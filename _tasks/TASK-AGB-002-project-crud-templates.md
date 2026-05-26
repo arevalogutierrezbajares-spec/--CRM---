@@ -1,11 +1,11 @@
 ---
 id: TASK-AGB-002
 title: Project CRUD + template instantiation + pipeline-stage tracking
-status: open
+status: review
 priority: P0
 phase: 1
 fr_covered: [FR-PRJ-1, FR-PRJ-2, FR-PRJ-4, FR-PRJ-7]
-owner: null
+owner: OVL-AGB-Claude
 branch: null
 pr: null
 estimated_points: 8

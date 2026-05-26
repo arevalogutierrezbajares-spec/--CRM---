@@ -1,11 +1,11 @@
 ---
 id: TASK-AGB-005
 title: Contact detail page (touches + projects + intro chain + meetings)
-status: open
+status: review
 priority: P1
 phase: 1
 fr_covered: [FR-CON-6, FR-MTG-6]
-owner: null
+owner: OVL-AGB-Claude
 branch: null
 pr: null
 estimated_points: 5

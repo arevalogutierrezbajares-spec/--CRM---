@@ -1,11 +1,11 @@
 ---
 id: TASK-AGB-001
 title: Contact CRUD (form, list, server actions)
-status: open
+status: review
 priority: P0
 phase: 1
 fr_covered: [FR-CON-1, FR-CON-2, FR-CON-3, FR-CON-5, FR-CON-7, FR-CAP-5]
-owner: null
+owner: OVL-AGB-Claude
 branch: null
 pr: null
 estimated_points: 5

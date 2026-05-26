@@ -4,6 +4,15 @@ import { NextResponse, type NextRequest } from "next/server";
 const PUBLIC_PATHS = ["/login", "/auth/callback", "/api/health"];
 
 export async function updateSession(request: NextRequest) {
+  // Dev-only bypass — see lib/current-user.ts. Cannot fire in production
+  // (gated by both NODE_ENV and an explicit env opt-in).
+  if (
+    process.env.NODE_ENV === "development" &&
+    process.env.AGB_DEV_FAKE_USER === "1"
+  ) {
+    return NextResponse.next({ request });
+  }
+
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(

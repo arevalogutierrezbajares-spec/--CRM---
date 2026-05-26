@@ -1,11 +1,11 @@
 ---
 id: TASK-AGB-012
 title: Founder profile page (timezone, display name, briefing prefs)
-status: open
+status: review
 priority: P1
 phase: 1
 fr_covered: [FR-TEAM-1]
-owner: null
+owner: OVL-AGB-Claude
 branch: null
 pr: null
 estimated_points: 2

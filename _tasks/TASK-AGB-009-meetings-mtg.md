@@ -1,11 +1,11 @@
 ---
 id: TASK-AGB-009
 title: Meeting CRUD + Action Items → Milestones (MTG capability area)
-status: open
+status: review
 priority: P1
 phase: 1
 fr_covered: [FR-MTG-1, FR-MTG-2, FR-MTG-3, FR-MTG-6]
-owner: null
+owner: OVL-AGB-Claude
 branch: null
 pr: null
 estimated_points: 5

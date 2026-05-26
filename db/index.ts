@@ -2,13 +2,31 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "./schema";
 
-const connectionString = process.env.DATABASE_URL;
+type DB = ReturnType<typeof drizzle<typeof schema>>;
 
-if (!connectionString) {
-  throw new Error("DATABASE_URL is not set");
+let _db: DB | null = null;
+
+export function getDb(): DB {
+  if (_db) return _db;
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    throw new Error(
+      "DATABASE_URL is not set. Set it in .env.local before running DB-backed actions.",
+    );
+  }
+  const client = postgres(connectionString, { prepare: false });
+  _db = drizzle(client, { schema });
+  return _db;
 }
 
-const client = postgres(connectionString, { prepare: false });
+// Proxy so existing `import { db }` call sites keep working — connection
+// is only established on first property access.
+export const db: DB = new Proxy({} as DB, {
+  get(_target, prop) {
+    const real = getDb() as unknown as Record<string | symbol, unknown>;
+    const value = real[prop];
+    return typeof value === "function" ? (value as (...args: unknown[]) => unknown).bind(real) : value;
+  },
+});
 
-export const db = drizzle(client, { schema });
 export { schema };

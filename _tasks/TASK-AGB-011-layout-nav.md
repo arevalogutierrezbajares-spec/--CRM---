@@ -1,11 +1,11 @@
 ---
 id: TASK-AGB-011
 title: Root layout + nav + sign-out
-status: open
+status: review
 priority: P0
 phase: 1
 fr_covered: []
-owner: null
+owner: OVL-AGB-Claude
 branch: null
 pr: null
 estimated_points: 2

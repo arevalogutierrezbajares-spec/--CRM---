@@ -1,11 +1,11 @@
 ---
 id: TASK-AGB-006
 title: Project detail page (milestones + touches + meetings + linked contacts)
-status: open
+status: review
 priority: P1
 phase: 1
 fr_covered: [FR-PRJ-1, FR-MTG-6]
-owner: null
+owner: OVL-AGB-Claude
 branch: null
 pr: null
 estimated_points: 5

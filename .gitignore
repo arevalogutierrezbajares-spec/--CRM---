@@ -44,3 +44,11 @@ supabase/.branches/
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# test artifacts
+/test-results/
+/playwright-report/
+/blob-report/
+
+# stray .next dirs from running dev/build outside the project root
+_tasks/.next/

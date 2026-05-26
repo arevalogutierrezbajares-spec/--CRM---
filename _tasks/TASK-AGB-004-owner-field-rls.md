@@ -1,11 +1,11 @@
 ---
 id: TASK-AGB-004
 title: Owner field on Contact + Project + baseline RLS
-status: open
+status: review
 priority: P0
 phase: 1
 fr_covered: [FR-TEAM-1, FR-TEAM-2, NFR-SEC-1]
-owner: null
+owner: OVL-AGB-Claude
 branch: null
 pr: null
 estimated_points: 3

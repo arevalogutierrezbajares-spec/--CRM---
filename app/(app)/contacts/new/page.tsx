@@ -1,0 +1,53 @@
+import Link from "next/link";
+import { ChevronLeft } from "lucide-react";
+import { requireUser } from "@/lib/current-user";
+import { TopBar } from "@/components/layout/top-bar";
+import { Card, CardContent } from "@/components/ui/card";
+import { ContactForm } from "@/components/contacts/contact-form";
+import { DbBanner } from "@/components/db-banner";
+import { listTags } from "@/db/queries/tags";
+import { safeRead } from "@/lib/db-status";
+import { createContact } from "../actions";
+
+export default async function NewContactPage() {
+  const user = await requireUser();
+  const tagsRes = await safeRead(() => listTags(), []);
+
+  async function action(formData: FormData) {
+    "use server";
+    return createContact(null, formData);
+  }
+
+  return (
+    <>
+      <TopBar email={user.email} displayName={user.displayName} />
+      <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-8">
+        <Link
+          href="/contacts"
+          className="inline-flex items-center gap-1 text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+        >
+          <ChevronLeft className="h-4 w-4" /> Back to contacts
+        </Link>
+        <header className="mt-4 mb-6">
+          <h1 className="text-2xl font-semibold tracking-tight">New contact</h1>
+          <p className="text-sm text-[var(--muted-foreground)]">
+            People + orgs you want to track. Channels, tags, intro chain all
+            optional.
+          </p>
+        </header>
+
+        {!tagsRes.ok && <DbBanner error={tagsRes.error} />}
+
+        <Card>
+          <CardContent className="pt-6">
+            <ContactForm
+              availableTags={tagsRes.data}
+              action={action}
+              submitLabel="Create contact"
+            />
+          </CardContent>
+        </Card>
+      </main>
+    </>
+  );
+}

@@ -1,11 +1,11 @@
 ---
 id: TASK-AGB-007
 title: Milestone CRUD on Projects
-status: open
+status: review
 priority: P0
 phase: 1
 fr_covered: [FR-PRJ-3]
-owner: null
+owner: OVL-AGB-Claude
 branch: null
 pr: null
 estimated_points: 3

@@ -1,11 +1,11 @@
 ---
 id: TASK-AGB-008
 title: Touch entity — manual create + list
-status: open
+status: review
 priority: P0
 phase: 1
 fr_covered: [FR-CAP-5]
-owner: null
+owner: OVL-AGB-Claude
 branch: null
 pr: null
 estimated_points: 3

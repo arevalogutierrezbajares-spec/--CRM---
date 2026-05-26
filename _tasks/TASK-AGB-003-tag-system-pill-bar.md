@@ -1,11 +1,11 @@
 ---
 id: TASK-AGB-003
 title: Tag system + venture workspace pill bar
-status: open
+status: review
 priority: P0
 phase: 1
 fr_covered: [FR-WSP-1, FR-WSP-2, FR-WSP-3, FR-CON-3]
-owner: null
+owner: OVL-AGB-Claude
 branch: null
 pr: null
 estimated_points: 3

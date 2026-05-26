@@ -55,6 +55,22 @@ const TEMPLATES = [
       ["Closed (won / lost / parked)", null, "either", "Outcome captured + relationship preserved"],
     ],
   },
+  {
+    id: "restaurant-discovery",
+    name: "Restaurant discovery",
+    description:
+      "Restaurant-vertical pipeline — from lead via creator/channel to live customer (CaneyCloud Restaurant)",
+    stages: [
+      ["Identified (creator-surfaced or inbound)", 5, "tomas", "Restaurant captured with owner contact + city"],
+      ["First contact", 7, "tomas", "WhatsApp/call/email reached"],
+      ["Demo scheduled", 7, "either", "Demo on the calendar"],
+      ["Demo delivered", 3, "tomas", "Walkthrough completed; pain points captured"],
+      ["Proposal sent", 7, "tomas", "Pricing + integration timeline shared"],
+      ["Pilot signed", 14, "either", "Pilot agreement signed; access provisioned"],
+      ["Pilot live", 14, "cofounder", "POS connected, first reservation through CaneyCloud"],
+      ["Converted (paying customer)", null, "either", "Pilot → paid; reciprocity ledger active"],
+    ],
+  },
 ] as const;
 
 // ─────────────────────────────────────────────────────────────────────────────
