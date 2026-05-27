@@ -1,15 +1,28 @@
 # AGB CRM — Handoff
 
-> **Latest: 2026-05-27 — X . JEAV . TIGR login page live in production.**
-> Rebranded sign-in is deployed at https://agb-crm.vercel.app/login and the
-> custom domain `x.vamosavenezuela.com` is attached to the Vercel project
-> (deploy `dpl_FkTYHMkXPGFLyTgC5Hc5KJn13BA8`). Two manual steps remain to flip
-> the custom domain live — see **Wave E — Domain Launch** below.
+> **Latest: 2026-05-27 (late) — invite-only login live, WA bot working E2E,
+> token diet shipped.**
 >
-> Landing: full-bleed B/W tent photograph, invisible hotspot positioned over
-> the book the man is reading. Cursor turns into a glowing cyan dot when over
-> the book; click triggers 80-cell pixel-shatter; holographic IDENTIFY form
-> rises with cyan scanlines + corner brackets. Re-uses Supabase magic-link.
+> **Login (X . JEAV . TIGR):** deployed at https://agb-crm.vercel.app/login.
+> Caney landing, invisible hotspot on the book, pixel-shatter reveal,
+> platform-native form (warm card, Inter, near-black primary). Sign-in is
+> **invite-only** — only emails in the `users` table can request a magic
+> link. Custom domain `x.vamosavenezuela.com` attached, waiting on DNS A
+> record + Supabase callback URL allowlist (see Wave E in `_tasks/_BOARD.md`).
+>
+> **WA bot:** End-to-end working on real phone numbers. Outbound failures now
+> surface to `wa_activity` as `direction='error'` (no more silent breakage
+> when the access token expires). Persona set so Tomas is always "Tomas" or
+> "TG", no nickname jumble. "Focus / priorities / what's next" now lands on
+> `todo_query` and returns real prioritized data.
+>
+> **WA agent perf:** Input-token diet halved per-message cost. Dynamic tool
+> gating (only the intent's allowedTools shipped to Claude, not all 20) +
+> Haiku 4.5 routing for routine intents (recap/todos/lookups/reminders/briefs) +
+> mention pre-resolver carrying org/rel across turns. Result on 18-scenario
+> bench: -57% total tokens, -64% Sonnet-only tokens, 17/18 intent accuracy,
+> single-tool-call multi-turn flows, cleaner replies. Sonnet rate limit
+> (30K/min) is no longer a practical concern at expected traffic.
 >
 > **Also 2026-05-27 — Wave A/B/C shipped — 20-tool WA agent + media pipeline.**
 > WA agent now has 20 tools (was 14). New tools: `add_channel`, `draft_message`,
@@ -53,11 +66,12 @@ If anything's broken: `pnpm verify` — walks all 9 env-gated surfaces and repor
 
 | | |
 |---|---|
-| **Score** | **~9.0/10** — production-ready for a single founder doing real CRM work |
-| **Routes** | 31 (19 pages · 12 API endpoints incl. 4 crons + 3 webhooks) |
-| **Tables** | 17 (13 CRM + 4 WhatsApp agent: `wa_conversations`, `wa_activity`, `reminders`, `nudges`) |
-| **Tests** | 114 passing in ~13s combined (`pnpm test:all`) |
-| **Tasks** | 48/50 at `review`; remaining 2 are AGB-000A (Supabase wiring) and AGB-000B (cofounder account) |
+| **Score** | **~9.3/10** — production-ready, invite-only auth live, WA bot verified E2E |
+| **Routes** | 32 (incl. new login client component) |
+| **Tables** | 20+ (CRM core + workspace mgmt + WhatsApp agent + treasury) |
+| **Tests** | 202 unit + 23 E2E smoke + 18-scenario WA bench. `npx vitest run` to verify. |
+| **Tasks** | 48/56 at `review`; 8 open (3 Wave D media + 3 Wave E domain + 2 Phase 0). See `_tasks/_BOARD.md`. |
+| **WA agent** | 20 tools, intent-gated, Sonnet/Haiku routed. ~2,800 tokens/avg Sonnet msg. Bench harness at `scripts/bench-agent.ts`. |
 | **Build** | `next build` 2.3s ✓ · `tsc --noEmit` clean ✓ |
 | **Commits ahead of scaffold** | 5 (`b3139da → cd42896 → 37435f5 → next push`) |
 

@@ -1,11 +1,31 @@
 # AGB CRM — Task Board
 
-**Updated:** 2026-05-27
+**Updated:** 2026-05-27 (late session)
 **Workflow:** [`_WORKFLOW.md`](./_WORKFLOW.md)
 **Source of truth for ACs:** [`docs/requirements/FR-MATRIX.md`](../docs/requirements/FR-MATRIX.md)
-**Tests:** 197 unit + 23 E2E smoke — `npx vitest run` + `env -u DATABASE_URL npx tsx scripts/smoke-all-tools.ts`
-**Score:** ~9.0/10
-**Hot path:** Text the WhatsApp bot in natural language; 20-tool agent loop routes through intent classifier → tool gating → Claude. Voice notes, images, links, vCards handled by media pipeline. Reminders + nudges crons proactively ping.
+**Tests:** 202 unit + 23 E2E smoke + 18-scenario WA bench — `npx vitest run` + `env -u DATABASE_URL npx tsx scripts/smoke-all-tools.ts` + `env -u DATABASE_URL AGB_WA_DAILY_TOKEN_CAP=10000000 npx tsx scripts/bench-agent.ts`
+**Score:** ~9.3/10 — login is invite-gated and live in prod; WA bot verified end-to-end on real phone; token diet shipped (-57% input tokens)
+**Hot path:** Text the WA bot at the live Cloud number; 20-tool agent routes through regex intent classifier → dynamic tool gating (3 tools avg per call) → Haiku 4.5 for routine intents, Sonnet 4.6 for reasoning. Mention pre-resolver injects contact IDs + org + rel before the LLM, eliminating most second-turn lookups. Outbound send failures now write `error` rows to `wa_activity` so an expired WA token can't silently break the bot again.
+
+## What shipped this session (2026-05-27 late)
+
+Out-of-band work past the 50-task plan. None of these have task IDs because
+they were reactive to live testing/UX feedback, not scoped up front.
+
+| Area | What | Where |
+|------|------|-------|
+| **Login UX** | X . JEAV . TIGR Caney landing replaces plain magic-link form. Full-bleed B/W tent photo; invisible hotspot over the book the man reads; cyan glowing cursor; 80-cell pixel-shatter on click; platform-native form rises behind blurred photo. | `app/login/caney-landing.tsx`, `app/login/page.tsx`, `public/caney.png` |
+| **Invite-only auth** | Magic link now gated on existing `users.email`. Strangers get "not on the invite list" instead of a magic link. | `app/actions/auth.ts` (server action `requestSignInLink`) |
+| **Vercel deploy** | Production live at `https://agb-crm.vercel.app`. Custom domain `x.vamosavenezuela.com` attached to project. `NEXT_PUBLIC_SITE_URL` set. Build green. | deploy `dpl_FkTYHMkXPGFLyTgC5Hc5KJn13BA8` |
+| **Treasury client/server split** | `lib/fx.ts` (client-safe formatters) + `lib/fx.server.ts` (DB-touching `toUsdCents`/`setRate`). Fixes prod build error from postgres driver bundling into client component. | commit `e895fa3` |
+| **WA bot, real end-to-end** | Tomas's WA phone wired to user record; ngrok tunnel verified; expired access token caught + replaced; outbound send failures now logged. Bot replies correctly from `/api/whatsapp/webhook`. | `app/api/whatsapp/webhook/route.ts` |
+| **WA agent token diet** | Dynamic tool gating (per-intent allowedTools filter) + Haiku 4.5 routing for routine intents + mention pre-resolver carrying org/rel + supplement-per-turn fix. **Result: -57% input tokens, -64% Sonnet usage**, 17/18 intent accuracy, cleaner replies. | commits `1934914` + `6e4a930` + `9db8e9d` |
+| **WA bench harness** | 18-scenario `scripts/bench-agent.ts` fires through `handleMessage()` directly (no real WA delivery), measures tokens + intent accuracy + reply quality. Reusable for any future agent-loop change. | `scripts/bench-agent.ts` |
+| **Persona consistency** | Tomas's `whatsapp_persona` set so bot uses "Tomas" / "TG" consistently instead of cycling through "Top G" / "TIGER" / "Master Tomas". | DB row update |
+| **Outbound observability** | Webhook now inspects `sendWhatsAppText` results and writes `direction='error'` `wa_activity` rows on any failure. Fixes the silent-failure mode where an expired token looked like "agent alive but no reply". | commit `9db8e9d` |
+| **"Focus" intent** | "what should I focus on / what's next / my priorities" now classify as `todo_query` (was `unknown`). EN + ES patterns. 5 new unit tests. | `lib/wa-agent/intent/classify.ts` |
+
+Test count: 197 → **202** (5 new todo_query priority phrasings). All passing.
 
 ## At a glance
 
@@ -207,10 +227,12 @@ Build: 29 routes, `next build` green, `tsc --noEmit` green.
 
 ## Wave E — Domain Launch (2026-05-27)
 
-Login page rebranded to **X . JEAV . TIGR**. Vercel project + domain attached,
-production build green at https://agb-crm.vercel.app. The custom domain
-`x.vamosavenezuela.com` is one DNS record + one Supabase config change away
-from going live.
+Login page rebranded to **X . JEAV . TIGR**. **Production deploy is LIVE** at
+https://agb-crm.vercel.app/login with invite-only auth gating, real Caney
+photo, working pixel-shatter reveal, holographic→platform-native form. The
+custom domain `x.vamosavenezuela.com` is attached to the Vercel project and
+`NEXT_PUBLIC_SITE_URL` is set. Two manual steps remain to flip the custom
+domain live + one agent verification:
 
 | ID | Title | Who | Pri | Pts | Status |
 |----|-------|-----|-----|-----|--------|
@@ -221,12 +243,20 @@ from going live.
 **Order:** AGB-DOM-001 + AGB-DOM-002 can be done in parallel (~5 min combined).
 DNS propagation takes 5–30 min. Then AGB-DOM-003 unblocks for the agent to run.
 
+**Already done (no task ID — done in-session):**
+- ✅ Login rebrand (X . JEAV . TIGR with Caney landing + shatter reveal)
+- ✅ Invite-only gating (allowlist against `users.email`)
+- ✅ Vercel domain attached (`x.vamosavenezuela.com` → `agb-crm` project)
+- ✅ Production deploy green (after fixing treasury client/server bundle split)
+- ✅ `NEXT_PUBLIC_SITE_URL=https://x.vamosavenezuela.com` in production env
+
 ---
 
 ## Wave D — WA Media (2026-05-27)
 
-Shipped Wave A (6 new CRM tools), Wave B (media pipeline), Wave C (197 unit tests + 23 E2E smoke).
-Three items left to close the loop:
+Shipped Wave A (6 new CRM tools), Wave B (media pipeline scaffolds in
+`lib/wa-agent/media/`), Wave C (202 unit tests + 23 E2E smoke + 18-scenario
+bench). Three items left to close the media loop:
 
 | ID | Title | Who | Pri | Pts | Status |
 |----|-------|-----|-----|-----|--------|
@@ -236,6 +266,29 @@ Three items left to close the loop:
 
 **Do AGB-WA-002 first** (5 minutes, your action) — it unblocks AGB-WA-001.
 Then claim AGB-WA-001 + AGB-WA-003 in the same agent session.
+
+**Done in-session (no separate task ID needed):**
+- ✅ Outbound silent-send failure observability (was planned as AGB-WA-004 — done inline in commit `9db8e9d`)
+- ✅ Bot persona consistency (Tomas/TG instead of nickname jumble)
+- ✅ "focus / priorities" intent classification
+- ✅ Token diet (Sonnet at the limit went from ~7,800 → ~2,800 tokens/msg)
+
+---
+
+## CoS-Bot Backlog (low priority — only invest when you hit them)
+
+Identified during bench review. None are blocking; all are quality-of-life
+or cost-of-life polish on top of an already-working bot.
+
+| Idea | Trigger | Effort |
+|------|---------|--------|
+| Proactive context after writes (e.g. "you haven't touched X in 14d — set a reminder?") | When you start missing nudges you should be getting | 2pt |
+| Multi-contact log_touch ("talked to marcos AND anabella") | If group meetings become common | 1pt |
+| "All clear" reply when nothing is overdue (instead of empty list) | Polish; only worth it if you regularly ask when there are zero items | 1pt |
+| Conversation summarization when history > 10 turns | Only matters for very long single sessions | 2pt |
+| Prompt caching (Anthropic ephemeral cache) | When system+tools naturally grow ≥ 1024 tokens for Sonnet (currently below threshold) | 3pt |
+| Smart create-on-the-fly with project tagging | If you regularly add contacts via touch with implied project context | 2pt |
+| Daily digest as proactive WA push (not just on-demand) | When the daily nudge cron isn't quite hitting the mark | 2pt |
 
 ---
 
