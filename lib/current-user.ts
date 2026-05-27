@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { eq } from "drizzle-orm";
+import { and, eq, gt, ilike, isNull } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { createClient } from "@/lib/supabase/server";
 
@@ -87,6 +87,48 @@ export async function ensureUserAndWorkspace(args: {
     return {
       workspaceId: existingMembership.workspaceId,
       workspaceRole: existingMembership.role,
+      whatsappPhone: u?.whatsappPhone ?? null,
+    };
+  }
+
+  // 4.5. Auto-accept any pending invite for this user's email BEFORE creating
+  // a fresh workspace. This is the safety net for cases where the post-auth
+  // redirect loses the ?token= param (Supabase verify endpoint sometimes
+  // strips query params from the redirect_to URL). Without this, an invited
+  // user would silently get their own empty workspace instead of joining the
+  // team that invited them.
+  const [pendingInvite] = await db
+    .select()
+    .from(schema.workspaceInvites)
+    .where(
+      and(
+        ilike(schema.workspaceInvites.email, args.email),
+        isNull(schema.workspaceInvites.acceptedAt),
+        gt(schema.workspaceInvites.expiresAt, new Date()),
+      ),
+    )
+    .limit(1);
+
+  if (pendingInvite) {
+    await db
+      .insert(schema.workspaceMembers)
+      .values({
+        workspaceId: pendingInvite.workspaceId,
+        userId: args.id,
+        role: pendingInvite.role,
+      })
+      .onConflictDoNothing();
+    await db
+      .update(schema.workspaceInvites)
+      .set({ acceptedAt: new Date() })
+      .where(eq(schema.workspaceInvites.id, pendingInvite.id));
+    await db
+      .update(schema.users)
+      .set({ currentWorkspaceId: pendingInvite.workspaceId })
+      .where(eq(schema.users.id, args.id));
+    return {
+      workspaceId: pendingInvite.workspaceId,
+      workspaceRole: pendingInvite.role,
       whatsappPhone: u?.whatsappPhone ?? null,
     };
   }
