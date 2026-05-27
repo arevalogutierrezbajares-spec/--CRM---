@@ -18,6 +18,8 @@ import { formatDateTime } from "@/lib/utils";
 import { parseActionItems } from "@/lib/validation/meeting"; // used for server-side spawn button count
 import { InlineNotes } from "@/components/meetings/inline-notes";
 import { LiveMeeting } from "@/components/meetings/live-meeting";
+import { PreMeetingBrief } from "@/components/meetings/pre-meeting-brief";
+import { getAttendeeContext } from "@/db/queries/meetings";
 import {
   generateMilestonesFromMeeting,
 } from "../actions";
@@ -37,6 +39,27 @@ export default async function MeetingDetailPage(props: {
   const res = await safeRead(() => getMeeting({ id, workspaceId: user.workspaceId }), null);
   if (res.ok && !res.data) notFound();
   const meeting = res.data;
+
+  // Load attendee context for pre-meeting brief (parallel, best-effort)
+  const attendeeContexts = meeting?.attendees.length
+    ? await Promise.all(
+        meeting.attendees.map(async (c) => {
+          const ctx = await getAttendeeContext({
+            contactId: c.id,
+            workspaceId: user.workspaceId,
+          }).catch(() => null);
+          return {
+            contactId: c.id,
+            name: c.name,
+            organization: c.organization,
+            lastTouchAt: ctx?.lastTouchAt ?? null,
+            openActionItems: ctx?.openActionItems ?? 0,
+            previousMeetingId: ctx?.previousMeetingId ?? null,
+            previousMeetingTitle: ctx?.previousMeetingTitle ?? null,
+          };
+        }),
+      )
+    : [];
 
   async function spawn() {
     "use server";
@@ -111,6 +134,10 @@ export default async function MeetingDetailPage(props: {
 
                 <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
                   <div className="space-y-6">
+                    {attendeeContexts.length > 0 && (
+                      <PreMeetingBrief attendees={attendeeContexts} />
+                    )}
+
                     <Card>
                       <CardHeader>
                         <CardTitle>Agenda</CardTitle>
