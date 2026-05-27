@@ -42,6 +42,7 @@ const checks: Check[] = [
       const client = postgres(process.env.DATABASE_URL!, {
         prepare: false,
         max: 1,
+        connection: { search_path: "public, extensions" },
       });
       try {
         const rows = await client`select 1 as ok`;
@@ -52,9 +53,10 @@ const checks: Check[] = [
         };
       } catch (e) {
         await client.end({ timeout: 1 }).catch(() => {});
+        const msg = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
         return {
           verdict: "broken" as const,
-          detail: e instanceof Error ? e.message : String(e),
+          detail: msg || "(empty error — likely postgres-js bug; check DATABASE_URL format)",
         };
       }
     },
@@ -69,6 +71,7 @@ const checks: Check[] = [
       const client = postgres(process.env.DATABASE_URL!, {
         prepare: false,
         max: 1,
+        connection: { search_path: "public, extensions" },
       });
       const expected = [
         "users",
