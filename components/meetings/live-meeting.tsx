@@ -2,7 +2,15 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CheckSquare, Square, StopCircle, Timer } from "lucide-react";
+import {
+  CheckSquare,
+  Mic,
+  MicOff,
+  Sparkles,
+  Square,
+  StopCircle,
+  Timer,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -37,15 +45,23 @@ export function LiveMeeting({
   linkedProjectId,
 }: LiveMeetingProps) {
   const router = useRouter();
-  const [startedAt, setStartedAt] = useState<Date | null>(
-    initialStartedAt,
-  );
+  const [startedAt, setStartedAt] = useState<Date | null>(initialStartedAt);
   const [elapsed, setElapsed] = useState(0);
   const [ending, setEnding] = useState(false);
   const [checkedItems, setCheckedItems] = useState<Set<number>>(new Set());
+
+  // Voice / transcript state
+  const [recording, setRecording] = useState(false);
+  const [transcript, setTranscript] = useState("");
+  const [transcribing, setTranscribing] = useState(false);
+  const [summarizing, setSummarizing] = useState(false);
+  const [minutesDraft, setMinutesDraft] = useState<string | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const chunkIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Parse agenda into agenda items (non-empty lines)
   const agendaLines = (agenda ?? "")
     .split(/\r?\n/)
     .map((l) => l.trim())
@@ -58,7 +74,6 @@ export function LiveMeeting({
     }, 1000);
   }, []);
 
-  // Auto-start on mount if not started yet
   useEffect(() => {
     async function autoStart() {
       const res = await fetch(`/api/meetings/${meetingId}/live`, {
@@ -86,7 +101,99 @@ export function LiveMeeting({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Flush a recorded chunk to Whisper
+  const flushChunk = useCallback(async () => {
+    const chunks = chunksRef.current.splice(0);
+    if (chunks.length === 0) return;
+    const blob = new Blob(chunks, { type: "audio/webm" });
+    if (blob.size < 1000) return; // skip tiny/silent chunks
+
+    setTranscribing(true);
+    try {
+      const form = new FormData();
+      form.append("audio", blob, "chunk.webm");
+      const res = await fetch(`/api/meetings/${meetingId}/transcribe`, {
+        method: "POST",
+        body: form,
+      });
+      if (res.ok) {
+        const { text } = await res.json();
+        if (text) {
+          setTranscript((prev) => (prev ? `${prev} ${text}` : text));
+        }
+      }
+    } finally {
+      setTranscribing(false);
+    }
+  }, [meetingId]);
+
+  async function toggleRecording() {
+    if (recording) {
+      // Stop
+      if (chunkIntervalRef.current) clearInterval(chunkIntervalRef.current);
+      mediaRecorderRef.current?.stop();
+      setRecording(false);
+      setTimeout(flushChunk, 500); // flush final chunk after stop
+    } else {
+      // Start
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch {
+        alert("Microphone access denied. Check browser permissions.");
+        return;
+      }
+
+      const mr = new MediaRecorder(stream, { mimeType: "audio/webm" });
+      mediaRecorderRef.current = mr;
+      chunksRef.current = [];
+
+      mr.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+
+      mr.start(1000); // collect data every 1s
+      setRecording(true);
+
+      // Flush to Whisper every 15 seconds
+      chunkIntervalRef.current = setInterval(flushChunk, 15_000);
+    }
+  }
+
+  async function handleSummarize() {
+    setSummarizing(true);
+    try {
+      const res = await fetch(`/api/meetings/${meetingId}/summarize`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          transcript,
+          agenda: agenda ?? null,
+          attendeeNames: attendees.map((a) => a.name),
+        }),
+      });
+      if (res.ok) {
+        const { minutes: draft } = await res.json();
+        setMinutesDraft(draft);
+        // Also save as minutes via the notes PATCH so it persists
+        await fetch(`/api/meetings/${meetingId}/notes`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ field: "minutes", value: draft }),
+        });
+      }
+    } finally {
+      setSummarizing(false);
+    }
+  }
+
   async function handleEnd() {
+    if (recording) {
+      if (chunkIntervalRef.current) clearInterval(chunkIntervalRef.current);
+      mediaRecorderRef.current?.stop();
+      await new Promise((r) => setTimeout(r, 600));
+      await flushChunk();
+    }
     setEnding(true);
     await fetch(`/api/meetings/${meetingId}/live`, {
       method: "PATCH",
@@ -128,21 +235,45 @@ export function LiveMeeting({
           )}
         </div>
 
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-1.5 border-red-500/40 text-red-600 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-900/20 dark:text-red-400"
-          onClick={handleEnd}
-          disabled={ending}
-        >
-          <StopCircle className="h-4 w-4" />
-          {ending ? "Ending…" : "End Meeting"}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className={`gap-1.5 text-xs ${
+              recording
+                ? "border-red-400 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 animate-pulse"
+                : "text-[var(--muted-foreground)]"
+            }`}
+            onClick={toggleRecording}
+          >
+            {recording ? (
+              <>
+                <MicOff className="h-3.5 w-3.5" /> Stop recording
+              </>
+            ) : (
+              <>
+                <Mic className="h-3.5 w-3.5" /> Record
+              </>
+            )}
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 border-red-500/40 text-red-600 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-900/20 dark:text-red-400"
+            onClick={handleEnd}
+            disabled={ending}
+          >
+            <StopCircle className="h-4 w-4" />
+            {ending ? "Ending…" : "End Meeting"}
+          </Button>
+        </div>
       </div>
 
       <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
 
-      {/* Split pane: agenda checklist + live notes */}
+      {/* Split pane */}
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Agenda checklist */}
         <Card>
@@ -188,7 +319,6 @@ export function LiveMeeting({
               </ul>
             )}
 
-            {/* Attendees strip */}
             {attendees.length > 0 && (
               <div className="mt-4 border-t border-[var(--border)] pt-4">
                 <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--muted-foreground)]">
@@ -211,27 +341,90 @@ export function LiveMeeting({
           </CardContent>
         </Card>
 
-        {/* Live minutes */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">
-              Minutes{" "}
-              <span className="text-xs font-normal text-[var(--muted-foreground)]">
-                — auto-saving
-              </span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <InlineNotes
-              meetingId={meetingId}
-              field="minutes"
-              initialValue={minutes}
-              placeholder={"Take notes here. Use [ ] to mark action items.\nExample: [ ] Follow up on proposal"}
-              showActionItems
-              linkedProjectId={linkedProjectId}
-            />
-          </CardContent>
-        </Card>
+        {/* Live minutes + transcript */}
+        <div className="space-y-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">
+                Minutes{" "}
+                <span className="text-xs font-normal text-[var(--muted-foreground)]">
+                  — auto-saving
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {minutesDraft ? (
+                <div className="space-y-2">
+                  <p className="text-xs text-green-600 dark:text-green-400">
+                    AI summary applied — editing below.
+                  </p>
+                  <InlineNotes
+                    meetingId={meetingId}
+                    field="minutes"
+                    initialValue={minutesDraft}
+                    showActionItems
+                    linkedProjectId={linkedProjectId}
+                  />
+                </div>
+              ) : (
+                <InlineNotes
+                  meetingId={meetingId}
+                  field="minutes"
+                  initialValue={minutes}
+                  placeholder={"Take notes here. Use [ ] to mark action items.\nExample: [ ] Follow up on proposal"}
+                  showActionItems
+                  linkedProjectId={linkedProjectId}
+                />
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Live transcript strip */}
+          {(transcript || transcribing || recording) && (
+            <Card>
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm">
+                    Live transcript
+                    {transcribing && (
+                      <span className="ml-2 text-xs font-normal text-[var(--muted-foreground)] animate-pulse">
+                        transcribing…
+                      </span>
+                    )}
+                  </CardTitle>
+                  {transcript && !summarizing && !minutesDraft && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-7 gap-1 px-2 text-xs"
+                      onClick={handleSummarize}
+                    >
+                      <Sparkles className="h-3 w-3" />
+                      Summarize with AI
+                    </Button>
+                  )}
+                  {summarizing && (
+                    <span className="text-xs text-[var(--muted-foreground)] animate-pulse">
+                      Generating minutes…
+                    </span>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent>
+                {transcript ? (
+                  <p className="max-h-36 overflow-y-auto whitespace-pre-wrap text-xs leading-relaxed text-[var(--muted-foreground)]">
+                    {transcript}
+                  </p>
+                ) : (
+                  <p className="text-xs text-[var(--muted-foreground)] italic">
+                    Listening… transcript will appear here.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -241,9 +434,10 @@ function ElapsedTimer({ elapsed }: { elapsed: number }) {
   const h = Math.floor(elapsed / 3600);
   const m = Math.floor((elapsed % 3600) / 60);
   const s = elapsed % 60;
-  const parts = h > 0
-    ? [h, m, s].map((v) => String(v).padStart(2, "0"))
-    : [m, s].map((v) => String(v).padStart(2, "0"));
+  const parts =
+    h > 0
+      ? [h, m, s].map((v) => String(v).padStart(2, "0"))
+      : [m, s].map((v) => String(v).padStart(2, "0"));
 
   return (
     <span className="flex items-center gap-1 font-mono text-sm tabular-nums text-[var(--foreground)]">
