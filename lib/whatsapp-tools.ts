@@ -19,6 +19,7 @@ const {
   milestones,
   meetings,
   reminders,
+  users,
 } = schema;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -602,12 +603,15 @@ const TOOLS: Record<string, ToolEntry> = {
     definition: {
       name: "daily_recap",
       description:
-        "Summarize what the texting user has personally shipped: contacts they created, " +
-        "meetings they organized, touches they logged, reminders they filed for themselves " +
-        "or others, plus auto-detected highlights (new 'connector' contacts, dual-source " +
-        "priority signals where the same contact came in from multiple intro chains). " +
-        "Use when the user asks for a recap, 'what did I do today', 'highlight my wins', " +
-        "or any end-of-day/end-of-week reflection prompt.",
+        "Summarize what the WORKSPACE TEAM has shipped in the time window: contacts " +
+        "created, meetings organized, touches logged, reminders filed — attributed per " +
+        "team member (the texter sees 'you' for their own work and the partner's name " +
+        "for theirs). This is a single shared CRM; the recap is collective by default. " +
+        "Highlights: new 'connector' contacts (high-value BD nodes), dual-source priority " +
+        "signals (same contact reached via 2+ intro chains). Use when the user asks " +
+        "for a recap, 'what did we do today', 'recap me', 'highlight wins', or any " +
+        "end-of-day/end-of-week reflection. " +
+        "Set `whose='self'` ONLY if the user explicitly asks for just their own activity.",
       input_schema: {
         type: "object",
         properties: {
@@ -617,11 +621,20 @@ const TOOLS: Record<string, ToolEntry> = {
             description:
               "Time window. Defaults to 'today' (since UTC midnight of the current calendar day).",
           },
+          whose: {
+            type: "string",
+            enum: ["team", "self"],
+            description:
+              "Scope of activity. 'team' (default) = the whole workspace; 'self' = only " +
+              "the texter's own created_by rows. Default to 'team' unless the user " +
+              "specifically says 'me' / 'mine' / 'just my activity'.",
+          },
         },
       },
     },
     async execute(input, ctx) {
       const scope = (input.scope as "today" | "yesterday" | "week") ?? "today";
+      const whose = (input.whose as "team" | "self") ?? "team";
       const now = ctx.now;
       let start: Date;
       let end: Date;
@@ -639,7 +652,14 @@ const TOOLS: Record<string, ToolEntry> = {
         end = now;
       }
 
-      // Contacts they created in window.
+      // Reusable createdBy filter: workspace by default, narrowed to self
+      // only if the user asked.
+      const createdByFilter = whose === "self"
+        ? eq(contacts.createdBy, ctx.userId)
+        : undefined;
+
+      // Contacts created in window, joined with author display name so the
+      // wrapper LLM can attribute each one.
       const newContacts = await db
         .select({
           id: contacts.id,
@@ -649,20 +669,22 @@ const TOOLS: Record<string, ToolEntry> = {
           relationship: contacts.relationshipType,
           intro: contacts.introChainFromText,
           createdAt: contacts.createdAt,
+          createdBy: contacts.createdBy,
+          authorName: users.displayName,
         })
         .from(contacts)
+        .innerJoin(users, eq(users.id, contacts.createdBy))
         .where(
           and(
             eq(contacts.workspaceId, ctx.workspaceId),
-            eq(contacts.createdBy, ctx.userId),
             gte(contacts.createdAt, start),
             lt(contacts.createdAt, end),
+            createdByFilter,
           ),
         )
         .orderBy(asc(contacts.createdAt));
 
-      // For each new contact, attach their tag names (so the wrapper LLM can
-      // point out which ones are 'connector' / dual-sourced).
+      // Tag fan-out (so wrapper can point at connectors / dual-source).
       const tagByContact: Record<string, string[]> = {};
       if (newContacts.length > 0) {
         const ids = newContacts.map((c) => c.id);
@@ -670,7 +692,6 @@ const TOOLS: Record<string, ToolEntry> = {
           .select({
             contactId: contactTags.contactId,
             name: tags.name,
-            kind: tags.kind,
           })
           .from(contactTags)
           .innerJoin(tags, eq(tags.id, contactTags.tagId))
@@ -681,42 +702,73 @@ const TOOLS: Record<string, ToolEntry> = {
         }
       }
 
-      const contactsWithTags = newContacts.map((c) => ({
+      const contactsWithMeta = newContacts.map((c) => ({
         ...c,
         tags: tagByContact[c.id] ?? [],
+        byYou: c.createdBy === ctx.userId,
       }));
 
-      // Highlight #1 — new connectors (tag === 'connector').
-      const connectors = contactsWithTags.filter((c) =>
+      // Per-member rollup so the wrapper can say "you did X, Joe did Y".
+      const byMember: Record<
+        string,
+        { name: string; isYou: boolean; contacts: number; touches: number; meetings: number }
+      > = {};
+      const memberKey = (id: string) => id;
+      for (const c of contactsWithMeta) {
+        const key = memberKey(c.createdBy);
+        if (!byMember[key]) {
+          byMember[key] = {
+            name: c.authorName,
+            isYou: c.createdBy === ctx.userId,
+            contacts: 0,
+            touches: 0,
+            meetings: 0,
+          };
+        }
+        byMember[key].contacts++;
+      }
+
+      const connectors = contactsWithMeta.filter((c) =>
         c.tags.includes("connector"),
       );
-
-      // Highlight #2 — dual-source signals: a contact that carries 2+ `via-*`
-      // tags is a name that surfaced through multiple intro chains.
-      const dualSourced = contactsWithTags.filter(
+      const dualSourced = contactsWithMeta.filter(
         (c) => c.tags.filter((t) => t.startsWith("via-")).length >= 2,
       );
 
-      // Meetings they organized (createdBy = user) in window.
+      // Meetings + touches + reminders, same pattern.
       const newMeetings = await db
         .select({
           id: meetings.id,
           title: meetings.title,
           scheduledAt: meetings.scheduledAt,
+          createdBy: meetings.createdBy,
+          authorName: users.displayName,
         })
         .from(meetings)
+        .innerJoin(users, eq(users.id, meetings.createdBy))
         .where(
           and(
             eq(meetings.workspaceId, ctx.workspaceId),
-            eq(meetings.createdBy, ctx.userId),
             gte(meetings.createdAt, start),
             lt(meetings.createdAt, end),
+            whose === "self" ? eq(meetings.createdBy, ctx.userId) : undefined,
           ),
         )
         .orderBy(asc(meetings.scheduledAt));
+      for (const m of newMeetings) {
+        const key = memberKey(m.createdBy);
+        if (!byMember[key]) {
+          byMember[key] = {
+            name: m.authorName,
+            isYou: m.createdBy === ctx.userId,
+            contacts: 0,
+            touches: 0,
+            meetings: 0,
+          };
+        }
+        byMember[key].meetings++;
+      }
 
-      // Touches they authored (excludes auto-touches generated by meeting
-      // creation only if we wanted to — we keep them all here for honesty).
       const newTouches = await db
         .select({
           id: touches.id,
@@ -724,35 +776,52 @@ const TOOLS: Record<string, ToolEntry> = {
           channel: touches.channel,
           body: touches.body,
           createdAt: touches.createdAt,
+          createdBy: touches.createdBy,
+          authorName: users.displayName,
         })
         .from(touches)
+        .innerJoin(users, eq(users.id, touches.createdBy))
         .where(
           and(
             eq(touches.workspaceId, ctx.workspaceId),
-            eq(touches.createdBy, ctx.userId),
             gte(touches.createdAt, start),
             lt(touches.createdAt, end),
+            whose === "self" ? eq(touches.createdBy, ctx.userId) : undefined,
           ),
         )
         .orderBy(asc(touches.createdAt))
-        .limit(20);
+        .limit(30);
+      for (const t of newTouches) {
+        const key = memberKey(t.createdBy);
+        if (!byMember[key]) {
+          byMember[key] = {
+            name: t.authorName,
+            isYou: t.createdBy === ctx.userId,
+            contacts: 0,
+            touches: 0,
+            meetings: 0,
+          };
+        }
+        byMember[key].touches++;
+      }
 
-      // Reminders the user filed (created_by = user). Separate from
-      // reminders the user is receiving (for_user_id = user).
       const remindersFiled = await db
         .select({
           id: reminders.id,
           subject: reminders.subject,
           dueAt: reminders.dueAt,
           forUserId: reminders.forUserId,
+          createdBy: reminders.createdBy,
+          authorName: users.displayName,
         })
         .from(reminders)
+        .innerJoin(users, eq(users.id, reminders.createdBy))
         .where(
           and(
             eq(reminders.workspaceId, ctx.workspaceId),
-            eq(reminders.createdBy, ctx.userId),
             gte(reminders.createdAt, start),
             lt(reminders.createdAt, end),
+            whose === "self" ? eq(reminders.createdBy, ctx.userId) : undefined,
           ),
         );
 
@@ -760,45 +829,52 @@ const TOOLS: Record<string, ToolEntry> = {
         ok: true,
         data: {
           scope,
+          whose,
           window: {
             start: start.toISOString(),
             end: end.toISOString(),
             timezone: ctx.ownerTimezone,
           },
           totals: {
-            contacts: contactsWithTags.length,
+            contacts: contactsWithMeta.length,
             meetings: newMeetings.length,
             touches: newTouches.length,
             remindersFiled: remindersFiled.length,
           },
-          contacts: contactsWithTags.map((c) => ({
+          by_member: Object.values(byMember),
+          contacts: contactsWithMeta.map((c) => ({
             name: c.name,
             type: c.type,
             organization: c.organization,
             relationship: c.relationship,
             tags: c.tags,
+            by: { name: c.authorName, isYou: c.byYou },
             intro_excerpt: c.intro?.slice(0, 200) ?? null,
           })),
           highlights: {
             connectors: connectors.map((c) => ({
               name: c.name,
               organization: c.organization,
+              by: { name: c.authorName, isYou: c.byYou },
               intro_excerpt: c.intro?.slice(0, 200) ?? null,
             })),
             dual_sourced_priority: dualSourced.map((c) => ({
               name: c.name,
               organization: c.organization,
               via_tags: c.tags.filter((t) => t.startsWith("via-")),
+              by: { name: c.authorName, isYou: c.byYou },
               intro_excerpt: c.intro?.slice(0, 200) ?? null,
             })),
           },
           meetings: newMeetings.map((m) => ({
             title: m.title,
             scheduledAt: m.scheduledAt,
+            by: { name: m.authorName, isYou: m.createdBy === ctx.userId },
           })),
           reminders_filed: remindersFiled.map((r) => ({
             subject: r.subject.slice(0, 140),
             dueAt: r.dueAt,
+            by: { name: r.authorName, isYou: r.createdBy === ctx.userId },
             forSelf: r.forUserId === ctx.userId,
           })),
         },

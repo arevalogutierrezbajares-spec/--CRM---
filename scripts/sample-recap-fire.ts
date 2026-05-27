@@ -10,35 +10,35 @@ import "dotenv/config";
 import { handleMessage } from "@/lib/whatsapp-agent";
 
 const JOE_PHONE = "+16466752101";
+const TOMAS_PHONE = "+19545317093";
+
+async function fire(label: string, phone: string, body: string) {
+  console.log("\n┌" + "─".repeat(72));
+  console.log(`│ inbound from ${label} (${phone}):`);
+  console.log(`│   "${body}"`);
+  console.log("├" + "─".repeat(72));
+
+  const res = await handleMessage({ senderPhone: phone, body });
+
+  if (!res.ok) {
+    console.log(`│ ERROR: ${res.error}`);
+    console.log(`│ reply: ${res.reply}`);
+  } else {
+    console.log(`│ tool calls : ${res.toolCalls.join(" → ") || "(none)"}`);
+    console.log(`│ tokens     : ${res.tokensIn} in / ${res.tokensOut} out`);
+    console.log("│");
+    console.log(`│ AGENT REPLY (what ${label} would see on WhatsApp):`);
+    console.log("│");
+    for (const line of res.reply.split("\n")) {
+      console.log(`│   ${line}`);
+    }
+  }
+  console.log("└" + "─".repeat(72));
+}
 
 async function main() {
-  const inboundMessages = [
-    "recap me on today's wins",
-  ];
-
-  for (const body of inboundMessages) {
-    console.log("\n┌" + "─".repeat(72));
-    console.log(`│ inbound from Joe (${JOE_PHONE}):`);
-    console.log(`│   "${body}"`);
-    console.log("├" + "─".repeat(72));
-
-    const res = await handleMessage({ senderPhone: JOE_PHONE, body });
-
-    if (!res.ok) {
-      console.log(`│ ERROR: ${res.error}`);
-      console.log(`│ reply: ${res.reply}`);
-    } else {
-      console.log(`│ tool calls : ${res.toolCalls.join(" → ") || "(none)"}`);
-      console.log(`│ tokens     : ${res.tokensIn} in / ${res.tokensOut} out`);
-      console.log("│");
-      console.log("│ AGENT REPLY (what Joe would see on WhatsApp):");
-      console.log("│");
-      for (const line of res.reply.split("\n")) {
-        console.log(`│   ${line}`);
-      }
-    }
-    console.log("└" + "─".repeat(72));
-  }
+  await fire("Joe", JOE_PHONE, "recap me on today's wins");
+  await fire("Tomas", TOMAS_PHONE, "recap today");
 }
 
 main().catch((e) => {
