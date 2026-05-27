@@ -384,6 +384,7 @@ export const meetings = pgTable("meetings", {
     .references(() => workspaces.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
   scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull(),
+  startedAt: timestamp("started_at", { withTimezone: true }),
   endedAt: timestamp("ended_at", { withTimezone: true }),
   location: text("location"),
   type: meetingType("type").notNull().default("one_on_one"),
