@@ -7,6 +7,8 @@
 **Score:** ~9.3/10 — login is invite-gated and live in prod; WA bot verified end-to-end on real phone; token diet shipped (-57% input tokens)
 **Hot path:** Text the WA bot at the live Cloud number; 20-tool agent routes through regex intent classifier → dynamic tool gating (3 tools avg per call) → Haiku 4.5 for routine intents, Sonnet 4.6 for reasoning. Mention pre-resolver injects contact IDs + org + rel before the LLM, eliminating most second-turn lookups. Outbound send failures now write `error` rows to `wa_activity` so an expired WA token can't silently break the bot again.
 
+**Index of this doc:** _What shipped this session_ → _At a glance_ → _Phase tables (0-7 + Wave D + Wave E)_ → _CoS-Bot Backlog_ (tactical polish) → _Brainstorm_ (strategic / multi-system, NOT committed: RAG, creator program) → _Recommended pick-up order_
+
 ## What shipped this session (2026-05-27 late)
 
 Out-of-band work past the 50-task plan. None of these have task IDs because
@@ -289,6 +291,103 @@ or cost-of-life polish on top of an already-working bot.
 | Prompt caching (Anthropic ephemeral cache) | When system+tools naturally grow ≥ 1024 tokens for Sonnet (currently below threshold) | 3pt |
 | Smart create-on-the-fly with project tagging | If you regularly add contacts via touch with implied project context | 2pt |
 | Daily digest as proactive WA push (not just on-demand) | When the daily nudge cron isn't quite hitting the mark | 2pt |
+
+---
+
+## Brainstorm — strategic / multi-system ideas (NOT committed)
+
+These are larger ideas worth shaping before they get a task ID. Each is
+cross-system (touches AGB-CRM + at least one other project/repo) and needs
+a scoping conversation before implementation. Listed here so they don't get
+lost between sessions.
+
+### BR-1 — RAG knowledge base for VAV + workspace data
+
+**What:** Retrieval-augmented generation layer that lets the WA bot (and
+eventually VAV's own surfaces) answer questions grounded in actual content,
+not just structured CRM rows.
+
+**Corpus candidates (need to decide which):**
+- VAV/Venezuela tourism content (posadas, routes, regions, regs, safety
+  bulletins) — currently lives across `--TOURISM--`, `VZ_Tourism_Project`,
+  `caneycloud-restaurant`, and assorted PDFs/markdown
+- Workspace memory: full text of touches + meeting minutes + obsidian notes
+  (richer than what `contact_summary` returns today)
+- Creator briefs / past campaign docs from the VAV creator program
+- Public knowledge: SENIAT regs, Venezuelan tourism stats, OFAC compliance
+
+**Where the bot fits:**
+- New tool: `search_knowledge(query, corpus?)` returning ranked chunks with
+  citations
+- Augment `contact_summary` / `meeting_brief` to pull semantic matches in
+  addition to the structured DB rows
+- Enable questions like "what did Anabella say about Margarita logistics
+  last month?" — currently the bot can list touches but can't search them
+  semantically
+
+**Open questions:**
+- Vector store: pgvector in our existing Supabase (cheapest) vs a managed
+  service (Pinecone/Turbopuffer)? Supabase is already the data plane.
+- Embedding model: Voyage-3 (best for retrieval) vs OpenAI's text-embedding-3
+  (cheaper, already have key)? Cost difference is meaningful at scale.
+- Ingestion: one-time bulk vs continuous (every new touch indexed
+  automatically vs nightly batch)?
+- Scope: just AGB workspace data first, or include VAV public corpus?
+- Shared with VAV repo: same Supabase project + table, or separate vector
+  DB that both apps query?
+
+**Why now signals:** When someone asks "remember what we discussed about X"
+and the bot can only list touches without surfacing the actual content,
+that friction will compound as the touch log grows.
+
+---
+
+### BR-2 — Creator / affiliate structure
+
+**What:** Data model + operational tooling to manage the VAV creator program
+end-to-end (and any affiliate/referral program that grows out of it).
+
+**The current state:** AGB-CRM has a `vav-creator-campaign` pipeline template
+(seeded in `db/seed.ts`) with 10 stages from outreach → paid out. But there's
+no first-class concept of a "creator" entity — they're just contacts with a
+tag, and campaigns are projects. Payouts, deliverables, performance tracking
+all live in someone's head.
+
+**Possible scope:**
+- **Creator entity**: extends Contact with creator-specific fields (handles,
+  followers, niche, rate sheet, contract terms, prior campaigns, payout
+  preferences)
+- **Campaign entity**: deliverables (counts/types), budget, dates, status,
+  metrics (reach/clicks/conversions), payout state
+- **Affiliate codes**: unique short codes / referral URLs per creator,
+  tracked back to bookings/leads
+- **Reconciliation flow**: from "content posted" → "engagement reviewed" →
+  "paid out", with a real ledger
+- **Discovery surface**: which creators match an upcoming trip type? Filter
+  by niche + recent performance + availability
+
+**Open questions:**
+- Lives in AGB-CRM or in VAV repo? CRM is BD-flavored, VAV is consumer-
+  flavored — creator program straddles both. Could live in CRM if AGB is
+  the BD source-of-truth and VAV reads via API.
+- Affiliate link tracking: do we build redirect+tracking, or pipe through
+  an existing service (Rewardful, Tapfiliate, Tolt)?
+- Payouts: track in CRM (treasury module just shipped) or route through a
+  third party (Tipalti, Wise Bulk)?
+- Connection to existing 10-stage pipeline — extend or replace?
+
+**Why now signals:** Once you start running more than ~3 creator campaigns
+in parallel, the spreadsheet-in-head approach breaks. Multi-campaign
+attribution and payout reconciliation are the first things to fall over.
+
+---
+
+### How to use this section
+
+When one of these starts feeling urgent: turn it into a proper task file
+(`TASK-AGB-BR-1-rag-knowledge-base.md`), pick the smallest valuable slice
+(e.g., "index this week's touches into pgvector + add `search_touches`
+tool"), write ACs, claim it. Don't try to build the full vision in one go.
 
 ---
 
