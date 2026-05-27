@@ -7,6 +7,7 @@ import { NextResponse, type NextRequest } from "next/server";
 const PUBLIC_PATHS = [
   "/login",
   "/auth/callback",
+  "/auth/handoff", // implicit-flow magic-link → server-side session establishment
   "/api/health",
   "/api/whatsapp/webhook", // Meta — verifies via WA_VERIFY_TOKEN + HMAC
   "/api/postmark/inbound", // Postmark — verifies via ?secret= query
