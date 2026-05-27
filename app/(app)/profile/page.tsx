@@ -81,6 +81,20 @@ export default async function ProfilePage() {
                   IANA tz name (e.g. America/New_York, America/Caracas).
                 </p>
               </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="whatsappPhone">WhatsApp number</Label>
+                <Input
+                  id="whatsappPhone"
+                  name="whatsappPhone"
+                  placeholder="+1 305 555 0123"
+                  defaultValue={profile?.whatsappPhone ?? ""}
+                />
+                <p className="text-xs text-[var(--muted-foreground)]">
+                  Include country code. Texting the workspace’s WhatsApp number
+                  from this phone lets the AI assistant act on your behalf in
+                  the shared workspace. Reminders fire here too.
+                </p>
+              </div>
               <div className="flex justify-end border-t border-[var(--border)] pt-4">
                 <Button type="submit">Save profile</Button>
               </div>

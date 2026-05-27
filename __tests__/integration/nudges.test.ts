@@ -5,9 +5,11 @@ import {
   filterDedupedCandidates,
   recordNudgesFired,
 } from "@/lib/nudge-engine";
-import { FAKE_USER_ID } from "./setup";
+import { FAKE_USER_ID, FAKE_WORKSPACE_ID } from "./setup";
 
 const { contacts, projects, milestones, nudges } = schema;
+
+const base = { workspaceId: FAKE_WORKSPACE_ID, createdBy: FAKE_USER_ID };
 
 describe("[integration] nudge engine", () => {
   it("gathers candidates from overdue/blocked/stale", async () => {
@@ -18,33 +20,33 @@ describe("[integration] nudge engine", () => {
 
     const [proj] = await db
       .insert(projects)
-      .values({ title: "Overdue project", ownerId: FAKE_USER_ID })
+      .values({ ...base, title: "Overdue project" })
       .returning();
     await db.insert(milestones).values({
+      ...base,
       projectId: proj.id,
       title: "Send proposal",
-      ownerId: FAKE_USER_ID,
       dueDate: yesterday.toISOString().slice(0, 10),
     });
 
     const past = new Date();
     past.setDate(past.getDate() - 3);
     await db.insert(projects).values({
+      ...base,
       title: "Blocked project",
-      ownerId: FAKE_USER_ID,
       status: "waiting",
       waitingOn: "their signature",
       expectedUnblockDate: past.toISOString().slice(0, 10),
     });
 
     await db.insert(contacts).values({
+      ...base,
       name: "Stale Friend",
-      ownerId: FAKE_USER_ID,
       relationshipType: "friend",
       lastTouchAt: longAgo,
     });
 
-    const cands = await gatherNudgeCandidates(FAKE_USER_ID);
+    const cands = await gatherNudgeCandidates(FAKE_WORKSPACE_ID);
     const sigs = cands.map((c) => c.signature);
     expect(sigs.some((s) => s.startsWith("overdue:milestone:"))).toBe(true);
     expect(sigs.some((s) => s.startsWith("overdue:blocker:"))).toBe(true);
@@ -56,31 +58,39 @@ describe("[integration] nudge engine", () => {
     yesterday.setDate(yesterday.getDate() - 1);
     const [proj] = await db
       .insert(projects)
-      .values({ title: "P", ownerId: FAKE_USER_ID })
+      .values({ ...base, title: "P" })
       .returning();
     const [m] = await db
       .insert(milestones)
       .values({
+        ...base,
         projectId: proj.id,
         title: "Overdue",
-        ownerId: FAKE_USER_ID,
         dueDate: yesterday.toISOString().slice(0, 10),
       })
       .returning();
 
     const sig = `overdue:milestone:${m.id}`;
-    await db.insert(nudges).values({ ownerId: FAKE_USER_ID, signature: sig });
+    await db.insert(nudges).values({
+      workspaceId: FAKE_WORKSPACE_ID,
+      forUserId: FAKE_USER_ID,
+      signature: sig,
+    });
 
-    const cands = await gatherNudgeCandidates(FAKE_USER_ID);
+    const cands = await gatherNudgeCandidates(FAKE_WORKSPACE_ID);
     const fresh = await filterDedupedCandidates(FAKE_USER_ID, cands);
     expect(fresh.find((c) => c.signature === sig)).toBeUndefined();
   });
 
   it("recordNudgesFired inserts new signatures", async () => {
-    await recordNudgesFired(FAKE_USER_ID, [
-      { signature: "stale:friend:abc", line: "x" },
-      { signature: "stale:friend:def", line: "y" },
-    ]);
+    await recordNudgesFired({
+      workspaceId: FAKE_WORKSPACE_ID,
+      forUserId: FAKE_USER_ID,
+      cands: [
+        { signature: "stale:friend:abc", line: "x" },
+        { signature: "stale:friend:def", line: "y" },
+      ],
+    });
     const rows = await db.select().from(nudges);
     expect(rows.map((r) => r.signature).sort()).toEqual([
       "stale:friend:abc",

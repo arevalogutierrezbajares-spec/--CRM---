@@ -1,19 +1,19 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { NextRequest } from "next/server";
 import { db, schema } from "@/db";
-import { FAKE_USER_ID } from "./setup";
+import { FAKE_USER_ID, FAKE_WORKSPACE_ID } from "./setup";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function nextReq(url: string, init?: any): NextRequest {
-  // Cast to satisfy Next 16's stricter RequestInit typing (signal: null disallowed).
   return new NextRequest(url, init);
 }
 
-const { contacts, contactChannels, touches } = schema;
+const { contacts, contactChannels, touches, users } = schema;
 
-// Configure the route env once for the whole suite. The webhook routes read
-// these synchronously.
+const SENDER_PHONE = "+15551234567";
+const base = { workspaceId: FAKE_WORKSPACE_ID, createdBy: FAKE_USER_ID };
+
 beforeAll(() => {
   process.env.POSTMARK_INBOUND_SECRET = "test-secret";
   process.env.AGB_INBOUND_OWNER_USER_ID = FAKE_USER_ID;
@@ -22,7 +22,6 @@ beforeAll(() => {
   process.env.WA_VERIFY_TOKEN = "test-verify-token";
 });
 
-// Stub global fetch so the WhatsApp send helper succeeds in tests.
 const realFetch = globalThis.fetch;
 beforeAll(() => {
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -43,29 +42,23 @@ afterAll(() => {
   globalThis.fetch = realFetch;
 });
 
+beforeEach(async () => {
+  // Bind FAKE_USER's WhatsApp number for sender resolution in the WA webhook.
+  await db
+    .update(users)
+    .set({ whatsappPhone: SENDER_PHONE })
+    .where(eq(users.id, FAKE_USER_ID));
+});
+
 async function seedContactWithEmail(email: string) {
   const [c] = await db
     .insert(contacts)
-    .values({ name: "Marta López", ownerId: FAKE_USER_ID })
+    .values({ ...base, name: "Marta López" })
     .returning();
   await db.insert(contactChannels).values({
     contactId: c.id,
     kind: "email",
     value: email,
-    isPrimary: true,
-  });
-  return c;
-}
-
-async function seedContactWithWhatsApp(phone: string) {
-  const [c] = await db
-    .insert(contacts)
-    .values({ name: "Carlos Pérez", ownerId: FAKE_USER_ID })
-    .returning();
-  await db.insert(contactChannels).values({
-    contactId: c.id,
-    kind: "whatsapp",
-    value: phone,
     isPrimary: true,
   });
   return c;
@@ -89,9 +82,6 @@ describe("[integration] Postmark inbound webhook", () => {
         headers: { "content-type": "application/json" },
       },
     );
-    // The route expects a NextRequest; the route handler reads .json() and
-    // .nextUrl.searchParams, both of which a plain Request supports via the
-    // NextRequest wrapper at runtime. Next adapts Request automatically.
     const resp = await POST(req);
     expect(resp.status).toBe(200);
     const body = (await resp.json()) as { ok: boolean; touchId: string };
@@ -105,7 +95,6 @@ describe("[integration] Postmark inbound webhook", () => {
     expect(rows[0].body).toContain("Caney onboarding");
     expect(rows[0].body).toContain("schedule the demo");
 
-    // last_touch_at should be bumped on the contact.
     const [updated] = await db
       .select()
       .from(contacts)
@@ -123,7 +112,7 @@ describe("[integration] Postmark inbound webhook", () => {
     expect(resp.status).toBe(401);
   });
 
-  it("returns 202 + drops to the triage log when the sender doesn't match a contact", async () => {
+  it("returns 202 + drops to the triage log when sender doesn't match a contact", async () => {
     const { POST } = await import("@/app/api/postmark/inbound/route");
     const req = nextReq(
       "http://localhost/api/postmark/inbound?secret=test-secret",
@@ -148,7 +137,6 @@ describe("[integration] Postmark inbound webhook", () => {
     expect(body.reason).toMatch(/no matching contact/i);
     expect(body.from).toBe("unknown-sender@example.com");
 
-    // No touches were created.
     const all = await db.select().from(touches);
     expect(all).toHaveLength(0);
   });
@@ -175,13 +163,10 @@ describe("[integration] WhatsApp webhook", () => {
     expect(resp.status).toBe(403);
   });
 
-  it("POST /log @marta from a known sender logs a Touch on the right contact", async () => {
-    // Sender contact (whose phone is the from-id)
-    await seedContactWithWhatsApp("15551234567");
-    // Target contact for /log
+  it("POST /log @marta from a registered sender logs a Touch on the right contact", async () => {
     const [marta] = await db
       .insert(contacts)
-      .values({ name: "Marta López", ownerId: FAKE_USER_ID })
+      .values({ ...base, name: "Marta López" })
       .returning();
 
     const { POST } = await import("@/app/api/whatsapp/webhook/route");
@@ -195,12 +180,12 @@ describe("[integration] WhatsApp webhook", () => {
                 value: {
                   messages: [
                     {
-                      from: "15551234567",
+                      from: SENDER_PHONE,
                       type: "text",
                       text: { body: "/log @marta had coffee, talked funding" },
                     },
                   ],
-                  contacts: [{ wa_id: "15551234567" }],
+                  contacts: [{ wa_id: SENDER_PHONE }],
                 },
               },
             ],
@@ -212,7 +197,6 @@ describe("[integration] WhatsApp webhook", () => {
     const resp = await POST(req);
     expect(resp.status).toBe(200);
 
-    // Allow the fire-and-forget WA reply to settle.
     await new Promise((r) => setTimeout(r, 10));
 
     const martaTouches = await db
@@ -224,8 +208,18 @@ describe("[integration] WhatsApp webhook", () => {
     expect(martaTouches[0].body).toContain("had coffee, talked funding");
   });
 
-  it("POST free-form text from a known sender logs a whatsapp Touch on the sender", async () => {
-    const sender = await seedContactWithWhatsApp("15559876543");
+  it("POST free-form text matches sender to contact channel and logs on it", async () => {
+    // Seed a contact whose whatsapp channel value matches the sender phone.
+    const [contact] = await db
+      .insert(contacts)
+      .values({ ...base, name: "Carlos Pérez" })
+      .returning();
+    await db.insert(contactChannels).values({
+      contactId: contact.id,
+      kind: "whatsapp",
+      value: SENDER_PHONE,
+      isPrimary: true,
+    });
 
     const { POST } = await import("@/app/api/whatsapp/webhook/route");
     const req = nextReq("http://localhost/api/whatsapp/webhook", {
@@ -238,7 +232,7 @@ describe("[integration] WhatsApp webhook", () => {
                 value: {
                   messages: [
                     {
-                      from: "15559876543",
+                      from: SENDER_PHONE,
                       type: "text",
                       text: { body: "Hey, free for lunch tomorrow?" },
                     },
@@ -254,12 +248,12 @@ describe("[integration] WhatsApp webhook", () => {
     const resp = await POST(req);
     expect(resp.status).toBe(200);
 
-    const senderTouches = await db
+    const contactTouches = await db
       .select()
       .from(touches)
-      .where(eq(touches.contactId, sender.id));
-    expect(senderTouches.length).toBe(1);
-    expect(senderTouches[0].channel).toBe("whatsapp");
-    expect(senderTouches[0].body).toBe("Hey, free for lunch tomorrow?");
+      .where(eq(touches.contactId, contact.id));
+    expect(contactTouches.length).toBe(1);
+    expect(contactTouches[0].channel).toBe("whatsapp");
+    expect(contactTouches[0].body).toBe("Hey, free for lunch tomorrow?");
   });
 });

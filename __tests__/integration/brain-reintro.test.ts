@@ -1,7 +1,9 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { db, schema } from "@/db";
 import { generateReintro } from "@/app/(app)/brain/actions";
-import { FAKE_USER_ID } from "./setup";
+import { FAKE_USER_ID, FAKE_WORKSPACE_ID } from "./setup";
+
+const base = { workspaceId: FAKE_WORKSPACE_ID, createdBy: FAKE_USER_ID };
 
 const { contacts, touches } = schema;
 
@@ -59,11 +61,11 @@ describe("[integration] re-intro brain surface", () => {
     const [c] = await db
       .insert(contacts)
       .values({
+        ...base,
         name: "Marta López",
         type: "person",
         relationshipType: "friend",
         organization: "Posada La Rosa",
-        ownerId: FAKE_USER_ID,
         introChainFromText: "Met at IDB dinner via Carlos",
       })
       .returning();
@@ -71,16 +73,16 @@ describe("[integration] re-intro brain surface", () => {
     // Seed two recent touches as context.
     await db.insert(touches).values([
       {
+        ...base,
         contactId: c.id,
         channel: "manual",
         body: "Discussed Caney onboarding next steps",
-        createdBy: FAKE_USER_ID,
       },
       {
+        ...base,
         contactId: c.id,
         channel: "whatsapp",
         body: "Confirmed she's interested in the partnership",
-        createdBy: FAKE_USER_ID,
       },
     ]);
 
@@ -103,8 +105,8 @@ describe("[integration] re-intro brain surface", () => {
     const [c] = await db
       .insert(contacts)
       .values({
+        ...base,
         name: "Carlos Pérez",
-        ownerId: FAKE_USER_ID,
       })
       .returning();
 

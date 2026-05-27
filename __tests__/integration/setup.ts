@@ -12,6 +12,7 @@
  * — see scripts/test-db.sh.
  */
 import { afterEach, beforeAll } from "vitest";
+import { eq } from "drizzle-orm";
 
 process.env.DATABASE_URL =
   process.env.DATABASE_URL ?? "postgresql://agb@localhost:54329/agb_test";
@@ -26,11 +27,11 @@ process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY =
 
 // Must match the fake user id baked into lib/current-user.ts.
 export const FAKE_USER_ID = "00000000-0000-0000-0000-000000000000";
+// A workspace owned by FAKE_USER_ID, materialized in beforeAll.
+export const FAKE_WORKSPACE_ID = "00000000-0000-0000-0000-0000000000aa";
 
 beforeAll(async () => {
   const { db, schema } = await import("@/db");
-  // Make sure the fake test user exists — every FK on contacts/projects/etc
-  // needs a row in users.
   await db
     .insert(schema.users)
     .values({
@@ -39,6 +40,26 @@ beforeAll(async () => {
       displayName: "Test Founder",
     })
     .onConflictDoNothing();
+  await db
+    .insert(schema.workspaces)
+    .values({
+      id: FAKE_WORKSPACE_ID,
+      name: "Test Workspace",
+      createdBy: FAKE_USER_ID,
+    })
+    .onConflictDoNothing();
+  await db
+    .insert(schema.workspaceMembers)
+    .values({
+      workspaceId: FAKE_WORKSPACE_ID,
+      userId: FAKE_USER_ID,
+      role: "owner",
+    })
+    .onConflictDoNothing();
+  await db
+    .update(schema.users)
+    .set({ currentWorkspaceId: FAKE_WORKSPACE_ID })
+    .where(eq(schema.users.id, FAKE_USER_ID));
 });
 
 afterEach(async () => {

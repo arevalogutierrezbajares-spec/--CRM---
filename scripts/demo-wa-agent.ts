@@ -12,6 +12,7 @@ import { handleMessage } from "@/lib/whatsapp-agent";
 import { eq } from "drizzle-orm";
 
 const FAKE_USER_ID = "00000000-0000-0000-0000-000000000000";
+const FAKE_WORKSPACE_ID = "00000000-0000-0000-0000-0000000000aa";
 const SENDER = "+15551234567";
 
 process.env.ANTHROPIC_API_KEY = "sk-test";
@@ -52,7 +53,6 @@ async function step(label: string, message: string) {
   console.log(`\n┌─ ${label}`);
   console.log(`│ User:  ${message}`);
   const res = await handleMessage({
-    ownerId: FAKE_USER_ID,
     senderPhone: SENDER,
     body: message,
   });
@@ -65,6 +65,12 @@ async function step(label: string, message: string) {
 }
 
 async function main() {
+// Make sure FAKE_USER has a whatsapp_phone matching SENDER so resolveSender finds them.
+await db
+  .update(schema.users)
+  .set({ whatsappPhone: SENDER, currentWorkspaceId: FAKE_WORKSPACE_ID })
+  .where(eq(schema.users.id, FAKE_USER_ID));
+
 const [marta] = await db
   .select()
   .from(schema.contacts)

@@ -1,12 +1,16 @@
 # AGB CRM — Handoff
 
-> **Latest: 2026-05-27 — production-ready v1.**
-> 114 tests passing (69 unit · 33 integration against real Postgres · 12 e2e).
-> `next build` green, `tsc --noEmit` clean. End-to-end audit complete with a
-> live agent demo against real data — see §*Final audit verdict* below.
+> **Latest: 2026-05-27 — production-ready v1 + shared-workspace refactor.**
+> All data ownership moved from per-user (`owner_id`) to per-workspace
+> (`workspace_id`), so you and your partners share contacts/projects/meetings
+> while keeping personal reminders. WhatsApp agent now routes by sender phone
+> → user → workspace, so each partner can text from their own number and act
+> as themselves inside the shared CRM. New `/workspace` page lets the owner
+> invite members by email; new `/accept?token=…` flow redeems invites.
 >
-> **What's left for you:** wire Supabase (AGB-000A), add the API keys you want
-> active (Anthropic, WhatsApp, Postmark, etc.), then `pnpm verify` and ship.
+> 119 tests passing (69 unit · 38 integration against real Postgres + new
+> cross-workspace-isolation suite · 12 e2e). `next build` green, `tsc --noEmit`
+> clean, Supabase live with 20 tables + workspace RLS.
 
 ---
 

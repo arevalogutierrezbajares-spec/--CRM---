@@ -12,9 +12,12 @@ import { db, schema } from "@/db";
 import { instantiateMilestonesFromTemplate } from "@/db/queries/milestones";
 
 const FAKE_USER_ID = "00000000-0000-0000-0000-000000000000";
+const FAKE_WORKSPACE_ID = "00000000-0000-0000-0000-0000000000aa";
 
 const {
   users,
+  workspaces,
+  workspaceMembers,
   contacts,
   contactChannels,
   contactTags,
@@ -29,10 +32,9 @@ const {
   reminders,
 } = schema;
 
+const base = { workspaceId: FAKE_WORKSPACE_ID, createdBy: FAKE_USER_ID };
+
 async function main() {
-  // Idempotent: wipe fixture tables before inserting so re-running this
-  // script doesn't double everything. Leaves seeded base (templates, tags,
-  // users) alone.
   await db.execute(/* sql */ `
     truncate table
       wa_activity,
@@ -51,7 +53,7 @@ async function main() {
     cascade
   `);
 
-  // Owner row (matches the dev fake user)
+  // Owner row + workspace.
   await db
     .insert(users)
     .values({
@@ -61,6 +63,26 @@ async function main() {
       timezone: "America/New_York",
     })
     .onConflictDoNothing();
+  await db
+    .insert(workspaces)
+    .values({
+      id: FAKE_WORKSPACE_ID,
+      name: "Demo Workspace",
+      createdBy: FAKE_USER_ID,
+    })
+    .onConflictDoNothing();
+  await db
+    .insert(workspaceMembers)
+    .values({
+      workspaceId: FAKE_WORKSPACE_ID,
+      userId: FAKE_USER_ID,
+      role: "owner",
+    })
+    .onConflictDoNothing();
+  await db
+    .update(users)
+    .set({ currentWorkspaceId: FAKE_WORKSPACE_ID })
+    .where(eq(users.id, FAKE_USER_ID));
 
   const ventureTags = await db.select().from(tags);
   const caneyTag = ventureTags.find((t) => t.name === "caney")!;
@@ -71,11 +93,11 @@ async function main() {
   const [marta] = await db
     .insert(contacts)
     .values({
+      ...base,
       name: "Marta López",
       type: "person",
       relationshipType: "lead",
       organization: "Posada La Rosa",
-      ownerId: FAKE_USER_ID,
       introChainFromText: "Met at IDB dinner via Carlos",
       lastTouchAt: new Date(Date.now() - 3 * 86400000),
     })
@@ -94,12 +116,12 @@ async function main() {
   const [carlos] = await db
     .insert(contacts)
     .values({
+      ...base,
       name: "Carlos Pérez",
       type: "person",
       relationshipType: "friend",
       organization: "IDB",
-      ownerId: FAKE_USER_ID,
-      lastTouchAt: new Date(Date.now() - 70 * 86400000), // stale
+      lastTouchAt: new Date(Date.now() - 70 * 86400000),
     })
     .returning();
   await db.insert(contactChannels).values({
@@ -116,11 +138,11 @@ async function main() {
   const [diego] = await db
     .insert(contacts)
     .values({
+      ...base,
       name: "Diego Méndez",
       type: "person",
       relationshipType: "partner",
       organization: "Creatives MX",
-      ownerId: FAKE_USER_ID,
       introChainFromContactId: carlos.id,
       lastTouchAt: new Date(Date.now() - 14 * 86400000),
     })
@@ -133,15 +155,14 @@ async function main() {
   });
   await db.insert(contactTags).values({ contactId: diego.id, tagId: vavTag.id });
 
-  // Archived contact so /contacts?archived=true has something
   await db.insert(contacts).values({
+    ...base,
     name: "Old Vendor",
     relationshipType: "prospect",
     archived: true,
-    ownerId: FAKE_USER_ID,
   });
 
-  // ── Project: Marta — Caney onboarding (uses the 12-stage Caney template) ─
+  // ── Project: Marta — Caney onboarding ───────────────────────────────────
   const caneyStages = await db
     .select()
     .from(pipelineStages)
@@ -150,10 +171,10 @@ async function main() {
   const [martaProject] = await db
     .insert(projects)
     .values({
+      ...base,
       title: "Marta — Caney onboarding",
       templateId: "caney-posada-onboarding",
-      currentStageId: caneyStages[2].id, // started, mid-stage
-      ownerId: FAKE_USER_ID,
+      currentStageId: caneyStages[2].id,
       dueDate: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
     })
     .returning();
@@ -163,16 +184,15 @@ async function main() {
   const ms = await instantiateMilestonesFromTemplate({
     projectId: martaProject.id,
     templateId: "caney-posada-onboarding",
-    fallbackOwnerId: FAKE_USER_ID,
+    workspaceId: FAKE_WORKSPACE_ID,
+    createdBy: FAKE_USER_ID,
   });
-  // Mark first 2 done
   for (const m of ms.slice(0, 2)) {
     await db
       .update(milestones)
       .set({ status: "done", completedAt: new Date() })
       .where(eq(milestones.id, m.id));
   }
-  // Make milestone 3 overdue
   await db
     .update(milestones)
     .set({
@@ -184,9 +204,9 @@ async function main() {
   const [vavProject] = await db
     .insert(projects)
     .values({
+      ...base,
       title: "VAV Q3 creator pipeline",
       templateId: "vav-creator-campaign",
-      ownerId: FAKE_USER_ID,
       status: "waiting",
       waitingOn: "Diego's signed deliverables agreement",
       expectedUnblockDate: new Date(Date.now() - 5 * 86400000)
@@ -198,7 +218,7 @@ async function main() {
     .insert(projectContacts)
     .values({ projectId: vavProject.id, contactId: diego.id, role: "primary" });
 
-  // ── Touches across the timeline so /contacts/[id] + heatmap render ──────
+  // ── Touches ─────────────────────────────────────────────────────────────
   const now = Date.now();
   const martaTouchData = [
     { days: 3, channel: "meeting" as const, body: "Demo of CaneyCloud booking flow at her posada" },
@@ -208,28 +228,28 @@ async function main() {
   ];
   for (const t of martaTouchData) {
     await db.insert(touches).values({
+      ...base,
       contactId: marta.id,
       projectId: martaProject.id,
       channel: t.channel,
       body: t.body,
-      createdBy: FAKE_USER_ID,
       createdAt: new Date(now - t.days * 86400000),
     });
   }
   await db.insert(touches).values([
     {
+      ...base,
       contactId: diego.id,
       projectId: vavProject.id,
       channel: "email",
       body: "Followed up on the deliverables agreement — still waiting",
-      createdBy: FAKE_USER_ID,
       createdAt: new Date(now - 8 * 86400000),
     },
     {
+      ...base,
       contactId: diego.id,
       channel: "call",
       body: "Caught up about Q4 plans, he's interested in scaling the partnership",
-      createdBy: FAKE_USER_ID,
       createdAt: new Date(now - 14 * 86400000),
     },
   ]);
@@ -238,12 +258,14 @@ async function main() {
   const [meeting] = await db
     .insert(meetings)
     .values({
+      ...base,
       title: "Marta — onboarding kickoff",
       scheduledAt: new Date(now - 3 * 86400000),
       type: "one_on_one",
       location: "Caracas · Café Arábica",
       linkedProjectId: martaProject.id,
-      agenda: "Walk through the CaneyCloud booking flow + agree on rollout timeline",
+      agenda:
+        "Walk through the CaneyCloud booking flow + agree on rollout timeline",
       minutes: [
         "Marta confirmed October pilot start.",
         "She wants WhatsApp booking on day 1.",
@@ -253,7 +275,6 @@ async function main() {
         "[ ] Confirm Stripe Connect setup with her bank",
         "[ ] Draft pilot agreement (60 days, $99/mo)",
       ].join("\n"),
-      createdBy: FAKE_USER_ID,
     })
     .returning();
   await db
@@ -263,7 +284,9 @@ async function main() {
   // ── Reminders ───────────────────────────────────────────────────────────
   await db.insert(reminders).values([
     {
-      ownerId: FAKE_USER_ID,
+      workspaceId: FAKE_WORKSPACE_ID,
+      forUserId: FAKE_USER_ID,
+      createdBy: FAKE_USER_ID,
       subject: "Send Marta the WhatsApp integration spec",
       dueAt: new Date(now + 2 * 86400000),
       recur: "once",
@@ -271,11 +294,13 @@ async function main() {
       sourceProjectId: martaProject.id,
     },
     {
-      ownerId: FAKE_USER_ID,
+      workspaceId: FAKE_WORKSPACE_ID,
+      forUserId: FAKE_USER_ID,
+      createdBy: FAKE_USER_ID,
       subject: "Weekly VAV creator pipeline review",
       dueAt: new Date(now + 7 * 86400000),
       recur: "weekly",
-      recurDay: 1, // Mon
+      recurDay: 1,
       recurTime: "08:00:00",
     },
   ]);

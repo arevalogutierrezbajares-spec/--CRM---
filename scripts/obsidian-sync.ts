@@ -96,22 +96,25 @@ async function upsertTag(name: string): Promise<string> {
 }
 
 async function syncContact(opts: {
-  ownerId: string;
+  workspaceId: string;
+  userId: string;
   vaultPath: string;
   fm: ContactFM;
   mtime: Date;
 }) {
-  const { ownerId, vaultPath, fm, mtime } = opts;
+  const { workspaceId, userId, vaultPath, fm, mtime } = opts;
 
   const [existing] = await db
     .select()
     .from(contacts)
     .where(
-      and(eq(contacts.notesPath, vaultPath), eq(contacts.ownerId, ownerId)),
+      and(
+        eq(contacts.notesPath, vaultPath),
+        eq(contacts.workspaceId, workspaceId),
+      ),
     )
     .limit(1);
 
-  // Last-write-wins: only overwrite if the file is newer than the row.
   if (existing && existing.updatedAt > mtime) {
     return { skipped: true, id: existing.id };
   }
@@ -122,7 +125,8 @@ async function syncContact(opts: {
     relationshipType: fm.relationship ?? "prospect",
     organization: fm.org ?? null,
     introChainFromText: fm.intro ?? null,
-    ownerId,
+    workspaceId,
+    createdBy: userId,
     notesPath: vaultPath,
     updatedAt: new Date(),
   };
@@ -156,17 +160,21 @@ async function syncContact(opts: {
 }
 
 async function syncProject(opts: {
-  ownerId: string;
+  workspaceId: string;
+  userId: string;
   vaultPath: string;
   fm: ProjectFM;
   mtime: Date;
 }) {
-  const { ownerId, vaultPath, fm, mtime } = opts;
+  const { workspaceId, userId, vaultPath, fm, mtime } = opts;
   const [existing] = await db
     .select()
     .from(projects)
     .where(
-      and(eq(projects.notesPath, vaultPath), eq(projects.ownerId, ownerId)),
+      and(
+        eq(projects.notesPath, vaultPath),
+        eq(projects.workspaceId, workspaceId),
+      ),
     )
     .limit(1);
 
@@ -180,7 +188,8 @@ async function syncProject(opts: {
     templateId: fm.template ?? null,
     dueDate: fm.due ?? null,
     waitingOn: fm.waiting_on ?? null,
-    ownerId,
+    workspaceId,
+    createdBy: userId,
     notesPath: vaultPath,
     updatedAt: new Date(),
   };
@@ -216,6 +225,18 @@ async function main() {
     console.error("OBSIDIAN_OWNER_USER_ID not set.");
     process.exit(1);
   }
+  const [u] = await db
+    .select({ id: schema.users.id, workspaceId: schema.users.currentWorkspaceId })
+    .from(schema.users)
+    .where(eq(schema.users.id, ownerId))
+    .limit(1);
+  if (!u || !u.workspaceId) {
+    console.error(
+      "Obsidian owner not found or has no current workspace.",
+    );
+    process.exit(1);
+  }
+  const workspaceId = u.workspaceId;
 
   let contactsSynced = 0;
   let projectsSynced = 0;
@@ -232,7 +253,8 @@ async function main() {
 
     if (fm.agb_type === "contact") {
       const r = await syncContact({
-        ownerId,
+        workspaceId,
+        userId: ownerId,
         vaultPath: rel,
         fm,
         mtime: stat.mtime,
@@ -241,7 +263,8 @@ async function main() {
       else contactsSynced++;
     } else if (fm.agb_type === "project") {
       const r = await syncProject({
-        ownerId,
+        workspaceId,
+        userId: ownerId,
         vaultPath: rel,
         fm,
         mtime: stat.mtime,

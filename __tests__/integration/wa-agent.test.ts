@@ -2,17 +2,23 @@ import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { handleMessage } from "@/lib/whatsapp-agent";
-import { FAKE_USER_ID } from "./setup";
+import { FAKE_USER_ID, FAKE_WORKSPACE_ID } from "./setup";
 
-const { contacts, touches, reminders, waConversations, waActivity } = schema;
+const { contacts, touches, reminders, waConversations, waActivity, users } =
+  schema;
 
-const SENDER = "15551234567";
+const SENDER = "+15551234567";
 
-beforeAll(() => {
+const base = { workspaceId: FAKE_WORKSPACE_ID, createdBy: FAKE_USER_ID };
+
+beforeAll(async () => {
   process.env.ANTHROPIC_API_KEY =
     process.env.ANTHROPIC_API_KEY ?? "sk-test-stubbed";
-  // Use a known tz so reminder formatting is predictable.
-  // The user row gets timezone='America/New_York' by default.
+  // The agent looks up users.whatsapp_phone to resolve sender → user → ws.
+  await db
+    .update(users)
+    .set({ whatsappPhone: SENDER })
+    .where(eq(users.id, FAKE_USER_ID));
 });
 
 const realFetch = globalThis.fetch;
@@ -20,11 +26,6 @@ afterEach(() => {
   globalThis.fetch = realFetch;
 });
 
-/**
- * Stub Claude's tool-use endpoint with a scripted sequence of responses.
- * Each call returns the next item from `responses`. Use this to drive the
- * agent loop through known tool calls + final text.
- */
 function scriptClaude(
   responses: Array<{
     stop_reason: "tool_use" | "end_turn";
@@ -65,7 +66,7 @@ describe("[integration] WhatsApp agent loop", () => {
   it("logs a touch when Claude calls find_contact then log_touch then ends", async () => {
     const [c] = await db
       .insert(contacts)
-      .values({ name: "Marta López", ownerId: FAKE_USER_ID })
+      .values({ ...base, name: "Marta López" })
       .returning();
 
     scriptClaude([
@@ -102,7 +103,6 @@ describe("[integration] WhatsApp agent loop", () => {
     ]);
 
     const res = await handleMessage({
-      ownerId: FAKE_USER_ID,
       senderPhone: SENDER,
       body: "log: had coffee with Marta, talked funding",
     });
@@ -112,21 +112,19 @@ describe("[integration] WhatsApp agent loop", () => {
     expect(res.reply).toBe("Logged it on Marta.");
     expect(res.toolCalls).toEqual(["find_contact", "log_touch"]);
 
-    // Touch landed
     const ts = await db.select().from(touches).where(eq(touches.contactId, c.id));
     expect(ts).toHaveLength(1);
     expect(ts[0].body).toBe("Had coffee, talked funding");
 
-    // Conversation state persisted
     const [conv] = await db
       .select()
       .from(waConversations)
       .where(eq(waConversations.senderPhone, SENDER));
     expect(conv).toBeTruthy();
-    expect(conv.ownerId).toBe(FAKE_USER_ID);
+    expect(conv.workspaceId).toBe(FAKE_WORKSPACE_ID);
+    expect(conv.userId).toBe(FAKE_USER_ID);
     expect((conv.messages as unknown[]).length).toBeGreaterThanOrEqual(2);
 
-    // Activity log captured the in/tool/out trail
     const acts = await db.select().from(waActivity);
     const dirs = acts.map((a) => a.direction);
     expect(dirs).toContain("in");
@@ -135,7 +133,7 @@ describe("[integration] WhatsApp agent loop", () => {
   });
 
   it("schedules a reminder when Claude returns a schedule_reminder tool call", async () => {
-    const dueIso = "2026-06-02T13:00:00.000Z"; // 9 AM EDT
+    const dueIso = "2026-06-02T13:00:00.000Z";
     scriptClaude([
       {
         stop_reason: "tool_use",
@@ -154,12 +152,13 @@ describe("[integration] WhatsApp agent loop", () => {
       },
       {
         stop_reason: "end_turn",
-        content: [{ type: "text", text: "✓ Will remind you about Marta's proposal." }],
+        content: [
+          { type: "text", text: "✓ Will remind you about Marta's proposal." },
+        ],
       },
     ]);
 
     const res = await handleMessage({
-      ownerId: FAKE_USER_ID,
       senderPhone: SENDER,
       body: "Remind me Tuesday 9am about Marta's proposal",
     });
@@ -171,7 +170,20 @@ describe("[integration] WhatsApp agent loop", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].subject).toBe("Marta's proposal");
     expect(rows[0].recur).toBe("once");
+    expect(rows[0].forUserId).toBe(FAKE_USER_ID);
+    expect(rows[0].workspaceId).toBe(FAKE_WORKSPACE_ID);
     expect(rows[0].dueAt.toISOString()).toBe(dueIso);
+  });
+
+  it("rejects unknown senders with a polite message", async () => {
+    const res = await handleMessage({
+      senderPhone: "+19998887777",
+      body: "anything",
+    });
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.error).toBe("unknown-sender");
+    expect(res.reply).toMatch(/recognize/i);
   });
 
   it("returns a friendly error when Claude is unavailable", async () => {
@@ -184,7 +196,6 @@ describe("[integration] WhatsApp agent loop", () => {
     }) as typeof fetch;
 
     const res = await handleMessage({
-      ownerId: FAKE_USER_ID,
       senderPhone: SENDER,
       body: "anything",
     });
@@ -194,7 +205,6 @@ describe("[integration] WhatsApp agent loop", () => {
   });
 
   it("status_report tool returns counts of overdue/blocked/stale", async () => {
-    // Seed: 1 overdue milestone, 1 blocked project, 1 stale friend
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     const long_ago = new Date();
@@ -202,25 +212,23 @@ describe("[integration] WhatsApp agent loop", () => {
 
     const [proj] = await db
       .insert(schema.projects)
-      .values({ title: "P", ownerId: FAKE_USER_ID })
+      .values({ ...base, title: "P" })
       .returning();
     await db.insert(schema.milestones).values({
+      ...base,
       projectId: proj.id,
       title: "Overdue",
-      ownerId: FAKE_USER_ID,
       dueDate: yesterday.toISOString().slice(0, 10),
     });
-    await db
-      .insert(schema.projects)
-      .values({
-        title: "Blocked",
-        ownerId: FAKE_USER_ID,
-        status: "waiting",
-        waitingOn: "their signature",
-      });
+    await db.insert(schema.projects).values({
+      ...base,
+      title: "Blocked",
+      status: "waiting",
+      waitingOn: "their signature",
+    });
     await db.insert(contacts).values({
+      ...base,
       name: "Old Friend",
-      ownerId: FAKE_USER_ID,
       relationshipType: "friend",
       lastTouchAt: long_ago,
     });
@@ -240,29 +248,24 @@ describe("[integration] WhatsApp agent loop", () => {
       {
         stop_reason: "end_turn",
         content: [
-          {
-            type: "text",
-            text: "1 overdue · 1 blocked · 1 stale friend.",
-          },
+          { type: "text", text: "1 overdue · 1 blocked · 1 stale friend." },
         ],
       },
     ]);
 
-    const res = await handleMessage({
-      ownerId: FAKE_USER_ID,
-      senderPhone: SENDER,
-      body: "status",
-    });
+    const res = await handleMessage({ senderPhone: SENDER, body: "status" });
     expect(res.ok).toBe(true);
     if (!res.ok) return;
     expect(res.toolCalls).toEqual(["status_report"]);
-    // The tool execution result is logged; the assistant message references the counts.
     const acts = await db.select().from(waActivity);
     const toolAct = acts.find((a) => a.direction === "tool");
     expect(toolAct).toBeTruthy();
     const payload = toolAct!.payload as {
       name: string;
-      result: { ok: true; data: { overdue: unknown[]; blocked: unknown[]; stale: unknown[] } };
+      result: {
+        ok: true;
+        data: { overdue: unknown[]; blocked: unknown[]; stale: unknown[] };
+      };
     };
     expect(payload.name).toBe("status_report");
     expect(payload.result.data.overdue).toHaveLength(1);

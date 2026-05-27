@@ -3,9 +3,14 @@ import { asc, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { listProjects, getProject } from "@/db/queries/projects";
 import { instantiateMilestonesFromTemplate } from "@/db/queries/milestones";
-import { FAKE_USER_ID } from "./setup";
+import { FAKE_USER_ID, FAKE_WORKSPACE_ID } from "./setup";
 
 const { projects, pipelineStages, pipelineTemplates, milestones } = schema;
+
+const baseProject = {
+  workspaceId: FAKE_WORKSPACE_ID,
+  createdBy: FAKE_USER_ID,
+};
 
 describe("[integration] projects + template instantiation", () => {
   it("instantiateMilestonesFromTemplate creates one milestone per stage with correct ordering", async () => {
@@ -15,23 +20,24 @@ describe("[integration] projects + template instantiation", () => {
       .from(pipelineStages)
       .where(eq(pipelineStages.templateId, template))
       .orderBy(asc(pipelineStages.order));
-    expect(stages.length).toBe(12); // Caney template has 12 stages
+    expect(stages.length).toBe(12);
 
     const [stage1] = stages;
     const [p] = await db
       .insert(projects)
       .values({
+        ...baseProject,
         title: "Marta — Caney onboarding",
         templateId: template,
         currentStageId: stage1.id,
-        ownerId: FAKE_USER_ID,
       })
       .returning();
 
     const created = await instantiateMilestonesFromTemplate({
       projectId: p.id,
       templateId: template,
-      fallbackOwnerId: FAKE_USER_ID,
+      workspaceId: FAKE_WORKSPACE_ID,
+      createdBy: FAKE_USER_ID,
     });
 
     expect(created.length).toBe(12);
@@ -42,7 +48,6 @@ describe("[integration] projects + template instantiation", () => {
       .orderBy(asc(milestones.order));
     expect(stored.map((m) => m.title)).toEqual(stages.map((s) => s.name));
 
-    // Each milestone should have a due date computed from SLA, or null if SLA missing.
     for (let i = 0; i < stored.length; i++) {
       if (stages[i].slaDays === null) {
         expect(stored[i].dueDate).toBeNull();
@@ -64,24 +69,24 @@ describe("[integration] projects + template instantiation", () => {
     const [p] = await db
       .insert(projects)
       .values({
+        ...baseProject,
         title: "Overdue project",
         templateId: template,
         currentStageId: stage1.id,
-        ownerId: FAKE_USER_ID,
       })
       .returning();
 
-    // Add an overdue milestone (yesterday).
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     await db.insert(milestones).values({
       projectId: p.id,
       title: "Send proposal",
-      ownerId: FAKE_USER_ID,
+      workspaceId: FAKE_WORKSPACE_ID,
+      createdBy: FAKE_USER_ID,
       dueDate: yesterday.toISOString().slice(0, 10),
     });
 
-    const list = await listProjects({ ownerId: FAKE_USER_ID });
+    const list = await listProjects({ workspaceId: FAKE_WORKSPACE_ID });
     const subject = list.find((x) => x.id === p.id)!;
     expect(subject.computedHealth).toBe("red");
     expect(subject.milestoneOverdueCount).toBe(1);
@@ -99,14 +104,17 @@ describe("[integration] projects + template instantiation", () => {
     const [p] = await db
       .insert(projects)
       .values({
+        ...baseProject,
         title: "VAV deal",
         templateId: template,
         currentStageId: stage1.id,
-        ownerId: FAKE_USER_ID,
       })
       .returning();
 
-    const detail = await getProject({ id: p.id, ownerId: FAKE_USER_ID });
+    const detail = await getProject({
+      id: p.id,
+      workspaceId: FAKE_WORKSPACE_ID,
+    });
     expect(detail).toBeTruthy();
     expect(detail!.templateName).toBe("VAV creator campaign");
     expect(detail!.stages.length).toBe(10);

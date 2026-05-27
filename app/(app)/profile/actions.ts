@@ -12,13 +12,26 @@ const { users } = schema;
 const profileSchema = z.object({
   displayName: z.string().min(1).max(120),
   timezone: z.string().min(1).max(60),
+  whatsappPhone: z
+    .string()
+    .max(32)
+    .optional()
+    .transform((v) => (v && v.trim().length > 0 ? v.trim() : null)),
 });
+
+function normalizePhone(p: string | null): string | null {
+  if (!p) return null;
+  const digits = p.replace(/[^0-9]/g, "");
+  if (!digits) return null;
+  return digits.startsWith("+") ? digits : `+${digits}`;
+}
 
 export async function updateProfile(formData: FormData) {
   const user = await requireUser();
   const parsed = profileSchema.safeParse({
     displayName: String(formData.get("displayName") ?? "").trim(),
     timezone: String(formData.get("timezone") ?? "").trim(),
+    whatsappPhone: String(formData.get("whatsappPhone") ?? "").trim(),
   });
   if (!parsed.success) {
     return {
@@ -27,28 +40,19 @@ export async function updateProfile(formData: FormData) {
     };
   }
 
-  // Mirror display name into Supabase user_metadata so the nav reflects it.
   const supabase = await createClient();
   await supabase.auth.updateUser({
     data: { display_name: parsed.data.displayName },
   });
 
-  // Upsert into the public.users mirror table.
   await db
-    .insert(users)
-    .values({
-      id: user.id,
-      email: user.email,
+    .update(users)
+    .set({
       displayName: parsed.data.displayName,
       timezone: parsed.data.timezone,
+      whatsappPhone: normalizePhone(parsed.data.whatsappPhone ?? null),
     })
-    .onConflictDoUpdate({
-      target: users.id,
-      set: {
-        displayName: parsed.data.displayName,
-        timezone: parsed.data.timezone,
-      },
-    });
+    .where(eq(users.id, user.id));
 
   revalidatePath("/profile");
   return { ok: true as const };

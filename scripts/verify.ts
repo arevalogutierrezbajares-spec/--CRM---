@@ -29,6 +29,22 @@ type Check = {
   run: () => Promise<{ verdict: Verdict; detail: string }>;
 };
 
+function describeError(e: unknown): string {
+  if (!(e instanceof Error)) return String(e);
+  // AggregateError (common for Node's DNS / connect retries): unpack causes.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const errors: unknown[] | undefined = (e as any).errors;
+  if (Array.isArray(errors) && errors.length > 0) {
+    const causes = errors
+      .map((sub) => (sub instanceof Error ? sub.message : String(sub)))
+      .filter((m) => m && m.length > 0);
+    if (causes.length > 0) return `${e.name}: ${causes.join(" / ")}`;
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const code = (e as any).code;
+  return `${e.name}${code ? ` (${code})` : ""}: ${e.message || "(no message)"}`;
+}
+
 const checks: Check[] = [
   // ──────────────────────────────────────────────────────────────────────────
   // 2. Database connectivity (AGB-000A)
@@ -53,10 +69,9 @@ const checks: Check[] = [
         };
       } catch (e) {
         await client.end({ timeout: 1 }).catch(() => {});
-        const msg = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
         return {
           verdict: "broken" as const,
-          detail: msg || "(empty error — likely postgres-js bug; check DATABASE_URL format)",
+          detail: describeError(e),
         };
       }
     },
@@ -64,7 +79,7 @@ const checks: Check[] = [
   // Schema applied → expected tables exist
   {
     id: "db-schema",
-    label: "Drizzle schema applied (12 tables present)",
+    label: "Drizzle schema applied (workspace tables present)",
     required: ["DATABASE_URL"],
     async run() {
       const { default: postgres } = await import("postgres");
@@ -75,6 +90,9 @@ const checks: Check[] = [
       });
       const expected = [
         "users",
+        "workspaces",
+        "workspace_members",
+        "workspace_invites",
         "contacts",
         "contact_channels",
         "contact_tags",
@@ -87,6 +105,10 @@ const checks: Check[] = [
         "touches",
         "meetings",
         "meeting_attendees",
+        "reminders",
+        "nudges",
+        "wa_conversations",
+        "wa_activity",
       ];
       try {
         const rows = (await client`
@@ -110,7 +132,7 @@ const checks: Check[] = [
         await client.end({ timeout: 1 }).catch(() => {});
         return {
           verdict: "broken" as const,
-          detail: e instanceof Error ? e.message : String(e),
+          detail: describeError(e),
         };
       }
     },
