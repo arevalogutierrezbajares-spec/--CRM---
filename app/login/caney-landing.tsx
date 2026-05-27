@@ -53,10 +53,14 @@ export function CaneyLanding() {
   }, [phase]);
 
   // Implicit-flow magic-link handler: when Supabase's email link lands here
-  // with `#access_token=…&refresh_token=…` in the URL hash (admin-generated
-  // links or older magic-link templates), exchange the tokens for a real
-  // session cookie and redirect to the protected home.
-  // PKCE flow (?code=…) is handled by the middleware + /auth/callback route.
+  // with `#access_token=…&refresh_token=…` in the URL hash, forward the
+  // tokens to /auth/handoff which establishes the session SERVER-SIDE.
+  //
+  // Why not client-side setSession? Supabase projects using HS256 signing
+  // keys can't publish a verifying secret in JWKS, so the browser SDK
+  // rejects the JWT with "unrecognized kid" / "signature is invalid". The
+  // server-side @supabase/ssr just trusts and stores the tokens via the
+  // cookie API. PKCE flow (?code=…) is handled by middleware + /auth/callback.
   useEffect(() => {
     if (typeof window === "undefined") return;
     const hash = window.location.hash.slice(1);
@@ -67,10 +71,14 @@ export function CaneyLanding() {
     if (!access_token || !refresh_token) return;
 
     (async () => {
-      const supabase = createBrowserSupabase();
-      const { error } = await supabase.auth.setSession({ access_token, refresh_token });
-      if (error) {
-        console.error("setSession failed:", error.message);
+      const resp = await fetch("/auth/handoff", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ access_token, refresh_token }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        console.error("auth handoff failed:", err.error ?? resp.status);
         return;
       }
       // Clear the hash so a reload doesn't try to re-process it, then go home.
