@@ -295,13 +295,84 @@ export async function handleMessage(opts: {
     };
   }
 
+  return handleResolvedMessage({
+    senderKey: opts.senderPhone,
+    body: opts.body,
+    resolved,
+  });
+}
+
+/**
+ * Web entry point — caller already has an authenticated session user.
+ * Conversation state is keyed under `web:<userId>` so web threads don't
+ * collide with the user's WhatsApp thread; both can coexist for the same
+ * person and have independent history.
+ */
+export async function handleMessageForUser(opts: {
+  userId: string;
+  body: string;
+}): Promise<AgentResult> {
+  if (!isAnthropicConfigured()) {
+    return {
+      ok: false,
+      reply: "AI brain isn't configured. Set ANTHROPIC_API_KEY and reload.",
+      error: "ANTHROPIC_API_KEY missing",
+    };
+  }
+
+  const [u] = await db
+    .select({
+      id: users.id,
+      displayName: users.displayName,
+      timezone: users.timezone,
+      whatsappPersona: users.whatsappPersona,
+      currentWorkspaceId: users.currentWorkspaceId,
+    })
+    .from(users)
+    .where(eq(users.id, opts.userId))
+    .limit(1);
+
+  if (!u || !u.currentWorkspaceId) {
+    return {
+      ok: false,
+      reply: "I can't find your workspace. Visit /profile to set one up.",
+      error: "no-workspace",
+    };
+  }
+
+  const resolved: ResolvedSender = {
+    userId: u.id,
+    workspaceId: u.currentWorkspaceId,
+    displayName: u.displayName,
+    timezone: u.timezone,
+    persona: u.whatsappPersona ?? null,
+  };
+
+  return handleResolvedMessage({
+    senderKey: `web:${opts.userId}`,
+    body: opts.body,
+    resolved,
+  });
+}
+
+/**
+ * Shared agent core. Both transports (WhatsApp + web) call this once the
+ * sender has been resolved to a user+workspace.
+ */
+async function handleResolvedMessage(opts: {
+  senderKey: string;
+  body: string;
+  resolved: ResolvedSender;
+}): Promise<AgentResult> {
+  const { senderKey, body, resolved } = opts;
+
   // Daily token cap (per workspace).
   const spent = await tokenSpendToday(resolved.workspaceId);
   if (spent > dailyCap()) {
     await logActivity({
       workspaceId: resolved.workspaceId,
       userId: resolved.userId,
-      senderPhone: opts.senderPhone,
+      senderPhone: senderKey,
       direction: "reject",
       payload: { reason: "daily-token-cap", spent, cap: dailyCap() },
     });
@@ -314,10 +385,10 @@ export async function handleMessage(opts: {
   }
 
   const now = new Date();
-  const state = await loadState(opts.senderPhone);
+  const state = await loadState(senderKey);
 
   // ── Intent classification & workflow gating ──────────────────────────────
-  const classification = classifyIntent(opts.body);
+  const classification = classifyIntent(body);
   const workflow = getWorkflow(classification.intent);
 
   // Confirmation handling: if user said "yes/no" and there's a pending intent,
@@ -331,13 +402,13 @@ export async function handleMessage(opts: {
   // Short-circuit "no" when something was pending
   if (isConfirmNo && hasPendingIntent) {
     state.pendingIntent = null;
-    await saveState(opts.senderPhone, resolved.workspaceId, resolved.userId, state);
+    await saveState(senderKey, resolved.workspaceId, resolved.userId, state);
     await logActivity({
       workspaceId: resolved.workspaceId,
       userId: resolved.userId,
-      senderPhone: opts.senderPhone,
+      senderPhone: senderKey,
       direction: "in",
-      payload: { body: opts.body, intent: "confirmation:no" },
+      payload: { body: body, intent: "confirmation:no" },
     });
     return {
       ok: true,
@@ -359,7 +430,7 @@ export async function handleMessage(opts: {
   // Note: the RESOLVED line goes on EVERY turn (it's ground truth Claude needs
   // throughout the conversation, including when composing the final reply).
   // The workflow supplement only goes on turn 0 (it's the "what to do" hint).
-  const mentionMatches = await resolveMentions(resolved.workspaceId, opts.body);
+  const mentionMatches = await resolveMentions(resolved.workspaceId, body);
   const mentionHint = mentionSupplementLine(mentionMatches);
 
   let turn0Supplement = workflow.supplement ?? "";
@@ -368,13 +439,13 @@ export async function handleMessage(opts: {
       "\nCONFIRMATION GATE: Describe exactly what you are about to do, then ask the user YES or NO to confirm. Do NOT call any write/destructive tools yet.";
   }
 
-  state.messages.push({ role: "user", content: opts.body });
+  state.messages.push({ role: "user", content: body });
   await logActivity({
     workspaceId: resolved.workspaceId,
     userId: resolved.userId,
-    senderPhone: opts.senderPhone,
+    senderPhone: senderKey,
     direction: "in",
-    payload: { body: opts.body, intent: classification.intent },
+    payload: { body: body, intent: classification.intent },
   });
 
   const ctx: ToolContext = {
@@ -428,7 +499,7 @@ export async function handleMessage(opts: {
       await logActivity({
         workspaceId: resolved.workspaceId,
         userId: resolved.userId,
-        senderPhone: opts.senderPhone,
+        senderPhone: senderKey,
         direction: "error",
         payload: { stage: "claude", error: result.error },
       });
@@ -499,7 +570,7 @@ export async function handleMessage(opts: {
           await logActivity({
             workspaceId: resolved.workspaceId,
             userId: resolved.userId,
-            senderPhone: opts.senderPhone,
+            senderPhone: senderKey,
             direction: "tool",
             payload: { name: call.name, blocked: true, allowed },
           });
@@ -526,7 +597,7 @@ export async function handleMessage(opts: {
         await logActivity({
           workspaceId: resolved.workspaceId,
           userId: resolved.userId,
-          senderPhone: opts.senderPhone,
+          senderPhone: senderKey,
           direction: "tool",
           payload: { name: call.name, input: call.input, result: r },
         });
@@ -550,14 +621,14 @@ export async function handleMessage(opts: {
     replyText = "I'm having trouble completing that. Try rephrasing.";
   }
 
-  await saveState(opts.senderPhone, resolved.workspaceId, resolved.userId, {
+  await saveState(senderKey, resolved.workspaceId, resolved.userId, {
     messages: state.messages,
     pendingIntent,
   });
   await logActivity({
     workspaceId: resolved.workspaceId,
     userId: resolved.userId,
-    senderPhone: opts.senderPhone,
+    senderPhone: senderKey,
     direction: "out",
     payload: {
       body: replyText,
