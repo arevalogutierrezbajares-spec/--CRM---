@@ -1,5 +1,7 @@
 "use server";
 
+import { eq } from "drizzle-orm";
+import { db, schema } from "@/db";
 import { requireUser } from "@/lib/current-user";
 import { handleMessageForUser } from "@/lib/wa-agent/loop";
 
@@ -53,8 +55,6 @@ export async function requestAgentTurn(text: string): Promise<AgentTurnResult> {
  */
 export async function clearAgentConversation(): Promise<{ ok: true }> {
   const user = await requireUser();
-  const { db, schema } = await import("@/db");
-  const { eq } = await import("drizzle-orm");
   await db
     .delete(schema.waConversations)
     .where(eq(schema.waConversations.senderPhone, `web:${user.id}`));

@@ -1,14 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireUser } from "@/lib/current-user";
+import { getCurrentUser } from "@/lib/current-user";
 import { transcribeVoice } from "@/lib/wa-agent/media/transcribe";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
-  // Auth check — only logged-in workspace members can hit Whisper.
-  // requireUser() throws → 401 if unauthenticated.
-  await requireUser();
+  // Auth check — return clean 401 instead of redirecting (requireUser
+  // redirects, which is wrong for an API route consumed by fetch).
+  const user = await getCurrentUser();
+  if (!user) {
+    return NextResponse.json(
+      { ok: false, error: "unauthenticated" },
+      { status: 401 },
+    );
+  }
 
   let formData: FormData;
   try {
