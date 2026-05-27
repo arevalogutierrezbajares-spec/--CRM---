@@ -138,3 +138,23 @@ export async function listStagesForTemplate(templateId: string) {
     .where(eq(pipelineStages.templateId, templateId))
     .orderBy(asc(pipelineStages.order));
 }
+
+/* ─── Project links (Business / Marketing / Tech / etc.) ───────────────── */
+
+export type ProjectLinkRow = typeof schema.projectLinks.$inferSelect;
+
+export async function listProjectLinks(opts: {
+  projectId: string;
+  workspaceId: string;
+}): Promise<ProjectLinkRow[]> {
+  return db
+    .select()
+    .from(schema.projectLinks)
+    .where(
+      and(
+        eq(schema.projectLinks.projectId, opts.projectId),
+        eq(schema.projectLinks.workspaceId, opts.workspaceId),
+      ),
+    )
+    .orderBy(asc(schema.projectLinks.category), asc(schema.projectLinks.sortOrder));
+}

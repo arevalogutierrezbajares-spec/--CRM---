@@ -87,6 +87,18 @@ export const waDirection = pgEnum("wa_direction", [
   "reject",
   "error",
 ]);
+/* ─── Project links ────────────────────────────────────────────────────── */
+
+export const linkCategory = pgEnum("link_category", [
+  "business",
+  "marketing",
+  "tech",
+  "ops",
+  "design",
+  "finance",
+  "other",
+]);
+
 /* ─── Work-mgmt enums ──────────────────────────────────────────────────── */
 
 export const workPriority = pgEnum("work_priority", [
@@ -378,10 +390,36 @@ export const projects = pgTable("projects", {
   waitingOn: text("waiting_on"),
   expectedUnblockDate: date("expected_unblock_date"),
   notesPath: text("notes_path"),
+  // ─── Portfolio display extensions ────────────────────────────────
+  tagline: text("tagline"), // one-line positioning
+  summary: text("summary"), // markdown-ish description
+  coverEmoji: text("cover_emoji"), // single emoji for the cover
+  coverColor: text("cover_color"), // hex; left/border accent
+  primaryUrl: text("primary_url"), // production / canonical link
+  repoUrl: text("repo_url"),
+  statusText: text("status_text"), // short human status string
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const projectLinks = pgTable("project_links", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  projectId: uuid("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  category: linkCategory("category").notNull().default("other"),
+  label: text("label").notNull(),
+  url: text("url"), // can be null for "note" entries
+  description: text("description"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
 });
