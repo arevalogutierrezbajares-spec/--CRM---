@@ -7,7 +7,7 @@
 **Score:** ~9.3/10 — login is invite-gated and live in prod; WA bot verified end-to-end on real phone; token diet shipped (-57% input tokens)
 **Hot path:** Text the WA bot at the live Cloud number; 20-tool agent routes through regex intent classifier → dynamic tool gating (3 tools avg per call) → Haiku 4.5 for routine intents, Sonnet 4.6 for reasoning. Mention pre-resolver injects contact IDs + org + rel before the LLM, eliminating most second-turn lookups. Outbound send failures now write `error` rows to `wa_activity` so an expired WA token can't silently break the bot again.
 
-**Index of this doc:** _What shipped this session_ → _At a glance_ → _Phase tables (0-7 + Wave D + Wave E)_ → _CoS-Bot Backlog_ (tactical polish) → _Brainstorm_ (strategic / multi-system, NOT committed: RAG, creator program) → _Recommended pick-up order_
+**Index of this doc:** _What shipped this session_ → _At a glance_ → _Phase tables (0-7 + Wave D + Wave E)_ → _CoS-Bot Backlog_ (tactical polish) → _Brainstorm_ (strategic / multi-system, NOT committed: BR-1 RAG, BR-2 creator program, BR-3 partner portal) → _Recommended pick-up order_
 
 ## What shipped this session (2026-05-27 late)
 
@@ -379,6 +379,94 @@ all live in someone's head.
 **Why now signals:** Once you start running more than ~3 creator campaigns
 in parallel, the spreadsheet-in-head approach breaks. Multi-campaign
 attribution and payout reconciliation are the first things to fall over.
+
+---
+
+### BR-3 — Partner Portal + document-share tracking
+
+**What:** External-facing portal where partners (posada owners, VAV creators,
+BD clients, contract counterparties) log in to see *their own slice* of the
+CRM — content/functionality decided by the admin on a per-contact basis,
+controlled from the Customers/Contacts surface. Plus a substrate for
+tracking which documents have been shared with whom (independent of whether
+the full portal exists yet).
+
+**The 2-stage scoping (do them in this order):**
+
+#### Stage 1 — document-share tracking (no portal yet, ~3-5pt)
+Internal feature, ships fast, captures the immediate pain. New tables:
+- `documents` — file blob (Supabase Storage path) or external link, title,
+  uploaded_by, uploaded_at, mime_type, doc_type (NDA / contract / brief /
+  deck / spec / other)
+- `document_shares` — `(document_id, contact_id, shared_by, shared_at,
+  channel='email'|'whatsapp'|'link', message_id?, revoked_at?, viewed_at?)`
+
+UI: on a contact detail page, a "Shared with this contact" panel listing
+every document, when it was sent, the channel, and (if we can track it)
+when they opened/downloaded. New WA agent tool: `share_document(contact_id,
+doc_id, channel)` so the bot can ship a doc + log the share in one step.
+
+This alone is valuable even without the portal — it kills the "did I send
+Anabella the deck?" mental ledger.
+
+#### Stage 2 — partner portal (8-13pt depending on auth model)
+External login at e.g. `partners.agbox.com` or a `/portal` route. Each
+partner sees only what their contact record has been configured to expose.
+
+**Per-contact config (set by you from Contacts tab):**
+- `portal_enabled: boolean` — gates everything
+- `portal_surfaces: string[]` — which sections they see, e.g.:
+  - `documents` — list of docs you've shared with them
+  - `project_status` — milestones for projects where they're a stakeholder
+  - `meetings` — past meetings + minutes they attended
+  - `payments` — invoices/payouts (ties into treasury)
+  - `messages` — async thread for back-and-forth
+- `portal_welcome_message` — custom intro shown on their landing
+- Optional: `portal_branding` — different sub-brand per audience type
+  (creators see VAV branding, posada owners see CaneyCloud)
+
+**Auth model — needs a call:**
+- **Magic link to email-on-file** — cheap, reuses Supabase Auth, but partners
+  don't get a password they can remember
+- **One-time signed tokens** — each share-event includes a unique URL token,
+  no persistent login. Good for one-off doc handoffs, bad for ongoing portal
+- **Full account with password** — partners self-register, you approve.
+  Most "portal-like" but most overhead.
+
+**Open questions:**
+- "Customers tab" — does this exist today or are we adding it? Today the
+  CRM has a generic Contacts table with `relationship_type: friend/lead/
+  partner/prospect`. "Customers" could be a filtered Contacts view OR a
+  new top-level entity (recommend filtered view to start).
+- Multi-tenant data isolation: same Supabase project, partner-portal queries
+  ride on new RLS policies keyed off the auth.users.id ↔ contact_id link.
+- One portal per workspace, or one global portal that detects which
+  workspace each partner belongs to? (Important once you have multiple AGB
+  workspaces — today you don't.)
+- File storage: same `agb-media` bucket as voice notes (Wave D), or a
+  separate `agb-docs` bucket for sharing semantics?
+- View tracking: is "viewed_at" tied to portal access, document download,
+  or both? Compliance question if any of these are contracts.
+
+**Natural overlap with other brainstorm items:**
+- **BR-2 (creator/affiliate structure)** — creators ARE partners; their
+  portal surface is mostly Stage-2 with creator-specific tabs (deliverable
+  checklist, payout history, affiliate stats). Either build BR-3 first and
+  let creators be one configuration of it, or vice versa.
+- **BR-1 (RAG)** — partners could ask the bot "what did we agree on for
+  Q3?" and get answers from THEIR slice of the corpus. The RAG layer would
+  need contact-scoped retrieval.
+
+**Why now signals:**
+- "Did I send X the Y document?" being a recurring question in your head
+- A creator/posada owner asking "where do I see my campaign status / payout
+  history?" and you not having a clean answer
+- A counterparty asking for a paper trail of what was shared when
+
+**Smallest valuable slice to ship first:** Stage 1, with just `documents`
++ `document_shares` + the contact-detail panel. No portal, no auth changes,
+no new permissions model. Tests the demand without committing to the
+external-portal complexity.
 
 ---
 
