@@ -3,19 +3,11 @@ import { Plus } from "lucide-react";
 import { requireUser } from "@/lib/current-user";
 import { TopBar } from "@/components/layout/top-bar";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { DbBanner } from "@/components/db-banner";
+import { MeetingsList } from "@/components/meetings/meetings-list";
 import { listMeetings } from "@/db/queries/meetings";
 import { safeRead } from "@/lib/db-status";
-import { formatDateTime } from "@/lib/utils";
-
-const typeLabel: Record<"one_on_one" | "group" | "event" | "call", string> = {
-  one_on_one: "1:1",
-  group: "group",
-  event: "event",
-  call: "call",
-};
 
 export default async function MeetingsPage() {
   const user = await requireUser();
@@ -58,36 +50,7 @@ export default async function MeetingsPage() {
             </div>
           </Card>
         ) : (
-          <Card className="overflow-hidden">
-            <ul className="divide-y divide-[var(--border)]">
-              {res.data.map((m) => (
-                <li key={m.id} className="px-4 py-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <Link
-                        href={`/meetings/${m.id}`}
-                        className="text-sm font-medium hover:underline"
-                      >
-                        {m.title}
-                      </Link>
-                      <div className="text-xs text-[var(--muted-foreground)]">
-                        {formatDateTime(m.scheduledAt)}
-                        {m.location ? ` · ${m.location}` : ""}
-                        {m.projectTitle ? ` · ${m.projectTitle}` : ""}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <Badge variant="outline">{typeLabel[m.type]}</Badge>
-                      <span className="text-xs text-[var(--muted-foreground)]">
-                        {m.attendeeCount} attendee
-                        {m.attendeeCount === 1 ? "" : "s"}
-                      </span>
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </Card>
+          <MeetingsList meetings={res.data} />
         )}
       </main>
     </>

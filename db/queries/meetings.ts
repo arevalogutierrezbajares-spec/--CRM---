@@ -13,7 +13,9 @@ const {
 export type MeetingRow = typeof meetings.$inferSelect;
 export type MeetingListItem = MeetingRow & {
   attendeeCount: number;
+  attendeeNames: string[];
   projectTitle: string | null;
+  openActionItems: number;
 };
 
 export async function listMeetings(opts: {
@@ -28,16 +30,34 @@ export async function listMeetings(opts: {
   if (rows.length === 0) return [];
 
   const ids = rows.map((r) => r.meeting.id);
-  const attendees = await db
-    .select()
-    .from(meetingAttendees)
-    .where(inArray(meetingAttendees.meetingId, ids));
 
-  return rows.map(({ meeting, projectTitle }) => ({
-    ...meeting,
-    attendeeCount: attendees.filter((a) => a.meetingId === meeting.id).length,
-    projectTitle,
-  }));
+  const [attendeeRows, openMilestoneRows] = await Promise.all([
+    db
+      .select({ meetingId: meetingAttendees.meetingId, name: contacts.name })
+      .from(meetingAttendees)
+      .innerJoin(contacts, eq(contacts.id, meetingAttendees.contactId))
+      .where(inArray(meetingAttendees.meetingId, ids)),
+    db
+      .select({ meetingId: milestones.sourceMeetingId })
+      .from(milestones)
+      .where(
+        and(
+          inArray(milestones.sourceMeetingId, ids),
+          sql`${milestones.status} IN ('pending','blocked')`,
+        ),
+      ),
+  ]);
+
+  return rows.map(({ meeting, projectTitle }) => {
+    const myAttendees = attendeeRows.filter((a) => a.meetingId === meeting.id);
+    return {
+      ...meeting,
+      attendeeCount: myAttendees.length,
+      attendeeNames: myAttendees.map((a) => a.name),
+      projectTitle,
+      openActionItems: openMilestoneRows.filter((ms) => ms.meetingId === meeting.id).length,
+    };
+  });
 }
 
 export async function getMeeting(opts: { id: string; workspaceId: string }) {
