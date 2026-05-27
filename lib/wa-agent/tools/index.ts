@@ -17,6 +17,9 @@ import { scheduleReminder } from "./schedule-reminder";
 import { listReminders } from "./list-reminders";
 import { cancelReminder } from "./cancel-reminder";
 import { dailyRecap } from "./daily-recap";
+import { upsertNote } from "./upsert-note";
+import { proposeAddContact } from "./propose-add-contact";
+import { readTodoBoard } from "./read-todo-board";
 
 export const TOOLS: Record<string, ToolEntry> = {
   find_contact: findContact,
@@ -30,6 +33,9 @@ export const TOOLS: Record<string, ToolEntry> = {
   list_reminders: listReminders,
   cancel_reminder: cancelReminder,
   daily_recap: dailyRecap,
+  upsert_note: upsertNote,
+  propose_add_contact: proposeAddContact,
+  read_todo_board: readTodoBoard,
 };
 
 export const TOOL_NAMES = Object.keys(TOOLS);
