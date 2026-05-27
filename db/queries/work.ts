@@ -27,12 +27,14 @@ export async function listThemes(workspaceId: string): Promise<ThemeRow[]> {
 }
 
 const SEED_THEMES: Array<{ name: string; color: string; icon: string }> = [
+  { name: "Business Development", color: "#0F6E56", icon: "Briefcase" },
+  { name: "Tech", color: "#185FA5", icon: "Server" },
   { name: "AI", color: "#534AB7", icon: "Sparkles" },
   { name: "Growth", color: "#3B6D11", icon: "TrendingUp" },
-  { name: "Infrastructure", color: "#185FA5", icon: "Server" },
   { name: "Brand", color: "#A32D2D", icon: "Palette" },
-  { name: "Sales", color: "#0F6E56", icon: "Briefcase" },
   { name: "Ops", color: "#854F0B", icon: "Wrench" },
+  { name: "Fundraising", color: "#BA7517", icon: "DollarSign" },
+  { name: "Legal & Compliance", color: "#6B6B68", icon: "Scale" },
 ];
 
 export async function seedDefaultThemes(workspaceId: string): Promise<void> {
@@ -68,9 +70,17 @@ export type InitiativeListItem = InitiativeRow & {
 export async function listInitiatives(opts: {
   workspaceId: string;
   status?: "planning" | "active" | "paused" | "done" | "cancelled";
+  priority?: "now" | "next" | "later" | "backlog";
+  projectId?: string;
+  themeId?: string;
+  ownerUserId?: string;
 }): Promise<InitiativeListItem[]> {
   const conditions = [eq(initiatives.workspaceId, opts.workspaceId)];
   if (opts.status) conditions.push(eq(initiatives.status, opts.status));
+  if (opts.priority) conditions.push(eq(initiatives.priority, opts.priority));
+  if (opts.projectId) conditions.push(eq(initiatives.projectId, opts.projectId));
+  if (opts.ownerUserId)
+    conditions.push(eq(initiatives.ownerUserId, opts.ownerUserId));
 
   const rows = await db
     .select({
@@ -107,7 +117,7 @@ export async function listInitiatives(opts: {
       .groupBy(milestones.initiativeId),
   ]);
 
-  return rows.map(({ init, projectTitle, ownerName }) => {
+  const enriched = rows.map(({ init, projectTitle, ownerName }) => {
     const myThemes = themeJoins
       .filter((t) => t.initiativeId === init.id)
       .map((t) => t.theme);
@@ -124,6 +134,14 @@ export async function listInitiatives(opts: {
       progressPct: total === 0 ? 0 : Math.round((done / total) * 100),
     };
   });
+
+  // Theme filter is post-join (m2m); applied in memory
+  if (opts.themeId) {
+    return enriched.filter((init) =>
+      init.themes.some((t) => t.id === opts.themeId),
+    );
+  }
+  return enriched;
 }
 
 export async function getInitiative(opts: {
@@ -204,13 +222,20 @@ export async function listWorkTasks(opts: {
   workspaceId: string;
   initiativeId?: string;
   sprintId?: string;
-  status?: string;
+  projectId?: string;
+  themeId?: string;
+  priority?: "now" | "next" | "later" | "backlog";
+  assigneeUserId?: string;
   limit?: number;
 }): Promise<WorkTask[]> {
   const conditions = [eq(projects.workspaceId, opts.workspaceId)];
-  if (opts.initiativeId) conditions.push(eq(milestones.initiativeId, opts.initiativeId));
+  if (opts.initiativeId)
+    conditions.push(eq(milestones.initiativeId, opts.initiativeId));
   if (opts.sprintId) conditions.push(eq(milestones.sprintId, opts.sprintId));
-  // status filter handled below via .where
+  if (opts.projectId) conditions.push(eq(milestones.projectId, opts.projectId));
+  if (opts.priority) conditions.push(eq(milestones.priority, opts.priority));
+  if (opts.assigneeUserId)
+    conditions.push(eq(milestones.assigneeUserId, opts.assigneeUserId));
 
   const rows = await db
     .select({
@@ -237,7 +262,7 @@ export async function listWorkTasks(opts: {
     .innerJoin(themes, eq(themes.id, milestoneThemes.themeId))
     .where(inArray(milestoneThemes.milestoneId, ids));
 
-  return rows.map(({ ms, projectTitle, initiativeTitle, sprintName, assigneeName }) => ({
+  const enriched = rows.map(({ ms, projectTitle, initiativeTitle, sprintName, assigneeName }) => ({
     ...ms,
     projectTitle,
     initiativeTitle,
@@ -247,4 +272,11 @@ export async function listWorkTasks(opts: {
       .filter((t) => t.milestoneId === ms.id)
       .map((t) => t.theme),
   }));
+
+  if (opts.themeId) {
+    return enriched.filter((t) =>
+      t.themes.some((th) => th.id === opts.themeId),
+    );
+  }
+  return enriched;
 }

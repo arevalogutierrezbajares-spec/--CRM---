@@ -2,7 +2,10 @@ import { requireUser } from "@/lib/current-user";
 import { TopBar } from "@/components/layout/top-bar";
 import { DbBanner } from "@/components/db-banner";
 import { SyncButton } from "@/components/overlord/sync-button";
-import { SectionNav } from "@/components/overlord/section-nav";
+import {
+  SectionNav,
+  OverlordFilterChips,
+} from "@/components/overlord/section-nav";
 import { OverlordTaskCard } from "@/components/overlord/task-card";
 import { ActivityFeed } from "@/components/overlord/activity-feed";
 import { DashCard } from "@/components/dashboard/shared/dash-card";
@@ -198,6 +201,14 @@ export default async function OverlordPage(props: {
               totalCount={counts.total}
               totalActive={totalActive}
             />
+
+            <DashCard>
+              <SectionLabel icon={AlertCircle}>Filter</SectionLabel>
+              <OverlordFilterChips
+                priorityCounts={counts.byPriority}
+                agents={counts.activeAgents}
+              />
+            </DashCard>
 
             {/* Kanban-by-status */}
             <div className="grid gap-2.5 grid-cols-1 lg:grid-cols-2 xl:grid-cols-4">
