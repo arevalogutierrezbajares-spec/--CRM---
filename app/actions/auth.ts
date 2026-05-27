@@ -51,10 +51,15 @@ export async function requestSignInLink(formData: FormData): Promise<{
   const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
   const redirectTo = `${proto}://${host}/auth/callback`;
 
+  // We've already verified the email is on the invite list (users.email
+  // lookup above). Supabase's shouldCreateUser:false would over-gate by
+  // requiring a pre-existing auth.users row — but invited members might be
+  // doing their first-ever Supabase auth, so leave creation enabled and rely
+  // on the app-level allowlist check as the actual gate.
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithOtp({
     email,
-    options: { emailRedirectTo: redirectTo, shouldCreateUser: false },
+    options: { emailRedirectTo: redirectTo },
   });
 
   if (error) {
