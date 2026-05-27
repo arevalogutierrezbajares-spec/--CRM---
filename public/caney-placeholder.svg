@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="sky" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0a0e14"/>
+      <stop offset="40%" stop-color="#1c1611"/>
+      <stop offset="70%" stop-color="#2a1f15"/>
+      <stop offset="100%" stop-color="#0d0a07"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="60%" r="40%">
+      <stop offset="0%" stop-color="#3a2a15" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#000" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="grain">
+      <feTurbulence baseFrequency="0.9" numOctaves="2" seed="3"/>
+      <feColorMatrix values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.04 0"/>
+      <feComposite in2="SourceGraphic" operator="in"/>
+    </filter>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#sky)"/>
+  <rect width="1920" height="1080" fill="url(#glow)"/>
+  <!-- Distant horizon -->
+  <path d="M 0 720 Q 480 680 960 700 T 1920 720 L 1920 1080 L 0 1080 Z" fill="#0a0805" opacity="0.7"/>
+  <!-- Caney silhouette: conical thatch roof + simple structure -->
+  <g opacity="0.85">
+    <!-- thatch roof -->
+    <path d="M 800 680 L 960 480 L 1120 680 Z" fill="#1a1208"/>
+    <path d="M 800 680 L 960 480 L 1120 680 Z" fill="url(#sky)" opacity="0.3"/>
+    <!-- structure body -->
+    <rect x="830" y="680" width="260" height="160" fill="#0d0904"/>
+    <!-- doorway (the hotspot lives roughly here) -->
+    <rect x="935" y="730" width="50" height="110" fill="#050402"/>
+    <!-- faint warm interior glow -->
+    <rect x="940" y="740" width="40" height="90" fill="#5a3818" opacity="0.15"/>
+  </g>
+  <rect width="1920" height="1080" filter="url(#grain)"/>
+  <!-- Watermark -->
+  <text x="40" y="1040" font-family="monospace" font-size="11" fill="#ffffff" opacity="0.18" letter-spacing="4">
+    PLACEHOLDER · DROP YOUR CANEY PHOTO AT /public/caney.jpg
+  </text>
+</svg>
