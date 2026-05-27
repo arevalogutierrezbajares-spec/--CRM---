@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { requestSignInLink } from "@/app/actions/auth";
+import { createClient as createBrowserSupabase } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -50,6 +51,33 @@ export function CaneyLanding() {
     const t = setTimeout(() => setHintVisible(true), 10_000);
     return () => clearTimeout(t);
   }, [phase]);
+
+  // Implicit-flow magic-link handler: when Supabase's email link lands here
+  // with `#access_token=…&refresh_token=…` in the URL hash (admin-generated
+  // links or older magic-link templates), exchange the tokens for a real
+  // session cookie and redirect to the protected home.
+  // PKCE flow (?code=…) is handled by the middleware + /auth/callback route.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const hash = window.location.hash.slice(1);
+    if (!hash.includes("access_token=")) return;
+    const params = new URLSearchParams(hash);
+    const access_token = params.get("access_token");
+    const refresh_token = params.get("refresh_token");
+    if (!access_token || !refresh_token) return;
+
+    (async () => {
+      const supabase = createBrowserSupabase();
+      const { error } = await supabase.auth.setSession({ access_token, refresh_token });
+      if (error) {
+        console.error("setSession failed:", error.message);
+        return;
+      }
+      // Clear the hash so a reload doesn't try to re-process it, then go home.
+      window.history.replaceState(null, "", window.location.pathname);
+      window.location.href = "/";
+    })();
+  }, []);
 
   function handleMove(e: React.MouseEvent<HTMLDivElement>) {
     const el = imgRef.current;
