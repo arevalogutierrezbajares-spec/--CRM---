@@ -7,7 +7,7 @@
 **Score:** ~9.3/10 — login is invite-gated and live in prod; WA bot verified end-to-end on real phone; token diet shipped (-57% input tokens)
 **Hot path:** Text the WA bot at the live Cloud number; 20-tool agent routes through regex intent classifier → dynamic tool gating (3 tools avg per call) → Haiku 4.5 for routine intents, Sonnet 4.6 for reasoning. Mention pre-resolver injects contact IDs + org + rel before the LLM, eliminating most second-turn lookups. Outbound send failures now write `error` rows to `wa_activity` so an expired WA token can't silently break the bot again.
 
-**Index of this doc:** _What shipped this session_ → _At a glance_ → _Phase tables (0-7 + Wave D + Wave E)_ → _CoS-Bot Backlog_ (tactical polish) → _Brainstorm_ (strategic / multi-system, NOT committed: BR-1 RAG, BR-2 creator program, BR-3 partner portal) → _Recommended pick-up order_
+**Index of this doc:** _What shipped this session_ → _At a glance_ → _Phase tables (0-7 + Wave D + Wave E)_ → _CoS-Bot Backlog_ (tactical polish) → _Brainstorm_ (strategic / multi-system, NOT committed: BR-1 RAG, BR-2 creator program, BR-3 partner portal, BR-4 PMS operator agent) → _Recommended pick-up order_
 
 ## What shipped this session (2026-05-27 late)
 
@@ -467,6 +467,142 @@ partner sees only what their contact record has been configured to expose.
 + `document_shares` + the contact-detail panel. No portal, no auth changes,
 no new permissions model. Tests the demand without committing to the
 external-portal complexity.
+
+---
+
+### BR-4 — PMS Operator Agent (text + voice agent for `--TOURISM--`)
+
+**What:** A text+voice agent embedded in the PMS that lets you (and eventually
+posada operators) update bookings, mark rooms clean, log expenses, adjust
+rates, confirm payments, etc. by talking instead of clicking through 6 forms.
+Same architecture as the AGB-CRM WhatsApp agent: regex intent classifier →
+per-intent tool gating → Haiku/Sonnet routing → tool execution → reply.
+
+**Why this gets built on the AGB-CRM blueprint:**
+What we shipped last session is the reusable pattern:
+- `intent/classify.ts` — fast regex classifier (EN + ES) with high precision
+- `intent/workflows.ts` — per-intent allowedTools + model + supplement
+- mention pre-resolver → dynamic tool gating → Haiku for routine, Sonnet for reasoning
+- 57% input-token reduction, 18-scenario bench harness for regression
+- Outbound observability so silent failures can't hide
+
+The PMS domain is different (rooms / rates / bookings / channels instead of
+contacts / projects / touches) but the **loop + intent layer + tool diet
+mechanics are domain-agnostic**. Either port them or generalize them.
+
+#### Three architecture options (pick one)
+
+| Option | What | Effort | Risk |
+|--------|------|--------|------|
+| **A. Pattern reuse, separate code** | Each app builds its own agent loop following AGB-CRM's blueprint. Fast to start, drifts over time. | 5-8pt | Drift |
+| **B. Shared agent-core library** | Extract the loop+classifier+diet into a reusable npm or Python package. Each app registers its own tools+prompt. Clean long-term, slower to start. | 13-21pt | Over-engineering |
+| **C. One agent, cross-system tools** | The WA bot you already have learns PMS tools. One conversation can `log_touch` AND `confirm_booking`. Auth: bot backend reads from both Supabase projects. | 8-13pt | Powerful but cross-DB RLS is non-trivial |
+
+**Recommendation:** Start with **A** (pattern reuse). The AGB-CRM code is fresh
+enough to copy + adapt; we'll learn what's actually shared after building the
+PMS one. Promote to B if/when a third agent surfaces. C is exciting but the
+cross-DB auth question is its own scoping conversation.
+
+#### The PMS tool surface (subset to start)
+
+Pulled from what the PMS actually does. Pick the smallest-valuable-slice:
+
+| Domain | Tool | Use case |
+|--------|------|----------|
+| **Bookings** | `confirm_booking`, `cancel_booking`, `mark_no_show`, `check_in`, `check_out` | "guest from 5/30 just confirmed — confirm reservation" |
+| **Rooms/Units** | `mark_room_clean`, `mark_room_dirty`, `mark_out_of_service` | "habitación 3 lista" |
+| **Rates** | `set_rate`, `bulk_update_rates` | "raise August rates 15%" |
+| **Channel** | `pause_channel`, `resume_channel`, `set_channel_availability` | "block Booking.com for next weekend" |
+| **Payments** | `log_payment`, `mark_refund`, `confirm_deposit` | "received deposit from Maria" |
+| **Expenses** | `log_expense`, `categorize_expense` | "gasolina 80 dollars hoy" |
+| **Guests** | `find_guest`, `update_guest_contact`, `add_guest_note` | "Maria called, has a peanut allergy" |
+| **Reports** | `daily_occupancy`, `revenue_today`, `pending_arrivals`, `pending_checkouts` | "qué llega hoy?" |
+
+A reasonable Stage 1: bookings + rooms + payments (8-10 tools).
+Skip channels and rates until the operator-facing UX is validated.
+
+#### Stack decision — which surface owns the agent?
+
+| Where | Pros | Cons |
+|-------|------|------|
+| **PMS backend (Python/FastAPI)** | Same stack as existing PMS; one auth context; tools are direct Python calls into existing service code | Port TS loop to Python; new dep on Anthropic SDK in backend; concierge is already Deno so two agent stacks in one repo |
+| **PMS frontend (Next.js server actions)** | Reuse AGB-CRM TS code almost verbatim; Anthropic SDK already in frontend deps; ships with hot reload | Tool execution needs to call backend API (HTTP overhead per tool); double auth surface |
+| **Extend existing Deno concierge** | Same edge runtime, same Supabase project; concierge already handles guest WhatsApp | Concierge is GUEST-facing; mixing operator-facing tools creates auth complexity; Deno port of the loop |
+
+**Recommendation:** **PMS frontend server actions** — fastest path, reuses
+AGB-CRM TS code, hot reload during dev. If we later add operator WhatsApp,
+extract to a backend service then.
+
+#### Transport — how does the operator talk to the agent?
+
+| Where | When to pick |
+|-------|--------------|
+| **In-PMS text box** (always present in the UI header) | Daily operator workflow, on the laptop or tablet at the front desk |
+| **Operator WhatsApp** (new number, separate from concierge) | Owner is on the move, doesn't have the PMS open |
+| **Voice input via web button** (Whisper transcription) | "I'm cleaning rooms, hands full" — needs phone in pocket scenario |
+
+**Recommendation:** Start with **in-PMS text box + voice button**, add WA later.
+The in-app interface is verifiable (you can debug live), avoids the
+WhatsApp Cloud API complexity for v1, and demos well to JEAV.
+
+#### Voice ingestion path
+
+Same as Wave B in AGB-CRM (already coded but not wired):
+- Browser MediaRecorder → POST audio blob to backend
+- OpenAI Whisper transcribes (EN + ES native)
+- Transcribed text + speak-back wrapper "I heard: '...' — " is fed to the
+  agent loop, agent ALWAYS asks YES/NO before executing
+- Same confirmation gate pattern as WhatsApp voice notes
+
+The voice→text→agent path is already proven in AGB-CRM's media pipeline.
+Just rewire the input source.
+
+#### Open questions (need calls before scoping)
+
+- **Audience**: "Allows ME to update the PMS" — does "me" mean (a) you/Tomas
+  as admin updating any property, (b) every posada operator on their own
+  property, or (c) the operator on day-1 and you on day-30 once it's solid?
+  This drives auth, multi-tenancy, and the persona model.
+- **Co-ownership with JEAV**: per `feedback_partner_safety_tourism`, the
+  --TOURISM-- repo is co-owned. Major feature like this needs a JEAV signal
+  before claim. Could file as a brainstorm doc only, or coordinate via
+  Overlord (`OVL-TG` agent ID) before implementation begins.
+- **Concierge overlap**: existing Supabase edge concierge handles guest-side
+  WhatsApp. Should the operator agent ride the same Supabase project +
+  share a `pms_conversations` table, or be fully separate?
+- **Spanish-first**: per the audience (Venezuelan posadas), Spanish is
+  probably the primary language. AGB-CRM has bilingual patterns we copy.
+- **Multi-property**: does an owner with 3 posadas have one agent context
+  that knows which property they mean? "qué llega hoy" — across which
+  property? Default to user's current_property_id, like CRM's
+  current_workspace_id pattern.
+- **Audit trail**: every operator action that costs money (refund, expense,
+  rate change) should leave a paper trail with sender + before/after state.
+  This is more critical for PMS than CRM (where touches are append-only and
+  reversible).
+
+#### Smallest valuable slice (Stage 1)
+
+A "guided demo" version:
+1. New PMS page `/agent` with a chat-style UI (text input + voice button)
+2. Backend route `POST /api/agent/turn` that calls a port of `handleMessage()`
+3. Three tools to start: `find_booking`, `confirm_booking`, `mark_room_clean`
+4. Spanish + English intent classifier covering ~10 intents
+5. Reply rendered in the chat UI
+6. 10-scenario bench harness on day 1 (regression net)
+7. Audit: every tool execution writes to a `pms_agent_activity` table
+
+If that lands well in a real operator's hands, expand to payments + expenses
++ rates. If it doesn't, the architecture is throwaway with no production
+commitments.
+
+#### What I'd want from you before drafting a real task
+
+- A decision on the 3 architecture options + transport + stack (recs above
+  are starting points, not the answer)
+- JEAV alignment that this lives in `--TOURISM--` and how it relates to
+  Overlord's existing sections
+- The Stage 1 tool list (mine is a guess — you know what hurts daily)
 
 ---
 
