@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql as rawSql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { computeHealth, type HealthColor } from "@/lib/health";
 
@@ -23,9 +23,18 @@ export type ProjectListItem = ProjectRow & {
 export async function listProjects(opts: {
   workspaceId: string;
   status?: "active" | "waiting" | "done" | "lost";
+  /** Default true: hide child projects (sub-modules) from the gallery */
+  topLevelOnly?: boolean;
+  /** Restrict to children of this parent (used when listing modules) */
+  parentId?: string;
 }): Promise<ProjectListItem[]> {
   const conditions = [eq(projects.workspaceId, opts.workspaceId)];
   if (opts.status) conditions.push(eq(projects.status, opts.status));
+  if (opts.parentId) {
+    conditions.push(eq(projects.parentProjectId, opts.parentId));
+  } else if (opts.topLevelOnly !== false) {
+    conditions.push(rawSql`${projects.parentProjectId} IS NULL`);
+  }
 
   const rows = await db
     .select({

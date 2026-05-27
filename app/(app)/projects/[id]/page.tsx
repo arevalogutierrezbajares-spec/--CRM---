@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { ChevronLeft, ExternalLink, Pencil, Target } from "lucide-react";
 import { requireUser } from "@/lib/current-user";
 import { TopBar } from "@/components/layout/top-bar";
@@ -16,18 +16,28 @@ import { DbBanner } from "@/components/db-banner";
 import { MilestoneList } from "@/components/projects/milestone-list";
 import { TouchList } from "@/components/touches/touch-list";
 import { LinkSection } from "@/components/projects/link-section";
+import {
+  ModuleSwitcher,
+  type ModuleTab,
+} from "@/components/projects/module-switcher";
 import { DashCard } from "@/components/dashboard/shared/dash-card";
 import { SectionLabel } from "@/components/dashboard/shared/section-label";
 import { DashBadge } from "@/components/dashboard/shared/badge";
 import { ProgressBar } from "@/components/dashboard/shared/progress-bar";
-import { getProject, listProjectLinks } from "@/db/queries/projects";
+import {
+  getProject,
+  listProjectLinks,
+  listProjects,
+  type ProjectListItem,
+  type ProjectLinkRow,
+} from "@/db/queries/projects";
 import { listTouchesForProject } from "@/db/queries/touches";
-import { listMeetingsForContact } from "@/db/queries/meetings";
 import { safeRead } from "@/lib/db-status";
 import { formatDate, formatRelative } from "@/lib/utils";
 import { computeHealth } from "@/lib/health";
 
 type Params = Promise<{ id: string }>;
+type SearchParams = Promise<{ module?: string }>;
 
 const STATUS_VARIANT: Record<
   "active" | "waiting" | "done" | "lost",
@@ -39,47 +49,112 @@ const STATUS_VARIANT: Record<
   lost: "neutral",
 };
 
-export default async function ProjectDetailPage(props: { params: Params }) {
+export default async function ProjectDetailPage(props: {
+  params: Params;
+  searchParams: SearchParams;
+}) {
   const user = await requireUser();
   const { id } = await props.params;
+  const sp = await props.searchParams;
 
-  const [projectRes, touchesRes, linksRes] = await Promise.all([
-    safeRead(() => getProject({ id, workspaceId: user.workspaceId }), null),
-    safeRead(
-      () => listTouchesForProject({ projectId: id, workspaceId: user.workspaceId }),
-      [],
-    ),
-    safeRead(() => listProjectLinks({ projectId: id, workspaceId: user.workspaceId }), []),
-  ]);
-
-  if (projectRes.ok && !projectRes.data) notFound();
-  const project = projectRes.data;
-  if (!project) {
+  // Load the project at this URL first
+  const parentRes = await safeRead(
+    () => getProject({ id, workspaceId: user.workspaceId }),
+    null,
+  );
+  if (parentRes.ok && !parentRes.data) notFound();
+  const parent = parentRes.data;
+  if (!parent) {
     return (
       <main className="p-6">
-        <DbBanner error={(projectRes as { error?: string }).error ?? ""} />
+        <DbBanner error={(parentRes as { error?: string }).error ?? ""} />
       </main>
     );
   }
 
-  const accent = project.coverColor ?? "var(--text-tertiary)";
+  // If this URL itself is a child project, redirect to its parent with ?module=
+  if (parent.parentProjectId) {
+    redirect(`/projects/${parent.parentProjectId}?module=${parent.id}`);
+  }
+
+  const modulesRes = await safeRead<ProjectListItem[]>(
+    () =>
+      listProjects({
+        workspaceId: user.workspaceId,
+        parentId: parent.id,
+      }),
+    [],
+  );
+  const modules = modulesRes.data;
+  const moduleTabs: ModuleTab[] = modules.map((m) => ({
+    id: m.id,
+    title: m.title,
+    coverEmoji: m.coverEmoji ?? null,
+    coverColor: m.coverColor ?? null,
+  }));
+
+  const selectedModuleId = sp.module ?? null;
+  const isModuleView =
+    selectedModuleId !== null &&
+    moduleTabs.some((m) => m.id === selectedModuleId);
+
+  const displayedRes = isModuleView
+    ? await safeRead(
+        () =>
+          getProject({
+            id: selectedModuleId!,
+            workspaceId: user.workspaceId,
+          }),
+        null,
+      )
+    : parentRes;
+
+  const displayed = displayedRes.data;
+  if (!displayed) {
+    return (
+      <main className="p-6">
+        <DbBanner error="Module not found" />
+      </main>
+    );
+  }
+
+  const [touchesRes, linksRes] = await Promise.all([
+    safeRead(
+      () =>
+        listTouchesForProject({
+          projectId: displayed.id,
+          workspaceId: user.workspaceId,
+        }),
+      [],
+    ),
+    safeRead<ProjectLinkRow[]>(
+      () =>
+        listProjectLinks({
+          projectId: displayed.id,
+          workspaceId: user.workspaceId,
+        }),
+      [],
+    ),
+  ]);
+
+  const accent = displayed.coverColor ?? "var(--text-tertiary)";
   const health = computeHealth({
-    status: project.status,
-    expectedUnblockDate: project.expectedUnblockDate,
-    milestones: project.milestones.map((m) => ({
+    status: displayed.status,
+    expectedUnblockDate: displayed.expectedUnblockDate,
+    milestones: displayed.milestones.map((m) => ({
       status: m.status,
       dueDate: m.dueDate,
     })),
   });
-  const currentStage = project.stages.find(
-    (s) => s.id === project.currentStageId,
+  const currentStage = displayed.stages.find(
+    (s) => s.id === displayed.currentStageId,
   );
-
-  // Milestone aggregates
-  const total = project.milestones.length;
-  const done = project.milestones.filter((m) => m.status === "done").length;
+  const total = displayed.milestones.length;
+  const done = displayed.milestones.filter((m) => m.status === "done").length;
   const open = total - done;
   const progressPct = total === 0 ? 0 : Math.round((done / total) * 100);
+
+  const hasModules = moduleTabs.length > 0;
 
   return (
     <>
@@ -88,10 +163,10 @@ export default async function ProjectDetailPage(props: { params: Params }) {
         displayName={user.displayName}
         action={
           <div className="flex items-center gap-2">
-            {project.primaryUrl && (
+            {displayed.primaryUrl && (
               <Button asChild variant="outline" size="sm">
                 <a
-                  href={project.primaryUrl}
+                  href={displayed.primaryUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                 >
@@ -100,7 +175,7 @@ export default async function ProjectDetailPage(props: { params: Params }) {
               </Button>
             )}
             <Button asChild variant="outline" size="sm">
-              <Link href={`/projects/${id}/edit`}>
+              <Link href={`/projects/${displayed.id}/edit`}>
                 <Pencil className="h-4 w-4" /> Edit
               </Link>
             </Button>
@@ -115,7 +190,6 @@ export default async function ProjectDetailPage(props: { params: Params }) {
           <ChevronLeft className="h-4 w-4" /> All projects
         </Link>
 
-        {/* ── Hero ─────────────────────────────────────────────────────── */}
         <div
           className="rounded-xl border overflow-hidden"
           style={{ borderColor: "var(--border-default)" }}
@@ -134,53 +208,63 @@ export default async function ProjectDetailPage(props: { params: Params }) {
                 border: `1px solid color-mix(in oklab, ${accent} 50%, transparent)`,
               }}
             >
-              {project.coverEmoji ?? "📁"}
+              {displayed.coverEmoji ?? "📁"}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
+                {isModuleView && (
+                  <Link
+                    href={`/projects/${parent.id}`}
+                    className="text-tiny text-text-tertiary font-mono hover:text-text-secondary"
+                  >
+                    {parent.title} /
+                  </Link>
+                )}
                 <h1 className="text-[24px] font-medium tracking-tight text-text-primary truncate">
-                  {project.title}
+                  {displayed.title}
                 </h1>
-                <DashBadge variant={STATUS_VARIANT[project.status]}>
-                  {project.status}
+                <DashBadge variant={STATUS_VARIANT[displayed.status]}>
+                  {displayed.status}
                 </DashBadge>
                 <HealthBadge health={health} short />
               </div>
-              {project.tagline && (
+              {displayed.tagline && (
                 <p className="text-[13px] text-text-secondary mt-1">
-                  {project.tagline}
+                  {displayed.tagline}
                 </p>
               )}
-              {project.statusText && (
+              {displayed.statusText && (
                 <p className="text-tiny text-text-tertiary font-mono mt-1.5">
-                  {project.statusText}
+                  {displayed.statusText}
                 </p>
               )}
               <div className="mt-3 flex items-center gap-4 flex-wrap text-tiny text-text-tertiary">
-                {project.templateName && <span>{project.templateName}</span>}
-                {currentStage && <span>stage: {currentStage.name}</span>}
-                {project.dueDate && (
-                  <span>due {formatDate(project.dueDate)}</span>
+                {displayed.templateName && (
+                  <span>{displayed.templateName}</span>
                 )}
-                {project.primaryUrl && (
+                {currentStage && <span>stage: {currentStage.name}</span>}
+                {displayed.dueDate && (
+                  <span>due {formatDate(displayed.dueDate)}</span>
+                )}
+                {displayed.primaryUrl && (
                   <a
-                    href={project.primaryUrl}
+                    href={displayed.primaryUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1 text-text-secondary hover:text-text-primary"
                   >
-                    <ExternalLink size={10} /> {project.primaryUrl.replace(/^https?:\/\//, "")}
+                    <ExternalLink size={10} />{" "}
+                    {displayed.primaryUrl.replace(/^https?:\/\//, "")}
                   </a>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Summary + progress bar */}
           <div className="px-6 py-4 grid gap-4 lg:grid-cols-[1fr_220px]">
-            {project.summary && (
+            {displayed.summary && (
               <p className="text-[13px] text-text-secondary leading-relaxed">
-                {project.summary}
+                {displayed.summary}
               </p>
             )}
             <div className="space-y-2">
@@ -193,29 +277,83 @@ export default async function ProjectDetailPage(props: { params: Params }) {
               <ProgressBar pct={progressPct} fillClass="bg-green-mid" />
               <div className="flex justify-between text-tiny text-text-tertiary mt-1">
                 <span>{open} open</span>
-                <span>{project.contacts.length} contacts</span>
+                <span>{displayed.contacts.length} contacts</span>
               </div>
             </div>
           </div>
 
-          {project.status === "waiting" && project.waitingOn && (
+          {displayed.status === "waiting" && displayed.waitingOn && (
             <div
               className="px-6 py-3 border-t text-tiny"
               style={{
-                background: "color-mix(in oklab, var(--amber-mid) 8%, transparent)",
+                background:
+                  "color-mix(in oklab, var(--amber-mid) 8%, transparent)",
                 borderColor: "var(--border-default)",
                 color: "var(--amber-text)",
               }}
             >
-              ⏸ Waiting on: <strong>{project.waitingOn}</strong>
-              {project.expectedUnblockDate && (
-                <> · expected {formatDate(project.expectedUnblockDate)}</>
+              ⏸ Waiting on: <strong>{displayed.waitingOn}</strong>
+              {displayed.expectedUnblockDate && (
+                <>
+                  {" "}
+                  · expected {formatDate(displayed.expectedUnblockDate)}
+                </>
               )}
             </div>
           )}
         </div>
 
-        {/* ── Business / Marketing / Tech sections (the new core) ──── */}
+        {hasModules && (
+          <ModuleSwitcher parentId={parent.id} modules={moduleTabs} />
+        )}
+
+        {hasModules && !isModuleView && (
+          <DashCard>
+            <SectionLabel>Modules ({moduleTabs.length})</SectionLabel>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {modules.map((m) => {
+                const c = m.coverColor ?? "var(--border-default)";
+                return (
+                  <Link
+                    key={m.id}
+                    href={`/projects/${parent.id}?module=${m.id}`}
+                    className="rounded-md border bg-card p-3 hover:bg-surface transition-colors border-l-[3px]"
+                    style={{
+                      borderColor: "var(--border-default)",
+                      borderLeftColor: c,
+                    }}
+                  >
+                    <div className="flex items-start gap-2">
+                      <span className="text-[20px] shrink-0">
+                        {m.coverEmoji ?? "📁"}
+                      </span>
+                      <div className="min-w-0">
+                        <div className="text-[13px] font-medium text-text-primary truncate">
+                          {m.title}
+                        </div>
+                        {m.tagline && (
+                          <p className="text-tiny text-text-tertiary line-clamp-2 mt-0.5">
+                            {m.tagline}
+                          </p>
+                        )}
+                        <div className="text-tiny text-text-tertiary mt-1 tabular-nums">
+                          {m.milestoneOpenCount} open
+                          {m.milestoneOverdueCount > 0 && (
+                            <span className="text-red-text">
+                              {" · "}
+                              {m.milestoneOverdueCount} overdue
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </DashCard>
+        )}
+
         <div className="grid gap-3 lg:grid-cols-3">
           <LinkSection
             category="business"
@@ -234,7 +372,6 @@ export default async function ProjectDetailPage(props: { params: Params }) {
           />
         </div>
 
-        {/* ── Ops / Design / Finance / Other (only show if present) ── */}
         {(["ops", "design", "finance", "other"] as const).some((c) =>
           linksRes.data.some((l) => l.category === c),
         ) && (
@@ -246,7 +383,6 @@ export default async function ProjectDetailPage(props: { params: Params }) {
           </div>
         )}
 
-        {/* ── Lower zone: milestones + timeline / sidebar ──────────── */}
         <div className="grid gap-4 lg:grid-cols-[1fr_300px]">
           <div className="space-y-4">
             <Card>
@@ -255,8 +391,8 @@ export default async function ProjectDetailPage(props: { params: Params }) {
               </CardHeader>
               <CardContent>
                 <MilestoneList
-                  projectId={project.id}
-                  milestones={project.milestones.map((m) => ({
+                  projectId={displayed.id}
+                  milestones={displayed.milestones.map((m) => ({
                     id: m.id,
                     title: m.title,
                     status: m.status,
@@ -285,13 +421,13 @@ export default async function ProjectDetailPage(props: { params: Params }) {
           <aside className="space-y-3">
             <DashCard>
               <SectionLabel icon={Target}>Linked contacts</SectionLabel>
-              {project.contacts.length === 0 ? (
+              {displayed.contacts.length === 0 ? (
                 <p className="text-tiny text-text-tertiary py-2">
                   None linked.
                 </p>
               ) : (
                 <ul className="space-y-1.5">
-                  {project.contacts.map((c) => (
+                  {displayed.contacts.map((c) => (
                     <li key={c.id} className="text-[12.5px]">
                       <Link
                         href={`/contacts/${c.id}`}
@@ -312,18 +448,24 @@ export default async function ProjectDetailPage(props: { params: Params }) {
             <DashCard>
               <SectionLabel>Details</SectionLabel>
               <dl className="space-y-1 text-[12px]">
-                <Row label="Notes path" value={project.notesPath ?? "—"} />
-                <Row label="Created" value={formatRelative(project.createdAt)} />
-                <Row label="Updated" value={formatRelative(project.updatedAt)} />
+                <Row label="Notes path" value={displayed.notesPath ?? "—"} />
+                <Row
+                  label="Created"
+                  value={formatRelative(displayed.createdAt)}
+                />
+                <Row
+                  label="Updated"
+                  value={formatRelative(displayed.updatedAt)}
+                />
                 <Separator className="my-2" />
-                <Row label="Status" value={project.status} />
+                <Row label="Status" value={displayed.status} />
                 <Row label="Health" value={health} />
-                {project.repoUrl && (
+                {displayed.repoUrl && (
                   <Row
                     label="Repo"
                     value={
                       <a
-                        href={project.repoUrl}
+                        href={displayed.repoUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-text-primary hover:underline"

@@ -398,6 +398,8 @@ export const projects = pgTable("projects", {
   primaryUrl: text("primary_url"), // production / canonical link
   repoUrl: text("repo_url"),
   statusText: text("status_text"), // short human status string
+  // Self-reference for module/sub-project nesting (e.g. CaneyCloud → Stays/Restaurants/WA Concierge)
+  parentProjectId: uuid("parent_project_id"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
