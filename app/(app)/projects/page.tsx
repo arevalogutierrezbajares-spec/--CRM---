@@ -133,30 +133,26 @@ export default async function ProjectsPage(props: {
           </div>
         ) : (
           <div className="space-y-6">
-            {/* ── Featured row (CaneyCloud + VAV at top) ─────────────── */}
+            {/* ── Priority row at top (no label) ─────────────────────── */}
             {featured.length > 0 && (
-              <section>
-                <h2 className="text-label text-text-secondary mb-3 flex items-center gap-1.5">
-                  <span>★ Featured</span>
-                  <span className="opacity-60">· {featured.length}</span>
-                </h2>
-                <div className="grid gap-4 lg:grid-cols-2">
-                  {featured.map((p) => (
-                    <ProjectCard key={p.id} project={p} variant="featured" />
-                  ))}
-                </div>
-              </section>
+              <div className="grid gap-4 lg:grid-cols-2">
+                {featured.map((p) => (
+                  <ProjectCard key={p.id} project={p} variant="featured" />
+                ))}
+              </div>
             )}
 
-            {/* ── Rest grouped by status ──────────────────────────────── */}
+            {/* ── Rest, only labeled when status is NOT active ──────── */}
             {(["active", "waiting", "done", "lost"] as const).map((s) => {
               const items = groups[s];
               if (items.length === 0) return null;
               return (
                 <section key={s}>
-                  <h2 className="text-label text-text-secondary mb-3">
-                    {s} · {items.length}
-                  </h2>
+                  {s !== "active" && (
+                    <h2 className="text-label text-text-secondary mb-3">
+                      {s} · {items.length}
+                    </h2>
+                  )}
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     {items.map((p) => (
                       <ProjectCard key={p.id} project={p} />

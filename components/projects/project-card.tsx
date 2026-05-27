@@ -106,15 +106,12 @@ export function ProjectCard({ project: p, variant = "default" }: ProjectCardProp
               >
                 {p.title}
               </h3>
-              <DashBadge variant={STATUS_VARIANT[p.status]}>
-                {p.status}
-              </DashBadge>
-              <HealthBadge health={p.computedHealth} short />
-              {p.featured && (
-                <span className="inline-flex items-center gap-0.5 text-tiny text-blue-text">
-                  <Sparkles size={10} /> featured
-                </span>
+              {p.status !== "active" && (
+                <DashBadge variant={STATUS_VARIANT[p.status]}>
+                  {p.status}
+                </DashBadge>
               )}
+              <HealthBadge health={p.computedHealth} short />
             </div>
             {p.tagline && (
               <p
