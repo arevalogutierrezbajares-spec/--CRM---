@@ -18,9 +18,10 @@ import { ReciprocityCard } from "@/components/reciprocity/reciprocity-card";
 import { reciprocityFor } from "@/db/queries/reciprocity";
 import { getContact } from "@/db/queries/contacts";
 import { listTouchesForContact } from "@/db/queries/touches";
+import { listMeetingsForContact } from "@/db/queries/meetings";
 import { safeRead, isDbConfigured } from "@/lib/db-status";
 import { archiveContact, unarchiveContact } from "../actions";
-import { formatRelative } from "@/lib/utils";
+import { formatRelative, formatDateTime } from "@/lib/utils";
 
 type Params = Promise<{ id: string }>;
 
@@ -28,7 +29,7 @@ export default async function ContactDetailPage(props: { params: Params }) {
   const user = await requireUser();
   const { id } = await props.params;
 
-  const [contactRes, touchesRes, warmPathRes, reciprocityRes] = await Promise.all([
+  const [contactRes, touchesRes, warmPathRes, reciprocityRes, meetingsRes] = await Promise.all([
     safeRead(() => getContact({ id, workspaceId: user.workspaceId }), null),
     safeRead(() => listTouchesForContact({ contactId: id, workspaceId: user.workspaceId }), []),
     safeRead(
@@ -45,6 +46,7 @@ export default async function ContactDetailPage(props: { params: Params }) {
         ratio: 0,
       },
     ),
+    safeRead(() => listMeetingsForContact({ contactId: id, workspaceId: user.workspaceId }), []),
   ]);
 
   if (contactRes.ok && !contactRes.data) notFound();
@@ -154,6 +156,46 @@ export default async function ContactDetailPage(props: { params: Params }) {
                     )}
                   </CardContent>
                 </Card>
+
+                {/* Meetings with this contact */}
+                {meetingsRes.ok && meetingsRes.data.length > 0 && (
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                      <CardTitle>Meetings</CardTitle>
+                      <Link
+                        href={`/meetings/new?attendee=${id}`}
+                        className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+                      >
+                        + Schedule
+                      </Link>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                      <ul className="divide-y divide-[var(--border)]">
+                        {meetingsRes.data.map((m) => (
+                          <li key={m.id} className="flex items-start justify-between gap-2 px-6 py-2.5">
+                            <div className="min-w-0">
+                              <Link
+                                href={`/meetings/${m.id}`}
+                                className="text-sm font-medium hover:underline"
+                              >
+                                {m.title}
+                              </Link>
+                              <div className="text-xs text-[var(--muted-foreground)]">
+                                {formatDateTime(m.scheduledAt)}
+                                {m.attendeeCount > 1 && ` · ${m.attendeeCount} attendees`}
+                              </div>
+                            </div>
+                            {m.openActionItems > 0 && (
+                              <span className="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                                {m.openActionItems} open AI{m.openActionItems === 1 ? "" : "s"}
+                              </span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </CardContent>
+                  </Card>
+                )}
               </div>
 
               <aside className="space-y-6">

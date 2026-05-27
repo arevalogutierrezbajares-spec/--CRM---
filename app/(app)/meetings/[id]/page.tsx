@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronLeft, ListChecks, Pencil } from "lucide-react";
+import { ChevronLeft, ListChecks, Pencil, Radio } from "lucide-react";
 import { requireUser } from "@/lib/current-user";
 import { TopBar } from "@/components/layout/top-bar";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,8 @@ import { DbBanner } from "@/components/db-banner";
 import { getMeeting } from "@/db/queries/meetings";
 import { safeRead } from "@/lib/db-status";
 import { formatDateTime } from "@/lib/utils";
-import { parseActionItems } from "@/lib/validation/meeting";
+import { parseActionItems } from "@/lib/validation/meeting"; // used for server-side spawn button count
+import { InlineNotes } from "@/components/meetings/inline-notes";
 import {
   generateMilestonesFromMeeting,
 } from "../actions";
@@ -43,11 +44,18 @@ export default async function MeetingDetailPage(props: { params: Params }) {
         email={user.email}
         displayName={user.displayName}
         action={
-          <Button asChild variant="outline" size="sm">
-            <Link href={`/meetings/${id}/edit`}>
-              <Pencil className="h-4 w-4" /> Edit
-            </Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/meetings/${id}?live=1`}>
+                <Radio className="h-4 w-4" /> Go Live
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/meetings/${id}/edit`}>
+                <Pencil className="h-4 w-4" /> Edit
+              </Link>
+            </Button>
+          </div>
         }
       />
       <main className="mx-auto w-full max-w-4xl flex-1 px-6 py-8">
@@ -81,63 +89,44 @@ export default async function MeetingDetailPage(props: { params: Params }) {
 
             <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
               <div className="space-y-6">
-                {meeting.agenda && (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Agenda</CardTitle>
-                    </CardHeader>
-                    <CardContent className="whitespace-pre-wrap text-sm leading-relaxed">
-                      {meeting.agenda}
-                    </CardContent>
-                  </Card>
-                )}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Agenda</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <InlineNotes
+                      meetingId={id}
+                      field="agenda"
+                      initialValue={meeting.agenda}
+                      placeholder="Add agenda items, talking points, goals…"
+                    />
+                  </CardContent>
+                </Card>
 
-                {meeting.minutes && (
-                  <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0">
-                      <CardTitle>Minutes</CardTitle>
-                      {items.length > 0 && meeting.linkedProjectId && (
-                        <form action={spawn}>
-                          <Button type="submit" size="sm" variant="outline">
-                            <ListChecks className="h-4 w-4" />
-                            Spawn {items.length} milestone
-                            {items.length === 1 ? "" : "s"}
-                          </Button>
-                        </form>
-                      )}
-                    </CardHeader>
-                    <CardContent>
-                      <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed">
-                        {meeting.minutes}
-                      </pre>
-                      {items.length > 0 && (
-                        <div className="mt-4 rounded-md border border-[var(--border)] bg-[var(--muted)]/20 p-3">
-                          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--muted-foreground)]">
-                            Detected action items
-                          </p>
-                          <ul className="space-y-1 text-sm">
-                            {items.map((it, i) => (
-                              <li
-                                key={i}
-                                className="flex items-start gap-2"
-                              >
-                                <span className="mt-0.5 text-[var(--muted-foreground)]">
-                                  ☐
-                                </span>
-                                <span>{it}</span>
-                              </li>
-                            ))}
-                          </ul>
-                          {!meeting.linkedProjectId && (
-                            <p className="mt-2 text-xs text-[var(--health-amber)]">
-                              Link a project to spawn these as milestones.
-                            </p>
-                          )}
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                )}
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0">
+                    <CardTitle>Minutes</CardTitle>
+                    {items.length > 0 && meeting.linkedProjectId && (
+                      <form action={spawn}>
+                        <Button type="submit" size="sm" variant="outline">
+                          <ListChecks className="h-4 w-4" />
+                          Spawn {items.length} milestone
+                          {items.length === 1 ? "" : "s"}
+                        </Button>
+                      </form>
+                    )}
+                  </CardHeader>
+                  <CardContent>
+                    <InlineNotes
+                      meetingId={id}
+                      field="minutes"
+                      initialValue={meeting.minutes}
+                      placeholder={"Take notes here. Use [ ] to mark action items.\nExample: [ ] Follow up on proposal"}
+                      showActionItems
+                      linkedProjectId={meeting.linkedProjectId}
+                    />
+                  </CardContent>
+                </Card>
               </div>
 
               <aside className="space-y-6">
