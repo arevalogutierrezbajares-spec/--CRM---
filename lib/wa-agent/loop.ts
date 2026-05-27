@@ -246,39 +246,18 @@ function systemPrompt(opts: {
     timeZone: opts.userTimezone,
   });
   return [
-    `You are a chief-of-staff assistant for ${opts.userName} embedded in their shared workspace CRM.`,
-    `Today is ${today}. Their timezone is ${opts.userTimezone}.`,
-    opts.persona
-      ? `\nPersona instruction (how to address this user in greetings/replies): ${opts.persona}`
-      : "",
-    "",
-    "All workspace members share the same contacts, projects, milestones, meetings, and touches. " +
-      "Reminders, however, are personal to the texter.",
-    "",
-    "Capabilities:",
-    "- Log touches (interactions) on contacts",
-    "- Create contacts (only after find_contact returns no match AND the user confirmed creation)",
-    "- Schedule personal reminders (one-shot, daily, weekly, monthly)",
-    "- Mark milestones done (DESTRUCTIVE — confirm with user first)",
-    "- Summarize status (overdue / blocked / stale)",
-    "- Brief a contact's recent touches",
-    "",
-    "Style:",
-    "- Reply in plain text, 1–3 sentences usually. WhatsApp doesn't render markdown.",
-    "- For ambiguous names ('Marta'), call find_contact first; if 2+ matches, ask which one.",
-    "- For dates: ALWAYS resolve to a full ISO datetime with the user's timezone offset before calling schedule_reminder.",
-    "- For destructive ops (mark done, cancel reminder): preview and require explicit confirmation in the next message.",
-    "- Never invent contact_ids, project_ids, or milestone_ids. Always look them up first.",
-    "",
-    "When you have enough info to act, call the tool. Don't narrate.",
-    opts.workflowSupplement ? `\n${opts.workflowSupplement}` : "",
-    opts.confirmationPending
-      ? "\nIMPORTANT: The user has just confirmed a pending action. Execute it now."
-      : "",
+    `Chief-of-staff for ${opts.userName} in a shared workspace CRM. Today: ${today}. TZ: ${opts.userTimezone}.`,
+    opts.persona ? `Persona: ${opts.persona}` : "",
+    "Workspace data (contacts/projects/milestones/meetings/touches) is shared; reminders are personal.",
+    "Rules: reply in plain text (no markdown), 1–3 sentences. Resolve dates to ISO with TZ offset before scheduling. Never invent UUIDs — look them up. For destructive ops, preview and require explicit YES first.",
+    "Call tools when you have enough info; don't narrate the plan.",
+    opts.workflowSupplement ? opts.workflowSupplement : "",
+    opts.confirmationPending ? "The user just confirmed the pending action — execute it now." : "",
     opts.pendingIntent
-      ? `\nPending intent from prior turn:\n${JSON.stringify(opts.pendingIntent, null, 2)}`
+      ? `Pending from prior turn: ${JSON.stringify(opts.pendingIntent)}`
       : "",
   ]
+    .filter(Boolean)
     .join("\n")
     .trim();
 }
@@ -377,13 +356,15 @@ export async function handleMessage(opts: {
 
   // ── Mention pre-resolver (Phase 4) ───────────────────────────────────
   // Run before the LLM so Claude gets contact IDs without spending a tool turn.
+  // Note: the RESOLVED line goes on EVERY turn (it's ground truth Claude needs
+  // throughout the conversation, including when composing the final reply).
+  // The workflow supplement only goes on turn 0 (it's the "what to do" hint).
   const mentionMatches = await resolveMentions(resolved.workspaceId, opts.body);
   const mentionHint = mentionSupplementLine(mentionMatches);
 
-  // Build supplement: workflow supplement + confirmation-gate override + mention hint
-  let workflowSupplement = (workflow.supplement ?? "") + mentionHint;
+  let turn0Supplement = workflow.supplement ?? "";
   if (needsConfirmFirst) {
-    workflowSupplement +=
+    turn0Supplement +=
       "\nCONFIRMATION GATE: Describe exactly what you are about to do, then ask the user YES or NO to confirm. Do NOT call any write/destructive tools yet.";
   }
 
@@ -419,6 +400,14 @@ export async function handleMessage(opts: {
   const model = workflow.model ?? "claude-sonnet-4-6";
 
   for (let turn = 0; turn < MAX_TURNS; turn++) {
+    // On turn 0 we send the full supplement (workflow nudge + confirmation
+    // gate + resolved mentions). On later turns we only carry the resolved
+    // mentions forward so Claude doesn't forget the contact org/rel when
+    // composing the reply, but stops getting nagged about the workflow plan.
+    const supplementForTurn = turn === 0
+      ? turn0Supplement + mentionHint
+      : mentionHint;
+
     const result = await claudeWithTools({
       system: systemPrompt({
         userName: resolved.displayName,
@@ -426,7 +415,7 @@ export async function handleMessage(opts: {
         persona: resolved.persona,
         now,
         pendingIntent,
-        workflowSupplement: turn === 0 ? workflowSupplement : undefined,
+        workflowSupplement: supplementForTurn || undefined,
         confirmationPending: turn === 0 && confirmationJustReceived,
       }),
       messages: state.messages,

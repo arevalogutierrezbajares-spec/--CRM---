@@ -39,7 +39,7 @@ export const WORKFLOWS: Partial<Record<Intent, Workflow>> = {
   note_write: {
     allowedTools: ["find_contact", "upsert_note", "create_contact"],
     supplement:
-      "INSTRUCTION: The user wants to record a note. If a contact name is mentioned, call find_contact first to resolve the ID, then call upsert_note. Tag the note to the contact(s) mentioned.",
+      "Record a note. Use any PRE-RESOLVED contact_ids directly; only call find_contact if a name is mentioned that wasn't pre-resolved.",
   },
 
   contact_add: {
@@ -89,30 +89,27 @@ export const WORKFLOWS: Partial<Record<Intent, Workflow>> = {
   touch_log: {
     allowedTools: ["find_contact", "log_touch", "create_contact"],
     supplement:
-      "INSTRUCTION: Find the contact by name with find_contact before logging the touch. If no match, ask the user to confirm before creating.",
+      "Log the touch. Use any PRE-RESOLVED contact_ids directly. If a name isn't pre-resolved, call find_contact; if no match, ask before creating.",
   },
 
   draft_send: {
     allowedTools: ["find_contact", "draft_message", "send_message"],
     requireConfirmation: true,
     supplement:
-      "INSTRUCTION: Call find_contact to resolve the contact, then call draft_message to gather context. " +
-      "Present the full drafted message to the user and wait for YES before calling send_message. " +
-      "Never send without explicit confirmation.",
+      "Use any PRE-RESOLVED contact_id directly, then call draft_message. Show the full drafted message and wait for YES before send_message. Never send without explicit confirmation.",
   },
 
   add_channel: {
     allowedTools: ["find_contact", "add_channel"],
     model: "claude-haiku-4-5",
     supplement:
-      "INSTRUCTION: Call find_contact first if you need to resolve the contact ID. Then call add_channel with the validated value.",
+      "Use PRE-RESOLVED contact_id directly; only call find_contact if no match was pre-resolved. Then add_channel with the validated value.",
   },
 
   log_meeting: {
     allowedTools: ["find_contact", "log_meeting"],
     supplement:
-      "INSTRUCTION: Resolve all attendee names to contact IDs with find_contact before calling log_meeting. " +
-      "Use the current datetime if no time is specified.",
+      "Use PRE-RESOLVED contact_ids directly for attendees; only call find_contact for unresolved names. Use the current datetime if none specified.",
   },
 
   meeting_brief: {
@@ -120,16 +117,14 @@ export const WORKFLOWS: Partial<Record<Intent, Workflow>> = {
     requiredTools: ["meeting_brief"],
     model: "claude-haiku-4-5",
     supplement:
-      "INSTRUCTION: Call find_contact to resolve contact IDs, then call meeting_brief. " +
-      "Present the brief clearly organized by contact.",
+      "Use PRE-RESOLVED contact_ids directly; only call find_contact for unresolved names. Then meeting_brief.",
   },
 
   assign_contact: {
     allowedTools: ["find_contact", "assign_contact"],
     model: "claude-haiku-4-5",
     supplement:
-      "INSTRUCTION: Call find_contact to get the contact ID, then assign_contact. " +
-      "Use 'me' as the assignee if the user wants to assign to themselves.",
+      "Use PRE-RESOLVED contact_id directly. 'me' as assignee means the texter themselves.",
   },
 
   status_check: {

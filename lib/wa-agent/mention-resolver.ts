@@ -26,6 +26,12 @@ export type MentionMatch = {
   id: string;
   name: string;
   matchedToken: string;
+  /** Organization the contact belongs to, if any. Helps the agent write
+   *  context-rich replies without an extra contact_summary lookup. */
+  org: string | null;
+  /** lead | partner | prospect | friend — surfaces who this person IS so
+   *  the agent doesn't ask "which Oscar?" or look up the relationship type. */
+  rel: "friend" | "lead" | "partner" | "prospect";
 };
 
 /**
@@ -49,9 +55,16 @@ export async function resolveMentions(
 ): Promise<MentionMatch[]> {
   const body = messageBody.toLowerCase();
 
-  // Fetch all active workspace contacts (name + id only — small payload)
+  // Fetch all active workspace contacts (name + id + org + relationship).
+  // Including org/rel lets the agent compose a context-rich reply without
+  // a second contact_summary round-trip just for "Oscar Pietri (La Guaquira)".
   const allContacts = await db
-    .select({ id: contacts.id, name: contacts.name })
+    .select({
+      id: contacts.id,
+      name: contacts.name,
+      org: contacts.organization,
+      rel: contacts.relationshipType,
+    })
     .from(contacts)
     .where(
       and(
@@ -63,34 +76,51 @@ export async function resolveMentions(
 
   const matches: MentionMatch[] = [];
 
+  // Build a token → contacts[] index so we know which tokens are unique to
+  // a single contact (safe to match on alone) vs ambiguous across many.
+  const tokenIndex = new Map<string, typeof allContacts>();
+  for (const c of allContacts) {
+    for (const t of nameTokens(c.name)) {
+      const existing = tokenIndex.get(t) ?? [];
+      existing.push(c);
+      tokenIndex.set(t, existing);
+    }
+  }
+
   for (const c of allContacts) {
     const fullNameLower = c.name.toLowerCase();
 
+    const base = { id: c.id, name: c.name, org: c.org, rel: c.rel };
+
     // Check for full name match first (strongest signal)
     if (body.includes(fullNameLower)) {
-      matches.push({ id: c.id, name: c.name, matchedToken: c.name });
+      matches.push({ ...base, matchedToken: c.name });
       continue;
     }
 
-    // Check for significant partial matches (all tokens present)
     const tokens = nameTokens(c.name);
     if (tokens.length === 0) continue;
 
+    // All tokens present (matches "Juan Carlos Guinand" when message says
+    // "juan carlos guinand" or any order)
     const allPresent = tokens.every((t) => body.includes(t));
     if (allPresent) {
-      matches.push({ id: c.id, name: c.name, matchedToken: tokens.join(" ") });
+      matches.push({ ...base, matchedToken: tokens.join(" ") });
       continue;
     }
 
-    // For single-token names (nicknames, companies), accept a direct match
-    // only if the token is ≥ 6 chars (reduces false positives)
-    if (tokens.length === 1 && tokens[0].length >= 6) {
-      const token = tokens[0];
-      // Use word-boundary-style check: token must appear with non-alpha around it
-      const re = new RegExp(`(?<![a-z])${token}(?![a-z])`, "i");
-      if (re.test(body)) {
-        matches.push({ id: c.id, name: c.name, matchedToken: token });
-      }
+    // Single-token match: only safe if the token is unique to ONE contact
+    // in the workspace. Otherwise we'd mis-attribute "talked to Maria" when
+    // there are 3 Marias.
+    for (const t of tokens) {
+      if (!body.includes(t)) continue;
+      const owners = tokenIndex.get(t) ?? [];
+      if (owners.length !== 1) continue; // ambiguous — let the agent disambiguate
+      // Token must appear as a whole word, not as a substring of another word.
+      const re = new RegExp(`(?<![a-zA-Z])${t}(?![a-zA-Z])`, "i");
+      if (!re.test(body)) continue;
+      matches.push({ ...base, matchedToken: t });
+      break;
     }
   }
 
@@ -111,8 +141,13 @@ export async function resolveMentions(
  */
 export function mentionSupplementLine(matches: MentionMatch[]): string {
   if (matches.length === 0) return "";
+  // Compact: name(org)[rel]=id ; ... — keep it short so Claude reads it as
+  // authoritative ground truth, not a "hint" to verify.
   const list = matches
-    .map((m) => `"${m.name}" (contact_id: ${m.id})`)
-    .join(", ");
-  return `\nKNOWN ENTITIES IN THIS MESSAGE: ${list}. Use these IDs directly without calling find_contact.`;
+    .map((m) => {
+      const orgPart = m.org ? `(${m.org})` : "";
+      return `${m.name}${orgPart}[${m.rel}]=${m.id}`;
+    })
+    .join(" ; ");
+  return `\nRESOLVED: ${list}\n^ Treat as ground truth. Do NOT call find_contact/contact_summary for these.`;
 }
