@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
@@ -138,4 +138,103 @@ export async function unarchiveContact(id: string): Promise<ActionResult> {
   if (!row) return { ok: false, error: "Contact not found" };
   revalidatePath("/contacts");
   return { ok: true, id: row.id };
+}
+
+export type BulkResult =
+  | { ok: true; count: number }
+  | { ok: false; error: string };
+
+export async function bulkArchiveContacts(
+  ids: string[],
+  archived: boolean,
+): Promise<BulkResult> {
+  if (ids.length === 0) return { ok: true, count: 0 };
+  const user = await requireUser();
+  const rows = await db
+    .update(contacts)
+    .set({ archived, updatedAt: new Date() })
+    .where(
+      and(
+        inArray(contacts.id, ids),
+        eq(contacts.workspaceId, user.workspaceId),
+      ),
+    )
+    .returning({ id: contacts.id });
+  revalidatePath("/contacts");
+  return { ok: true, count: rows.length };
+}
+
+/**
+ * Adds a tag to many contacts. Uses ON CONFLICT DO NOTHING semantics: we
+ * filter out pairs that already exist before inserting, so re-tagging is a
+ * no-op rather than an error.
+ */
+export async function bulkAddTagToContacts(
+  contactIds: string[],
+  tagId: string,
+): Promise<BulkResult> {
+  if (contactIds.length === 0) return { ok: true, count: 0 };
+  const user = await requireUser();
+  // Scope to user's workspace: only operate on contacts the user can see.
+  const owned = await db
+    .select({ id: contacts.id })
+    .from(contacts)
+    .where(
+      and(
+        inArray(contacts.id, contactIds),
+        eq(contacts.workspaceId, user.workspaceId),
+      ),
+    );
+  const ownedIds = owned.map((r) => r.id);
+  if (ownedIds.length === 0) return { ok: true, count: 0 };
+
+  const existing = await db
+    .select({ contactId: contactTags.contactId })
+    .from(contactTags)
+    .where(
+      and(
+        eq(contactTags.tagId, tagId),
+        inArray(contactTags.contactId, ownedIds),
+      ),
+    );
+  const existingSet = new Set(existing.map((r) => r.contactId));
+  const toInsert = ownedIds
+    .filter((id) => !existingSet.has(id))
+    .map((contactId) => ({ contactId, tagId }));
+
+  if (toInsert.length > 0) {
+    await db.insert(contactTags).values(toInsert);
+  }
+  revalidatePath("/contacts");
+  return { ok: true, count: ownedIds.length };
+}
+
+export async function bulkRemoveTagFromContacts(
+  contactIds: string[],
+  tagId: string,
+): Promise<BulkResult> {
+  if (contactIds.length === 0) return { ok: true, count: 0 };
+  const user = await requireUser();
+  const owned = await db
+    .select({ id: contacts.id })
+    .from(contacts)
+    .where(
+      and(
+        inArray(contacts.id, contactIds),
+        eq(contacts.workspaceId, user.workspaceId),
+      ),
+    );
+  const ownedIds = owned.map((r) => r.id);
+  if (ownedIds.length === 0) return { ok: true, count: 0 };
+
+  await db
+    .delete(contactTags)
+    .where(
+      and(
+        eq(contactTags.tagId, tagId),
+        inArray(contactTags.contactId, ownedIds),
+      ),
+    );
+  revalidatePath("/contacts");
+  return { ok: true, count: ownedIds.length };
 }
