@@ -1,7 +1,7 @@
 import {
   Building2,
-  CalendarDays,
   Contact2,
+  Home,
   KanbanSquare,
   LayoutGrid,
   Network,
@@ -17,7 +17,7 @@ export type NavItem = {
 };
 
 export const NAV_ITEMS: NavItem[] = [
-  { href: "/", label: "This Week", icon: CalendarDays },
+  { href: "/", label: "Home", icon: Home },
   { href: "/contacts", label: "Contacts", icon: Contact2 },
   { href: "/projects", label: "Projects", icon: LayoutGrid },
   { href: "/meetings", label: "Meetings", icon: Users },

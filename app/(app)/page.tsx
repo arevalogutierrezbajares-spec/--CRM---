@@ -1,282 +1,264 @@
-import Link from "next/link";
-import { AlertCircle, CalendarClock, Clock4 } from "lucide-react";
 import { requireUser } from "@/lib/current-user";
-import { TopBar } from "@/components/layout/top-bar";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { DashboardShell } from "@/components/dashboard/shell/dashboard-shell";
+import { RightColumn } from "@/components/dashboard/shell/right-column";
+import { MiniCalendar } from "@/components/dashboard/right/mini-calendar";
+import { PipelineSnapshot } from "@/components/dashboard/right/pipeline-snapshot";
+import { RelationshipHealth } from "@/components/dashboard/right/relationship-health";
+import { AIBriefing } from "@/components/dashboard/right/ai-briefing";
+import { DailyView } from "@/components/dashboard/daily/daily-view";
+import { WeeklyView } from "@/components/dashboard/weekly/weekly-view";
+import { MonthlyView } from "@/components/dashboard/monthly/monthly-view";
 import { DbBanner } from "@/components/db-banner";
-import {
-  listDueThisWeek,
-  listBlockedProjects,
-  listStaleFriends,
-  type DueItem,
-  type BlockedProject,
-  type StaleContact,
-} from "@/db/queries/this-week";
-import { touchDensity, type DensityCell } from "@/db/queries/density";
-import { Heatmap } from "@/components/density/heatmap";
 import { safeRead } from "@/lib/db-status";
-import { formatDate } from "@/lib/utils";
+import {
+  dashboardCounts,
+  listActiveProjectsForDashboard,
+  listMeetingsThisMonth,
+  listMeetingsThisWeek,
+  listMeetingsToday,
+  listTasksThisMonth,
+  listTasksThisWeek,
+  listTasksToday,
+  meetingDaysThisMonth,
+  monthStats,
+  pipelineSnapshot,
+  relationshipHealth,
+  startOfMonth,
+  startOfWeek,
+  topAccountsThisMonth,
+  type DashCounts,
+  type DashMeeting,
+  type DashProject,
+  type DashTask,
+  type PipelineStageBar,
+  type RelationshipRow,
+  type TopAccount,
+} from "@/db/queries/dashboard";
+import {
+  listBlockedProjects,
+  type BlockedProject,
+  type DueItem,
+} from "@/db/queries/this-week";
 
-export default async function ThisWeekPage() {
-  const user = await requireUser();
+type SearchParams = Promise<{ view?: string }>;
 
-  const [dueRes, blockedRes, staleRes, densityRes] = await Promise.all([
-    safeRead<DueItem[]>(() => listDueThisWeek(user.id), []),
-    safeRead<BlockedProject[]>(() => listBlockedProjects(user.id), []),
-    safeRead<StaleContact[]>(() => listStaleFriends(user.id), []),
-    safeRead<DensityCell[]>(() => touchDensity({ workspaceId: user.workspaceId }), []),
-  ]);
+const EMPTY_COUNTS: DashCounts = {
+  tasksToday: 0,
+  tasksTodayOverdue: 0,
+  meetingsToday: 0,
+  nextMeetingMinutes: null,
+  activeProjects: 0,
+  nearestProjectDueDays: null,
+  blockedProjects: 0,
+};
 
-  const dueCount = dueRes.data.length;
-  const overdueCount = dueRes.data.filter((d) => d.isOverdue).length;
-  const blockedCount = blockedRes.data.length;
-  const overdueBlockedCount = blockedRes.data.filter(
-    (b) => b.isOverdue,
-  ).length;
+const EMPTY_MONTH_STATS = {
+  meetingsHeld: 0,
+  tasksCompleted: 0,
+  tasksTotal: 0,
+  projectsActive: 0,
+  contactsTouched: 0,
+};
 
-  return (
-    <>
-      <TopBar email={user.email} displayName={user.displayName} />
-      <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-8">
-        <header className="mb-6">
-          <h1 className="text-2xl font-semibold tracking-tight">This Week</h1>
-          <p className="text-sm text-[var(--muted-foreground)]">
-            Due, blocked, stale across your contacts and projects.
-          </p>
-        </header>
-
-        {(!dueRes.ok || !blockedRes.ok || !staleRes.ok) && (
-          <DbBanner
-            error={
-              dueRes.ok && blockedRes.ok && staleRes.ok
-                ? ""
-                : (dueRes as { error?: string }).error ??
-                  (blockedRes as { error?: string }).error ??
-                  (staleRes as { error?: string }).error ??
-                  "Database error"
-            }
-          />
-        )}
-
-        <div className="grid gap-4 md:grid-cols-3">
-          <StatCard
-            label="Due this week"
-            value={dueCount}
-            sub={
-              overdueCount > 0
-                ? `${overdueCount} overdue`
-                : dueCount > 0
-                  ? "on track"
-                  : "—"
-            }
-            tone={overdueCount > 0 ? "danger" : "default"}
-            icon={<CalendarClock className="h-4 w-4" />}
-          />
-          <StatCard
-            label="Blocked"
-            value={blockedCount}
-            sub={
-              overdueBlockedCount > 0
-                ? `${overdueBlockedCount} past expected unblock`
-                : "no overdue blockers"
-            }
-            tone={overdueBlockedCount > 0 ? "danger" : "warning"}
-            icon={<AlertCircle className="h-4 w-4" />}
-          />
-          <StatCard
-            label="Stale friends"
-            value={staleRes.data.length}
-            sub="no touch in 60+ days"
-            tone={staleRes.data.length > 0 ? "warning" : "default"}
-            icon={<Clock4 className="h-4 w-4" />}
-          />
-        </div>
-
-        <section className="mt-8 grid gap-6 lg:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <CardTitle>Due this week</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {dueRes.data.length === 0 ? (
-                <p className="text-sm text-[var(--muted-foreground)]">
-                  Nothing on the calendar in the next 7 days.
-                </p>
-              ) : (
-                <ul className="divide-y divide-[var(--border)]">
-                  {dueRes.data
-                    .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
-                    .map((d) => (
-                      <li
-                        key={d.milestoneId}
-                        className="flex items-start justify-between gap-3 py-2"
-                      >
-                        <div className="min-w-0">
-                          <Link
-                            href={`/projects/${d.projectId}`}
-                            className="text-sm font-medium hover:underline"
-                          >
-                            {d.title}
-                          </Link>
-                          <div className="truncate text-xs text-[var(--muted-foreground)]">
-                            {d.projectTitle}
-                          </div>
-                        </div>
-                        <div className="shrink-0 text-right">
-                          <Badge
-                            variant={d.isOverdue ? "danger" : "outline"}
-                            className="text-xs"
-                          >
-                            {formatDate(d.dueDate)}
-                          </Badge>
-                          {d.status === "blocked" && (
-                            <div className="mt-1 text-xs text-[var(--health-amber)]">
-                              blocked
-                            </div>
-                          )}
-                        </div>
-                      </li>
-                    ))}
-                </ul>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Blocked projects</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {blockedRes.data.length === 0 ? (
-                <p className="text-sm text-[var(--muted-foreground)]">
-                  Nothing is currently waiting.
-                </p>
-              ) : (
-                <ul className="divide-y divide-[var(--border)]">
-                  {blockedRes.data.map((b) => (
-                    <li
-                      key={b.id}
-                      className="flex items-start justify-between gap-3 py-2"
-                    >
-                      <div className="min-w-0">
-                        <Link
-                          href={`/projects/${b.id}`}
-                          className="text-sm font-medium hover:underline"
-                        >
-                          {b.title}
-                        </Link>
-                        <div className="text-xs text-[var(--muted-foreground)]">
-                          waiting on: {b.waitingOn}
-                        </div>
-                      </div>
-                      <div className="shrink-0 text-right">
-                        {b.expectedUnblockDate && (
-                          <Badge
-                            variant={b.isOverdue ? "danger" : "outline"}
-                            className="text-xs"
-                          >
-                            unblock {formatDate(b.expectedUnblockDate)}
-                          </Badge>
-                        )}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="lg:col-span-2">
-            <CardHeader>
-              <CardTitle>Touch density · last 90 days</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {densityRes.data.length === 0 ? (
-                <p className="text-sm text-[var(--muted-foreground)]">
-                  No touch activity yet.
-                </p>
-              ) : (
-                <Heatmap cells={densityRes.data} />
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="lg:col-span-2">
-            <CardHeader>
-              <CardTitle>Stale friends</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {staleRes.data.length === 0 ? (
-                <p className="text-sm text-[var(--muted-foreground)]">
-                  Friends are warm. Nothing has gone cold past 60 days.
-                </p>
-              ) : (
-                <ul className="grid gap-2 md:grid-cols-2">
-                  {staleRes.data.map((s) => (
-                    <li
-                      key={s.id}
-                      className="flex items-center justify-between rounded-md border border-[var(--border)] px-3 py-2"
-                    >
-                      <Link
-                        href={`/contacts/${s.id}`}
-                        className="text-sm font-medium hover:underline"
-                      >
-                        {s.name}
-                      </Link>
-                      <span className="text-xs text-[var(--muted-foreground)]">
-                        {s.daysSince === null
-                          ? "never"
-                          : `${s.daysSince}d ago`}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardContent>
-          </Card>
-        </section>
-      </main>
-    </>
-  );
+function briefingBullets(
+  counts: DashCounts,
+  tasks: DashTask[],
+  meetings: DashMeeting[],
+  blocked: BlockedProject[],
+): string[] {
+  const out: string[] = [];
+  if (counts.tasksTodayOverdue > 0) {
+    out.push(
+      `${counts.tasksTodayOverdue} task${counts.tasksTodayOverdue === 1 ? "" : "s"} overdue — clear before noon.`,
+    );
+  } else if (counts.tasksToday > 0) {
+    out.push(`${counts.tasksToday} task${counts.tasksToday === 1 ? "" : "s"} on deck for today.`);
+  }
+  if (counts.nextMeetingMinutes !== null) {
+    if (counts.nextMeetingMinutes < 30) {
+      const m = meetings.find((mm) => mm.scheduledAt.getTime() > Date.now());
+      out.push(`Next meeting in ${counts.nextMeetingMinutes}m${m ? ` — ${m.title}` : ""}.`);
+    } else if (counts.meetingsToday > 0) {
+      out.push(`${counts.meetingsToday} meeting${counts.meetingsToday === 1 ? "" : "s"} on the calendar today.`);
+    }
+  }
+  if (blocked.length > 0) {
+    out.push(
+      `${blocked.length} project${blocked.length === 1 ? "" : "s"} blocked — check what's needed to unblock.`,
+    );
+  }
+  return out.slice(0, 4);
 }
 
-function StatCard({
-  label,
-  value,
-  sub,
-  tone,
-  icon,
-}: {
-  label: string;
-  value: number;
-  sub: string;
-  tone: "default" | "warning" | "danger";
-  icon: React.ReactNode;
-}) {
-  const ring =
-    tone === "danger"
-      ? "ring-1 ring-[var(--health-red)]/30"
-      : tone === "warning"
-        ? "ring-1 ring-[var(--health-amber)]/30"
-        : "";
+export default async function HomePage(props: { searchParams: SearchParams }) {
+  const user = await requireUser();
+  const sp = await props.searchParams;
+  const view = sp.view === "weekly" || sp.view === "monthly" ? sp.view : "daily";
+
+  /* ── Persistent right-column data + counts ─────────────────────────── */
+
+  const [
+    countsRes,
+    pipelineRes,
+    relRes,
+    eventDaysRes,
+    blockedRes,
+  ] = await Promise.all([
+    safeRead<DashCounts>(() => dashboardCounts(user.workspaceId), EMPTY_COUNTS),
+    safeRead<PipelineStageBar[]>(() => pipelineSnapshot(user.workspaceId), []),
+    safeRead<RelationshipRow[]>(() => relationshipHealth(user.workspaceId, 6), []),
+    safeRead<string[]>(() => meetingDaysThisMonth(user.workspaceId), []),
+    safeRead<BlockedProject[]>(() => listBlockedProjects(user.workspaceId), []),
+  ]);
+
+  /* ── View-specific data fetched conditionally ──────────────────────── */
+
+  let dailyData: {
+    tasks: DashTask[];
+    meetings: DashMeeting[];
+    projects: DashProject[];
+  } | null = null;
+  let weeklyData: {
+    tasks: DashTask[];
+    meetings: DashMeeting[];
+    projects: DashProject[];
+    weekStart: Date;
+  } | null = null;
+  let monthlyData: {
+    meetings: DashMeeting[];
+    projects: DashProject[];
+    overdueTasks: DueItem[];
+    topAccounts: TopAccount[];
+    monthStatsT: typeof EMPTY_MONTH_STATS;
+    monthStart: Date;
+  } | null = null;
+
+  if (view === "daily") {
+    const [tasks, meetings, projects] = await Promise.all([
+      safeRead<DashTask[]>(() => listTasksToday(user.workspaceId), []),
+      safeRead<DashMeeting[]>(() => listMeetingsToday(user.workspaceId), []),
+      safeRead<DashProject[]>(() => listActiveProjectsForDashboard(user.workspaceId, 6), []),
+    ]);
+    dailyData = {
+      tasks: tasks.data,
+      meetings: meetings.data,
+      projects: projects.data,
+    };
+  } else if (view === "weekly") {
+    const [tasks, meetings, projects] = await Promise.all([
+      safeRead<DashTask[]>(() => listTasksThisWeek(user.workspaceId), []),
+      safeRead<DashMeeting[]>(() => listMeetingsThisWeek(user.workspaceId), []),
+      safeRead<DashProject[]>(() => listActiveProjectsForDashboard(user.workspaceId, 6), []),
+    ]);
+    weeklyData = {
+      tasks: tasks.data,
+      meetings: meetings.data,
+      projects: projects.data,
+      weekStart: startOfWeek(),
+    };
+  } else {
+    const [meetings, projects, overdueTasks, top, stats] = await Promise.all([
+      safeRead<DashMeeting[]>(() => listMeetingsThisMonth(user.workspaceId), []),
+      safeRead<DashProject[]>(() => listActiveProjectsForDashboard(user.workspaceId, 6), []),
+      safeRead<DashTask[]>(() => listTasksThisMonth(user.workspaceId), []),
+      safeRead<TopAccount[]>(() => topAccountsThisMonth(user.workspaceId, 6), []),
+      safeRead(() => monthStats(user.workspaceId), EMPTY_MONTH_STATS),
+    ]);
+    // Coerce DashTask → DueItem shape for RiskFlags reuse
+    const overdueAsDueItems: DueItem[] = overdueTasks.data
+      .filter((t) => t.isOverdue)
+      .map((t) => ({
+        milestoneId: t.id,
+        projectId: t.projectId,
+        projectTitle: t.projectTitle,
+        title: t.title,
+        dueDate: t.dueDate,
+        status: t.status,
+        isOverdue: t.isOverdue,
+      }));
+    monthlyData = {
+      meetings: meetings.data,
+      projects: projects.data,
+      overdueTasks: overdueAsDueItems,
+      topAccounts: top.data,
+      monthStatsT: stats.data,
+      monthStart: startOfMonth(),
+    };
+  }
+
+  /* ── Briefing bullets for right column ─────────────────────────────── */
+
+  const briefing = briefingBullets(
+    countsRes.data,
+    dailyData?.tasks ?? weeklyData?.tasks ?? monthlyData?.overdueTasks.map((t) => ({
+      id: t.milestoneId,
+      title: t.title,
+      dueDate: t.dueDate,
+      projectId: t.projectId,
+      projectTitle: t.projectTitle,
+      status: t.status,
+      isOverdue: t.isOverdue,
+    })) ?? [],
+    dailyData?.meetings ?? weeklyData?.meetings ?? monthlyData?.meetings ?? [],
+    blockedRes.data,
+  );
+
+  const dbError =
+    !countsRes.ok || !pipelineRes.ok || !relRes.ok || !eventDaysRes.ok;
+
   return (
-    <Card className={ring}>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-sm font-medium text-[var(--muted-foreground)]">
-          {icon}
-          {label}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="text-3xl font-semibold">{value}</div>
-        <p className="mt-2 text-xs text-[var(--muted-foreground)]">{sub}</p>
-      </CardContent>
-    </Card>
+    <DashboardShell
+      email={user.email}
+      displayName={user.displayName}
+      rightColumn={
+        <RightColumn>
+          <MiniCalendar eventDays={eventDaysRes.data} />
+          <AIBriefing bullets={briefing} />
+          <PipelineSnapshot stages={pipelineRes.data} />
+          <RelationshipHealth rows={relRes.data} />
+        </RightColumn>
+      }
+    >
+      {dbError && (
+        <DbBanner
+          error={
+            (countsRes as { error?: string }).error ??
+            (pipelineRes as { error?: string }).error ??
+            "Database error"
+          }
+        />
+      )}
+
+      {view === "daily" && dailyData && (
+        <DailyView
+          counts={countsRes.data}
+          tasks={dailyData.tasks}
+          meetings={dailyData.meetings}
+          projects={dailyData.projects}
+        />
+      )}
+
+      {view === "weekly" && weeklyData && (
+        <WeeklyView
+          counts={countsRes.data}
+          tasks={weeklyData.tasks}
+          meetings={weeklyData.meetings}
+          projects={weeklyData.projects}
+          weekStart={weeklyData.weekStart}
+        />
+      )}
+
+      {view === "monthly" && monthlyData && (
+        <MonthlyView
+          monthStart={monthlyData.monthStart}
+          meetings={monthlyData.meetings}
+          projects={monthlyData.projects}
+          overdueTasks={monthlyData.overdueTasks}
+          blocked={blockedRes.data}
+          topAccounts={monthlyData.topAccounts}
+          monthStats={monthlyData.monthStatsT}
+        />
+      )}
+    </DashboardShell>
   );
 }

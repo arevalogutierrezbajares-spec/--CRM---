@@ -8,17 +8,27 @@ import { NAV_ITEMS } from "./nav-items";
 export function Sidebar() {
   const pathname = usePathname();
   return (
-    <aside className="hidden w-56 shrink-0 border-r border-[var(--border)] bg-[var(--card)] md:flex md:flex-col">
-      <div className="flex h-14 items-center gap-2 border-b border-[var(--border)] px-5">
+    <aside
+      className="hidden w-[200px] shrink-0 border-r bg-card md:flex md:flex-col"
+      style={{ borderColor: "var(--border-default)" }}
+    >
+      <div
+        className="flex h-14 items-center gap-2 border-b px-4"
+        style={{ borderColor: "var(--border-default)" }}
+      >
         <div
           aria-hidden
-          className="grid h-7 w-7 place-items-center rounded-md bg-[var(--primary)] text-xs font-semibold text-[var(--primary-foreground)]"
+          className="grid h-7 w-7 place-items-center rounded-md text-[11px] font-medium"
+          style={{ background: "var(--text-primary)", color: "var(--bg-card)" }}
         >
           AGB
         </div>
-        <span className="text-sm font-semibold tracking-tight">AGB CRM</span>
+        <span className="text-[13px] font-medium tracking-tight text-text-primary">
+          AGB CRM
+        </span>
       </div>
-      <nav aria-label="Primary" className="flex flex-1 flex-col gap-0.5 p-3">
+
+      <nav aria-label="Primary" className="flex flex-1 flex-col gap-0.5 p-2">
         {NAV_ITEMS.map((item) => {
           const active =
             item.href === "/"
@@ -31,20 +41,24 @@ export function Sidebar() {
               href={item.href}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors",
+                "flex items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px] transition-colors",
                 active
-                  ? "bg-[var(--accent)] font-medium text-[var(--accent-foreground)] shadow-sm"
-                  : "text-[var(--muted-foreground)] hover:bg-[var(--accent)]/60 hover:text-[var(--foreground)]",
+                  ? "bg-surface font-medium text-text-primary"
+                  : "text-text-secondary hover:bg-surface hover:text-text-primary",
               )}
             >
-              <Icon className="h-4 w-4" />
-              {item.label}
+              <Icon size={16} className="shrink-0" />
+              <span>{item.label}</span>
             </Link>
           );
         })}
       </nav>
-      <div className="border-t border-[var(--border)] px-5 py-3 text-xs text-[var(--muted-foreground)]">
-        Phase 0 · v0.1.0
+
+      <div
+        className="border-t px-4 py-2.5 text-tiny text-text-tertiary"
+        style={{ borderColor: "var(--border-default)" }}
+      >
+        v0.2 · Home
       </div>
     </aside>
   );
