@@ -48,9 +48,8 @@ export const WORKFLOWS: Partial<Record<Intent, Workflow>> = {
   },
 
   todo_query: {
-    // read_todo_board will be added in Phase 3 — wired here as a future-required tool
     allowedTools: ["read_todo_board", "list_reminders", "status_report"],
-    requiredTools: ["read_todo_board", "list_reminders", "status_report"], // at least one required
+    requiredTools: ["read_todo_board", "list_reminders", "status_report"],
     supplement:
       "INSTRUCTION: The user wants their action items. You MUST call read_todo_board (or at minimum list_reminders + status_report) to get live data. Do NOT list todos from memory or conversation history.",
   },
@@ -79,6 +78,43 @@ export const WORKFLOWS: Partial<Record<Intent, Workflow>> = {
     allowedTools: ["find_contact", "log_touch", "create_contact"],
     supplement:
       "INSTRUCTION: Find the contact by name with find_contact before logging the touch. If no match, ask the user to confirm before creating.",
+  },
+
+  draft_send: {
+    allowedTools: ["find_contact", "draft_message", "send_message"],
+    requireConfirmation: true,
+    supplement:
+      "INSTRUCTION: Call find_contact to resolve the contact, then call draft_message to gather context. " +
+      "Present the full drafted message to the user and wait for YES before calling send_message. " +
+      "Never send without explicit confirmation.",
+  },
+
+  add_channel: {
+    allowedTools: ["find_contact", "add_channel"],
+    supplement:
+      "INSTRUCTION: Call find_contact first if you need to resolve the contact ID. Then call add_channel with the validated value.",
+  },
+
+  log_meeting: {
+    allowedTools: ["find_contact", "log_meeting"],
+    supplement:
+      "INSTRUCTION: Resolve all attendee names to contact IDs with find_contact before calling log_meeting. " +
+      "Use the current datetime if no time is specified.",
+  },
+
+  meeting_brief: {
+    allowedTools: ["find_contact", "meeting_brief"],
+    requiredTools: ["meeting_brief"],
+    supplement:
+      "INSTRUCTION: Call find_contact to resolve contact IDs, then call meeting_brief. " +
+      "Present the brief clearly organized by contact.",
+  },
+
+  assign_contact: {
+    allowedTools: ["find_contact", "assign_contact"],
+    supplement:
+      "INSTRUCTION: Call find_contact to get the contact ID, then assign_contact. " +
+      "Use 'me' as the assignee if the user wants to assign to themselves.",
   },
 
   status_check: {

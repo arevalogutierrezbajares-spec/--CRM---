@@ -2,7 +2,62 @@ import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { safeStr, type ToolEntry } from "./_types";
 
-const { contacts, touches } = schema;
+const { contacts, touches, reminders } = schema;
+
+/**
+ * Parse a follow-up expression like "3 days", "tomorrow", "next Monday", "Friday"
+ * into a concrete Date. Returns null if the expression is unrecognised.
+ */
+export function parseFollowUp(expr: string, now: Date): Date | null {
+  const lower = expr.toLowerCase().trim();
+  const d = new Date(now);
+
+  const nDays = lower.match(/(\d+)\s*day/);
+  if (nDays) {
+    d.setDate(d.getDate() + parseInt(nDays[1]));
+    d.setHours(9, 0, 0, 0);
+    return d;
+  }
+
+  const nWeeks = lower.match(/(\d+)\s*week/);
+  if (nWeeks) {
+    d.setDate(d.getDate() + parseInt(nWeeks[1]) * 7);
+    d.setHours(9, 0, 0, 0);
+    return d;
+  }
+
+  const nMonths = lower.match(/(\d+)\s*month/);
+  if (nMonths) {
+    d.setMonth(d.getMonth() + parseInt(nMonths[1]));
+    d.setHours(9, 0, 0, 0);
+    return d;
+  }
+
+  if (lower.includes("tomorrow")) {
+    d.setDate(d.getDate() + 1);
+    d.setHours(9, 0, 0, 0);
+    return d;
+  }
+
+  if (lower.includes("next week")) {
+    d.setDate(d.getDate() + 7);
+    d.setHours(9, 0, 0, 0);
+    return d;
+  }
+
+  const dayNames = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+  const dayMatch = dayNames.findIndex((day) => lower.includes(day));
+  if (dayMatch >= 0) {
+    const today = d.getDay();
+    let delta = dayMatch - today;
+    if (delta <= 0) delta += 7; // always forward
+    d.setDate(d.getDate() + delta);
+    d.setHours(9, 0, 0, 0);
+    return d;
+  }
+
+  return null;
+}
 
 export const logTouch: ToolEntry = {
   definition: {
@@ -29,6 +84,11 @@ export const logTouch: ToolEntry = {
           ],
         },
         project_id: { type: "string" },
+        follow_up_in: {
+          type: "string",
+          description:
+            "Optionally schedule a follow-up reminder, e.g. '3 days', 'tomorrow', 'next Monday'",
+        },
       },
       required: ["contact_id", "body"],
     },
@@ -76,10 +136,32 @@ export const logTouch: ToolEntry = {
       .set({ lastTouchAt: ctx.now, updatedAt: ctx.now })
       .where(eq(contacts.id, contactId));
 
+    // Optional follow-up reminder
+    let reminderId: string | null = null;
+    const followUpExpr = safeStr(input.follow_up_in, 60);
+    if (followUpExpr) {
+      const dueAt = parseFollowUp(followUpExpr, ctx.now);
+      if (dueAt) {
+        const [rem] = await db
+          .insert(reminders)
+          .values({
+            workspaceId: ctx.workspaceId,
+            forUserId: ctx.userId,
+            createdBy: ctx.userId,
+            subject: `Follow up with ${c.name}`,
+            dueAt,
+            recur: "once",
+            sourceContactId: contactId,
+          })
+          .returning({ id: reminders.id });
+        reminderId = rem.id;
+      }
+    }
+
     return {
       ok: true,
-      data: { id: row.id, contactName: c.name },
-      speak: `Logged touch on ${c.name}.`,
+      data: { id: row.id, contactName: c.name, reminderId },
+      speak: `Logged touch on ${c.name}${reminderId ? " + follow-up reminder set" : ""}.`,
     };
   },
 };
