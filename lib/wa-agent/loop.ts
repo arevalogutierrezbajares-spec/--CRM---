@@ -25,6 +25,7 @@ import {
 } from "@/lib/wa-agent/tools";
 import { classifyIntent } from "@/lib/wa-agent/intent/classify";
 import { getWorkflow } from "@/lib/wa-agent/intent/workflows";
+import { resolveMentions, mentionSupplementLine } from "@/lib/wa-agent/mention-resolver";
 
 const { waConversations, waActivity, users } = schema;
 
@@ -374,8 +375,13 @@ export async function handleMessage(opts: {
     !!workflow.requireConfirmation && !hasPendingIntent && !isConfirmYes;
   const confirmationJustReceived = isConfirmYes && hasPendingIntent;
 
-  // Build supplement: workflow supplement + confirmation-gate override if needed
-  let workflowSupplement = workflow.supplement ?? "";
+  // ── Mention pre-resolver (Phase 4) ───────────────────────────────────
+  // Run before the LLM so Claude gets contact IDs without spending a tool turn.
+  const mentionMatches = await resolveMentions(resolved.workspaceId, opts.body);
+  const mentionHint = mentionSupplementLine(mentionMatches);
+
+  // Build supplement: workflow supplement + confirmation-gate override + mention hint
+  let workflowSupplement = (workflow.supplement ?? "") + mentionHint;
   if (needsConfirmFirst) {
     workflowSupplement +=
       "\nCONFIRMATION GATE: Describe exactly what you are about to do, then ask the user YES or NO to confirm. Do NOT call any write/destructive tools yet.";
