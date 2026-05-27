@@ -1,11 +1,11 @@
 # AGB CRM — Task Board
 
-**Updated:** 2026-05-26
+**Updated:** 2026-05-27
 **Workflow:** [`_WORKFLOW.md`](./_WORKFLOW.md)
 **Source of truth for ACs:** [`docs/requirements/FR-MATRIX.md`](../docs/requirements/FR-MATRIX.md)
-**Tests:** 114 passing (69 unit · 33 integration · 12 e2e) — `pnpm test:all`
-**Score:** ~9.0/10 (was 7.4 before, see HANDOFF §batch 7-8)
-**Hot path:** Text the WhatsApp bot in natural language; agent loop routes through 9 tools + persists conversation state. Reminders + nudges crons proactively ping. See HANDOFF §batch 8.
+**Tests:** 197 unit + 23 E2E smoke — `npx vitest run` + `env -u DATABASE_URL npx tsx scripts/smoke-all-tools.ts`
+**Score:** ~9.0/10
+**Hot path:** Text the WhatsApp bot in natural language; 20-tool agent loop routes through intent classifier → tool gating → Claude. Voice notes, images, links, vCards handled by media pipeline. Reminders + nudges crons proactively ping.
 
 ## At a glance
 
@@ -19,7 +19,8 @@
 | Phase 5 — Network Graph | 2 | 0 | 0 | 0 | 2 | 0 |
 | Phase 6 — SHOULDs | 7 | 0 | 0 | 0 | 7 | 0 |
 | Phase 7 — COULDs / v1.5 | 1 | 0 | 0 | 0 | 1 | 0 |
-| **TOTAL** | **50** | **2** | **0** | **0** | **48** | **0** |
+| **Wave D — WA Media** | **3** | **3** | **0** | **0** | **0** | **0** |
+| **TOTAL** | **53** | **5** | **0** | **0** | **48** | **0** |
 
 (*Phase 2 row count is 9 because AGB-108 group-by is delivered as part of the
 grid framework alongside AGB-100..107. The 2 remaining `open` items are
@@ -200,6 +201,22 @@ Build: 29 routes, `next build` green, `tsc --noEmit` green.
 | ID | Title | Pts | FRs | Status |
 |----|-------|-----|-----|--------|
 | AGB-700 | Inbound-Triage AI | 8 | FR-BRN-11 | review (`lib/inbound-triage.ts` wired into Postmark handler; verdicts log to `INBOUND_TRIAGE_LOG_PATH` JSONL) |
+
+---
+
+## Wave D — WA Media (2026-05-27)
+
+Shipped Wave A (6 new CRM tools), Wave B (media pipeline), Wave C (197 unit tests + 23 E2E smoke).
+Three items left to close the loop:
+
+| ID | Title | Who | Pri | Pts | Status |
+|----|-------|-----|-----|-----|--------|
+| [AGB-WA-001](TASK-AGB-WA-001-webhook-media-dispatcher.md) | Wire media dispatcher into webhook | Agent | P0 | 5 | open |
+| [AGB-WA-002](TASK-AGB-WA-002-media-storage-setup.md) | Create agb-media bucket + env vars | **You** | P0 | 1 | open |
+| [AGB-WA-003](TASK-AGB-WA-003-activity-admin-page.md) | /wa-activity admin page (cost tracking) | Agent | P1 | 3 | open |
+
+**Do AGB-WA-002 first** (5 minutes, your action) — it unblocks AGB-WA-001.
+Then claim AGB-WA-001 + AGB-WA-003 in the same agent session.
 
 ---
 

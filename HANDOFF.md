@@ -1,15 +1,18 @@
 # AGB CRM — Handoff
 
-> **Latest: 2026-05-27 — production-ready v1 + shared-workspace refactor.**
-> All data ownership moved from per-user (`owner_id`) to per-workspace
-> (`workspace_id`), so you and your partners share contacts/projects/meetings
-> while keeping personal reminders. WhatsApp agent now routes by sender phone
-> → user → workspace, so each partner can text from their own number and act
-> as themselves inside the shared CRM. New `/workspace` page lets the owner
-> invite members by email; new `/accept?token=…` flow redeems invites.
+> **Latest: 2026-05-27 — Wave A/B/C shipped — 20-tool WA agent + media pipeline.**
+> WA agent now has 20 tools (was 14). New tools: `add_channel`, `draft_message`,
+> `send_message` (confirmation-gated), `log_meeting`, `meeting_brief`,
+> `assign_contact`. `log_touch` enhanced with `follow_up_in`. Media pipeline
+> written (`lib/wa-agent/media/`) — voice transcription (Whisper), Supabase
+> Storage, WA media download, vCard parsing, link extraction. Intent classifier
+> + workflows expanded for all new intents (EN + ES). 197 unit tests + 23/23
+> E2E smoke passing. Committed `9e65a06`.
 >
-> 119 tests passing (69 unit · 38 integration against real Postgres + new
-> cross-workspace-isolation suite · 12 e2e). `next build` green, `tsc --noEmit`
+> **Previous (2026-05-27):** production-ready v1 + shared-workspace refactor.
+> All data ownership moved from per-user (`owner_id`) to per-workspace
+> (`workspace_id`). WhatsApp agent routes by sender phone → user → workspace.
+> `/workspace` invite flow. 119 tests. `next build` green, `tsc --noEmit`
 > clean, Supabase live with 20 tables + workspace RLS.
 
 ---
@@ -62,15 +65,17 @@ If anything's broken: `pnpm verify` — walks all 9 env-gated surfaces and repor
 
 ## What's wired but unverified (waiting on your credentials)
 
-- ⏸ Real Supabase pooler URL (AGB-000A) — needed to flip the CRM from "demo-mode" to real
-- ⏸ Real `ANTHROPIC_API_KEY` — re-intro generator + weekly briefing + nudge AI + WhatsApp agent NL routing
-- ⏸ Real `WA_*` credentials — actual WhatsApp send/receive
-- ⏸ Real `POSTMARK_INBOUND_SECRET` — email-forward intake
-- ⏸ Real `OPENAI_API_KEY` — Whisper voice memo capture
-- ⏸ Real `RESEND_API_KEY` — weekly briefing email
+- ✅ `DATABASE_URL` — Supabase `uktrhbvdamzfzbnhuwhn` pooler live, seeded
+- ✅ `ANTHROPIC_API_KEY` — set, agent active
+- ⏸ `WA_*` credentials — actual WhatsApp send/receive
+- ⏸ `POSTMARK_INBOUND_SECRET` — email-forward intake
+- ⏸ `OPENAI_API_KEY` — Whisper voice transcription (Wave B needs this)
+- ⏸ `SUPABASE_SERVICE_ROLE_KEY` — media storage uploads (Wave B needs this)
+- ⏸ `agb-media` bucket in Supabase Dashboard — must be created manually (see AGB-WA-002)
+- ⏸ `RESEND_API_KEY` — weekly briefing email
 - ⏸ Optional: `SENTRY_DSN`, `OBSIDIAN_VAULT`
 
-All 7 of these flip from `paused` → `active` the moment you set them; `pnpm verify` confirms.
+**Note on `DATABASE_URL` in shell:** Your shell has `DATABASE_URL=postgresql://tour_user@localhost:5433/tour_db` (tourism project). When running AGB scripts, prefix with `env -u DATABASE_URL` so `.env.local` takes effect. e.g.: `env -u DATABASE_URL npx tsx scripts/smoke-all-tools.ts`
 
 ## How to actually use it (the happy path)
 
@@ -98,6 +103,33 @@ All 7 of these flip from `paused` → `active` the moment you set them; `pnpm ve
 - Log touches as you have them — manually, by email forward, or by WhatsApp text
 - Schedule reminders by texting the bot or via `/projects/:id` form
 - Get the daily nudge cron at 13:00 UTC + the weekly briefing email on Mondays
+
+## Wave D — what's next (pick-up order)
+
+3 open tasks. AGB-WA-002 is a 5-minute user action; AGB-WA-001 + AGB-WA-003 are agent work.
+
+| Task | Who | What | Blocks |
+|------|-----|------|--------|
+| [AGB-WA-002](_tasks/TASK-AGB-WA-002-media-storage-setup.md) | **You** | Create `agb-media` Supabase bucket + add `OPENAI_API_KEY` + `SUPABASE_SERVICE_ROLE_KEY` to `.env.local` | AGB-WA-001 |
+| [AGB-WA-001](_tasks/TASK-AGB-WA-001-webhook-media-dispatcher.md) | Agent | Wire `download → transcribe/store → agent` into the webhook for audio/image/doc/contacts/text-with-links | — |
+| [AGB-WA-003](_tasks/TASK-AGB-WA-003-activity-admin-page.md) | Agent | `/wa-activity` admin page — token usage + cost by day + per-sender breakdown | — |
+
+After these three, the agent is fully media-capable and you have cost visibility. Everything after that is polish (global search, multi-tenant, Safari/screen-reader hardening).
+
+### Quick sanity checks
+
+```bash
+# Unit + integration tests
+npx vitest run                          # 197 unit tests
+
+# E2E smoke against real Supabase (unsets tourism DB from shell first)
+env -u DATABASE_URL npx tsx scripts/smoke-all-tools.ts   # 23/23
+
+# TypeScript
+npx tsc --noEmit                        # should be clean
+```
+
+---
 
 ## Final audit verdict (2026-05-27)
 
