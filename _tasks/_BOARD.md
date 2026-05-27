@@ -20,7 +20,8 @@
 | Phase 6 — SHOULDs | 7 | 0 | 0 | 0 | 7 | 0 |
 | Phase 7 — COULDs / v1.5 | 1 | 0 | 0 | 0 | 1 | 0 |
 | **Wave D — WA Media** | **3** | **3** | **0** | **0** | **0** | **0** |
-| **TOTAL** | **53** | **5** | **0** | **0** | **48** | **0** |
+| **Wave E — Domain Launch** | **3** | **3** | **0** | **0** | **0** | **0** |
+| **TOTAL** | **56** | **8** | **0** | **0** | **48** | **0** |
 
 (*Phase 2 row count is 9 because AGB-108 group-by is delivered as part of the
 grid framework alongside AGB-100..107. The 2 remaining `open` items are
@@ -201,6 +202,24 @@ Build: 29 routes, `next build` green, `tsc --noEmit` green.
 | ID | Title | Pts | FRs | Status |
 |----|-------|-----|-----|--------|
 | AGB-700 | Inbound-Triage AI | 8 | FR-BRN-11 | review (`lib/inbound-triage.ts` wired into Postmark handler; verdicts log to `INBOUND_TRIAGE_LOG_PATH` JSONL) |
+
+---
+
+## Wave E — Domain Launch (2026-05-27)
+
+Login page rebranded to **X . JEAV . TIGR**. Vercel project + domain attached,
+production build green at https://agb-crm.vercel.app. The custom domain
+`x.vamosavenezuela.com` is one DNS record + one Supabase config change away
+from going live.
+
+| ID | Title | Who | Pri | Pts | Status |
+|----|-------|-----|-----|-----|--------|
+| [AGB-DOM-001](TASK-AGB-DOM-001-godaddy-dns-record.md) | Add A record at GoDaddy (`x` → `76.76.21.21`) | **You** | P0 | 1 | open |
+| [AGB-DOM-002](TASK-AGB-DOM-002-supabase-redirect-url.md) | Whitelist callback URL in Supabase Auth | **You** | P0 | 1 | open |
+| [AGB-DOM-003](TASK-AGB-DOM-003-e2e-verify-domain.md) | E2E verify the live login flow | Agent | P0 | 2 | open (blocked) |
+
+**Order:** AGB-DOM-001 + AGB-DOM-002 can be done in parallel (~5 min combined).
+DNS propagation takes 5–30 min. Then AGB-DOM-003 unblocks for the agent to run.
 
 ---
 

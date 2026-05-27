@@ -1,6 +1,17 @@
 # AGB CRM — Handoff
 
-> **Latest: 2026-05-27 — Wave A/B/C shipped — 20-tool WA agent + media pipeline.**
+> **Latest: 2026-05-27 — X . JEAV . TIGR login page live in production.**
+> Rebranded sign-in is deployed at https://agb-crm.vercel.app/login and the
+> custom domain `x.vamosavenezuela.com` is attached to the Vercel project
+> (deploy `dpl_FkTYHMkXPGFLyTgC5Hc5KJn13BA8`). Two manual steps remain to flip
+> the custom domain live — see **Wave E — Domain Launch** below.
+>
+> Landing: full-bleed B/W tent photograph, invisible hotspot positioned over
+> the book the man is reading. Cursor turns into a glowing cyan dot when over
+> the book; click triggers 80-cell pixel-shatter; holographic IDENTIFY form
+> rises with cyan scanlines + corner brackets. Re-uses Supabase magic-link.
+>
+> **Also 2026-05-27 — Wave A/B/C shipped — 20-tool WA agent + media pipeline.**
 > WA agent now has 20 tools (was 14). New tools: `add_channel`, `draft_message`,
 > `send_message` (confirmation-gated), `log_meeting`, `meeting_brief`,
 > `assign_contact`. `log_touch` enhanced with `follow_up_in`. Media pipeline
@@ -104,7 +115,20 @@ If anything's broken: `pnpm verify` — walks all 9 env-gated surfaces and repor
 - Schedule reminders by texting the bot or via `/projects/:id` form
 - Get the daily nudge cron at 13:00 UTC + the weekly briefing email on Mondays
 
-## Wave D — what's next (pick-up order)
+## Wave E — Domain Launch (2026-05-27, current)
+
+`X . JEAV . TIGR` login page is live at https://agb-crm.vercel.app/login. The
+custom domain `x.vamosavenezuela.com` is attached to the Vercel project and
+the `NEXT_PUBLIC_SITE_URL` env var is set. Two manual steps remain to flip the
+real domain live, then an agent verification:
+
+| Task | Who | What |
+|------|-----|------|
+| [AGB-DOM-001](_tasks/TASK-AGB-DOM-001-godaddy-dns-record.md) | **You** | GoDaddy DNS — add A record `x` → `76.76.21.21` (vamosavenezuela.com) |
+| [AGB-DOM-002](_tasks/TASK-AGB-DOM-002-supabase-redirect-url.md) | **You** | Supabase Dashboard — add `https://x.vamosavenezuela.com/auth/callback` to redirect URLs |
+| [AGB-DOM-003](_tasks/TASK-AGB-DOM-003-e2e-verify-domain.md) | Agent | E2E verify the live flow once DNS propagates (blocked on DOM-001 + DOM-002) |
+
+## Wave D — WA Media (2026-05-27)
 
 3 open tasks. AGB-WA-002 is a 5-minute user action; AGB-WA-001 + AGB-WA-003 are agent work.
 
