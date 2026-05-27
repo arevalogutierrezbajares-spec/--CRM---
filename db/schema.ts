@@ -400,6 +400,7 @@ export const projects = pgTable("projects", {
   statusText: text("status_text"), // short human status string
   featured: boolean("featured").notNull().default(false), // pin to top of gallery
   logoUrl: text("logo_url"), // /logos/x.svg or external URL
+  logoUrlDark: text("logo_url_dark"), // dark-mode variant (optional)
   objectives: jsonb("objectives").$type<string[]>().default([]), // 3-5 high-level bullets
   // Self-reference for module/sub-project nesting (e.g. CaneyCloud → Stays/Restaurants/WA Concierge)
   parentProjectId: uuid("parent_project_id"),

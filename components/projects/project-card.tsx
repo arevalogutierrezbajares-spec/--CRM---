@@ -262,6 +262,7 @@ function ProjectAvatar({
   const size = large ? 64 : 48;
   const textSize = large ? "text-[34px]" : "text-[26px]";
   if (p.logoUrl) {
+    const innerSize = size - 16;
     return (
       <div
         className="shrink-0 grid place-items-center rounded-xl overflow-hidden"
@@ -272,14 +273,27 @@ function ProjectAvatar({
           border: `1px solid color-mix(in oklab, ${accent} 50%, transparent)`,
         }}
       >
+        {/* Light-mode logo */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={p.logoUrl}
           alt={`${p.title} logo`}
-          width={size - 16}
-          height={size - 16}
-          className="object-contain"
+          width={innerSize}
+          height={innerSize}
+          className={p.logoUrlDark ? "object-contain dark:hidden" : "object-contain"}
         />
+        {/* Dark-mode variant (if set) */}
+        {p.logoUrlDark && (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            src={p.logoUrlDark}
+            alt=""
+            aria-hidden
+            width={innerSize}
+            height={innerSize}
+            className="object-contain hidden dark:block"
+          />
+        )}
       </div>
     );
   }
