@@ -42,13 +42,18 @@ describe("intent classifier — English", () => {
     expect(classifyIntent(msg).intent).toBe("contact_find");
   });
 
-  // Todo query
+  // Todo query — including "what should I focus on" priorities phrasing
   it.each([
     "what are my todos",
     "action items",
     "what's on my list",
     "pending tasks",
     "open items",
+    "what should I focus on today",
+    "what should I work on",
+    "what's next",
+    "my priorities",
+    "what are my priorities",
   ])('"%s" → todo_query', (msg) => {
     expect(classifyIntent(msg).intent).toBe("todo_query");
   });

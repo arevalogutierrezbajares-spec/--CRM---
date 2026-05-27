@@ -23,8 +23,9 @@ const { waConversations } = schema;
 // Tomas — registered with whatsapp_phone = '+19545317093'
 const SENDER = "19545317093";
 
-// Test cases — representative across all intents
+// Test cases — representative + edge cases / failure modes
 const TESTS = [
+  // Happy path
   { body: "hi", expectIntent: "unknown" },
   { body: "my todos", expectIntent: "todo_query" },
   { body: "who is anabella", expectIntent: "contact_find" },
@@ -35,11 +36,22 @@ const TESTS = [
   { body: "note that oscar is interested in the BD partnership", expectIntent: "note_write" },
   { body: "remind me to call oscar tomorrow at 10am", expectIntent: "reminder_set" },
   { body: "draft an email to anabella to follow up", expectIntent: "draft_send" },
+
+  // Edge cases
+  { body: "talked to marcos antonio, follow up in 3 days", expectIntent: "touch_log", note: "action chain: log + follow-up" },
+  { body: "hablé con anabella ayer, muy bien", expectIntent: "touch_log", note: "Spanish" },
+  { body: "remind me thursday morning to send anabella the deck", expectIntent: "reminder_set", note: "fuzzy date" },
+  { body: "remind me in 2 weeks to check in on oscar", expectIntent: "reminder_set", note: "relative date" },
+  { body: "what should I focus on today", expectIntent: "todo_query", note: "fuzzy priority ask" },
+  { body: "talked to a guy named alex from BCG today", expectIntent: "contact_add", note: "new contact via touch" },
+  { body: "ok thx", expectIntent: "unknown", note: "low-content reply" },
+  { body: "👋", expectIntent: "unknown", note: "emoji only" },
 ];
 
 type Result = {
   body: string;
   expectIntent: string;
+  note?: string;
   actualIntent: string;
   intentOk: boolean;
   model: string;
@@ -61,7 +73,7 @@ async function resetConversation() {
     .where(eq(waConversations.senderPhone, SENDER));
 }
 
-async function runOne(body: string, expectIntent: string): Promise<Result> {
+async function runOne(body: string, expectIntent: string, note?: string): Promise<Result> {
   await resetConversation();
 
   const classification = classifyIntent(body);
@@ -87,6 +99,7 @@ async function runOne(body: string, expectIntent: string): Promise<Result> {
   return {
     body,
     expectIntent,
+    note,
     actualIntent: classification.intent,
     intentOk: classification.intent === expectIntent,
     model: workflow.model ?? "claude-sonnet-4-6",
@@ -109,7 +122,7 @@ async function main() {
   for (const t of TESTS) {
     process.stdout.write(`  ${t.body.padEnd(60)} … `);
     try {
-      const r = await runOne(t.body, t.expectIntent);
+      const r = await runOne(t.body, t.expectIntent, t.note);
       results.push(r);
       const tag = r.intentOk ? "✓" : "✗";
       const modelShort = r.model.replace("claude-", "").replace("-4-", "-");
@@ -125,6 +138,7 @@ async function main() {
   console.log("\n── Detail ──\n");
   for (const r of results) {
     console.log(`▸ "${r.body}"`);
+    if (r.note) console.log(`  scenario: ${r.note}`);
     console.log(`  intent: ${r.actualIntent}${r.intentOk ? "" : ` (expected ${r.expectIntent})`}`);
     console.log(`  model: ${r.model}`);
     console.log(`  tools available: ${r.toolCount}/${r.toolsAvailable}`);

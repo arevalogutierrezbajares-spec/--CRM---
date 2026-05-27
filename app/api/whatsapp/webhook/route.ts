@@ -15,7 +15,7 @@ import {
 } from "@/lib/whatsapp-agent";
 import { checkRateLimit } from "@/lib/wa-rate-limit";
 
-const { touches, contacts } = schema;
+const { touches, contacts, waActivity } = schema;
 
 // GET — Meta webhook verification handshake.
 export const GET = withErrorCapture(
@@ -152,9 +152,39 @@ export const POST = withErrorCapture(
       }
     }
 
-    await Promise.allSettled(
+    // Send each outbound reply and surface failures. We previously swallowed
+    // sendWhatsAppText errors via Promise.allSettled with no inspection — that
+    // meant an expired WA_ACCESS_TOKEN or any other 4xx silently broke the bot
+    // while wa_activity OUT rows still showed "sent". Now every failed send
+    // writes a wa_activity ERROR row so operators see the problem.
+    const sendResults = await Promise.allSettled(
       responses.map((r) => sendWhatsAppText({ to: r.to, body: r.body })),
     );
+    for (let i = 0; i < sendResults.length; i++) {
+      const r = sendResults[i];
+      const target = responses[i];
+      if (r.status === "rejected") {
+        await db.insert(waActivity).values({
+          senderPhone: target.to,
+          direction: "error",
+          payload: {
+            stage: "wa_send",
+            error: r.reason instanceof Error ? r.reason.message : String(r.reason),
+            bodyPreview: target.body.slice(0, 140),
+          },
+        });
+      } else if (r.value.ok === false) {
+        await db.insert(waActivity).values({
+          senderPhone: target.to,
+          direction: "error",
+          payload: {
+            stage: "wa_send",
+            error: r.value.error,
+            bodyPreview: target.body.slice(0, 140),
+          },
+        });
+      }
+    }
 
     return NextResponse.json({ ok: true });
   },

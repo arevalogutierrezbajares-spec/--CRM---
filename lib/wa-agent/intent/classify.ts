@@ -63,9 +63,9 @@ const PATTERNS: Array<[RegExp, Intent]> = [
   // Contact find
   [/\b(find|look up|search( for)?|who is|pull up|get( me)? (info|details) (on|about))\b/i, "contact_find"],
 
-  // Todo / action items
+  // Todo / action items / priorities / "what's next"
   [
-    /\b(todos?|action items?|to-?do list?|task list?|what'?s on my list|pending (tasks?|items?)|open items?)\b/i,
+    /\b(todos?|action items?|to-?do list?|task list?|what'?s on my list|pending (tasks?|items?)|open items?|what should i (focus on|work on|do)|what'?s next|priorities|focus today|my priorities|what are my priorities)\b/i,
     "todo_query",
   ],
 
@@ -139,7 +139,7 @@ const SPANISH_PATTERNS: Array<[RegExp, Intent]> = [
   [/^\s*(no|cancel(a|ar)?|para|olvida(lo)?|detén)\s*[.!]?\s*$/i, "confirmation"],
   [/\b(resumen|recuento|recap|cómo (fue|estuvo|salió)|qué pasó hoy|resúmeme)\b/i, "recap"],
   [/\b(pon(me)?|agrega|crea|añade) (un |una )?(nota|apunte)/i, "note_write"],
-  [/\b(mis (pendientes|tareas|to-?dos?)|qué (tengo|hay) (pendiente|por hacer)|lista de tareas)\b/i, "todo_query"],
+  [/\b(mis (pendientes|tareas|to-?dos?)|qué (tengo|hay) (pendiente|por hacer)|lista de tareas|en qué (debo|tengo que) enfocarme|qué hago primero|mis prioridades|qué sigue)\b/i, "todo_query"],
   [/\b(ponme|pon|agrega|crea|añade) (un |una )?(recordatorio|aviso|alarma)/i, "reminder_set"],
   [/\b(mis recordatorios|ver recordatorios|qué recordatorios)\b/i, "reminder_list"],
   [/\b(redacta(me)?|escríbe(me)?|prepara(me)?) (un |una )?(mensaje|email|correo|whatsapp)/i, "draft_send"],

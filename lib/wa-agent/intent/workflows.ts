@@ -89,7 +89,8 @@ export const WORKFLOWS: Partial<Record<Intent, Workflow>> = {
   touch_log: {
     allowedTools: ["find_contact", "log_touch", "create_contact"],
     supplement:
-      "Log the touch. Use any PRE-RESOLVED contact_ids directly. If a name isn't pre-resolved, call find_contact; if no match, ask before creating.",
+      "Log the touch. Use any PRE-RESOLVED contact_ids directly. If a name isn't pre-resolved, call find_contact. " +
+      "If no match: propose creating with sensible defaults (relationship_type='prospect', organization from context if mentioned) and ask ONE concise YES/NO — do not interrogate the user for every field.",
   },
 
   draft_send: {
