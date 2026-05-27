@@ -6,7 +6,9 @@ import { PipelineSnapshot } from "@/components/dashboard/right/pipeline-snapshot
 import { RelationshipHealth } from "@/components/dashboard/right/relationship-health";
 import { AIBriefing } from "@/components/dashboard/right/ai-briefing";
 import { TreasuryWidget } from "@/components/dashboard/right/treasury-widget";
+import { SprintWidget } from "@/components/dashboard/right/sprint-widget";
 import { treasurySnapshot, type TreasurySnapshot } from "@/db/queries/treasury";
+import { getActiveSprint, type SprintWithStats } from "@/db/queries/work";
 import { DailyView } from "@/components/dashboard/daily/daily-view";
 import { WeeklyView } from "@/components/dashboard/weekly/weekly-view";
 import { MonthlyView } from "@/components/dashboard/monthly/monthly-view";
@@ -118,6 +120,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
     eventDaysRes,
     blockedRes,
     treasuryRes,
+    sprintRes,
   ] = await Promise.all([
     safeRead<DashCounts>(() => dashboardCounts(user.workspaceId), EMPTY_COUNTS),
     safeRead<PipelineStageBar[]>(() => pipelineSnapshot(user.workspaceId), []),
@@ -127,6 +130,10 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
     safeRead<TreasurySnapshot>(
       () => treasurySnapshot(user.workspaceId),
       EMPTY_TREASURY_SNAPSHOT,
+    ),
+    safeRead<SprintWithStats | null>(
+      () => getActiveSprint(user.workspaceId),
+      null,
     ),
   ]);
 
@@ -232,6 +239,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
       rightColumn={
         <RightColumn>
           <MiniCalendar eventDays={eventDaysRes.data} />
+          <SprintWidget sprint={sprintRes.data} />
           <TreasuryWidget snapshot={treasuryRes.data} />
           <AIBriefing bullets={briefing} />
           <PipelineSnapshot stages={pipelineRes.data} />

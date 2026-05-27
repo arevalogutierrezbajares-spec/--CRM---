@@ -36,6 +36,9 @@ export const milestoneStatus = pgEnum("milestone_status", [
   "pending",
   "done",
   "blocked",
+  "in_progress",
+  "in_review",
+  "cancelled",
 ]);
 export const channelKind = pgEnum("channel_kind", [
   "email",
@@ -84,6 +87,49 @@ export const waDirection = pgEnum("wa_direction", [
   "reject",
   "error",
 ]);
+/* ─── Work-mgmt enums ──────────────────────────────────────────────────── */
+
+export const workPriority = pgEnum("work_priority", [
+  "now",
+  "next",
+  "later",
+  "backlog",
+]);
+
+export const initiativeStatus = pgEnum("initiative_status", [
+  "planning",
+  "active",
+  "paused",
+  "done",
+  "cancelled",
+]);
+
+export const sprintStatus = pgEnum("sprint_status", [
+  "planned",
+  "active",
+  "completed",
+]);
+
+/* ─── Overlord enums (mirror only) ─────────────────────────────────────── */
+
+export const overlordStatus = pgEnum("overlord_status", [
+  "todo",
+  "in_progress",
+  "in_review",
+  "blocked",
+  "completed",
+  "cancelled",
+]);
+
+export const overlordPriority = pgEnum("overlord_priority", [
+  "NOW",
+  "NEXT",
+  "LATER",
+  "BACKLOG",
+]);
+
+/* ─── Treasury enums ───────────────────────────────────────────────────── */
+
 export const accountType = pgEnum("account_type", [
   "checking",
   "savings",
@@ -381,6 +427,15 @@ export const milestones = pgTable("milestones", {
   sourceMeetingId: uuid("source_meeting_id"),
   completedAt: timestamp("completed_at", { withTimezone: true }),
   order: integer("order").notNull().default(0),
+  // ─── Work-mgmt extensions (R1) ────────────────────────────────────
+  initiativeId: uuid("initiative_id"),
+  sprintId: uuid("sprint_id"),
+  priority: workPriority("priority"),
+  assigneeUserId: uuid("assignee_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  parentMilestoneId: uuid("parent_milestone_id"),
+  estimatePoints: integer("estimate_points"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -904,3 +959,219 @@ export const finSubscriptionsRelations = relations(
     }),
   }),
 );
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WORK MANAGEMENT — themes, initiatives, sprints (extends milestones)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const themes = pgTable("themes", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  color: text("color"), // hex
+  icon: text("icon"), // lucide icon name
+  description: text("description"),
+  archived: boolean("archived").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const initiatives = pgTable("initiatives", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  // Optional venture (project) — initiatives can be cross-venture
+  projectId: uuid("project_id").references(() => projects.id, {
+    onDelete: "set null",
+  }),
+  title: text("title").notNull(),
+  summary: text("summary"),
+  goal: text("goal"), // the why
+  status: initiativeStatus("status").notNull().default("planning"),
+  priority: workPriority("priority").notNull().default("next"),
+  healthColor: healthColor("health_color").notNull().default("green"),
+  ownerUserId: uuid("owner_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  startDate: date("start_date"),
+  targetEndDate: date("target_end_date"),
+  actualEndDate: date("actual_end_date"),
+  notes: text("notes"),
+  createdBy: uuid("created_by")
+    .notNull()
+    .references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const sprints = pgTable("sprints", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  // Optional initiative — sprints can be initiative-scoped or workspace-wide
+  initiativeId: uuid("initiative_id").references(() => initiatives.id, {
+    onDelete: "set null",
+  }),
+  name: text("name").notNull(),
+  goal: text("goal"),
+  startDate: date("start_date").notNull(),
+  endDate: date("end_date").notNull(),
+  status: sprintStatus("status").notNull().default("planned"),
+  retroNotes: text("retro_notes"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const initiativeThemes = pgTable(
+  "initiative_themes",
+  {
+    initiativeId: uuid("initiative_id")
+      .notNull()
+      .references(() => initiatives.id, { onDelete: "cascade" }),
+    themeId: uuid("theme_id")
+      .notNull()
+      .references(() => themes.id, { onDelete: "cascade" }),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.initiativeId, t.themeId] }),
+  }),
+);
+
+// many-to-many themes on milestones (existing table)
+export const milestoneThemes = pgTable(
+  "milestone_themes",
+  {
+    milestoneId: uuid("milestone_id")
+      .notNull()
+      .references(() => milestones.id, { onDelete: "cascade" }),
+    themeId: uuid("theme_id")
+      .notNull()
+      .references(() => themes.id, { onDelete: "cascade" }),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.milestoneId, t.themeId] }),
+  }),
+);
+
+// DAG of milestone dependencies (blocker → blocked)
+export const milestoneDeps = pgTable(
+  "milestone_deps",
+  {
+    blockerId: uuid("blocker_id")
+      .notNull()
+      .references(() => milestones.id, { onDelete: "cascade" }),
+    blockedId: uuid("blocked_id")
+      .notNull()
+      .references(() => milestones.id, { onDelete: "cascade" }),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.blockerId, t.blockedId] }),
+  }),
+);
+
+/* ─── Initiative relations ─────────────────────────────────────────────── */
+
+export const themesRelations = relations(themes, ({ many }) => ({
+  initiatives: many(initiativeThemes),
+  milestones: many(milestoneThemes),
+}));
+
+export const initiativesRelations = relations(
+  initiatives,
+  ({ one, many }) => ({
+    project: one(projects, {
+      fields: [initiatives.projectId],
+      references: [projects.id],
+    }),
+    owner: one(users, {
+      fields: [initiatives.ownerUserId],
+      references: [users.id],
+    }),
+    themes: many(initiativeThemes),
+    sprints: many(sprints),
+  }),
+);
+
+export const sprintsRelations = relations(sprints, ({ one }) => ({
+  initiative: one(initiatives, {
+    fields: [sprints.initiativeId],
+    references: [initiatives.id],
+  }),
+}));
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OVERLORD MIRROR — read-only cache of TOURISM repo's section-*/TASKS.md files
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const overlordSections = pgTable("overlord_sections", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  sectionKey: text("section_key").notNull(), // e.g. "orchestration"
+  name: text("name").notNull(), // e.g. "Orchestration"
+  filePath: text("file_path").notNull(),
+  description: text("description"),
+  lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const overlordTasks = pgTable("overlord_tasks", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  sectionId: uuid("section_id")
+    .notNull()
+    .references(() => overlordSections.id, { onDelete: "cascade" }),
+  taskKey: text("task_key").notNull().unique(), // e.g. TASK-ORCH-119
+  title: text("title").notNull(),
+  status: overlordStatus("status").notNull().default("todo"),
+  priority: overlordPriority("priority"),
+  taskType: text("task_type"), // BUGFIX / FEATURE / etc.
+  claimedByAgent: text("claimed_by_agent"),
+  claimedAt: timestamp("claimed_at", { withTimezone: true }),
+  completedByAgent: text("completed_by_agent"),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  recommendedModel: text("recommended_model"),
+  estTokens: text("est_tokens"),
+  complexity: text("complexity"),
+  risk: text("risk"),
+  parallelSafe: boolean("parallel_safe"),
+  dependsOn: text("depends_on"),
+  scopePaths: jsonb("scope_paths").$type<string[]>().default([]),
+  branch: text("branch"),
+  lastHeartbeat: timestamp("last_heartbeat", { withTimezone: true }),
+  createdDate: date("created_date"),
+  lastModifiedDate: date("last_modified_date"),
+  description: text("description"),
+  acceptanceCriteria: jsonb("acceptance_criteria")
+    .$type<Array<{ text: string; done: boolean }>>()
+    .default([]),
+  activityLog: jsonb("activity_log")
+    .$type<Array<{ ts: string; agent: string; note: string }>>()
+    .default([]),
+  rawMarkdown: text("raw_markdown"), // original entry text for fidelity
+  lastSyncedAt: timestamp("last_synced_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const overlordTasksRelations = relations(overlordTasks, ({ one }) => ({
+  section: one(overlordSections, {
+    fields: [overlordTasks.sectionId],
+    references: [overlordSections.id],
+  }),
+}));

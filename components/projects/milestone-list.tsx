@@ -21,7 +21,13 @@ import { formatDate } from "@/lib/utils";
 type Milestone = {
   id: string;
   title: string;
-  status: "pending" | "done" | "blocked";
+  status:
+    | "pending"
+    | "done"
+    | "blocked"
+    | "in_progress"
+    | "in_review"
+    | "cancelled";
   dueDate: string | null;
   blockerText: string | null;
   order: number;
@@ -31,6 +37,9 @@ const statusVariant: Record<Milestone["status"], "secondary" | "success" | "warn
   pending: "secondary",
   done: "success",
   blocked: "warning",
+  in_progress: "secondary",
+  in_review: "secondary",
+  cancelled: "secondary",
 };
 
 export function MilestoneList({

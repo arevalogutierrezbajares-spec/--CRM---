@@ -19,7 +19,13 @@ export type HealthInput = {
   status: "active" | "waiting" | "done" | "lost";
   expectedUnblockDate?: string | null; // YYYY-MM-DD
   milestones?: Array<{
-    status: "pending" | "done" | "blocked";
+    status:
+      | "pending"
+      | "done"
+      | "blocked"
+      | "in_progress"
+      | "in_review"
+      | "cancelled";
     dueDate: string | null;
   }>;
   now?: Date;
