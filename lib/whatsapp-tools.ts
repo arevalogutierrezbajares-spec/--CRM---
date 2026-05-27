@@ -6,11 +6,20 @@
  * themselves — the agent loop owns I/O. Trivial to unit-test.
  */
 
-import { and, asc, desc, eq, ilike, lt, lte, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, lt, lte, or, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import type { ClaudeToolDef } from "@/lib/anthropic";
 
-const { contacts, touches, projects, milestones, reminders } = schema;
+const {
+  contacts,
+  contactTags,
+  tags,
+  touches,
+  projects,
+  milestones,
+  meetings,
+  reminders,
+} = schema;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -585,6 +594,215 @@ const TOOLS: Record<string, ToolEntry> = {
         .limit(20);
 
       return { ok: true, data: { reminders: rows } };
+    },
+  },
+
+  // ─── daily_recap ─────────────────────────────────────────────────────────
+  daily_recap: {
+    definition: {
+      name: "daily_recap",
+      description:
+        "Summarize what the texting user has personally shipped: contacts they created, " +
+        "meetings they organized, touches they logged, reminders they filed for themselves " +
+        "or others, plus auto-detected highlights (new 'connector' contacts, dual-source " +
+        "priority signals where the same contact came in from multiple intro chains). " +
+        "Use when the user asks for a recap, 'what did I do today', 'highlight my wins', " +
+        "or any end-of-day/end-of-week reflection prompt.",
+      input_schema: {
+        type: "object",
+        properties: {
+          scope: {
+            type: "string",
+            enum: ["today", "yesterday", "week"],
+            description:
+              "Time window. Defaults to 'today' (since UTC midnight of the current calendar day).",
+          },
+        },
+      },
+    },
+    async execute(input, ctx) {
+      const scope = (input.scope as "today" | "yesterday" | "week") ?? "today";
+      const now = ctx.now;
+      let start: Date;
+      let end: Date;
+      if (scope === "yesterday") {
+        const startOfToday = new Date(now);
+        startOfToday.setUTCHours(0, 0, 0, 0);
+        start = new Date(startOfToday.getTime() - 86400000);
+        end = startOfToday;
+      } else if (scope === "week") {
+        start = new Date(now.getTime() - 7 * 86400000);
+        end = now;
+      } else {
+        start = new Date(now);
+        start.setUTCHours(0, 0, 0, 0);
+        end = now;
+      }
+
+      // Contacts they created in window.
+      const newContacts = await db
+        .select({
+          id: contacts.id,
+          name: contacts.name,
+          type: contacts.type,
+          organization: contacts.organization,
+          relationship: contacts.relationshipType,
+          intro: contacts.introChainFromText,
+          createdAt: contacts.createdAt,
+        })
+        .from(contacts)
+        .where(
+          and(
+            eq(contacts.workspaceId, ctx.workspaceId),
+            eq(contacts.createdBy, ctx.userId),
+            gte(contacts.createdAt, start),
+            lt(contacts.createdAt, end),
+          ),
+        )
+        .orderBy(asc(contacts.createdAt));
+
+      // For each new contact, attach their tag names (so the wrapper LLM can
+      // point out which ones are 'connector' / dual-sourced).
+      const tagByContact: Record<string, string[]> = {};
+      if (newContacts.length > 0) {
+        const ids = newContacts.map((c) => c.id);
+        const tagRows = await db
+          .select({
+            contactId: contactTags.contactId,
+            name: tags.name,
+            kind: tags.kind,
+          })
+          .from(contactTags)
+          .innerJoin(tags, eq(tags.id, contactTags.tagId))
+          .where(inArray(contactTags.contactId, ids));
+        for (const r of tagRows) {
+          if (!tagByContact[r.contactId]) tagByContact[r.contactId] = [];
+          tagByContact[r.contactId].push(r.name);
+        }
+      }
+
+      const contactsWithTags = newContacts.map((c) => ({
+        ...c,
+        tags: tagByContact[c.id] ?? [],
+      }));
+
+      // Highlight #1 — new connectors (tag === 'connector').
+      const connectors = contactsWithTags.filter((c) =>
+        c.tags.includes("connector"),
+      );
+
+      // Highlight #2 — dual-source signals: a contact that carries 2+ `via-*`
+      // tags is a name that surfaced through multiple intro chains.
+      const dualSourced = contactsWithTags.filter(
+        (c) => c.tags.filter((t) => t.startsWith("via-")).length >= 2,
+      );
+
+      // Meetings they organized (createdBy = user) in window.
+      const newMeetings = await db
+        .select({
+          id: meetings.id,
+          title: meetings.title,
+          scheduledAt: meetings.scheduledAt,
+        })
+        .from(meetings)
+        .where(
+          and(
+            eq(meetings.workspaceId, ctx.workspaceId),
+            eq(meetings.createdBy, ctx.userId),
+            gte(meetings.createdAt, start),
+            lt(meetings.createdAt, end),
+          ),
+        )
+        .orderBy(asc(meetings.scheduledAt));
+
+      // Touches they authored (excludes auto-touches generated by meeting
+      // creation only if we wanted to — we keep them all here for honesty).
+      const newTouches = await db
+        .select({
+          id: touches.id,
+          contactId: touches.contactId,
+          channel: touches.channel,
+          body: touches.body,
+          createdAt: touches.createdAt,
+        })
+        .from(touches)
+        .where(
+          and(
+            eq(touches.workspaceId, ctx.workspaceId),
+            eq(touches.createdBy, ctx.userId),
+            gte(touches.createdAt, start),
+            lt(touches.createdAt, end),
+          ),
+        )
+        .orderBy(asc(touches.createdAt))
+        .limit(20);
+
+      // Reminders the user filed (created_by = user). Separate from
+      // reminders the user is receiving (for_user_id = user).
+      const remindersFiled = await db
+        .select({
+          id: reminders.id,
+          subject: reminders.subject,
+          dueAt: reminders.dueAt,
+          forUserId: reminders.forUserId,
+        })
+        .from(reminders)
+        .where(
+          and(
+            eq(reminders.workspaceId, ctx.workspaceId),
+            eq(reminders.createdBy, ctx.userId),
+            gte(reminders.createdAt, start),
+            lt(reminders.createdAt, end),
+          ),
+        );
+
+      return {
+        ok: true,
+        data: {
+          scope,
+          window: {
+            start: start.toISOString(),
+            end: end.toISOString(),
+            timezone: ctx.ownerTimezone,
+          },
+          totals: {
+            contacts: contactsWithTags.length,
+            meetings: newMeetings.length,
+            touches: newTouches.length,
+            remindersFiled: remindersFiled.length,
+          },
+          contacts: contactsWithTags.map((c) => ({
+            name: c.name,
+            type: c.type,
+            organization: c.organization,
+            relationship: c.relationship,
+            tags: c.tags,
+            intro_excerpt: c.intro?.slice(0, 200) ?? null,
+          })),
+          highlights: {
+            connectors: connectors.map((c) => ({
+              name: c.name,
+              organization: c.organization,
+              intro_excerpt: c.intro?.slice(0, 200) ?? null,
+            })),
+            dual_sourced_priority: dualSourced.map((c) => ({
+              name: c.name,
+              organization: c.organization,
+              via_tags: c.tags.filter((t) => t.startsWith("via-")),
+              intro_excerpt: c.intro?.slice(0, 200) ?? null,
+            })),
+          },
+          meetings: newMeetings.map((m) => ({
+            title: m.title,
+            scheduledAt: m.scheduledAt,
+          })),
+          reminders_filed: remindersFiled.map((r) => ({
+            subject: r.subject.slice(0, 140),
+            dueAt: r.dueAt,
+            forSelf: r.forUserId === ctx.userId,
+          })),
+        },
+      };
     },
   },
 
