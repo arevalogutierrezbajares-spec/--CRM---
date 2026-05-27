@@ -10,7 +10,7 @@
  *     don't collide.
  */
 
-import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { and, eq, gte, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import {
   claudeWithTools,
@@ -23,11 +23,13 @@ import {
   executeTool,
   type ToolContext,
 } from "@/lib/wa-agent/tools";
+import { classifyIntent } from "@/lib/wa-agent/intent/classify";
+import { getWorkflow } from "@/lib/wa-agent/intent/workflows";
 
 const { waConversations, waActivity, users } = schema;
 
 const MAX_TURNS = 6;
-const HISTORY_CAP = 10;
+const HISTORY_CAP = 20; // pairs, not individual messages
 const STATE_TTL_MS = 30 * 60 * 1000;
 
 export type AgentResult =
@@ -121,13 +123,33 @@ async function loadState(senderPhone: string): Promise<ConversationState> {
   };
 }
 
+/**
+ * Trim conversation history to at most HISTORY_CAP messages, but never
+ * start the slice on a tool_result block — that would orphan it from its
+ * preceding tool_use and cause Claude API errors.
+ */
+function trimHistory(messages: ClaudeMessage[]): ClaudeMessage[] {
+  if (messages.length <= HISTORY_CAP) return messages;
+  let start = messages.length - HISTORY_CAP;
+  // Walk forward until we're not starting on a tool_result block.
+  while (start < messages.length) {
+    const msg = messages[start];
+    const isToolResult =
+      Array.isArray(msg.content) &&
+      msg.content.some((b) => (b as ClaudeMessageContent).type === "tool_result");
+    if (!isToolResult) break;
+    start++;
+  }
+  return messages.slice(start);
+}
+
 async function saveState(
   senderPhone: string,
   workspaceId: string,
   userId: string,
   state: ConversationState,
 ) {
-  const trimmed = state.messages.slice(-HISTORY_CAP);
+  const trimmed = trimHistory(state.messages);
   await db
     .insert(waConversations)
     .values({
@@ -212,6 +234,8 @@ function systemPrompt(opts: {
   persona: string | null;
   now: Date;
   pendingIntent: unknown | null;
+  workflowSupplement?: string;
+  confirmationPending?: boolean;
 }): string {
   const today = opts.now.toLocaleDateString("en-US", {
     weekday: "long",
@@ -246,6 +270,10 @@ function systemPrompt(opts: {
     "- Never invent contact_ids, project_ids, or milestone_ids. Always look them up first.",
     "",
     "When you have enough info to act, call the tool. Don't narrate.",
+    opts.workflowSupplement ? `\n${opts.workflowSupplement}` : "",
+    opts.confirmationPending
+      ? "\nIMPORTANT: The user has just confirmed a pending action. Execute it now."
+      : "",
     opts.pendingIntent
       ? `\nPending intent from prior turn:\n${JSON.stringify(opts.pendingIntent, null, 2)}`
       : "",
@@ -307,13 +335,59 @@ export async function handleMessage(opts: {
 
   const now = new Date();
   const state = await loadState(opts.senderPhone);
+
+  // ── Intent classification & workflow gating ──────────────────────────────
+  const classification = classifyIntent(opts.body);
+  const workflow = getWorkflow(classification.intent);
+
+  // Confirmation handling: if user said "yes/no" and there's a pending intent,
+  // route as confirmation of that prior action.
+  const isConfirmYes =
+    classification.intent === "confirmation" && classification.isConfirmYes === true;
+  const isConfirmNo =
+    classification.intent === "confirmation" && !isConfirmYes;
+  const hasPendingIntent = !!state.pendingIntent;
+
+  // Short-circuit "no" when something was pending
+  if (isConfirmNo && hasPendingIntent) {
+    state.pendingIntent = null;
+    await saveState(opts.senderPhone, resolved.workspaceId, resolved.userId, state);
+    await logActivity({
+      workspaceId: resolved.workspaceId,
+      userId: resolved.userId,
+      senderPhone: opts.senderPhone,
+      direction: "in",
+      payload: { body: opts.body, intent: "confirmation:no" },
+    });
+    return {
+      ok: true,
+      reply: "Got it, action cancelled.",
+      toolCalls: [],
+      tokensIn: 0,
+      tokensOut: 0,
+    };
+  }
+
+  // For requireConfirmation intents without an existing pendingIntent,
+  // inject supplement telling agent to preview only.
+  const needsConfirmFirst =
+    !!workflow.requireConfirmation && !hasPendingIntent && !isConfirmYes;
+  const confirmationJustReceived = isConfirmYes && hasPendingIntent;
+
+  // Build supplement: workflow supplement + confirmation-gate override if needed
+  let workflowSupplement = workflow.supplement ?? "";
+  if (needsConfirmFirst) {
+    workflowSupplement +=
+      "\nCONFIRMATION GATE: Describe exactly what you are about to do, then ask the user YES or NO to confirm. Do NOT call any write/destructive tools yet.";
+  }
+
   state.messages.push({ role: "user", content: opts.body });
   await logActivity({
     workspaceId: resolved.workspaceId,
     userId: resolved.userId,
     senderPhone: opts.senderPhone,
     direction: "in",
-    payload: { body: opts.body },
+    payload: { body: opts.body, intent: classification.intent },
   });
 
   const ctx: ToolContext = {
@@ -328,6 +402,8 @@ export async function handleMessage(opts: {
   let totalOut = 0;
   let replyText = "";
   let pendingIntent = state.pendingIntent;
+  let requiredToolMet = false; // tracks whether a requiredTool was called this turn
+  let requiredRetryDone = false;
 
   for (let turn = 0; turn < MAX_TURNS; turn++) {
     const result = await claudeWithTools({
@@ -337,6 +413,8 @@ export async function handleMessage(opts: {
         persona: resolved.persona,
         now,
         pendingIntent,
+        workflowSupplement: turn === 0 ? workflowSupplement : undefined,
+        confirmationPending: turn === 0 && confirmationJustReceived,
       }),
       messages: state.messages,
       tools: TOOL_DEFINITIONS,
@@ -387,15 +465,60 @@ export async function handleMessage(opts: {
     state.messages.push({ role: "assistant", content: assistantContent });
 
     if (result.stopReason === "end_turn") {
+      // Before accepting the final reply, check required tools were called.
+      const required = workflow.requiredTools ?? [];
+      if (required.length > 0 && !requiredToolMet && !requiredRetryDone) {
+        // Inject a system nudge and give the agent one more turn.
+        requiredRetryDone = true;
+        const missingList = required.join(" or ");
+        state.messages.push({
+          role: "user",
+          content: `[SYSTEM] You must call ${missingList} to answer this accurately. Call the tool now, then reply.`,
+        });
+        continue;
+      }
       replyText = textOut.trim() || "Done.";
-      pendingIntent = null;
+      // If this was a confirmation-gated intent and we just previewed, save pendingIntent.
+      if (needsConfirmFirst) {
+        pendingIntent = { intent: classification.intent, previewedAt: now.toISOString() };
+      } else {
+        pendingIntent = null;
+      }
       break;
     }
 
     if (result.stopReason === "tool_use" && toolUses.length > 0) {
       const toolResults: ClaudeMessageContent[] = [];
       for (const call of toolUses) {
+        // ── Allowlist enforcement ──────────────────────────────────────────
+        const allowed = workflow.allowedTools;
+        if (allowed && !allowed.includes(call.name)) {
+          await logActivity({
+            workspaceId: resolved.workspaceId,
+            userId: resolved.userId,
+            senderPhone: opts.senderPhone,
+            direction: "tool",
+            payload: { name: call.name, blocked: true, allowed },
+          });
+          toolResults.push({
+            type: "tool_result",
+            tool_use_id: call.id,
+            content: JSON.stringify({
+              ok: false,
+              error: `Tool "${call.name}" is not available for this type of request.`,
+            }),
+            is_error: true,
+          });
+          continue;
+        }
+
         toolCalls.push(call.name);
+
+        // Track required tool satisfaction
+        if ((workflow.requiredTools ?? []).includes(call.name)) {
+          requiredToolMet = true;
+        }
+
         const r = await executeTool(call.name, call.input, ctx);
         await logActivity({
           workspaceId: resolved.workspaceId,
