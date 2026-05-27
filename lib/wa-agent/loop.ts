@@ -411,6 +411,13 @@ export async function handleMessage(opts: {
   let requiredToolMet = false; // tracks whether a requiredTool was called this turn
   let requiredRetryDone = false;
 
+  // ── Token diet: send only the tools this intent can use, and pick model ───
+  const allowedNames = workflow.allowedTools;
+  const tools = allowedNames
+    ? TOOL_DEFINITIONS.filter((t) => allowedNames.includes(t.name))
+    : TOOL_DEFINITIONS;
+  const model = workflow.model ?? "claude-sonnet-4-6";
+
   for (let turn = 0; turn < MAX_TURNS; turn++) {
     const result = await claudeWithTools({
       system: systemPrompt({
@@ -423,7 +430,8 @@ export async function handleMessage(opts: {
         confirmationPending: turn === 0 && confirmationJustReceived,
       }),
       messages: state.messages,
-      tools: TOOL_DEFINITIONS,
+      tools,
+      model,
       maxTokens: 1024,
     });
 
@@ -562,7 +570,13 @@ export async function handleMessage(opts: {
     userId: resolved.userId,
     senderPhone: opts.senderPhone,
     direction: "out",
-    payload: { body: replyText, toolCalls },
+    payload: {
+      body: replyText,
+      toolCalls,
+      intent: classification.intent,
+      model,
+      toolCount: tools.length,
+    },
     tokensIn: totalIn,
     tokensOut: totalOut,
   });

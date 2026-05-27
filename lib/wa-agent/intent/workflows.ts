@@ -18,12 +18,20 @@ export type Workflow = {
   requiredTools?: string[]; // at least one of these must be called
   requireConfirmation?: boolean;
   supplement?: string;
+  /**
+   * Override the default model for this intent.
+   *  - "claude-haiku-4-5" — cheap + fast, for deterministic tool routing
+   *  - "claude-sonnet-4-6" — default, for ambiguous/creative work
+   *  - "claude-opus-4-7" — overkill; reserved for milestone_done or research
+   */
+  model?: "claude-haiku-4-5" | "claude-sonnet-4-6" | "claude-opus-4-7";
 };
 
 export const WORKFLOWS: Partial<Record<Intent, Workflow>> = {
   recap: {
     allowedTools: ["daily_recap", "contact_summary", "find_contact"],
     requiredTools: ["daily_recap"],
+    model: "claude-haiku-4-5",
     supplement:
       "INSTRUCTION: The user wants a team recap. You MUST call daily_recap before writing your reply. Do NOT summarize from memory or prior turns — call the tool now.",
   },
@@ -43,6 +51,7 @@ export const WORKFLOWS: Partial<Record<Intent, Workflow>> = {
 
   contact_find: {
     allowedTools: ["find_contact", "contact_summary"],
+    model: "claude-haiku-4-5",
     supplement:
       "INSTRUCTION: Use find_contact to look up the contact. If multiple matches, list them and ask the user which one.",
   },
@@ -50,6 +59,7 @@ export const WORKFLOWS: Partial<Record<Intent, Workflow>> = {
   todo_query: {
     allowedTools: ["read_todo_board", "list_reminders", "status_report"],
     requiredTools: ["read_todo_board", "list_reminders", "status_report"],
+    model: "claude-haiku-4-5",
     supplement:
       "INSTRUCTION: The user wants their action items. You MUST call read_todo_board (or at minimum list_reminders + status_report) to get live data. Do NOT list todos from memory or conversation history.",
   },
@@ -63,6 +73,7 @@ export const WORKFLOWS: Partial<Record<Intent, Workflow>> = {
   reminder_list: {
     allowedTools: ["list_reminders"],
     requiredTools: ["list_reminders"],
+    model: "claude-haiku-4-5",
     supplement:
       "INSTRUCTION: Call list_reminders to get the current reminders. Do not recite from memory.",
   },
@@ -70,6 +81,7 @@ export const WORKFLOWS: Partial<Record<Intent, Workflow>> = {
   reminder_cancel: {
     allowedTools: ["list_reminders", "cancel_reminder"],
     requireConfirmation: true,
+    model: "claude-haiku-4-5",
     supplement:
       "INSTRUCTION: First call list_reminders so the user sees their reminders. Then ask which one to cancel and confirm before calling cancel_reminder.",
   },
@@ -91,6 +103,7 @@ export const WORKFLOWS: Partial<Record<Intent, Workflow>> = {
 
   add_channel: {
     allowedTools: ["find_contact", "add_channel"],
+    model: "claude-haiku-4-5",
     supplement:
       "INSTRUCTION: Call find_contact first if you need to resolve the contact ID. Then call add_channel with the validated value.",
   },
@@ -105,6 +118,7 @@ export const WORKFLOWS: Partial<Record<Intent, Workflow>> = {
   meeting_brief: {
     allowedTools: ["find_contact", "meeting_brief"],
     requiredTools: ["meeting_brief"],
+    model: "claude-haiku-4-5",
     supplement:
       "INSTRUCTION: Call find_contact to resolve contact IDs, then call meeting_brief. " +
       "Present the brief clearly organized by contact.",
@@ -112,6 +126,7 @@ export const WORKFLOWS: Partial<Record<Intent, Workflow>> = {
 
   assign_contact: {
     allowedTools: ["find_contact", "assign_contact"],
+    model: "claude-haiku-4-5",
     supplement:
       "INSTRUCTION: Call find_contact to get the contact ID, then assign_contact. " +
       "Use 'me' as the assignee if the user wants to assign to themselves.",
@@ -120,6 +135,7 @@ export const WORKFLOWS: Partial<Record<Intent, Workflow>> = {
   status_check: {
     allowedTools: ["status_report", "find_project", "contact_summary"],
     requiredTools: ["status_report", "find_project"],
+    model: "claude-haiku-4-5",
     supplement:
       "INSTRUCTION: Pull live project/milestone status with status_report or find_project. Do not recite from prior context.",
   },
@@ -136,7 +152,11 @@ export const WORKFLOWS: Partial<Record<Intent, Workflow>> = {
   },
 
   unknown: {
-    // No restrictions
+    // Fall back to a tiny read-only toolset so greetings ("hi", "thanks") and
+    // misclassified messages don't ship all 20 tool definitions every call.
+    // Users with truly novel requests can rephrase to land on a real intent.
+    allowedTools: ["find_contact", "contact_summary", "find_project"],
+    model: "claude-haiku-4-5",
   },
 };
 
