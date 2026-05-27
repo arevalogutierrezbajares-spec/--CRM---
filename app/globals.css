@@ -3,6 +3,16 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Pre-hydration dark-mode hint: if the user's system prefers dark AND no
+ * theme override has been applied yet, paint with dark page background.
+ * The ThemeProvider takes over on mount. */
+@media (prefers-color-scheme: dark) {
+  html:not(.light):not(.dark) {
+    color-scheme: dark;
+    background: #14130F;
+  }
+}
+
 :root {
   /* ─── Spec backgrounds (warm cream palette) ─── */
   --bg-page: #F5F4F0;

@@ -18,23 +18,8 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "AGB CRM",
   description:
-    "Chief-of-staff tool for CaneyCloud + VAV + BD warm network + project tracking.",
+    "Enterprise chief-of-staff platform for the AGB portfolio.",
 };
-
-// Set theme synchronously before hydration to avoid a flash of wrong colors.
-const NO_FLASH_SCRIPT = `
-(function () {
-  try {
-    var stored = localStorage.getItem('agb.theme');
-    var resolved = stored;
-    if (!resolved || resolved === 'system') {
-      resolved = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-    }
-    if (resolved === 'dark') document.documentElement.classList.add('dark');
-    document.documentElement.style.colorScheme = resolved;
-  } catch (e) {}
-})();
-`;
 
 export default function RootLayout({
   children,
@@ -47,9 +32,6 @@ export default function RootLayout({
       suppressHydrationWarning
       className={`${inter.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: NO_FLASH_SCRIPT }} />
-      </head>
       <body className="min-h-full flex flex-col">
         <ThemeProvider>{children}</ThemeProvider>
       </body>

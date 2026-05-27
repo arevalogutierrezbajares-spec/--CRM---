@@ -12,21 +12,32 @@ export function Sidebar() {
       className="hidden w-[200px] shrink-0 border-r bg-card md:flex md:flex-col"
       style={{ borderColor: "var(--border-default)" }}
     >
-      <div
-        className="flex h-14 items-center gap-2 border-b px-4"
+      <Link
+        href="/"
+        className="flex h-14 items-center gap-2 border-b px-4 hover:bg-surface/40 transition-colors"
         style={{ borderColor: "var(--border-default)" }}
       >
-        <div
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/logos/crm.svg"
+          alt="AGB CRM"
+          width={28}
+          height={28}
+          className="shrink-0 dark:hidden"
+        />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/logos/crm-light.svg"
+          alt=""
           aria-hidden
-          className="grid h-7 w-7 place-items-center rounded-md text-[11px] font-medium"
-          style={{ background: "var(--text-primary)", color: "var(--bg-card)" }}
-        >
-          AGB
-        </div>
+          width={28}
+          height={28}
+          className="shrink-0 hidden dark:block"
+        />
         <span className="text-[13px] font-medium tracking-tight text-text-primary">
           AGB CRM
         </span>
-      </div>
+      </Link>
 
       <nav aria-label="Primary" className="flex flex-1 flex-col gap-0.5 p-2">
         {NAV_ITEMS.map((item) => {
