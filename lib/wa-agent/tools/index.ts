@@ -20,6 +20,12 @@ import { dailyRecap } from "./daily-recap";
 import { upsertNote } from "./upsert-note";
 import { proposeAddContact } from "./propose-add-contact";
 import { readTodoBoard } from "./read-todo-board";
+import { draftMessage } from "./draft-message";
+import { sendMessage } from "./send-message";
+import { addChannel } from "./add-channel";
+import { logMeeting } from "./log-meeting";
+import { meetingBrief } from "./meeting-brief";
+import { assignContact } from "./assign-contact";
 
 export const TOOLS: Record<string, ToolEntry> = {
   find_contact: findContact,
@@ -36,6 +42,12 @@ export const TOOLS: Record<string, ToolEntry> = {
   upsert_note: upsertNote,
   propose_add_contact: proposeAddContact,
   read_todo_board: readTodoBoard,
+  draft_message: draftMessage,
+  send_message: sendMessage,
+  add_channel: addChannel,
+  log_meeting: logMeeting,
+  meeting_brief: meetingBrief,
+  assign_contact: assignContact,
 };
 
 export const TOOL_NAMES = Object.keys(TOOLS);

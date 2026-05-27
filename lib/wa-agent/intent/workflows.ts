@@ -95,6 +95,42 @@ export const WORKFLOWS: Partial<Record<Intent, Workflow>> = {
       "INSTRUCTION: Marking a milestone done is irreversible. Call find_project first, show the exact milestone name and project, and ask the user to confirm (YES/NO) before calling mark_milestone_done.",
   },
 
+  draft_send: {
+    allowedTools: ["find_contact", "draft_message", "send_message", "add_channel"],
+    requireConfirmation: true,
+    supplement:
+      "INSTRUCTION: To send a message, first call draft_message to get context and draft the text. " +
+      "Show the full draft to the user and ask 'Send this? (YES / NO)'. " +
+      "Only call send_message after explicit YES.",
+  },
+
+  add_channel: {
+    allowedTools: ["find_contact", "add_channel"],
+    supplement:
+      "INSTRUCTION: Use add_channel to add a phone, email, WhatsApp, or Instagram to a contact. " +
+      "If the contact_id isn't known, call find_contact first.",
+  },
+
+  log_meeting: {
+    allowedTools: ["find_contact", "log_meeting", "schedule_reminder"],
+    supplement:
+      "INSTRUCTION: Use log_meeting to record a meeting. Resolve all attendee names to contact_ids " +
+      "with find_contact first. Always confirm the scheduled_at datetime before inserting.",
+  },
+
+  meeting_brief: {
+    allowedTools: ["find_contact", "meeting_brief", "contact_summary"],
+    requiredTools: ["meeting_brief"],
+    supplement:
+      "INSTRUCTION: Use meeting_brief to pull live data on the contacts. Do not recite from memory.",
+  },
+
+  assign_contact: {
+    allowedTools: ["find_contact", "assign_contact"],
+    supplement:
+      "INSTRUCTION: Use assign_contact to assign a contact to a team member and schedule a follow-up reminder.",
+  },
+
   confirmation: {
     // Handled by pendingIntent logic in the loop — no tool restrictions needed
   },

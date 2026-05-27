@@ -16,6 +16,11 @@ export type Intent =
   | "touch_log"
   | "status_check"
   | "milestone_done"
+  | "draft_send"
+  | "add_channel"
+  | "log_meeting"
+  | "meeting_brief"
+  | "assign_contact"
   | "confirmation"
   | "unknown";
 
@@ -65,7 +70,7 @@ const PATTERNS: Array<[RegExp, Intent]> = [
   ],
 
   // Reminder cancel — must come before reminder_set (both match "reminder")
-  [/\b(cancel( the)? reminder|delete( the)? reminder|remove reminder|drop( the)? reminder)\b/i, "reminder_cancel"],
+  [/\b(cancel( the| my| a)? reminder|delete( the| my| a)? reminder|remove( the| my| a)? reminder|drop( the| my| a)? reminder)\b/i, "reminder_cancel"],
 
   // Reminder set
   [
@@ -75,14 +80,44 @@ const PATTERNS: Array<[RegExp, Intent]> = [
 
   // Reminder list
   [
-    /\b(my reminders?|(list|show|what are( my)?) reminders?|upcoming reminders?|what'?s? (coming up|scheduled))\b/i,
+    /\b(my reminders?|(list|show|what are( my)?|what) reminders?( do i have)?|upcoming reminders?|what'?s? (coming up|scheduled))\b/i,
     "reminder_list",
   ],
 
-  // Touch log
+  // Draft & send — before touch_log ("send" could fire there)
   [
-    /\b(log( a)? (call|meeting|touch|email|message|conversation)|talked to|spoke with|met with|had (a )?(call|meeting|chat) with|connected with)\b/i,
+    /\b(draft (a |an )?(message|email|whatsapp|note|outreach)|write (a |an )?(message|email)|send (a |an )?(message|email|whatsapp) to|message (them|him|her)|reach out to .+ (via|by|on|through))\b/i,
+    "draft_send",
+  ],
+
+  // Add channel
+  [
+    /\b(add (their |his |her )?(email|phone|number|whatsapp|instagram|contact|channel)|update (their |his |her )?(email|phone|number|whatsapp))\b/i,
+    "add_channel",
+  ],
+
+  // Meeting brief — before log_meeting and touch_log to avoid shadowing
+  [
+    /\b(brief me (on|about)|prep (me )?(for (the )?)?meeting|what do i know about .+ before|background on .+ for|pre-?meeting( brief| prep)?)\b/i,
+    "meeting_brief",
+  ],
+
+  // Log meeting — before touch_log ("had a meeting with" fires touch_log otherwise)
+  [
+    /\b(log (a |the )?meeting|had (a |the )?meeting with|we met (with)?|i met with|schedule (a |the )?meeting|meeting with .+ (today|yesterday|this morning|this afternoon|earlier|on))\b/i,
+    "log_meeting",
+  ],
+
+  // Touch log — after log_meeting so "had a meeting" doesn't land here
+  [
+    /\b(log( a)? (call|touch|email|message|conversation)|talked to|spoke with|met with|had (a )?(call|chat) with|connected with)\b/i,
     "touch_log",
+  ],
+
+  // Assign contact
+  [
+    /\b(assign|you take|joe take|tomas take|hand off|give .+ to (joe|tomas|me)|delegate)\b/i,
+    "assign_contact",
   ],
 
   // Milestone done — must come before status_check ("milestone" alone fires status_check)
@@ -98,6 +133,26 @@ const PATTERNS: Array<[RegExp, Intent]> = [
   ],
 ];
 
+// ── Spanish patterns (added after English so they don't shadow) ──────────────
+const SPANISH_PATTERNS: Array<[RegExp, Intent]> = [
+  [/^\s*(sí|si|dale|claro|confirma(do)?|adelante|va|ok(ey)?|perfecto|de acuerdo)\s*[.!]?\s*$/i, "confirmation"],
+  [/^\s*(no|cancel(a|ar)?|para|olvida(lo)?|detén)\s*[.!]?\s*$/i, "confirmation"],
+  [/\b(resumen|recuento|recap|cómo (fue|estuvo|salió)|qué pasó hoy|resúmeme)\b/i, "recap"],
+  [/\b(pon(me)?|agrega|crea|añade) (un |una )?(nota|apunte)/i, "note_write"],
+  [/\b(mis (pendientes|tareas|to-?dos?)|qué (tengo|hay) (pendiente|por hacer)|lista de tareas)\b/i, "todo_query"],
+  [/\b(ponme|pon|agrega|crea|añade) (un |una )?(recordatorio|aviso|alarma)/i, "reminder_set"],
+  [/\b(mis recordatorios|ver recordatorios|qué recordatorios)\b/i, "reminder_list"],
+  [/\b(redacta(me)?|escríbe(me)?|prepara(me)?) (un |una )?(mensaje|email|correo|whatsapp)/i, "draft_send"],
+  [/\b(envía|manda|mandá|envíale) (un |una )?(mensaje|email|correo|whatsapp) (a|para)\b/i, "draft_send"],
+  // Log meeting before touch_log (both match "reunión")
+  [/\b(tuve|hubo|registra|log(ea)?) (una? )?(reunión|meeting|junta)\b/i, "log_meeting"],
+  [/\b(registra|anota|log(ea)?|apunta) (una? )?(llamada|email|mensaje|conversación)/i, "touch_log"],
+  [/\b(hablé con|llamé a|me reuní con|tuve (una )?llamada con)\b/i, "touch_log"],
+  [/\b(asigna(le)?|dale a|que (joe|tomas|yo) (tome|maneje|contacte))\b/i, "assign_contact"],
+  [/\b(agreg(a|ar|ue)|añad(e|ir)) (el |la |su )?(teléfono|número|email|correo|whatsapp|instagram)\b/i, "add_channel"],
+  [/\b(cuéntame|dame info|prepárame|briefing|antecedentes) (sobre|de|del|para)\b/i, "meeting_brief"],
+];
+
 export function classifyIntent(body: string): Classification {
   const trimmed = body.trim();
 
@@ -105,6 +160,17 @@ export function classifyIntent(body: string): Classification {
     if (pattern.test(trimmed)) {
       if (intent === "confirmation") {
         const isYes = /^\s*(yes|yep|yeah|yup|confirm|go ahead|do it|ok|okay|sure|absolutely|sounds good|proceed|make it happen)/i.test(trimmed);
+        return { intent, confidence: "high", isConfirmYes: isYes };
+      }
+      return { intent, confidence: "high" };
+    }
+  }
+
+  // Try Spanish patterns
+  for (const [pattern, intent] of SPANISH_PATTERNS) {
+    if (pattern.test(trimmed)) {
+      if (intent === "confirmation") {
+        const isYes = /^\s*(sí|si|dale|claro|confirma|adelante|va\b|ok|perfecto|de acuerdo)/i.test(trimmed);
         return { intent, confidence: "high", isConfirmYes: isYes };
       }
       return { intent, confidence: "high" };

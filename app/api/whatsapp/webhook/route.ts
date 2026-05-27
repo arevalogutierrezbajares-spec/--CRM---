@@ -14,6 +14,11 @@ import {
   resolveSender,
 } from "@/lib/whatsapp-agent";
 import { checkRateLimit } from "@/lib/wa-rate-limit";
+import { downloadWaMedia } from "@/lib/wa-agent/media/download";
+import { transcribeVoice, isTranscriptionConfigured } from "@/lib/wa-agent/media/transcribe";
+import { storeMedia, isStorageConfigured } from "@/lib/wa-agent/media/store";
+import { parseWaContacts, contactCardSummary } from "@/lib/wa-agent/media/vcard";
+import { extractLinks } from "@/lib/wa-agent/media/links";
 
 const { touches, contacts } = schema;
 
@@ -55,17 +60,34 @@ export const POST = withErrorCapture(
       return NextResponse.json({ error: "bad signature" }, { status: 403 });
     }
 
+    type WaMessage = {
+      from?: string;
+      type?: string;
+      // text
+      text?: { body?: string };
+      // audio / voice
+      audio?: { id?: string; mime_type?: string; voice?: boolean };
+      // image
+      image?: { id?: string; mime_type?: string; caption?: string };
+      // document
+      document?: { id?: string; mime_type?: string; filename?: string; caption?: string };
+      // video
+      video?: { id?: string; mime_type?: string; caption?: string };
+      // shared contacts (vCard)
+      contacts?: Array<{
+        name?: { formatted_name?: string; first_name?: string; last_name?: string };
+        phones?: Array<{ phone?: string; type?: string; wa_id?: string }>;
+        emails?: Array<{ email?: string; type?: string }>;
+        org?: { company?: string };
+      }>;
+    };
     let payload: {
       entry?: Array<{
         changes?: Array<{
           value?: {
             messaging_product?: string;
             metadata?: { phone_number_id?: string; display_phone_number?: string };
-            messages?: Array<{
-              from?: string;
-              text?: { body?: string };
-              type?: string;
-            }>;
+            messages?: WaMessage[];
             contacts?: Array<{ wa_id?: string; profile?: { name?: string } }>;
           };
         }>;
@@ -111,7 +133,7 @@ export const POST = withErrorCapture(
         }
 
         for (const msg of change.value?.messages ?? []) {
-          if (msg.type !== "text" || !msg.text?.body || !msg.from) continue;
+          if (!msg.from) continue;
 
           const verdict = await checkRateLimit(msg.from);
           if (!verdict.allowed) {
@@ -122,28 +144,137 @@ export const POST = withErrorCapture(
             continue;
           }
 
+          // ── Resolve the inbound body + metadata for all message types ──
+          let body = "";
+          let mediaContext: { source: "voice" | "image" | "document" | "vcard" | "link" | "text"; transcribedLang?: string } =
+            { source: "text" };
+
+          if (msg.type === "text" && msg.text?.body) {
+            body = msg.text.body;
+            // Enrich with link note if URLs present
+            const links = extractLinks(body);
+            if (links.length > 0) {
+              mediaContext = { source: "link" };
+            }
+
+          } else if (msg.type === "audio" && msg.audio?.id) {
+            // Voice note — download + transcribe
+            const dl = await downloadWaMedia(msg.audio.id);
+            if (!dl.ok) {
+              responses.push({ to: msg.from, body: "Couldn't download your voice note. Try again." });
+              continue;
+            }
+            if (!isTranscriptionConfigured()) {
+              responses.push({ to: msg.from, body: "Voice transcription isn't configured yet. Send a text message instead." });
+              continue;
+            }
+            const tx = await transcribeVoice(dl.buffer, dl.filename);
+            if (!tx.ok) {
+              responses.push({ to: msg.from, body: `Couldn't transcribe voice note: ${tx.error}` });
+              continue;
+            }
+            body = tx.text;
+            mediaContext = { source: "voice", transcribedLang: tx.language };
+
+            // Store original audio (best-effort)
+            if (isStorageConfigured() && useAgent) {
+              const resolved = await resolveSender(msg.from);
+              if (resolved) {
+                void storeMedia({
+                  workspaceId: resolved.workspaceId,
+                  buffer: dl.buffer,
+                  mimeType: dl.mimeType,
+                  originalFilename: dl.filename,
+                }).catch(() => {});
+              }
+            }
+
+          } else if ((msg.type === "image" || msg.type === "video") && (msg.image?.id || msg.video?.id)) {
+            const mediaId = (msg.image?.id ?? msg.video?.id)!;
+            const caption = msg.image?.caption ?? msg.video?.caption ?? "";
+            const dl = await downloadWaMedia(mediaId);
+            if (dl.ok && isStorageConfigured()) {
+              const resolved = await resolveSender(msg.from);
+              if (resolved) {
+                const stored = await storeMedia({
+                  workspaceId: resolved.workspaceId,
+                  buffer: dl.buffer,
+                  mimeType: dl.mimeType,
+                  originalFilename: dl.filename,
+                });
+                if (stored.ok) {
+                  body = `[${msg.type === "image" ? "Image" : "Video"} shared] ${caption ? caption + " — " : ""}Stored at: ${stored.signedUrl}`;
+                  mediaContext = { source: "image" };
+                }
+              }
+            }
+            if (!body) {
+              body = `[${msg.type === "image" ? "Image" : "Video"} shared]${caption ? " " + caption : ""}`;
+              mediaContext = { source: "image" };
+            }
+
+          } else if (msg.type === "document" && msg.document?.id) {
+            const caption = msg.document.caption ?? "";
+            const filename = msg.document.filename ?? "document";
+            const dl = await downloadWaMedia(msg.document.id);
+            if (dl.ok && isStorageConfigured()) {
+              const resolved = await resolveSender(msg.from);
+              if (resolved) {
+                const stored = await storeMedia({
+                  workspaceId: resolved.workspaceId,
+                  buffer: dl.buffer,
+                  mimeType: dl.mimeType,
+                  originalFilename: filename,
+                });
+                if (stored.ok) {
+                  body = `[Document shared: ${filename}] ${caption ? caption + " — " : ""}Stored at: ${stored.signedUrl}`;
+                  mediaContext = { source: "document" };
+                }
+              }
+            }
+            if (!body) {
+              body = `[Document shared: ${filename}]${caption ? " " + caption : ""}`;
+              mediaContext = { source: "document" };
+            }
+
+          } else if (msg.type === "contacts" && msg.contacts?.length) {
+            // Shared contact cards (vCards)
+            const parsed = parseWaContacts({ contacts: msg.contacts });
+            const summaries = parsed.map(contactCardSummary).join("\n");
+            body = `[Contact card shared]\n${summaries}\n\nShould I add ${parsed.map((c) => c.formattedName).join(", ")} to the CRM?`;
+            mediaContext = { source: "vcard" };
+
+          } else {
+            // Unsupported type (location, sticker, reaction, etc.) — skip silently
+            continue;
+          }
+
+          if (!body) continue;
+
           if (useAgent) {
-            const r = await agentHandle({
-              senderPhone: msg.from,
-              body: msg.text.body,
-            });
+            // Inject media context supplement for voice notes (always-confirm gate)
+            const agentBody = mediaContext.source === "voice"
+              ? `[Voice Note${mediaContext.transcribedLang ? ` – detected language: ${mediaContext.transcribedLang}` : ""}]\nTranscription: "${body}"\n\nIMPORTANT: Start your reply with "I heard: '${body.slice(0, 80)}...' — " then state what you plan to do and ask YES/NO before taking any action.`
+              : body;
+
+            const r = await agentHandle({ senderPhone: msg.from, body: agentBody });
             responses.push({ to: msg.from, body: r.reply });
             continue;
           }
 
-          // Legacy slash-command path — also workspace-aware via resolveSender.
+          // Legacy slash-command path
+          if (msg.type !== "text") {
+            responses.push({ to: msg.from, body: "Media handling requires the AI agent (AGB_WA_AGENT=1)." });
+            continue;
+          }
           const resolved = await resolveSender(msg.from);
           if (!resolved) {
-            responses.push({
-              to: msg.from,
-              body:
-                "I don't recognize this number. Add it in /profile → WhatsApp.",
-            });
+            responses.push({ to: msg.from, body: "I don't recognize this number. Add it in /profile → WhatsApp." });
             continue;
           }
           const reply = await handleCommand({
             from: msg.from,
-            body: msg.text.body,
+            body,
             workspaceId: resolved.workspaceId,
             userId: resolved.userId,
           });
