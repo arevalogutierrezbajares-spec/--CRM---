@@ -94,6 +94,9 @@ export const workspaceRole = pgEnum("workspace_role", [
 // USERS (mirrors auth.users) — `whatsapp_phone` enables inbound bot routing.
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Users table — public mirror of auth.users (Supabase) plus workspace + agent
+// metadata. `whatsapp_persona` is freeform text injected into the WhatsApp
+// agent's system prompt so the AI greets each member with the right vibe.
 export const users = pgTable("users", {
   id: uuid("id").primaryKey(),
   displayName: text("display_name").notNull(),
@@ -102,6 +105,10 @@ export const users = pgTable("users", {
   // E.164 without leading + (e.g. "15551234567"). Used by the WhatsApp webhook
   // to identify the sender. NULL = user can't text the bot yet.
   whatsappPhone: text("whatsapp_phone").unique(),
+  // Freeform string injected into the WhatsApp agent's system prompt — used
+  // to teach the agent how to address this user (nicknames, vibe). NULL =
+  // agent falls back to display_name.
+  whatsappPersona: text("whatsapp_persona"),
   // Default workspace shown after sign-in. Null only briefly after sign-up,
   // before the first workspace is auto-created.
   currentWorkspaceId: uuid("current_workspace_id"),

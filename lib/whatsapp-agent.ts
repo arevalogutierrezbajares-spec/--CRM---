@@ -58,6 +58,7 @@ export type ResolvedSender = {
   workspaceId: string;
   displayName: string;
   timezone: string;
+  persona: string | null;
 };
 
 /**
@@ -79,6 +80,7 @@ export async function resolveSender(
       displayName: users.displayName,
       timezone: users.timezone,
       whatsappPhone: users.whatsappPhone,
+      whatsappPersona: users.whatsappPersona,
       currentWorkspaceId: users.currentWorkspaceId,
     })
     .from(users)
@@ -94,6 +96,7 @@ export async function resolveSender(
     workspaceId: u.currentWorkspaceId,
     displayName: u.displayName,
     timezone: u.timezone,
+    persona: u.whatsappPersona ?? null,
   };
 }
 
@@ -206,6 +209,7 @@ function dailyCap(): number {
 function systemPrompt(opts: {
   userName: string;
   userTimezone: string;
+  persona: string | null;
   now: Date;
   pendingIntent: unknown | null;
 }): string {
@@ -219,6 +223,9 @@ function systemPrompt(opts: {
   return [
     `You are a chief-of-staff assistant for ${opts.userName} embedded in their shared workspace CRM.`,
     `Today is ${today}. Their timezone is ${opts.userTimezone}.`,
+    opts.persona
+      ? `\nPersona instruction (how to address this user in greetings/replies): ${opts.persona}`
+      : "",
     "",
     "All workspace members share the same contacts, projects, milestones, meetings, and touches. " +
       "Reminders, however, are personal to the texter.",
@@ -327,6 +334,7 @@ export async function handleMessage(opts: {
       system: systemPrompt({
         userName: resolved.displayName,
         userTimezone: resolved.timezone,
+        persona: resolved.persona,
         now,
         pendingIntent,
       }),
