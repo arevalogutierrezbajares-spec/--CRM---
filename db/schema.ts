@@ -7,6 +7,8 @@ import {
   date,
   integer,
   boolean,
+  jsonb,
+  time,
   primaryKey,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
@@ -67,6 +69,19 @@ export const defaultOwner = pgEnum("default_owner", [
   "tomas",
   "cofounder",
   "either",
+]);
+export const reminderRecur = pgEnum("reminder_recur", [
+  "once",
+  "daily",
+  "weekly",
+  "monthly",
+]);
+export const waDirection = pgEnum("wa_direction", [
+  "in",
+  "out",
+  "tool",
+  "reject",
+  "error",
 ]);
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -374,3 +389,78 @@ export const pipelineStagesRelations = relations(pipelineStages, ({ one }) => ({
     references: [pipelineTemplates.id],
   }),
 }));
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WHATSAPP AGENT — conversation state, reminders, activity log, nudges
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const waConversations = pgTable("wa_conversations", {
+  // Keyed by raw WhatsApp sender phone (E.164 without leading +).
+  senderPhone: text("sender_phone").primaryKey(),
+  ownerId: uuid("owner_id")
+    .notNull()
+    .references(() => users.id),
+  // Last ~10 turns. Shape: [{role:'user'|'assistant'|'tool', content:any, ts:string}, ...]
+  messages: jsonb("messages").$type<unknown[]>().notNull().default([]),
+  // Partial intent mid-flow. Cleared on completion or after 30 min idle.
+  pendingIntent: jsonb("pending_intent").$type<unknown | null>(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const reminders = pgTable("reminders", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  ownerId: uuid("owner_id")
+    .notNull()
+    .references(() => users.id),
+  subject: text("subject").notNull(),
+  dueAt: timestamp("due_at", { withTimezone: true }).notNull(),
+  recur: reminderRecur("recur").notNull().default("once"),
+  // For weekly: 0=Sun..6=Sat. For monthly: 1..31.
+  recurDay: integer("recur_day"),
+  // Time of day in owner's timezone (used to compute next due_at).
+  recurTime: time("recur_time"),
+  firedAt: timestamp("fired_at", { withTimezone: true }),
+  sourceContactId: uuid("source_contact_id").references(() => contacts.id, {
+    onDelete: "set null",
+  }),
+  sourceProjectId: uuid("source_project_id").references(() => projects.id, {
+    onDelete: "set null",
+  }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const waActivity = pgTable("wa_activity", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  ownerId: uuid("owner_id")
+    .notNull()
+    .references(() => users.id),
+  senderPhone: text("sender_phone").notNull(),
+  direction: waDirection("direction").notNull(),
+  // Inbound text, tool call+result, outbound text, etc. JSON for flexibility.
+  payload: jsonb("payload").$type<unknown>().notNull(),
+  tokensIn: integer("tokens_in"),
+  tokensOut: integer("tokens_out"),
+  // Cost in tenths of a cent (so 12 = $0.0012). Avoids float drift.
+  costMillicents: integer("cost_millicents"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const nudges = pgTable("nudges", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  ownerId: uuid("owner_id")
+    .notNull()
+    .references(() => users.id),
+  // Stable identifier per nudge subject — e.g. 'overdue:milestone:<uuid>'.
+  // The (owner, signature, day) tuple is used for dedup.
+  signature: text("signature").notNull(),
+  firedAt: timestamp("fired_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  acknowledgedAt: timestamp("acknowledged_at", { withTimezone: true }),
+});

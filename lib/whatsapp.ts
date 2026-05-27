@@ -9,6 +9,41 @@
 
 const GRAPH_VERSION = "v21.0";
 
+/**
+ * Verify the x-hub-signature-256 header that Meta attaches to webhook POSTs.
+ * Signature is `sha256=<hex hmac>` of the raw request body, keyed by
+ * WA_APP_SECRET. Returns true on match (or when the secret isn't configured —
+ * we treat that as dev mode). Returns false on mismatch or malformed header.
+ */
+export async function verifyMetaSignature(opts: {
+  header: string | null;
+  rawBody: string;
+}): Promise<boolean> {
+  const secret = process.env.WA_APP_SECRET;
+  if (!secret) return true; // unconfigured → skip (dev / no Meta app yet)
+  if (!opts.header || !opts.header.startsWith("sha256=")) return false;
+  const expected = opts.header.slice("sha256=".length);
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(opts.rawBody));
+  const hex = Array.from(new Uint8Array(sig))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+  if (hex.length !== expected.length) return false;
+  // Constant-time compare to avoid timing attacks.
+  let diff = 0;
+  for (let i = 0; i < hex.length; i++) {
+    diff |= hex.charCodeAt(i) ^ expected.charCodeAt(i);
+  }
+  return diff === 0;
+}
+
 export function isWhatsAppConfigured(): boolean {
   return Boolean(
     process.env.WA_PHONE_NUMBER_ID &&

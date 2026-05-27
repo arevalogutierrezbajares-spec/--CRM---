@@ -19,7 +19,10 @@ test.describe("Grid state (URL-driven filter + group)", () => {
     page,
   }) => {
     await page.goto("/contacts");
-    await page.getByRole("link", { name: "Archived", exact: true }).click();
+    const link = page.getByRole("link", { name: "Archived", exact: true });
+    await expect(link).toBeVisible();
+    await link.click();
+    await page.waitForURL(/archived=true/);
     await expect(page).toHaveURL(/archived=true/);
   });
 });

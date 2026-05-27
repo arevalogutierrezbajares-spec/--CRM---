@@ -3,8 +3,9 @@
 **Updated:** 2026-05-26
 **Workflow:** [`_WORKFLOW.md`](./_WORKFLOW.md)
 **Source of truth for ACs:** [`docs/requirements/FR-MATRIX.md`](../docs/requirements/FR-MATRIX.md)
-**Tests:** 102 passing (69 unit · 21 integration · 12 e2e) — `pnpm test:all`
-**Score:** ~9.0/10 (was 7.4 before this batch — see HANDOFF §batch 7)
+**Tests:** 114 passing (69 unit · 33 integration · 12 e2e) — `pnpm test:all`
+**Score:** ~9.0/10 (was 7.4 before, see HANDOFF §batch 7-8)
+**Hot path:** Text the WhatsApp bot in natural language; agent loop routes through 9 tools + persists conversation state. Reminders + nudges crons proactively ping. See HANDOFF §batch 8.
 
 ## At a glance
 

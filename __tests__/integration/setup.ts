@@ -17,7 +17,7 @@ process.env.DATABASE_URL =
   process.env.DATABASE_URL ?? "postgresql://agb@localhost:54329/agb_test";
 // Force `development` so the dev-only fake-user bypass in lib/current-user.ts
 // engages. Cannot fire in production (that file checks NODE_ENV explicitly).
-process.env.NODE_ENV = "development";
+(process.env as Record<string, string>).NODE_ENV = "development";
 process.env.AGB_DEV_FAKE_USER = "1";
 process.env.NEXT_PUBLIC_SUPABASE_URL =
   process.env.NEXT_PUBLIC_SUPABASE_URL ?? "http://localhost:54321";
@@ -43,10 +43,15 @@ beforeAll(async () => {
 
 afterEach(async () => {
   const { db } = await import("@/db");
-  // Order matters: children before parents.
+  // Order matters: children before parents. Includes the WhatsApp agent
+  // tables so each test starts with empty conversation state + no reminders.
   await db.execute(
     /* sql */ `
     truncate table
+      wa_activity,
+      wa_conversations,
+      nudges,
+      reminders,
       touches,
       meeting_attendees,
       meetings,

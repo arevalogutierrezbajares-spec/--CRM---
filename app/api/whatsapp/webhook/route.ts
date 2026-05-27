@@ -6,8 +6,11 @@ import {
   parseCommand,
   sendWhatsAppText,
   isWhatsAppConfigured,
+  verifyMetaSignature,
 } from "@/lib/whatsapp";
 import { withErrorCapture } from "@/lib/instrument";
+import { handleMessage as agentHandle } from "@/lib/whatsapp-agent";
+import { checkRateLimit } from "@/lib/wa-rate-limit";
 
 const { touches, contacts, users } = schema;
 
@@ -43,6 +46,16 @@ export const POST = withErrorCapture("/api/whatsapp/webhook POST", async (req: N
     );
   }
 
+  // Read the raw body so we can verify Meta's signature *before* parsing.
+  const rawBody = await req.text();
+  const signatureOK = await verifyMetaSignature({
+    header: req.headers.get("x-hub-signature-256"),
+    rawBody,
+  });
+  if (!signatureOK) {
+    return NextResponse.json({ error: "bad signature" }, { status: 403 });
+  }
+
   // Confirm the owner exists.
   const [owner] = await db
     .select({ id: users.id })
@@ -56,39 +69,60 @@ export const POST = withErrorCapture("/api/whatsapp/webhook POST", async (req: N
     );
   }
 
-  const payload = (await req.json().catch(() => null)) as
-    | {
-        entry?: Array<{
-          changes?: Array<{
-            value?: {
-              messages?: Array<{
-                from?: string;
-                text?: { body?: string };
-                type?: string;
-              }>;
-              contacts?: Array<{
-                wa_id?: string;
-                profile?: { name?: string };
-              }>;
-            };
+  let payload: {
+    entry?: Array<{
+      changes?: Array<{
+        value?: {
+          messages?: Array<{
+            from?: string;
+            text?: { body?: string };
+            type?: string;
           }>;
-        }>;
-      }
-    | null;
+          contacts?: Array<{ wa_id?: string; profile?: { name?: string } }>;
+        };
+      }>;
+    }>;
+  } | null;
+  try {
+    payload = JSON.parse(rawBody);
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
   if (!payload) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
+
+  const useAgent = process.env.AGB_WA_AGENT === "1";
 
   const responses: { to: string; body: string }[] = [];
   for (const entry of payload.entry ?? []) {
     for (const change of entry.changes ?? []) {
       for (const msg of change.value?.messages ?? []) {
         if (msg.type !== "text" || !msg.text?.body || !msg.from) continue;
-        const reply = await handleCommand({
-          from: msg.from,
-          body: msg.text.body,
-          ownerId: ownerIdEnv,
-        });
+
+        // Sliding-window rate limit (per sender phone).
+        const verdict = await checkRateLimit(msg.from);
+        if (!verdict.allowed) {
+          responses.push({
+            to: msg.from,
+            body: `Slow down — try again in ${verdict.retryAfterSeconds}s.`,
+          });
+          continue;
+        }
+
+        const reply = useAgent
+          ? (
+              await agentHandle({
+                ownerId: ownerIdEnv,
+                senderPhone: msg.from,
+                body: msg.text.body,
+              })
+            ).reply
+          : await handleCommand({
+              from: msg.from,
+              body: msg.text.body,
+              ownerId: ownerIdEnv,
+            });
         responses.push({ to: msg.from, body: reply });
       }
     }
@@ -96,9 +130,7 @@ export const POST = withErrorCapture("/api/whatsapp/webhook POST", async (req: N
 
   // Fire replies (best-effort; don't block the webhook ack).
   await Promise.allSettled(
-    responses.map((r) =>
-      sendWhatsAppText({ to: r.to, body: r.body }),
-    ),
+    responses.map((r) => sendWhatsAppText({ to: r.to, body: r.body })),
   );
 
   return NextResponse.json({ ok: true });

@@ -4,7 +4,9 @@ import { NextRequest } from "next/server";
 import { db, schema } from "@/db";
 import { FAKE_USER_ID } from "./setup";
 
-function nextReq(url: string, init?: RequestInit): NextRequest {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function nextReq(url: string, init?: any): NextRequest {
+  // Cast to satisfy Next 16's stricter RequestInit typing (signal: null disallowed).
   return new NextRequest(url, init);
 }
 

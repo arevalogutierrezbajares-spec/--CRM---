@@ -11,7 +11,6 @@ export default defineConfig({
     // when they run strictly sequentially.
     pool: "forks",
     maxWorkers: 1,
-    minWorkers: 1,
     fileParallelism: false,
     sequence: { concurrent: false },
     hookTimeout: 30_000,
