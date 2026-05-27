@@ -1,5 +1,6 @@
 import {
   Bot,
+  Brain,
   Building2,
   Contact2,
   Home,
@@ -25,6 +26,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/projects", label: "Projects", icon: LayoutGrid },
   { href: "/meetings", label: "Meetings", icon: Users },
   { href: "/work", label: "Work", icon: ListTodo },
+  { href: "/research", label: "Research", icon: Brain },
   { href: "/overlord", label: "Overlord", icon: Bot },
   { href: "/pipeline", label: "Pipeline", icon: KanbanSquare },
   { href: "/treasury", label: "Treasury", icon: Wallet },

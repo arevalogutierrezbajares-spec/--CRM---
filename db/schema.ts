@@ -1218,3 +1218,29 @@ export const overlordTasksRelations = relations(overlordTasks, ({ one }) => ({
     references: [overlordSections.id],
   }),
 }));
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RESEARCH NOTES — index of Obsidian-style markdown brains on disk
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const researchNotes = pgTable("research_notes", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  projectId: uuid("project_id").references(() => projects.id, {
+    onDelete: "set null",
+  }),
+  sourceRoot: text("source_root").notNull(),
+  relPath: text("rel_path").notNull(),
+  title: text("title").notNull(),
+  summary: text("summary"),
+  folder: text("folder"),
+  wordCount: integer("word_count").notNull().default(0),
+  tags: jsonb("tags").$type<string[]>().notNull().default([]),
+  lastModified: timestamp("last_modified", { withTimezone: true }),
+  contentHash: text("content_hash"),
+  indexedAt: timestamp("indexed_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});

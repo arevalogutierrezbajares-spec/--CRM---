@@ -32,6 +32,11 @@ import {
   type ProjectLinkRow,
 } from "@/db/queries/projects";
 import { listTouchesForProject } from "@/db/queries/touches";
+import {
+  listResearchNotes,
+  type ResearchNoteListItem,
+} from "@/db/queries/research";
+import { Brain } from "lucide-react";
 import { safeRead } from "@/lib/db-status";
 import { formatDate, formatRelative } from "@/lib/utils";
 import { computeHealth } from "@/lib/health";
@@ -118,7 +123,7 @@ export default async function ProjectDetailPage(props: {
     );
   }
 
-  const [touchesRes, linksRes] = await Promise.all([
+  const [touchesRes, linksRes, researchRes] = await Promise.all([
     safeRead(
       () =>
         listTouchesForProject({
@@ -132,6 +137,15 @@ export default async function ProjectDetailPage(props: {
         listProjectLinks({
           projectId: displayed.id,
           workspaceId: user.workspaceId,
+        }),
+      [],
+    ),
+    safeRead<ResearchNoteListItem[]>(
+      () =>
+        listResearchNotes({
+          workspaceId: user.workspaceId,
+          projectId: displayed.id,
+          limit: 8,
         }),
       [],
     ),
@@ -419,6 +433,46 @@ export default async function ProjectDetailPage(props: {
           </div>
 
           <aside className="space-y-3">
+            <DashCard>
+              <SectionLabel
+                icon={Brain}
+                right={
+                  researchRes.data.length > 0 ? (
+                    <Link
+                      href={`/research?project=${displayed.id}`}
+                      className="text-tiny text-text-secondary hover:text-text-primary"
+                    >
+                      All
+                    </Link>
+                  ) : null
+                }
+              >
+                Research brain
+              </SectionLabel>
+              {researchRes.data.length === 0 ? (
+                <p className="text-tiny text-text-tertiary py-2">
+                  No notes mapped to this project yet.
+                </p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {researchRes.data.map((n) => (
+                    <li key={n.id} className="text-[12px]">
+                      <Link
+                        href={`/research/${n.id}`}
+                        className="block text-text-primary hover:underline line-clamp-2"
+                      >
+                        {n.title}
+                      </Link>
+                      <div className="text-tiny text-text-tertiary truncate">
+                        {n.folder ? `${n.folder} · ` : ""}
+                        {n.wordCount} words
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </DashCard>
+
             <DashCard>
               <SectionLabel icon={Target}>Linked contacts</SectionLabel>
               {displayed.contacts.length === 0 ? (
