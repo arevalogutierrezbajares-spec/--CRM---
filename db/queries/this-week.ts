@@ -40,7 +40,7 @@ function endOfWeekISO(): string {
   return d.toISOString().slice(0, 10);
 }
 
-export async function listDueThisWeek(ownerId: string): Promise<DueItem[]> {
+export async function listDueThisWeek(workspaceId: string): Promise<DueItem[]> {
   const today = todayISO();
   const end = endOfWeekISO();
 
@@ -57,7 +57,7 @@ export async function listDueThisWeek(ownerId: string): Promise<DueItem[]> {
     .innerJoin(projects, eq(projects.id, milestones.projectId))
     .where(
       and(
-        eq(projects.ownerId, ownerId),
+        eq(projects.workspaceId, workspaceId),
         sql`${milestones.status} <> 'done'`,
         sql`${milestones.dueDate} IS NOT NULL`,
         lte(milestones.dueDate, end),
@@ -78,7 +78,7 @@ export async function listDueThisWeek(ownerId: string): Promise<DueItem[]> {
 }
 
 export async function listBlockedProjects(
-  ownerId: string,
+  workspaceId: string,
 ): Promise<BlockedProject[]> {
   const today = todayISO();
   const rows = await db
@@ -90,7 +90,7 @@ export async function listBlockedProjects(
     })
     .from(projects)
     .where(
-      and(eq(projects.ownerId, ownerId), eq(projects.status, "waiting")),
+      and(eq(projects.workspaceId, workspaceId), eq(projects.status, "waiting")),
     );
 
   return rows
@@ -106,7 +106,7 @@ export async function listBlockedProjects(
 }
 
 export async function listStaleFriends(
-  ownerId: string,
+  workspaceId: string,
 ): Promise<StaleContact[]> {
   const threshold = new Date();
   threshold.setDate(threshold.getDate() - STALE_THRESHOLD_DAYS);
@@ -120,7 +120,7 @@ export async function listStaleFriends(
     .from(contacts)
     .where(
       and(
-        eq(contacts.ownerId, ownerId),
+        eq(contacts.workspaceId, workspaceId),
         eq(contacts.archived, false),
         eq(contacts.relationshipType, "friend"),
         or(isNull(contacts.lastTouchAt), lt(contacts.lastTouchAt, threshold)),

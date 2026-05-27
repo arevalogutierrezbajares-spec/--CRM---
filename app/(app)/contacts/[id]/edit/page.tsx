@@ -18,7 +18,7 @@ export default async function EditContactPage(props: { params: Params }) {
   const { id } = await props.params;
 
   const [contactRes, tagsRes] = await Promise.all([
-    safeRead(() => getContact({ id, ownerId: user.id }), null),
+    safeRead(() => getContact({ id, workspaceId: user.workspaceId }), null),
     safeRead(() => listTags(), []),
   ]);
 

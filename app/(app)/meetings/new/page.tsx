@@ -15,11 +15,11 @@ export default async function NewMeetingPage() {
 
   const [contactsRes, projectsRes] = await Promise.all([
     safeRead(
-      () => listContacts({ ownerId: user.id }),
+      () => listContacts({ workspaceId: user.workspaceId }),
       [] as Awaited<ReturnType<typeof listContacts>>,
     ),
     safeRead(
-      () => listProjects({ ownerId: user.id }),
+      () => listProjects({ workspaceId: user.workspaceId }),
       [] as Awaited<ReturnType<typeof listProjects>>,
     ),
   ]);

@@ -36,8 +36,7 @@ export const GET = withErrorCapture(
     }
 
     const ownerId = process.env.AGB_INBOUND_OWNER_USER_ID;
-    const phone = process.env.AGB_WATCHDOG_NOTIFY_PHONE;
-    if (!ownerId || !phone || !isWhatsAppConfigured()) {
+    if (!ownerId || !isWhatsAppConfigured()) {
       return NextResponse.json(
         { ok: false, reason: "wa or owner not configured" },
         { status: 503 },
@@ -45,16 +44,33 @@ export const GET = withErrorCapture(
     }
 
     const [owner] = await db
-      .select({ id: users.id })
+      .select({
+        id: users.id,
+        workspaceId: users.currentWorkspaceId,
+        phone: users.whatsappPhone,
+      })
       .from(users)
       .where(eq(users.id, ownerId))
       .limit(1);
     if (!owner) {
       return NextResponse.json({ error: "owner missing" }, { status: 500 });
     }
+    if (!owner.workspaceId) {
+      return NextResponse.json(
+        { ok: false, reason: "owner has no current workspace" },
+        { status: 503 },
+      );
+    }
+    const phone = owner.phone ?? process.env.AGB_WATCHDOG_NOTIFY_PHONE;
+    if (!phone) {
+      return NextResponse.json(
+        { ok: false, reason: "no whatsapp phone for owner" },
+        { status: 503 },
+      );
+    }
 
-    const all = await gatherNudgeCandidates(ownerId);
-    const fresh = (await filterDedupedCandidates(ownerId, all)).slice(0, 3);
+    const all = await gatherNudgeCandidates(owner.workspaceId);
+    const fresh = (await filterDedupedCandidates(owner.id, all)).slice(0, 3);
 
     if (fresh.length === 0) {
       return NextResponse.json({ ok: true, fired: 0, reason: "nothing fresh" });
@@ -86,7 +102,11 @@ export const GET = withErrorCapture(
         { status: 502 },
       );
     }
-    await recordNudgesFired(ownerId, fresh);
+    await recordNudgesFired({
+      workspaceId: owner.workspaceId,
+      forUserId: owner.id,
+      cands: fresh,
+    });
 
     return NextResponse.json({
       ok: true,

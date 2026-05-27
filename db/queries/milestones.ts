@@ -8,14 +8,13 @@ export type MilestoneRow = typeof milestones.$inferSelect;
 export type InstantiateMilestonesArgs = {
   projectId: string;
   templateId: string;
-  fallbackOwnerId: string; // Tomas's user id — used when default_owner=tomas|either
-  cofounderId?: string | null; // user id for default_owner=cofounder; falls back to Tomas if absent
+  workspaceId: string;
+  createdBy: string;
+  /** When a stage has `default_owner='cofounder'` we attempt to assign the
+   *  milestone to this user id (a workspace member). Falls back to `createdBy`. */
+  cofounderId?: string | null;
 };
 
-/**
- * For a project created with a template, create one Milestone per pipeline_stage
- * with due_date = NOW() + sla_days and owner resolved from default_owner enum.
- */
 export async function instantiateMilestonesFromTemplate(
   args: InstantiateMilestonesArgs,
 ) {
@@ -36,16 +35,18 @@ export async function instantiateMilestonesFromTemplate(
             .slice(0, 10)
         : null;
 
-    const ownerId =
+    const assignedTo =
       stage.defaultOwner === "cofounder"
-        ? args.cofounderId ?? args.fallbackOwnerId
-        : args.fallbackOwnerId;
+        ? args.cofounderId ?? args.createdBy
+        : args.createdBy;
 
     return {
       projectId: args.projectId,
+      workspaceId: args.workspaceId,
+      createdBy: args.createdBy,
+      assignedTo,
       title: stage.name,
       dueDate,
-      ownerId,
       order: stage.order,
     };
   });

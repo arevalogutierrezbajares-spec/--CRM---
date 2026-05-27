@@ -21,10 +21,10 @@ export type ProjectListItem = ProjectRow & {
 };
 
 export async function listProjects(opts: {
-  ownerId: string;
+  workspaceId: string;
   status?: "active" | "waiting" | "done" | "lost";
 }): Promise<ProjectListItem[]> {
-  const conditions = [eq(projects.ownerId, opts.ownerId)];
+  const conditions = [eq(projects.workspaceId, opts.workspaceId)];
   if (opts.status) conditions.push(eq(projects.status, opts.status));
 
   const rows = await db
@@ -85,7 +85,7 @@ export async function listProjects(opts: {
   });
 }
 
-export async function getProject(opts: { id: string; ownerId: string }) {
+export async function getProject(opts: { id: string; workspaceId: string }) {
   const [row] = await db
     .select({
       project: projects,
@@ -93,7 +93,7 @@ export async function getProject(opts: { id: string; ownerId: string }) {
     })
     .from(projects)
     .leftJoin(pipelineTemplates, eq(pipelineTemplates.id, projects.templateId))
-    .where(and(eq(projects.id, opts.id), eq(projects.ownerId, opts.ownerId)))
+    .where(and(eq(projects.id, opts.id), eq(projects.workspaceId, opts.workspaceId)))
     .limit(1);
 
   if (!row) return null;

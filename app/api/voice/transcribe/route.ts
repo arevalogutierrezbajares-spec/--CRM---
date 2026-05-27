@@ -86,6 +86,7 @@ export async function POST(req: NextRequest) {
       channel: "voice_memo",
       body,
       transcript: result.text,
+      workspaceId: user.workspaceId,
       createdBy: user.id,
     })
     .returning({ id: touches.id });

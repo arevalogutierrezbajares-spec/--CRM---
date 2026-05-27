@@ -30,7 +30,7 @@ export default async function ThisWeekPage() {
     safeRead<DueItem[]>(() => listDueThisWeek(user.id), []),
     safeRead<BlockedProject[]>(() => listBlockedProjects(user.id), []),
     safeRead<StaleContact[]>(() => listStaleFriends(user.id), []),
-    safeRead<DensityCell[]>(() => touchDensity({ ownerId: user.id }), []),
+    safeRead<DensityCell[]>(() => touchDensity({ workspaceId: user.workspaceId }), []),
   ]);
 
   const dueCount = dueRes.data.length;

@@ -9,137 +9,135 @@ import {
   verifyMetaSignature,
 } from "@/lib/whatsapp";
 import { withErrorCapture } from "@/lib/instrument";
-import { handleMessage as agentHandle } from "@/lib/whatsapp-agent";
+import {
+  handleMessage as agentHandle,
+  resolveSender,
+} from "@/lib/whatsapp-agent";
 import { checkRateLimit } from "@/lib/wa-rate-limit";
 
-const { touches, contacts, users } = schema;
+const { touches, contacts } = schema;
 
 // GET — Meta webhook verification handshake.
-export const GET = withErrorCapture("/api/whatsapp/webhook GET", async (req: NextRequest) => {
-  const verifyToken = process.env.WA_VERIFY_TOKEN;
-  if (!verifyToken) {
-    return NextResponse.json(
-      { error: "WA_VERIFY_TOKEN not set" },
-      { status: 503 },
-    );
-  }
-  const mode = req.nextUrl.searchParams.get("hub.mode");
-  const token = req.nextUrl.searchParams.get("hub.verify_token");
-  const challenge = req.nextUrl.searchParams.get("hub.challenge");
-  if (mode === "subscribe" && token === verifyToken && challenge) {
-    return new Response(challenge, { status: 200 });
-  }
-  return new Response("forbidden", { status: 403 });
-});
+export const GET = withErrorCapture(
+  "/api/whatsapp/webhook GET",
+  async (req: NextRequest) => {
+    const verifyToken = process.env.WA_VERIFY_TOKEN;
+    if (!verifyToken) {
+      return NextResponse.json(
+        { error: "WA_VERIFY_TOKEN not set" },
+        { status: 503 },
+      );
+    }
+    const mode = req.nextUrl.searchParams.get("hub.mode");
+    const token = req.nextUrl.searchParams.get("hub.verify_token");
+    const challenge = req.nextUrl.searchParams.get("hub.challenge");
+    if (mode === "subscribe" && token === verifyToken && challenge) {
+      return new Response(challenge, { status: 200 });
+    }
+    return new Response("forbidden", { status: 403 });
+  },
+);
 
 // POST — inbound message webhook.
-export const POST = withErrorCapture("/api/whatsapp/webhook POST", async (req: NextRequest) => {
-  if (!isWhatsAppConfigured()) {
-    return NextResponse.json({ error: "WA not configured" }, { status: 503 });
-  }
+export const POST = withErrorCapture(
+  "/api/whatsapp/webhook POST",
+  async (req: NextRequest) => {
+    if (!isWhatsAppConfigured()) {
+      return NextResponse.json({ error: "WA not configured" }, { status: 503 });
+    }
 
-  const ownerIdEnv = process.env.AGB_INBOUND_OWNER_USER_ID;
-  if (!ownerIdEnv) {
-    return NextResponse.json(
-      { error: "AGB_INBOUND_OWNER_USER_ID not set" },
-      { status: 503 },
-    );
-  }
+    const rawBody = await req.text();
+    const signatureOK = await verifyMetaSignature({
+      header: req.headers.get("x-hub-signature-256"),
+      rawBody,
+    });
+    if (!signatureOK) {
+      return NextResponse.json({ error: "bad signature" }, { status: 403 });
+    }
 
-  // Read the raw body so we can verify Meta's signature *before* parsing.
-  const rawBody = await req.text();
-  const signatureOK = await verifyMetaSignature({
-    header: req.headers.get("x-hub-signature-256"),
-    rawBody,
-  });
-  if (!signatureOK) {
-    return NextResponse.json({ error: "bad signature" }, { status: 403 });
-  }
-
-  // Confirm the owner exists.
-  const [owner] = await db
-    .select({ id: users.id })
-    .from(users)
-    .where(eq(users.id, ownerIdEnv))
-    .limit(1);
-  if (!owner) {
-    return NextResponse.json(
-      { error: "Inbound owner not in users table" },
-      { status: 500 },
-    );
-  }
-
-  let payload: {
-    entry?: Array<{
-      changes?: Array<{
-        value?: {
-          messages?: Array<{
-            from?: string;
-            text?: { body?: string };
-            type?: string;
-          }>;
-          contacts?: Array<{ wa_id?: string; profile?: { name?: string } }>;
-        };
+    let payload: {
+      entry?: Array<{
+        changes?: Array<{
+          value?: {
+            messages?: Array<{
+              from?: string;
+              text?: { body?: string };
+              type?: string;
+            }>;
+            contacts?: Array<{ wa_id?: string; profile?: { name?: string } }>;
+          };
+        }>;
       }>;
-    }>;
-  } | null;
-  try {
-    payload = JSON.parse(rawBody);
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
-  }
-  if (!payload) {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
-  }
+    } | null;
+    try {
+      payload = JSON.parse(rawBody);
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    }
+    if (!payload) {
+      return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    }
 
-  const useAgent = process.env.AGB_WA_AGENT === "1";
+    const useAgent = process.env.AGB_WA_AGENT === "1";
 
-  const responses: { to: string; body: string }[] = [];
-  for (const entry of payload.entry ?? []) {
-    for (const change of entry.changes ?? []) {
-      for (const msg of change.value?.messages ?? []) {
-        if (msg.type !== "text" || !msg.text?.body || !msg.from) continue;
+    const responses: { to: string; body: string }[] = [];
+    for (const entry of payload.entry ?? []) {
+      for (const change of entry.changes ?? []) {
+        for (const msg of change.value?.messages ?? []) {
+          if (msg.type !== "text" || !msg.text?.body || !msg.from) continue;
 
-        // Sliding-window rate limit (per sender phone).
-        const verdict = await checkRateLimit(msg.from);
-        if (!verdict.allowed) {
-          responses.push({
-            to: msg.from,
-            body: `Slow down — try again in ${verdict.retryAfterSeconds}s.`,
-          });
-          continue;
-        }
-
-        const reply = useAgent
-          ? (
-              await agentHandle({
-                ownerId: ownerIdEnv,
-                senderPhone: msg.from,
-                body: msg.text.body,
-              })
-            ).reply
-          : await handleCommand({
-              from: msg.from,
-              body: msg.text.body,
-              ownerId: ownerIdEnv,
+          const verdict = await checkRateLimit(msg.from);
+          if (!verdict.allowed) {
+            responses.push({
+              to: msg.from,
+              body: `Slow down — try again in ${verdict.retryAfterSeconds}s.`,
             });
-        responses.push({ to: msg.from, body: reply });
+            continue;
+          }
+
+          if (useAgent) {
+            const r = await agentHandle({
+              senderPhone: msg.from,
+              body: msg.text.body,
+            });
+            responses.push({ to: msg.from, body: r.reply });
+            continue;
+          }
+
+          // Legacy slash-command path — also workspace-aware via resolveSender.
+          const resolved = await resolveSender(msg.from);
+          if (!resolved) {
+            responses.push({
+              to: msg.from,
+              body:
+                "I don't recognize this number. Add it in /profile → WhatsApp.",
+            });
+            continue;
+          }
+          const reply = await handleCommand({
+            from: msg.from,
+            body: msg.text.body,
+            workspaceId: resolved.workspaceId,
+            userId: resolved.userId,
+          });
+          responses.push({ to: msg.from, body: reply });
+        }
       }
     }
-  }
 
-  // Fire replies (best-effort; don't block the webhook ack).
-  await Promise.allSettled(
-    responses.map((r) => sendWhatsAppText({ to: r.to, body: r.body })),
-  );
+    await Promise.allSettled(
+      responses.map((r) => sendWhatsAppText({ to: r.to, body: r.body })),
+    );
 
-  return NextResponse.json({ ok: true });
-});
+    return NextResponse.json({ ok: true });
+  },
+);
 
 async function handleCommand(opts: {
   from: string;
   body: string;
-  ownerId: string;
+  workspaceId: string;
+  userId: string;
 }): Promise<string> {
   const cmd = parseCommand(opts.body);
 
@@ -160,7 +158,7 @@ async function handleCommand(opts: {
       .from(contacts)
       .where(
         and(
-          eq(contacts.ownerId, opts.ownerId),
+          eq(contacts.workspaceId, opts.workspaceId),
           eq(contacts.archived, false),
           ilike(contacts.name, `%${cmd.query}%`),
         ),
@@ -178,7 +176,7 @@ async function handleCommand(opts: {
       .from(contacts)
       .where(
         and(
-          eq(contacts.ownerId, opts.ownerId),
+          eq(contacts.workspaceId, opts.workspaceId),
           eq(contacts.archived, false),
           or(
             ilike(contacts.name, `%${cmd.targetHint}%`),
@@ -194,7 +192,8 @@ async function handleCommand(opts: {
         contactId: contact.id,
         channel: "whatsapp",
         body: cmd.body,
-        createdBy: opts.ownerId,
+        workspaceId: opts.workspaceId,
+        createdBy: opts.userId,
       })
       .returning({ id: touches.id });
     await db
@@ -208,10 +207,9 @@ async function handleCommand(opts: {
     return "Note logging not wired yet — coming in AGB-305.";
   }
 
-  // Free-form: try to match the sender's WhatsApp number to a contact and log
-  // their message as a touch.
+  // Free-form: try to match the sender's WA number to a contact and log it.
   const senderContactId = await findContactByChannel({
-    ownerId: opts.ownerId,
+    workspaceId: opts.workspaceId,
     kind: "whatsapp",
     value: opts.from,
   });
@@ -220,7 +218,8 @@ async function handleCommand(opts: {
       contactId: senderContactId,
       channel: "whatsapp",
       body: opts.body,
-      createdBy: opts.ownerId,
+      workspaceId: opts.workspaceId,
+      createdBy: opts.userId,
     });
     await db
       .update(contacts)

@@ -110,7 +110,8 @@ export async function POST(req: NextRequest) {
       type: "person",
       relationshipType: extracted.relationship,
       organization: extracted.organization ?? null,
-      ownerId: user.id,
+      workspaceId: user.workspaceId,
+      createdBy: user.id,
     })
     .returning({ id: contacts.id });
 
@@ -119,6 +120,7 @@ export async function POST(req: NextRequest) {
     channel: "voice_memo",
     body: extracted.notes,
     transcript,
+    workspaceId: user.workspaceId,
     createdBy: user.id,
   });
 

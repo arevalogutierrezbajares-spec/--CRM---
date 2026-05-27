@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { and, eq, isNull, lte } from "drizzle-orm";
+import { and, eq, inArray, isNull, lte } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { sendWhatsAppText, isWhatsAppConfigured } from "@/lib/whatsapp";
 import { nextOccurrence, type Recur } from "@/lib/reminders";
@@ -13,11 +13,12 @@ const { reminders, users } = schema;
  *   { "path": "/api/cron/reminders", "schedule": "*​/5 * * * *" }
  *
  * For each due reminder:
- *   - send WhatsApp to the owner's notify phone (AGB_WATCHDOG_NOTIFY_PHONE)
+ *   - look up the for_user's WhatsApp phone
+ *   - send a WhatsApp ping
  *   - one-shot: set fired_at = now()
  *   - recurring: set fired_at = now() AND due_at = nextOccurrence(...)
  *
- * Auth: same Bearer $CRON_SECRET pattern as the other crons.
+ * Auth: Bearer $CRON_SECRET.
  */
 export const GET = withErrorCapture(
   "/api/cron/reminders",
@@ -30,8 +31,7 @@ export const GET = withErrorCapture(
       }
     }
 
-    const phone = process.env.AGB_WATCHDOG_NOTIFY_PHONE;
-    if (!phone || !isWhatsAppConfigured()) {
+    if (!isWhatsAppConfigured()) {
       return NextResponse.json(
         { ok: false, reason: "wa not configured" },
         { status: 503 },
@@ -49,35 +49,40 @@ export const GET = withErrorCapture(
       return NextResponse.json({ ok: true, fired: 0 });
     }
 
-    // Group by owner so we can look up tz once per owner.
-    const ownerIds = Array.from(new Set(due.map((r) => r.ownerId)));
-    const ownerRows = await db
-      .select({ id: users.id, timezone: users.timezone })
+    const userIds = Array.from(new Set(due.map((r) => r.forUserId)));
+    const userRows = await db
+      .select({
+        id: users.id,
+        timezone: users.timezone,
+        phone: users.whatsappPhone,
+      })
       .from(users)
-      .where(
-        ownerIds.length === 1
-          ? eq(users.id, ownerIds[0])
-          : // drizzle inArray would be more efficient; falling back to OR for clarity
-            eq(users.id, ownerIds[0]),
-      );
-    const tzByOwner = Object.fromEntries(
-      ownerRows.map((u) => [u.id, u.timezone]),
-    );
+      .where(inArray(users.id, userIds));
+    const byUser = Object.fromEntries(userRows.map((u) => [u.id, u]));
 
     let fired = 0;
     const failures: Array<{ id: string; error: string }> = [];
+    const skipped: Array<{ id: string; reason: string }> = [];
 
     for (const r of due) {
-      const tz = tzByOwner[r.ownerId] ?? "America/New_York";
+      const u = byUser[r.forUserId];
+      const tz = u?.timezone ?? "America/New_York";
+      const phone = u?.phone ?? null;
 
-      const body = `🔔 ${r.subject}`;
-      const sendRes = await sendWhatsAppText({ to: phone, body });
+      if (!phone) {
+        skipped.push({ id: r.id, reason: "user has no whatsapp_phone" });
+        continue;
+      }
+
+      const sendRes = await sendWhatsAppText({
+        to: phone,
+        body: `🔔 ${r.subject}`,
+      });
       if (!sendRes.ok) {
         failures.push({ id: r.id, error: sendRes.error });
         continue;
       }
 
-      // Mark fired + compute next due_at for recurring.
       const nextDue =
         r.recur === "once"
           ? null
@@ -103,6 +108,6 @@ export const GET = withErrorCapture(
       fired++;
     }
 
-    return NextResponse.json({ ok: true, fired, failures });
+    return NextResponse.json({ ok: true, fired, failures, skipped });
   },
 );

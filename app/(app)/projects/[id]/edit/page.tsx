@@ -18,13 +18,13 @@ export default async function EditProjectPage(props: { params: Params }) {
   const { id } = await props.params;
 
   const [projectRes, templatesRes, contactsRes] = await Promise.all([
-    safeRead(() => getProject({ id, ownerId: user.id }), null),
+    safeRead(() => getProject({ id, workspaceId: user.workspaceId }), null),
     safeRead(
       () => listTemplates(),
       [] as Awaited<ReturnType<typeof listTemplates>>,
     ),
     safeRead(
-      () => listContacts({ ownerId: user.id }),
+      () => listContacts({ workspaceId: user.workspaceId }),
       [] as Awaited<ReturnType<typeof listContacts>>,
     ),
   ]);

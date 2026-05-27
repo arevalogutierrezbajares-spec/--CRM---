@@ -25,13 +25,13 @@ export default async function EditMeetingPage(props: { params: Params }) {
   const { id } = await props.params;
 
   const [meetingRes, contactsRes, projectsRes] = await Promise.all([
-    safeRead(() => getMeeting({ id, ownerId: user.id }), null),
+    safeRead(() => getMeeting({ id, workspaceId: user.workspaceId }), null),
     safeRead(
-      () => listContacts({ ownerId: user.id }),
+      () => listContacts({ workspaceId: user.workspaceId }),
       [] as Awaited<ReturnType<typeof listContacts>>,
     ),
     safeRead(
-      () => listProjects({ ownerId: user.id }),
+      () => listProjects({ workspaceId: user.workspaceId }),
       [] as Awaited<ReturnType<typeof listProjects>>,
     ),
   ]);

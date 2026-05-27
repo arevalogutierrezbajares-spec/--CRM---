@@ -29,7 +29,7 @@ export default async function NewProjectPage() {
       }));
     }, [] as { id: string; name: string; description: string | null; stageCount: number }[]),
     safeRead(
-      () => listContacts({ ownerId: user.id }),
+      () => listContacts({ workspaceId: user.workspaceId }),
       [] as Awaited<ReturnType<typeof listContacts>>,
     ),
   ]);

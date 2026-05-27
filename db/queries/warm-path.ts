@@ -23,7 +23,7 @@ export type WarmPathNode = {
  * grows a `contact_introductions` join table.
  */
 export async function findWarmPath(opts: {
-  ownerId: string;
+  workspaceId: string;
   toContactId: string;
 }): Promise<WarmPathNode[] | null> {
   const owned = await db
@@ -36,7 +36,7 @@ export async function findWarmPath(opts: {
     })
     .from(contacts)
     .where(
-      and(eq(contacts.ownerId, opts.ownerId), eq(contacts.archived, false)),
+      and(eq(contacts.workspaceId, opts.workspaceId), eq(contacts.archived, false)),
     );
 
   const byId = new Map(owned.map((c) => [c.id, c]));

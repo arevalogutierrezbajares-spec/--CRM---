@@ -68,11 +68,12 @@ export async function createProject(
       status: parsed.status,
       templateId: parsed.templateId ?? null,
       currentStageId,
-      ownerId: user.id,
+      workspaceId: user.workspaceId,
       dueDate: parsed.dueDate ?? null,
       waitingOn: parsed.waitingOn ?? null,
       expectedUnblockDate: parsed.expectedUnblockDate ?? null,
       notesPath: parsed.notesPath ?? null,
+      createdBy: user.id,
     })
     .returning({ id: projects.id });
 
@@ -82,7 +83,8 @@ export async function createProject(
     await instantiateMilestonesFromTemplate({
       projectId: inserted.id,
       templateId: parsed.templateId,
-      fallbackOwnerId: user.id,
+      workspaceId: user.workspaceId,
+      createdBy: user.id,
       cofounderId: null,
     });
   }
@@ -115,7 +117,7 @@ export async function updateProject(
       notesPath: parsed.notesPath ?? null,
       updatedAt: new Date(),
     })
-    .where(and(eq(projects.id, id), eq(projects.ownerId, user.id)))
+    .where(and(eq(projects.id, id), eq(projects.workspaceId, user.workspaceId)))
     .returning({ id: projects.id });
 
   if (!updated) return { ok: false, error: "Project not found" };
@@ -174,29 +176,42 @@ export async function removeMilestone(opts: {
 export async function reassignMilestone(opts: {
   milestoneId: string;
   projectId: string;
-  toOwnerId: string;
+  toUserId: string;
 }): Promise<ActionResult> {
   const user = await requireUser();
 
-  // Verify the user owns the project (so they're allowed to reassign).
+  // Verify the project belongs to this workspace.
   const [project] = await db
     .select({ id: projects.id })
     .from(projects)
-    .where(and(eq(projects.id, opts.projectId), eq(projects.ownerId, user.id)))
+    .where(
+      and(
+        eq(projects.id, opts.projectId),
+        eq(projects.workspaceId, user.workspaceId),
+      ),
+    )
     .limit(1);
   if (!project) return { ok: false, error: "Project not found" };
 
-  const { milestones, users } = schema;
-  const [targetUser] = await db
-    .select({ id: users.id })
-    .from(users)
-    .where(eq(users.id, opts.toOwnerId))
+  // Verify the target user is a member of this workspace.
+  const { milestones, workspaceMembers } = schema;
+  const [member] = await db
+    .select({ userId: workspaceMembers.userId })
+    .from(workspaceMembers)
+    .where(
+      and(
+        eq(workspaceMembers.workspaceId, user.workspaceId),
+        eq(workspaceMembers.userId, opts.toUserId),
+      ),
+    )
     .limit(1);
-  if (!targetUser) return { ok: false, error: "Target user not found" };
+  if (!member) {
+    return { ok: false, error: "Target user is not a member of this workspace" };
+  }
 
   const [row] = await db
     .update(milestones)
-    .set({ ownerId: opts.toOwnerId })
+    .set({ assignedTo: opts.toUserId })
     .where(
       and(
         eq(milestones.id, opts.milestoneId),
@@ -219,7 +234,12 @@ export async function advanceProjectStage(opts: {
   const [project] = await db
     .select()
     .from(projects)
-    .where(and(eq(projects.id, opts.projectId), eq(projects.ownerId, user.id)))
+    .where(
+      and(
+        eq(projects.id, opts.projectId),
+        eq(projects.workspaceId, user.workspaceId),
+      ),
+    )
     .limit(1);
   if (!project) return { ok: false, error: "Project not found" };
   if (!project.templateId) return { ok: false, error: "Project has no template" };
@@ -258,7 +278,12 @@ export async function addMilestone(opts: {
   const [project] = await db
     .select({ id: projects.id })
     .from(projects)
-    .where(and(eq(projects.id, opts.projectId), eq(projects.ownerId, user.id)))
+    .where(
+      and(
+        eq(projects.id, opts.projectId),
+        eq(projects.workspaceId, user.workspaceId),
+      ),
+    )
     .limit(1);
   if (!project) return { ok: false, error: "Project not found" };
 
@@ -268,7 +293,8 @@ export async function addMilestone(opts: {
     .values({
       projectId: opts.projectId,
       title: opts.title.trim(),
-      ownerId: user.id,
+      workspaceId: user.workspaceId,
+      createdBy: user.id,
       dueDate: opts.dueDate ?? null,
     })
     .returning({ id: milestones.id });

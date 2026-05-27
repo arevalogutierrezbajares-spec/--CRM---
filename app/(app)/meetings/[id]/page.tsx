@@ -26,7 +26,7 @@ export default async function MeetingDetailPage(props: { params: Params }) {
   const user = await requireUser();
   const { id } = await props.params;
 
-  const res = await safeRead(() => getMeeting({ id, ownerId: user.id }), null);
+  const res = await safeRead(() => getMeeting({ id, workspaceId: user.workspaceId }), null);
   if (res.ok && !res.data) notFound();
   const meeting = res.data;
 

@@ -23,7 +23,7 @@ export async function generateReintro(contactId: string): Promise<ReintroResult>
     .select()
     .from(contacts)
     .where(
-      and(eq(contacts.id, contactId), eq(contacts.ownerId, user.id)),
+      and(eq(contacts.id, contactId), eq(contacts.workspaceId, user.workspaceId)),
     )
     .limit(1);
   if (!contact) return { ok: false, error: "Contact not found" };

@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
   const tag = req.nextUrl.searchParams.get("tag") ?? undefined;
 
   const rows = await listContacts({
-    ownerId: user.id,
+    workspaceId: user.workspaceId,
     archived,
     tagName: tag,
   });

@@ -7,13 +7,16 @@ export type TouchRow = typeof touches.$inferSelect;
 
 export async function listTouchesForContact(opts: {
   contactId: string;
-  ownerId: string;
+  workspaceId: string;
 }): Promise<TouchRow[]> {
   return db
     .select()
     .from(touches)
     .where(
-      and(eq(touches.contactId, opts.contactId), eq(touches.createdBy, opts.ownerId)),
+      and(
+        eq(touches.contactId, opts.contactId),
+        eq(touches.workspaceId, opts.workspaceId),
+      ),
     )
     .orderBy(desc(touches.createdAt))
     .limit(50);
@@ -21,13 +24,16 @@ export async function listTouchesForContact(opts: {
 
 export async function listTouchesForProject(opts: {
   projectId: string;
-  ownerId: string;
+  workspaceId: string;
 }): Promise<TouchRow[]> {
   return db
     .select()
     .from(touches)
     .where(
-      and(eq(touches.projectId, opts.projectId), eq(touches.createdBy, opts.ownerId)),
+      and(
+        eq(touches.projectId, opts.projectId),
+        eq(touches.workspaceId, opts.workspaceId),
+      ),
     )
     .orderBy(desc(touches.createdAt))
     .limit(50);

@@ -16,13 +16,13 @@ export type MeetingListItem = MeetingRow & {
 };
 
 export async function listMeetings(opts: {
-  ownerId: string;
+  workspaceId: string;
 }): Promise<MeetingListItem[]> {
   const rows = await db
     .select({ meeting: meetings, projectTitle: projects.title })
     .from(meetings)
     .leftJoin(projects, eq(projects.id, meetings.linkedProjectId))
-    .where(eq(meetings.createdBy, opts.ownerId))
+    .where(eq(meetings.workspaceId, opts.workspaceId))
     .orderBy(desc(meetings.scheduledAt));
   if (rows.length === 0) return [];
 
@@ -39,13 +39,13 @@ export async function listMeetings(opts: {
   }));
 }
 
-export async function getMeeting(opts: { id: string; ownerId: string }) {
+export async function getMeeting(opts: { id: string; workspaceId: string }) {
   const [row] = await db
     .select({ meeting: meetings, projectTitle: projects.title })
     .from(meetings)
     .leftJoin(projects, eq(projects.id, meetings.linkedProjectId))
     .where(
-      and(eq(meetings.id, opts.id), eq(meetings.createdBy, opts.ownerId)),
+      and(eq(meetings.id, opts.id), eq(meetings.workspaceId, opts.workspaceId)),
     )
     .limit(1);
   if (!row) return null;

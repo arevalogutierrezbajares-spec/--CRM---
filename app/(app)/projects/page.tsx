@@ -61,7 +61,7 @@ export default async function ProjectsPage(props: {
       : undefined;
 
   const res = await safeRead<ProjectListItem[]>(
-    () => listProjects({ ownerId: user.id, status: statusFilter }),
+    () => listProjects({ workspaceId: user.workspaceId, status: statusFilter }),
     [],
   );
 

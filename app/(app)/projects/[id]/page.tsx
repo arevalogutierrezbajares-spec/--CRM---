@@ -39,8 +39,8 @@ export default async function ProjectDetailPage(props: { params: Params }) {
   const { id } = await props.params;
 
   const [projectRes, touchesRes] = await Promise.all([
-    safeRead(() => getProject({ id, ownerId: user.id }), null),
-    safeRead(() => listTouchesForProject({ projectId: id, ownerId: user.id }), []),
+    safeRead(() => getProject({ id, workspaceId: user.workspaceId }), null),
+    safeRead(() => listTouchesForProject({ projectId: id, workspaceId: user.workspaceId }), []),
   ]);
 
   if (projectRes.ok && !projectRes.data) notFound();

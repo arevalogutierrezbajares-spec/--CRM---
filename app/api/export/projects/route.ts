@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
 
   const status = req.nextUrl.searchParams.get("status");
   const rows = await listProjects({
-    ownerId: user.id,
+    workspaceId: user.workspaceId,
     status:
       status === "active" || status === "waiting" || status === "done" || status === "lost"
         ? status

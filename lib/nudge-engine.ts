@@ -16,12 +16,12 @@ const { nudges } = schema;
 export type NudgeCandidate = { signature: string; line: string };
 
 export async function gatherNudgeCandidates(
-  ownerId: string,
+  workspaceId: string,
 ): Promise<NudgeCandidate[]> {
   const [due, blocked, stale] = await Promise.all([
-    listDueThisWeek(ownerId),
-    listBlockedProjects(ownerId),
-    listStaleFriends(ownerId),
+    listDueThisWeek(workspaceId),
+    listBlockedProjects(workspaceId),
+    listStaleFriends(workspaceId),
   ]);
 
   const cands: NudgeCandidate[] = [];
@@ -47,29 +47,34 @@ export async function gatherNudgeCandidates(
 }
 
 export async function filterDedupedCandidates(
-  ownerId: string,
+  forUserId: string,
   cands: NudgeCandidate[],
 ): Promise<NudgeCandidate[]> {
   if (cands.length === 0) return [];
-  // "Today" as a UTC day boundary; matches the partial index suggested in the
-  // schema doc (date_trunc('day', fired_at)) closely enough for dedup.
   const since = new Date();
   since.setUTCHours(0, 0, 0, 0);
   const recent = await db
     .select({ signature: nudges.signature })
     .from(nudges)
-    .where(and(eq(nudges.ownerId, ownerId), gte(nudges.firedAt, since)));
+    .where(and(eq(nudges.forUserId, forUserId), gte(nudges.firedAt, since)));
   const seen = new Set(recent.map((r) => r.signature));
   return cands.filter((c) => !seen.has(c.signature));
 }
 
-export async function recordNudgesFired(
-  ownerId: string,
-  cands: NudgeCandidate[],
-) {
-  if (cands.length === 0) return;
+export async function recordNudgesFired(opts: {
+  workspaceId: string;
+  forUserId: string;
+  cands: NudgeCandidate[];
+}) {
+  if (opts.cands.length === 0) return;
   await db
     .insert(nudges)
-    .values(cands.map((c) => ({ ownerId, signature: c.signature })))
+    .values(
+      opts.cands.map((c) => ({
+        workspaceId: opts.workspaceId,
+        forUserId: opts.forUserId,
+        signature: c.signature,
+      })),
+    )
     .onConflictDoNothing();
 }

@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { eq } from "drizzle-orm";
+import { db, schema } from "@/db";
 import {
   listDueThisWeek,
   listBlockedProjects,
@@ -40,10 +42,23 @@ export const GET = withErrorCapture("/api/cron/watchdogs", async (req: NextReque
     );
   }
 
+  const [u] = await db
+    .select({ workspaceId: schema.users.currentWorkspaceId })
+    .from(schema.users)
+    .where(eq(schema.users.id, ownerId))
+    .limit(1);
+  if (!u?.workspaceId) {
+    return NextResponse.json(
+      { error: "Owner has no current workspace" },
+      { status: 503 },
+    );
+  }
+  const workspaceId = u.workspaceId;
+
   const [due, blocked, stale] = await Promise.all([
-    listDueThisWeek(ownerId),
-    listBlockedProjects(ownerId),
-    listStaleFriends(ownerId),
+    listDueThisWeek(workspaceId),
+    listBlockedProjects(workspaceId),
+    listStaleFriends(workspaceId),
   ]);
 
   const overdueDue = due.filter((d) => d.isOverdue);

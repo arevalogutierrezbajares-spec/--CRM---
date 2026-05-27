@@ -22,7 +22,7 @@ export async function conversationSummary(contactId: string) {
     .select()
     .from(contacts)
     .where(
-      and(eq(contacts.id, contactId), eq(contacts.ownerId, user.id)),
+      and(eq(contacts.id, contactId), eq(contacts.workspaceId, user.workspaceId)),
     )
     .limit(1);
   if (!contact) return { ok: false as const, error: "Contact not found" };

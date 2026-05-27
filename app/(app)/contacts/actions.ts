@@ -60,7 +60,8 @@ export async function createContact(_: ActionResult | null, formData: FormData):
       type: parsed.type,
       organization: parsed.organization ?? null,
       relationshipType: parsed.relationshipType,
-      ownerId: user.id,
+      workspaceId: user.workspaceId,
+      createdBy: user.id,
       introChainFromText: parsed.introChainFromText ?? null,
       notesPath: parsed.notesPath ?? null,
     })
@@ -100,7 +101,7 @@ export async function updateContact(
       notesPath: parsed.notesPath ?? null,
       updatedAt: new Date(),
     })
-    .where(and(eq(contacts.id, id), eq(contacts.ownerId, user.id)))
+    .where(and(eq(contacts.id, id), eq(contacts.workspaceId, user.workspaceId)))
     .returning({ id: contacts.id });
 
   if (!updated) return { ok: false, error: "Contact not found" };
@@ -120,7 +121,7 @@ export async function archiveContact(id: string): Promise<ActionResult> {
   const [row] = await db
     .update(contacts)
     .set({ archived: true, updatedAt: new Date() })
-    .where(and(eq(contacts.id, id), eq(contacts.ownerId, user.id)))
+    .where(and(eq(contacts.id, id), eq(contacts.workspaceId, user.workspaceId)))
     .returning({ id: contacts.id });
   if (!row) return { ok: false, error: "Contact not found" };
   revalidatePath("/contacts");
@@ -132,7 +133,7 @@ export async function unarchiveContact(id: string): Promise<ActionResult> {
   const [row] = await db
     .update(contacts)
     .set({ archived: false, updatedAt: new Date() })
-    .where(and(eq(contacts.id, id), eq(contacts.ownerId, user.id)))
+    .where(and(eq(contacts.id, id), eq(contacts.workspaceId, user.workspaceId)))
     .returning({ id: contacts.id });
   if (!row) return { ok: false, error: "Contact not found" };
   revalidatePath("/contacts");

@@ -23,7 +23,7 @@ export type Reciprocity = {
  * `touches.direction` enum ('outbound' | 'inbound').
  */
 export async function reciprocityFor(opts: {
-  ownerId: string;
+  workspaceId: string;
   contactId: string;
 }): Promise<Reciprocity> {
   const rows = await db

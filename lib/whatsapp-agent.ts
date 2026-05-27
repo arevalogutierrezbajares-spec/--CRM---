@@ -1,10 +1,13 @@
 /**
  * WhatsApp agent loop.
  *
- * Reads conversation state from `wa_conversations`, asks Claude for a tool
- * call or final text, executes tools, persists state + activity, returns a
- * reply string. All I/O (DB + Claude) is here; the route handler in
- * /api/whatsapp/webhook only handles auth/signature/rate-limit/send.
+ * Multi-user shared-workspace model:
+ *  1. Inbound message arrives with `senderPhone`.
+ *  2. We look up users.whatsapp_phone → user.id + current_workspace_id.
+ *  3. The conversation, tool actions, and reminders are scoped to that user
+ *     within their workspace. All workspace members see the same data, but
+ *     each conversation is per-sender so two partners texting concurrently
+ *     don't collide.
  */
 
 import { and, desc, eq, gte, sql } from "drizzle-orm";
@@ -25,17 +28,74 @@ const { waConversations, waActivity, users } = schema;
 
 const MAX_TURNS = 6;
 const HISTORY_CAP = 10;
-// 30-minute idle window. Older state is dropped on the next inbound message.
 const STATE_TTL_MS = 30 * 60 * 1000;
 
 export type AgentResult =
-  | { ok: true; reply: string; toolCalls: string[]; tokensIn: number; tokensOut: number }
+  | {
+      ok: true;
+      reply: string;
+      toolCalls: string[];
+      tokensIn: number;
+      tokensOut: number;
+    }
   | { ok: false; reply: string; error: string };
 
 export type ConversationState = {
   messages: ClaudeMessage[];
   pendingIntent: unknown | null;
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sender → user → workspace resolution
+// ─────────────────────────────────────────────────────────────────────────────
+
+function normalizePhone(p: string): string {
+  return p.replace(/[^0-9]/g, "");
+}
+
+export type ResolvedSender = {
+  userId: string;
+  workspaceId: string;
+  displayName: string;
+  timezone: string;
+};
+
+/**
+ * Match an inbound WhatsApp number to a user row + their current workspace.
+ * Returns null if the sender isn't a registered user — the webhook should
+ * reject (or politely decline) at that point.
+ */
+export async function resolveSender(
+  senderPhone: string,
+): Promise<ResolvedSender | null> {
+  const normalized = normalizePhone(senderPhone);
+  if (!normalized) return null;
+
+  // Match users.whatsapp_phone exactly *or* by digits-only equality so we're
+  // tolerant of `+`, spaces, dashes on either side.
+  const candidates = await db
+    .select({
+      id: users.id,
+      displayName: users.displayName,
+      timezone: users.timezone,
+      whatsappPhone: users.whatsappPhone,
+      currentWorkspaceId: users.currentWorkspaceId,
+    })
+    .from(users)
+    .where(sql`${users.whatsappPhone} is not null`);
+
+  const u = candidates.find(
+    (c) => c.whatsappPhone && normalizePhone(c.whatsappPhone) === normalized,
+  );
+  if (!u || !u.currentWorkspaceId) return null;
+
+  return {
+    userId: u.id,
+    workspaceId: u.currentWorkspaceId,
+    displayName: u.displayName,
+    timezone: u.timezone,
+  };
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // State persistence
@@ -49,7 +109,6 @@ async function loadState(senderPhone: string): Promise<ConversationState> {
     .limit(1);
   if (!row) return { messages: [], pendingIntent: null };
 
-  // TTL: drop state older than STATE_TTL_MS.
   const age = Date.now() - new Date(row.updatedAt).getTime();
   if (age > STATE_TTL_MS) return { messages: [], pendingIntent: null };
 
@@ -61,16 +120,17 @@ async function loadState(senderPhone: string): Promise<ConversationState> {
 
 async function saveState(
   senderPhone: string,
-  ownerId: string,
+  workspaceId: string,
+  userId: string,
   state: ConversationState,
 ) {
-  // Keep only the most recent HISTORY_CAP messages.
   const trimmed = state.messages.slice(-HISTORY_CAP);
   await db
     .insert(waConversations)
     .values({
       senderPhone,
-      ownerId,
+      workspaceId,
+      userId,
       messages: trimmed,
       pendingIntent: state.pendingIntent,
       updatedAt: new Date(),
@@ -78,7 +138,8 @@ async function saveState(
     .onConflictDoUpdate({
       target: waConversations.senderPhone,
       set: {
-        ownerId,
+        workspaceId,
+        userId,
         messages: trimmed,
         pendingIntent: state.pendingIntent,
         updatedAt: new Date(),
@@ -87,7 +148,8 @@ async function saveState(
 }
 
 async function logActivity(opts: {
-  ownerId: string;
+  workspaceId: string | null;
+  userId: string | null;
   senderPhone: string;
   direction: "in" | "out" | "tool" | "reject" | "error";
   payload: unknown;
@@ -95,7 +157,8 @@ async function logActivity(opts: {
   tokensOut?: number;
 }) {
   await db.insert(waActivity).values({
-    ownerId: opts.ownerId,
+    workspaceId: opts.workspaceId,
+    userId: opts.userId,
     senderPhone: opts.senderPhone,
     direction: opts.direction,
     payload: opts.payload,
@@ -105,12 +168,12 @@ async function logActivity(opts: {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Daily token budget
+// Daily token budget — applied per-workspace.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const DEFAULT_DAILY_TOKEN_CAP = 300_000;
 
-async function tokenSpendToday(ownerId: string): Promise<number> {
+async function tokenSpendToday(workspaceId: string): Promise<number> {
   const since = new Date();
   since.setHours(0, 0, 0, 0);
   const rows = await db
@@ -120,7 +183,10 @@ async function tokenSpendToday(ownerId: string): Promise<number> {
     })
     .from(waActivity)
     .where(
-      and(eq(waActivity.ownerId, ownerId), gte(waActivity.createdAt, since)),
+      and(
+        eq(waActivity.workspaceId, workspaceId),
+        gte(waActivity.createdAt, since),
+      ),
     );
   const row = rows[0] ?? { sumIn: 0, sumOut: 0 };
   return Number(row.sumIn) + Number(row.sumOut);
@@ -138,8 +204,8 @@ function dailyCap(): number {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function systemPrompt(opts: {
-  ownerName: string;
-  ownerTimezone: string;
+  userName: string;
+  userTimezone: string;
   now: Date;
   pendingIntent: unknown | null;
 }): string {
@@ -148,16 +214,19 @@ function systemPrompt(opts: {
     year: "numeric",
     month: "long",
     day: "numeric",
-    timeZone: opts.ownerTimezone,
+    timeZone: opts.userTimezone,
   });
   return [
-    `You are a chief-of-staff assistant for ${opts.ownerName} embedded in their CRM.`,
-    `Today is ${today}. Their timezone is ${opts.ownerTimezone}.`,
+    `You are a chief-of-staff assistant for ${opts.userName} embedded in their shared workspace CRM.`,
+    `Today is ${today}. Their timezone is ${opts.userTimezone}.`,
+    "",
+    "All workspace members share the same contacts, projects, milestones, meetings, and touches. " +
+      "Reminders, however, are personal to the texter.",
     "",
     "Capabilities:",
     "- Log touches (interactions) on contacts",
     "- Create contacts (only after find_contact returns no match AND the user confirmed creation)",
-    "- Schedule reminders (one-shot, daily, weekly, monthly)",
+    "- Schedule personal reminders (one-shot, daily, weekly, monthly)",
     "- Mark milestones done (DESTRUCTIVE — confirm with user first)",
     "- Summarize status (overdue / blocked / stale)",
     "- Brief a contact's recent touches",
@@ -165,8 +234,8 @@ function systemPrompt(opts: {
     "Style:",
     "- Reply in plain text, 1–3 sentences usually. WhatsApp doesn't render markdown.",
     "- For ambiguous names ('Marta'), call find_contact first; if 2+ matches, ask which one.",
-    "- For dates: ALWAYS resolve to a full ISO datetime with the user's timezone offset before calling schedule_reminder. Today is the reference date.",
-    "- For destructive ops (mark done, cancel reminder): preview the action and require explicit confirmation in the next user message.",
+    "- For dates: ALWAYS resolve to a full ISO datetime with the user's timezone offset before calling schedule_reminder.",
+    "- For destructive ops (mark done, cancel reminder): preview and require explicit confirmation in the next message.",
     "- Never invent contact_ids, project_ids, or milestone_ids. Always look them up first.",
     "",
     "When you have enough info to act, call the tool. Don't narrate.",
@@ -183,7 +252,6 @@ function systemPrompt(opts: {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function handleMessage(opts: {
-  ownerId: string;
   senderPhone: string;
   body: string;
 }): Promise<AgentResult> {
@@ -195,21 +263,29 @@ export async function handleMessage(opts: {
     };
   }
 
-  // Resolve owner details for tz + greeting.
-  const [owner] = await db
-    .select({ id: users.id, displayName: users.displayName, timezone: users.timezone })
-    .from(users)
-    .where(eq(users.id, opts.ownerId))
-    .limit(1);
-  if (!owner) {
-    return { ok: false, reply: "User not found.", error: "owner missing" };
+  const resolved = await resolveSender(opts.senderPhone);
+  if (!resolved) {
+    await logActivity({
+      workspaceId: null,
+      userId: null,
+      senderPhone: opts.senderPhone,
+      direction: "reject",
+      payload: { reason: "unknown-sender" },
+    });
+    return {
+      ok: false,
+      reply:
+        "I don't recognize this number. Ask the workspace owner to add it to your profile in the CRM (/profile → WhatsApp).",
+      error: "unknown-sender",
+    };
   }
 
-  // Daily token cap
-  const spent = await tokenSpendToday(opts.ownerId);
+  // Daily token cap (per workspace).
+  const spent = await tokenSpendToday(resolved.workspaceId);
   if (spent > dailyCap()) {
     await logActivity({
-      ownerId: opts.ownerId,
+      workspaceId: resolved.workspaceId,
+      userId: resolved.userId,
       senderPhone: opts.senderPhone,
       direction: "reject",
       payload: { reason: "daily-token-cap", spent, cap: dailyCap() },
@@ -217,25 +293,26 @@ export async function handleMessage(opts: {
     return {
       ok: false,
       reply:
-        "Daily AI budget reached. Try again tomorrow or use slash commands (/log /find /help).",
+        "Daily AI budget reached for this workspace. Try again tomorrow or use slash commands (/log /find /help).",
       error: "daily-token-cap",
     };
   }
 
   const now = new Date();
   const state = await loadState(opts.senderPhone);
-  // Append the inbound user message.
   state.messages.push({ role: "user", content: opts.body });
   await logActivity({
-    ownerId: opts.ownerId,
+    workspaceId: resolved.workspaceId,
+    userId: resolved.userId,
     senderPhone: opts.senderPhone,
     direction: "in",
     payload: { body: opts.body },
   });
 
   const ctx: ToolContext = {
-    ownerId: opts.ownerId,
-    ownerTimezone: owner.timezone,
+    workspaceId: resolved.workspaceId,
+    userId: resolved.userId,
+    ownerTimezone: resolved.timezone,
     now,
   };
 
@@ -248,8 +325,8 @@ export async function handleMessage(opts: {
   for (let turn = 0; turn < MAX_TURNS; turn++) {
     const result = await claudeWithTools({
       system: systemPrompt({
-        ownerName: owner.displayName,
-        ownerTimezone: owner.timezone,
+        userName: resolved.displayName,
+        userTimezone: resolved.timezone,
         now,
         pendingIntent,
       }),
@@ -260,7 +337,8 @@ export async function handleMessage(opts: {
 
     if (!result.ok) {
       await logActivity({
-        ownerId: opts.ownerId,
+        workspaceId: resolved.workspaceId,
+        userId: resolved.userId,
         senderPhone: opts.senderPhone,
         direction: "error",
         payload: { stage: "claude", error: result.error },
@@ -275,9 +353,12 @@ export async function handleMessage(opts: {
     totalIn += result.usage.input_tokens;
     totalOut += result.usage.output_tokens;
 
-    // Collect assistant content + walk through tool_use blocks.
     const assistantContent: ClaudeMessageContent[] = [];
-    const toolUses: Array<{ id: string; name: string; input: Record<string, unknown> }> = [];
+    const toolUses: Array<{
+      id: string;
+      name: string;
+      input: Record<string, unknown>;
+    }> = [];
     let textOut = "";
 
     for (const block of result.content) {
@@ -299,7 +380,6 @@ export async function handleMessage(opts: {
 
     if (result.stopReason === "end_turn") {
       replyText = textOut.trim() || "Done.";
-      // Clear pending intent on a successful final turn.
       pendingIntent = null;
       break;
     }
@@ -310,7 +390,8 @@ export async function handleMessage(opts: {
         toolCalls.push(call.name);
         const r = await executeTool(call.name, call.input, ctx);
         await logActivity({
-          ownerId: opts.ownerId,
+          workspaceId: resolved.workspaceId,
+          userId: resolved.userId,
           senderPhone: opts.senderPhone,
           direction: "tool",
           payload: { name: call.name, input: call.input, result: r },
@@ -326,8 +407,8 @@ export async function handleMessage(opts: {
       continue;
     }
 
-    // Stop reason was max_tokens / stop_sequence with no tool call — bail out.
-    replyText = textOut.trim() || "I'm not sure how to handle that. Try /help.";
+    replyText =
+      textOut.trim() || "I'm not sure how to handle that. Try /help.";
     break;
   }
 
@@ -335,12 +416,13 @@ export async function handleMessage(opts: {
     replyText = "I'm having trouble completing that. Try rephrasing.";
   }
 
-  await saveState(opts.senderPhone, opts.ownerId, {
+  await saveState(opts.senderPhone, resolved.workspaceId, resolved.userId, {
     messages: state.messages,
     pendingIntent,
   });
   await logActivity({
-    ownerId: opts.ownerId,
+    workspaceId: resolved.workspaceId,
+    userId: resolved.userId,
     senderPhone: opts.senderPhone,
     direction: "out",
     payload: { body: replyText, toolCalls },

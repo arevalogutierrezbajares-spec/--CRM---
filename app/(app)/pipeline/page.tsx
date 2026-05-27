@@ -30,7 +30,7 @@ export default async function PipelinePage(props: {
 
   const boardRes = selectedId
     ? await safeRead(
-        () => getKanban({ ownerId: user.id, templateId: selectedId }),
+        () => getKanban({ workspaceId: user.workspaceId, templateId: selectedId }),
         null,
       )
     : { ok: true as const, data: null };

@@ -1,13 +1,9 @@
 /**
  * WhatsApp agent tool catalog.
  *
- * Each entry has:
- *   - definition: the JSON Schema Claude sees
- *   - execute: a server-side function that runs the action
- *
  * Tools are pure functions over the DB. They never read process.env directly
- * (the caller passes ownerId) and they never call WhatsApp themselves — the
- * agent loop owns I/O. This keeps them trivial to unit-test.
+ * (the caller passes workspaceId + userId) and they never call WhatsApp
+ * themselves — the agent loop owns I/O. Trivial to unit-test.
  */
 
 import { and, asc, desc, eq, ilike, lt, lte, or, sql } from "drizzle-orm";
@@ -25,9 +21,10 @@ export type ToolResult =
   | { ok: false; error: string };
 
 export type ToolContext = {
-  ownerId: string;
-  ownerTimezone: string; // IANA, e.g. "America/New_York"
-  now: Date; // pinned to a single timestamp per agent turn
+  workspaceId: string;
+  userId: string;
+  ownerTimezone: string;
+  now: Date;
 };
 
 type ToolExecutor = (
@@ -46,7 +43,14 @@ function safeStr(v: unknown, max = 1000): string {
   return v.slice(0, max).trim();
 }
 
-function pickContactSummary(rows: Array<{ id: string; name: string; relationshipType: string; organization: string | null }>) {
+function pickContactSummary(
+  rows: Array<{
+    id: string;
+    name: string;
+    relationshipType: string;
+    organization: string | null;
+  }>,
+) {
   return rows.map((r) => ({
     id: r.id,
     name: r.name,
@@ -65,7 +69,7 @@ const TOOLS: Record<string, ToolEntry> = {
     definition: {
       name: "find_contact",
       description:
-        "Fuzzy-search the user's contacts by name, organization, or channel value. " +
+        "Fuzzy-search the workspace's contacts by name, organization, or channel value. " +
         "Returns up to 5 matches. Use this BEFORE any tool that needs a contact_id.",
       input_schema: {
         type: "object",
@@ -82,7 +86,6 @@ const TOOLS: Record<string, ToolEntry> = {
       const q = safeStr(input.query, 120);
       if (!q) return { ok: false, error: "query is required" };
       const like = `%${q}%`;
-      // Name + org match (direct) + channel value match (join)
       const direct = await db
         .select({
           id: contacts.id,
@@ -93,7 +96,7 @@ const TOOLS: Record<string, ToolEntry> = {
         .from(contacts)
         .where(
           and(
-            eq(contacts.ownerId, ctx.ownerId),
+            eq(contacts.workspaceId, ctx.workspaceId),
             eq(contacts.archived, false),
             or(ilike(contacts.name, like), ilike(contacts.organization, like)),
           ),
@@ -130,7 +133,8 @@ const TOOLS: Record<string, ToolEntry> = {
           organization: { type: "string" },
           intro: {
             type: "string",
-            description: "Free-text intro chain — who introduced you, where you met.",
+            description:
+              "Free-text intro chain — who introduced you, where you met.",
           },
         },
         required: ["name"],
@@ -145,11 +149,15 @@ const TOOLS: Record<string, ToolEntry> = {
           name,
           type: (input.type as "person" | "org") ?? "person",
           relationshipType:
-            (input.relationship as "friend" | "lead" | "partner" | "prospect") ??
-            "prospect",
+            (input.relationship as
+              | "friend"
+              | "lead"
+              | "partner"
+              | "prospect") ?? "prospect",
           organization: safeStr(input.organization) || null,
           introChainFromText: safeStr(input.intro) || null,
-          ownerId: ctx.ownerId,
+          workspaceId: ctx.workspaceId,
+          createdBy: ctx.userId,
         })
         .returning({ id: contacts.id, name: contacts.name });
       return {
@@ -195,11 +203,15 @@ const TOOLS: Record<string, ToolEntry> = {
       if (!contactId || !body)
         return { ok: false, error: "contact_id and body are required" };
 
-      // Ownership check
       const [c] = await db
         .select({ id: contacts.id, name: contacts.name })
         .from(contacts)
-        .where(and(eq(contacts.id, contactId), eq(contacts.ownerId, ctx.ownerId)))
+        .where(
+          and(
+            eq(contacts.id, contactId),
+            eq(contacts.workspaceId, ctx.workspaceId),
+          ),
+        )
         .limit(1);
       if (!c) return { ok: false, error: "Contact not found" };
 
@@ -218,7 +230,8 @@ const TOOLS: Record<string, ToolEntry> = {
               | "voice_memo"
               | "obsidian") ?? "manual",
           projectId: (safeStr(input.project_id) || null) as string | null,
-          createdBy: ctx.ownerId,
+          workspaceId: ctx.workspaceId,
+          createdBy: ctx.userId,
         })
         .returning({ id: touches.id });
 
@@ -252,11 +265,20 @@ const TOOLS: Record<string, ToolEntry> = {
       const [c] = await db
         .select()
         .from(contacts)
-        .where(and(eq(contacts.id, contactId), eq(contacts.ownerId, ctx.ownerId)))
+        .where(
+          and(
+            eq(contacts.id, contactId),
+            eq(contacts.workspaceId, ctx.workspaceId),
+          ),
+        )
         .limit(1);
       if (!c) return { ok: false, error: "Contact not found" };
       const recent = await db
-        .select({ channel: touches.channel, body: touches.body, createdAt: touches.createdAt })
+        .select({
+          channel: touches.channel,
+          body: touches.body,
+          createdAt: touches.createdAt,
+        })
         .from(touches)
         .where(eq(touches.contactId, contactId))
         .orderBy(desc(touches.createdAt))
@@ -302,7 +324,7 @@ const TOOLS: Record<string, ToolEntry> = {
         .from(projects)
         .where(
           and(
-            eq(projects.ownerId, ctx.ownerId),
+            eq(projects.workspaceId, ctx.workspaceId),
             ilike(projects.title, `%${q}%`),
           ),
         )
@@ -326,18 +348,26 @@ const TOOLS: Record<string, ToolEntry> = {
     },
     async execute(input, ctx) {
       const id = safeStr(input.milestone_id);
-      // Ownership via the milestone's owner_id
       const [m] = await db
         .select({ id: milestones.id, title: milestones.title })
         .from(milestones)
-        .where(and(eq(milestones.id, id), eq(milestones.ownerId, ctx.ownerId)))
+        .where(
+          and(
+            eq(milestones.id, id),
+            eq(milestones.workspaceId, ctx.workspaceId),
+          ),
+        )
         .limit(1);
       if (!m) return { ok: false, error: "Milestone not found" };
       await db
         .update(milestones)
         .set({ status: "done", completedAt: ctx.now })
         .where(eq(milestones.id, id));
-      return { ok: true, data: { id, title: m.title }, speak: `Marked "${m.title}" done.` };
+      return {
+        ok: true,
+        data: { id, title: m.title },
+        speak: `Marked "${m.title}" done.`,
+      };
     },
   },
 
@@ -376,7 +406,7 @@ const TOOLS: Record<string, ToolEntry> = {
           .innerJoin(projects, eq(projects.id, milestones.projectId))
           .where(
             and(
-              eq(projects.ownerId, ctx.ownerId),
+              eq(projects.workspaceId, ctx.workspaceId),
               sql`${milestones.status} <> 'done'`,
               sql`${milestones.dueDate} IS NOT NULL`,
               lt(milestones.dueDate, today),
@@ -387,10 +417,17 @@ const TOOLS: Record<string, ToolEntry> = {
       }
       if (scope === "all" || scope === "blocked") {
         const blocked = await db
-          .select({ id: projects.id, title: projects.title, waitingOn: projects.waitingOn })
+          .select({
+            id: projects.id,
+            title: projects.title,
+            waitingOn: projects.waitingOn,
+          })
           .from(projects)
           .where(
-            and(eq(projects.ownerId, ctx.ownerId), eq(projects.status, "waiting")),
+            and(
+              eq(projects.workspaceId, ctx.workspaceId),
+              eq(projects.status, "waiting"),
+            ),
           )
           .limit(10);
         result.blocked = blocked;
@@ -398,14 +435,21 @@ const TOOLS: Record<string, ToolEntry> = {
       if (scope === "all" || scope === "stale") {
         const threshold = new Date(ctx.now.getTime() - 60 * 86400000);
         const stale = await db
-          .select({ id: contacts.id, name: contacts.name, lastTouchAt: contacts.lastTouchAt })
+          .select({
+            id: contacts.id,
+            name: contacts.name,
+            lastTouchAt: contacts.lastTouchAt,
+          })
           .from(contacts)
           .where(
             and(
-              eq(contacts.ownerId, ctx.ownerId),
+              eq(contacts.workspaceId, ctx.workspaceId),
               eq(contacts.archived, false),
               eq(contacts.relationshipType, "friend"),
-              or(sql`${contacts.lastTouchAt} IS NULL`, lt(contacts.lastTouchAt, threshold)),
+              or(
+                sql`${contacts.lastTouchAt} IS NULL`,
+                lt(contacts.lastTouchAt, threshold),
+              ),
             ),
           )
           .limit(10);
@@ -420,7 +464,7 @@ const TOOLS: Record<string, ToolEntry> = {
     definition: {
       name: "schedule_reminder",
       description:
-        "Schedule a reminder. Pass a fully-resolved ISO datetime in due_at_iso. " +
+        "Schedule a reminder for the texting user. Pass a fully-resolved ISO datetime in due_at_iso. " +
         "Recur defaults to 'once'. For weekly recur, set recur_day=0..6 (0=Sun). " +
         "For monthly recur, set recur_day=1..31.",
       input_schema: {
@@ -456,7 +500,8 @@ const TOOLS: Record<string, ToolEntry> = {
       if (Number.isNaN(dueAt.getTime()))
         return { ok: false, error: `Couldn't parse due_at_iso="${iso}"` };
 
-      const recur = (input.recur as "once" | "daily" | "weekly" | "monthly") ?? "once";
+      const recur =
+        (input.recur as "once" | "daily" | "weekly" | "monthly") ?? "once";
       const recurTimeRaw = safeStr(input.recur_time_hhmm, 5);
       const recurTime =
         recurTimeRaw && /^\d{2}:\d{2}$/.test(recurTimeRaw)
@@ -466,12 +511,16 @@ const TOOLS: Record<string, ToolEntry> = {
       const [row] = await db
         .insert(reminders)
         .values({
-          ownerId: ctx.ownerId,
+          workspaceId: ctx.workspaceId,
+          forUserId: ctx.userId,
+          createdBy: ctx.userId,
           subject,
           dueAt,
           recur,
           recurDay:
-            typeof input.recur_day === "number" ? (input.recur_day as number) : null,
+            typeof input.recur_day === "number"
+              ? (input.recur_day as number)
+              : null,
           recurTime,
           sourceContactId: safeStr(input.source_contact_id) || null,
           sourceProjectId: safeStr(input.source_project_id) || null,
@@ -501,7 +550,8 @@ const TOOLS: Record<string, ToolEntry> = {
   list_reminders: {
     definition: {
       name: "list_reminders",
-      description: "Return upcoming reminders. Default scope is the next 7 days.",
+      description:
+        "Return your upcoming reminders. Default scope is the next 7 days.",
       input_schema: {
         type: "object",
         properties: {
@@ -526,7 +576,7 @@ const TOOLS: Record<string, ToolEntry> = {
         .from(reminders)
         .where(
           and(
-            eq(reminders.ownerId, ctx.ownerId),
+            eq(reminders.forUserId, ctx.userId),
             sql`${reminders.firedAt} IS NULL`,
             lte(reminders.dueAt, until),
           ),
@@ -543,7 +593,7 @@ const TOOLS: Record<string, ToolEntry> = {
     definition: {
       name: "cancel_reminder",
       description:
-        "Cancel an upcoming reminder by id. The id comes from list_reminders.",
+        "Cancel one of your upcoming reminders by id. The id comes from list_reminders.",
       input_schema: {
         type: "object",
         properties: { id: { type: "string" } },
@@ -554,7 +604,7 @@ const TOOLS: Record<string, ToolEntry> = {
       const id = safeStr(input.id);
       const [row] = await db
         .delete(reminders)
-        .where(and(eq(reminders.id, id), eq(reminders.ownerId, ctx.ownerId)))
+        .where(and(eq(reminders.id, id), eq(reminders.forUserId, ctx.userId)))
         .returning({ id: reminders.id, subject: reminders.subject });
       if (!row) return { ok: false, error: "Reminder not found" };
       return { ok: true, data: row, speak: `Cancelled "${row.subject}".` };
@@ -583,5 +633,4 @@ export async function executeTool(
   }
 }
 
-// Used by tests to assert the catalog shape.
 export const TOOL_NAMES = Object.keys(TOOLS);

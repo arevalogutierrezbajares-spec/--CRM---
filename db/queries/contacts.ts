@@ -13,7 +13,7 @@ export type ContactListItem = ContactRow & {
 };
 
 export async function listContacts(opts: {
-  ownerId: string;
+  workspaceId: string;
   archived?: boolean;
   tagName?: string;
 }): Promise<ContactListItem[]> {
@@ -28,7 +28,7 @@ export async function listContacts(opts: {
       .innerJoin(tags, eq(tags.id, contactTags.tagId))
       .where(
         and(
-          eq(contacts.ownerId, opts.ownerId),
+          eq(contacts.workspaceId, opts.workspaceId),
           eq(contacts.archived, archived),
           eq(tags.name, opts.tagName),
         ),
@@ -40,7 +40,7 @@ export async function listContacts(opts: {
       .select()
       .from(contacts)
       .where(
-        and(eq(contacts.ownerId, opts.ownerId), eq(contacts.archived, archived)),
+        and(eq(contacts.workspaceId, opts.workspaceId), eq(contacts.archived, archived)),
       )
       .orderBy(desc(contacts.updatedAt));
   }
@@ -67,11 +67,11 @@ export async function listContacts(opts: {
   }));
 }
 
-export async function getContact(opts: { id: string; ownerId: string }) {
+export async function getContact(opts: { id: string; workspaceId: string }) {
   const [row] = await db
     .select()
     .from(contacts)
-    .where(and(eq(contacts.id, opts.id), eq(contacts.ownerId, opts.ownerId)))
+    .where(and(eq(contacts.id, opts.id), eq(contacts.workspaceId, opts.workspaceId)))
     .limit(1);
   if (!row) return null;
   const [channels, ctags] = await Promise.all([

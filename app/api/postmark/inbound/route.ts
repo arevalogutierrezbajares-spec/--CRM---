@@ -41,9 +41,9 @@ export const POST = withErrorCapture("/api/postmark/inbound", async (req: NextRe
     );
   }
 
-  // Verify owner exists.
+  // Resolve owner's current workspace.
   const [owner] = await db
-    .select({ id: users.id })
+    .select({ id: users.id, workspaceId: users.currentWorkspaceId })
     .from(users)
     .where(eq(users.id, ownerIdEnv))
     .limit(1);
@@ -53,6 +53,13 @@ export const POST = withErrorCapture("/api/postmark/inbound", async (req: NextRe
       { status: 500 },
     );
   }
+  if (!owner.workspaceId) {
+    return NextResponse.json(
+      { error: "Inbound owner has no current workspace" },
+      { status: 500 },
+    );
+  }
+  const workspaceId = owner.workspaceId;
 
   const payload = (await req.json().catch(() => null)) as
     | { FromFull?: { Email?: string }; From?: string; Subject?: string; TextBody?: string; StrippedTextReply?: string; MessageID?: string }
@@ -70,7 +77,7 @@ export const POST = withErrorCapture("/api/postmark/inbound", async (req: NextRe
   }
 
   const contactId = await findContactByEmail({
-    ownerId: ownerIdEnv,
+    workspaceId,
     email: fromEmail,
   });
   if (!contactId) {
@@ -124,6 +131,7 @@ export const POST = withErrorCapture("/api/postmark/inbound", async (req: NextRe
       contactId,
       channel: "email",
       body: body.slice(0, 8000),
+      workspaceId,
       createdBy: ownerIdEnv,
     })
     .returning({ id: touches.id });

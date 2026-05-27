@@ -45,6 +45,7 @@ export async function createTouch(input: unknown): Promise<TouchActionResult> {
       projectId: projectId ?? null,
       channel,
       body,
+      workspaceId: user.workspaceId,
       createdBy: user.id,
     })
     .returning({ id: touches.id });

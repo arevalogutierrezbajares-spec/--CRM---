@@ -8,7 +8,7 @@ const { contacts, contactChannels } = schema;
  * to a contact owned by the given user. Returns the contact id or null.
  */
 export async function findContactByChannel(opts: {
-  ownerId: string;
+  workspaceId: string;
   kind: "email" | "phone" | "whatsapp" | "instagram" | "domain";
   value: string;
 }): Promise<string | null> {
@@ -21,7 +21,7 @@ export async function findContactByChannel(opts: {
     .innerJoin(contacts, eq(contacts.id, contactChannels.contactId))
     .where(
       and(
-        eq(contacts.ownerId, opts.ownerId),
+        eq(contacts.workspaceId, opts.workspaceId),
         eq(contactChannels.kind, opts.kind),
         ilike(contactChannels.value, normalized),
       ),
@@ -35,11 +35,11 @@ export async function findContactByChannel(opts: {
  * (helps when someone emails from a new address but the org matches).
  */
 export async function findContactByEmail(opts: {
-  ownerId: string;
+  workspaceId: string;
   email: string;
 }): Promise<string | null> {
   const exact = await findContactByChannel({
-    ownerId: opts.ownerId,
+    workspaceId: opts.workspaceId,
     kind: "email",
     value: opts.email,
   });
@@ -54,7 +54,7 @@ export async function findContactByEmail(opts: {
     .innerJoin(contacts, eq(contacts.id, contactChannels.contactId))
     .where(
       and(
-        eq(contacts.ownerId, opts.ownerId),
+        eq(contacts.workspaceId, opts.workspaceId),
         or(
           and(
             eq(contactChannels.kind, "domain"),

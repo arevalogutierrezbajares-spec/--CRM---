@@ -17,7 +17,7 @@ export default async function NetworkPage(props: { searchParams: SearchParams })
   const lens: NetworkLens = sp.lens === "friend" ? "friend" : "all";
 
   const res = await safeRead(
-    () => buildNetwork({ ownerId: user.id, lens }),
+    () => buildNetwork({ workspaceId: user.workspaceId, lens }),
     [] as Awaited<ReturnType<typeof buildNetwork>>,
   );
 

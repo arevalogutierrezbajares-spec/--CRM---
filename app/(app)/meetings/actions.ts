@@ -35,7 +35,8 @@ async function syncAttendees(meetingId: string, contactIds: string[]) {
 async function bulkTouchForAttendees(opts: {
   meetingId: string;
   contactIds: string[];
-  ownerId: string;
+  workspaceId: string;
+  createdBy: string;
   body: string;
   projectId: string | null;
 }) {
@@ -47,7 +48,8 @@ async function bulkTouchForAttendees(opts: {
       projectId: opts.projectId,
       channel: "meeting" as const,
       body: opts.body,
-      createdBy: opts.ownerId,
+      workspaceId: opts.workspaceId,
+      createdBy: opts.createdBy,
     })),
   );
   const now = new Date();
@@ -61,7 +63,8 @@ async function bulkTouchForAttendees(opts: {
 
 async function createMilestonesFromActionItems(opts: {
   projectId: string;
-  ownerId: string;
+  workspaceId: string;
+  createdBy: string;
   meetingId: string;
   items: string[];
 }) {
@@ -70,7 +73,8 @@ async function createMilestonesFromActionItems(opts: {
     opts.items.map((title) => ({
       projectId: opts.projectId,
       title,
-      ownerId: opts.ownerId,
+      workspaceId: opts.workspaceId,
+      createdBy: opts.createdBy,
       sourceMeetingId: opts.meetingId,
     })),
   );
@@ -103,6 +107,7 @@ export async function createMeeting(
       minutes: parsed.minutes ?? null,
       metAtTag: parsed.metAtTag ?? null,
       linkedProjectId: parsed.linkedProjectId ?? null,
+      workspaceId: user.workspaceId,
       createdBy: user.id,
     })
     .returning({ id: meetings.id });
@@ -114,7 +119,8 @@ export async function createMeeting(
     await bulkTouchForAttendees({
       meetingId: inserted.id,
       contactIds: parsed.attendeeIds,
-      ownerId: user.id,
+      workspaceId: user.workspaceId,
+      createdBy: user.id,
       body: `Meeting: ${parsed.title}${parsed.metAtTag ? ` · ${parsed.metAtTag}` : ""}`,
       projectId: parsed.linkedProjectId ?? null,
     });
@@ -125,7 +131,8 @@ export async function createMeeting(
   if (items.length > 0 && parsed.linkedProjectId) {
     await createMilestonesFromActionItems({
       projectId: parsed.linkedProjectId,
-      ownerId: user.id,
+      workspaceId: user.workspaceId,
+      createdBy: user.id,
       meetingId: inserted.id,
       items,
     });
@@ -165,7 +172,7 @@ export async function updateMeeting(
       metAtTag: parsed.metAtTag ?? null,
       linkedProjectId: parsed.linkedProjectId ?? null,
     })
-    .where(and(eq(meetings.id, id), eq(meetings.createdBy, user.id)))
+    .where(and(eq(meetings.id, id), eq(meetings.workspaceId, user.workspaceId)))
     .returning({ id: meetings.id });
 
   if (!updated) return { ok: false, error: "Meeting not found" };
@@ -182,7 +189,7 @@ export async function generateMilestonesFromMeeting(meetingId: string) {
   const [m] = await db
     .select()
     .from(meetings)
-    .where(and(eq(meetings.id, meetingId), eq(meetings.createdBy, user.id)))
+    .where(and(eq(meetings.id, meetingId), eq(meetings.workspaceId, user.workspaceId)))
     .limit(1);
   if (!m) return { ok: false as const, error: "Meeting not found" };
   if (!m.linkedProjectId)
@@ -194,7 +201,8 @@ export async function generateMilestonesFromMeeting(meetingId: string) {
 
   await createMilestonesFromActionItems({
     projectId: m.linkedProjectId,
-    ownerId: user.id,
+    workspaceId: user.workspaceId,
+    createdBy: user.id,
     meetingId: m.id,
     items,
   });

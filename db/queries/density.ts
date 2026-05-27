@@ -14,7 +14,7 @@ export type DensityCell = {
  * created on that day.
  */
 export async function touchDensity(opts: {
-  ownerId: string;
+  workspaceId: string;
   days?: number;
 }): Promise<DensityCell[]> {
   const days = opts.days ?? 90;
@@ -26,7 +26,7 @@ export async function touchDensity(opts: {
     .select({ createdAt: touches.createdAt })
     .from(touches)
     .where(
-      and(eq(touches.createdBy, opts.ownerId), gte(touches.createdAt, since)),
+      and(eq(touches.workspaceId, opts.workspaceId), gte(touches.createdAt, since)),
     );
 
   const counts = new Map<string, number>();

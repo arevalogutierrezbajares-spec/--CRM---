@@ -19,7 +19,7 @@ const typeLabel: Record<"one_on_one" | "group" | "event" | "call", string> = {
 
 export default async function MeetingsPage() {
   const user = await requireUser();
-  const res = await safeRead(() => listMeetings({ ownerId: user.id }), []);
+  const res = await safeRead(() => listMeetings({ workspaceId: user.workspaceId }), []);
 
   return (
     <>

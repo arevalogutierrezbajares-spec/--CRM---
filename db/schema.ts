@@ -10,6 +10,7 @@ import {
   jsonb,
   time,
   primaryKey,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 
@@ -83,9 +84,14 @@ export const waDirection = pgEnum("wa_direction", [
   "reject",
   "error",
 ]);
+export const workspaceRole = pgEnum("workspace_role", [
+  "owner",
+  "admin",
+  "member",
+]);
 
 // ─────────────────────────────────────────────────────────────────────────────
-// USERS (mirrors auth.users)
+// USERS (mirrors auth.users) — `whatsapp_phone` enables inbound bot routing.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const users = pgTable("users", {
@@ -93,17 +99,89 @@ export const users = pgTable("users", {
   displayName: text("display_name").notNull(),
   email: text("email").notNull().unique(),
   timezone: text("timezone").notNull().default("America/New_York"),
+  // E.164 without leading + (e.g. "15551234567"). Used by the WhatsApp webhook
+  // to identify the sender. NULL = user can't text the bot yet.
+  whatsappPhone: text("whatsapp_phone").unique(),
+  // Default workspace shown after sign-in. Null only briefly after sign-up,
+  // before the first workspace is auto-created.
+  currentWorkspaceId: uuid("current_workspace_id"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CONTACTS
+// WORKSPACES — the unit of sharing. A workspace is a team of users that all
+// see the same contacts / projects / milestones / touches / meetings.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const workspaces = pgTable("workspaces", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  createdBy: uuid("created_by")
+    .notNull()
+    .references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const workspaceMembers = pgTable(
+  "workspace_members",
+  {
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    role: workspaceRole("role").notNull().default("member"),
+    joinedAt: timestamp("joined_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.workspaceId, t.userId] }),
+  }),
+);
+
+export const workspaceInvites = pgTable(
+  "workspace_invites",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    email: text("email").notNull(),
+    role: workspaceRole("role").notNull().default("member"),
+    invitedBy: uuid("invited_by")
+      .notNull()
+      .references(() => users.id),
+    token: text("token").notNull().unique(),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    uniqWorkspaceEmail: uniqueIndex("workspace_invites_workspace_email_uniq").on(
+      t.workspaceId,
+      t.email,
+    ),
+  }),
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CONTACTS — every owned row carries workspace_id (gates access) + created_by
+// (audit / "who added this").
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const contacts = pgTable("contacts", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   type: contactType("type").notNull().default("person"),
   organization: text("organization"),
@@ -111,7 +189,7 @@ export const contacts = pgTable("contacts", {
   relationshipType: relationshipType("relationship_type")
     .notNull()
     .default("prospect"),
-  ownerId: uuid("owner_id")
+  createdBy: uuid("created_by")
     .notNull()
     .references(() => users.id),
   introChainFromContactId: uuid("intro_chain_from_contact_id"),
@@ -138,7 +216,8 @@ export const contactChannels = pgTable("contact_channels", {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TAGS
+// TAGS — global dictionary, NOT workspace-scoped. Custom tags created by any
+// workspace member become available to everyone in the workspace.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const tags = pgTable("tags", {
@@ -164,7 +243,7 @@ export const contactTags = pgTable(
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PIPELINE TEMPLATES + STAGES
+// PIPELINE TEMPLATES + STAGES — read-only seed dictionary.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const pipelineTemplates = pgTable("pipeline_templates", {
@@ -191,11 +270,14 @@ export const pipelineStages = pgTable("pipeline_stages", {
 
 export const projects = pgTable("projects", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
   status: projectStatus("status").notNull().default("active"),
   templateId: text("template_id").references(() => pipelineTemplates.id),
   currentStageId: uuid("current_stage_id").references(() => pipelineStages.id),
-  ownerId: uuid("owner_id")
+  createdBy: uuid("created_by")
     .notNull()
     .references(() => users.id),
   dueDate: date("due_date"),
@@ -233,14 +315,20 @@ export const projectContacts = pgTable(
 
 export const milestones = pgTable("milestones", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
   projectId: uuid("project_id")
     .notNull()
     .references(() => projects.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
   dueDate: date("due_date"),
-  ownerId: uuid("owner_id")
+  createdBy: uuid("created_by")
     .notNull()
     .references(() => users.id),
+  // Optional: a specific workspace member assigned to this milestone. Falls
+  // back to "any member" when null.
+  assignedTo: uuid("assigned_to").references(() => users.id),
   status: milestoneStatus("status").notNull().default("pending"),
   blockerText: text("blocker_text"),
   sourceMeetingId: uuid("source_meeting_id"),
@@ -257,6 +345,9 @@ export const milestones = pgTable("milestones", {
 
 export const touches = pgTable("touches", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
   contactId: uuid("contact_id")
     .notNull()
     .references(() => contacts.id, { onDelete: "cascade" }),
@@ -276,11 +367,14 @@ export const touches = pgTable("touches", {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MEETINGS (MTG capability area)
+// MEETINGS
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const meetings = pgTable("meetings", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
   scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull(),
   endedAt: timestamp("ended_at", { withTimezone: true }),
@@ -319,16 +413,41 @@ export const meetingAttendees = pgTable(
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const usersRelations = relations(users, ({ many }) => ({
-  ownedContacts: many(contacts),
-  ownedProjects: many(projects),
-  ownedMilestones: many(milestones),
+  memberships: many(workspaceMembers),
+  createdContacts: many(contacts),
+  createdProjects: many(projects),
+  createdMilestones: many(milestones),
   createdTouches: many(touches),
   createdMeetings: many(meetings),
 }));
 
+export const workspacesRelations = relations(workspaces, ({ many }) => ({
+  members: many(workspaceMembers),
+  contacts: many(contacts),
+  projects: many(projects),
+}));
+
+export const workspaceMembersRelations = relations(
+  workspaceMembers,
+  ({ one }) => ({
+    workspace: one(workspaces, {
+      fields: [workspaceMembers.workspaceId],
+      references: [workspaces.id],
+    }),
+    user: one(users, {
+      fields: [workspaceMembers.userId],
+      references: [users.id],
+    }),
+  }),
+);
+
 export const contactsRelations = relations(contacts, ({ one, many }) => ({
-  owner: one(users, {
-    fields: [contacts.ownerId],
+  workspace: one(workspaces, {
+    fields: [contacts.workspaceId],
+    references: [workspaces.id],
+  }),
+  creator: one(users, {
+    fields: [contacts.createdBy],
     references: [users.id],
   }),
   introducer: one(contacts, {
@@ -344,8 +463,12 @@ export const contactsRelations = relations(contacts, ({ one, many }) => ({
 }));
 
 export const projectsRelations = relations(projects, ({ one, many }) => ({
-  owner: one(users, {
-    fields: [projects.ownerId],
+  workspace: one(workspaces, {
+    fields: [projects.workspaceId],
+    references: [workspaces.id],
+  }),
+  creator: one(users, {
+    fields: [projects.createdBy],
     references: [users.id],
   }),
   template: one(pipelineTemplates, {
@@ -363,6 +486,10 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
 }));
 
 export const meetingsRelations = relations(meetings, ({ one, many }) => ({
+  workspace: one(workspaces, {
+    fields: [meetings.workspaceId],
+    references: [workspaces.id],
+  }),
   creator: one(users, {
     fields: [meetings.createdBy],
     references: [users.id],
@@ -397,12 +524,18 @@ export const pipelineStagesRelations = relations(pipelineStages, ({ one }) => ({
 export const waConversations = pgTable("wa_conversations", {
   // Keyed by raw WhatsApp sender phone (E.164 without leading +).
   senderPhone: text("sender_phone").primaryKey(),
-  ownerId: uuid("owner_id")
+  // Which workspace this conversation is operating against. Set on first
+  // message based on the user's current_workspace_id; can be updated if the
+  // user switches workspaces mid-conversation.
+  workspaceId: uuid("workspace_id")
     .notNull()
-    .references(() => users.id),
-  // Last ~10 turns. Shape: [{role:'user'|'assistant'|'tool', content:any, ts:string}, ...]
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  // The user who texted (resolved from sender_phone). Tools attribute writes
+  // to this user via created_by.
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
   messages: jsonb("messages").$type<unknown[]>().notNull().default([]),
-  // Partial intent mid-flow. Cleared on completion or after 30 min idle.
   pendingIntent: jsonb("pending_intent").$type<unknown | null>(),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
@@ -411,15 +544,21 @@ export const waConversations = pgTable("wa_conversations", {
 
 export const reminders = pgTable("reminders", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  ownerId: uuid("owner_id")
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  // The user the reminder is FOR (and who will receive the WhatsApp ping).
+  // Each member of a workspace gets their own reminders.
+  forUserId: uuid("for_user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  createdBy: uuid("created_by")
     .notNull()
     .references(() => users.id),
   subject: text("subject").notNull(),
   dueAt: timestamp("due_at", { withTimezone: true }).notNull(),
   recur: reminderRecur("recur").notNull().default("once"),
-  // For weekly: 0=Sun..6=Sat. For monthly: 1..31.
   recurDay: integer("recur_day"),
-  // Time of day in owner's timezone (used to compute next due_at).
   recurTime: time("recur_time"),
   firedAt: timestamp("fired_at", { withTimezone: true }),
   sourceContactId: uuid("source_contact_id").references(() => contacts.id, {
@@ -435,16 +574,15 @@ export const reminders = pgTable("reminders", {
 
 export const waActivity = pgTable("wa_activity", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  ownerId: uuid("owner_id")
-    .notNull()
-    .references(() => users.id),
+  workspaceId: uuid("workspace_id").references(() => workspaces.id, {
+    onDelete: "set null",
+  }),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
   senderPhone: text("sender_phone").notNull(),
   direction: waDirection("direction").notNull(),
-  // Inbound text, tool call+result, outbound text, etc. JSON for flexibility.
   payload: jsonb("payload").$type<unknown>().notNull(),
   tokensIn: integer("tokens_in"),
   tokensOut: integer("tokens_out"),
-  // Cost in tenths of a cent (so 12 = $0.0012). Avoids float drift.
   costMillicents: integer("cost_millicents"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
@@ -453,11 +591,13 @@ export const waActivity = pgTable("wa_activity", {
 
 export const nudges = pgTable("nudges", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  ownerId: uuid("owner_id")
+  workspaceId: uuid("workspace_id")
     .notNull()
-    .references(() => users.id),
-  // Stable identifier per nudge subject — e.g. 'overdue:milestone:<uuid>'.
-  // The (owner, signature, day) tuple is used for dedup.
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  // Who receives the nudge.
+  forUserId: uuid("for_user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
   signature: text("signature").notNull(),
   firedAt: timestamp("fired_at", { withTimezone: true })
     .notNull()

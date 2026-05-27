@@ -24,7 +24,7 @@ export type NetworkLens = "all" | "friend";
  * contain at least one friend.
  */
 export async function buildNetwork(opts: {
-  ownerId: string;
+  workspaceId: string;
   lens: NetworkLens;
 }): Promise<NetworkNode[]> {
   const rows = await db
@@ -38,7 +38,7 @@ export async function buildNetwork(opts: {
     })
     .from(contacts)
     .where(
-      and(eq(contacts.ownerId, opts.ownerId), eq(contacts.archived, false)),
+      and(eq(contacts.workspaceId, opts.workspaceId), eq(contacts.archived, false)),
     );
 
   const byParent = new Map<string | null, typeof rows>();
@@ -80,7 +80,7 @@ function pruneToFriend(node: NetworkNode): NetworkNode | null {
 }
 
 /** Look up the orphans separately so the UI can call them out. */
-export async function listOrphanContacts(ownerId: string) {
+export async function listOrphanContacts(workspaceId: string) {
   return db
     .select({
       id: contacts.id,
@@ -90,7 +90,7 @@ export async function listOrphanContacts(ownerId: string) {
     .from(contacts)
     .where(
       and(
-        eq(contacts.ownerId, ownerId),
+        eq(contacts.workspaceId, workspaceId),
         eq(contacts.archived, false),
         isNull(contacts.introChainFromContactId),
         or(

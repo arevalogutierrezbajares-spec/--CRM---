@@ -39,7 +39,7 @@ export async function listPipelineTemplatesWithStages() {
 }
 
 export async function getKanban(opts: {
-  ownerId: string;
+  workspaceId: string;
   templateId: string;
 }): Promise<KanbanBoard | null> {
   const [template] = await db
@@ -60,7 +60,7 @@ export async function getKanban(opts: {
     .from(projects)
     .where(
       and(
-        eq(projects.ownerId, opts.ownerId),
+        eq(projects.workspaceId, opts.workspaceId),
         eq(projects.templateId, opts.templateId),
       ),
     );

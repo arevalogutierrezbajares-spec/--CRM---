@@ -29,14 +29,14 @@ export default async function ContactDetailPage(props: { params: Params }) {
   const { id } = await props.params;
 
   const [contactRes, touchesRes, warmPathRes, reciprocityRes] = await Promise.all([
-    safeRead(() => getContact({ id, ownerId: user.id }), null),
-    safeRead(() => listTouchesForContact({ contactId: id, ownerId: user.id }), []),
+    safeRead(() => getContact({ id, workspaceId: user.workspaceId }), null),
+    safeRead(() => listTouchesForContact({ contactId: id, workspaceId: user.workspaceId }), []),
     safeRead(
-      () => findWarmPath({ ownerId: user.id, toContactId: id }),
+      () => findWarmPath({ workspaceId: user.workspaceId, toContactId: id }),
       null as Awaited<ReturnType<typeof findWarmPath>>,
     ),
     safeRead(
-      () => reciprocityFor({ ownerId: user.id, contactId: id }),
+      () => reciprocityFor({ workspaceId: user.workspaceId, contactId: id }),
       {
         initiatedByMe: 0,
         initiatedByThem: 0,

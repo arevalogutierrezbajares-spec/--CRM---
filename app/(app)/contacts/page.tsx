@@ -47,7 +47,7 @@ export default async function ContactsPage(props: {
 
   const [res, tagsRes] = await Promise.all([
     safeRead<ContactListItem[]>(
-      () => listContacts({ ownerId: user.id, archived, tagName: tag }),
+      () => listContacts({ workspaceId: user.workspaceId, archived, tagName: tag }),
       [],
     ),
     safeRead(() => listTags(), []),
