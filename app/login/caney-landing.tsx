@@ -14,14 +14,14 @@ import { createClient } from "@/lib/supabase/client";
 // Tip: open DevTools, hover the image, and watch the console — when DEBUG is
 // on, mousemove logs the x/y % so you can pick exact coords by eye.
 
-// When you upload your real photo, save it at /public/caney.jpg and change
-// this to "/caney.jpg". The placeholder shows a styled Caney silhouette.
-const IMAGE_SRC = "/caney-placeholder.svg";
+// Real photo: man reading in a tent, surveyors in distance, mountains beyond.
+// The entry point is the BOOK he's holding in front of his face.
+const IMAGE_SRC = "/caney.png";
 const HOTSPOT = {
-  xPct: 50,    // center of hotspot, % from left of image
-  yPct: 60,    // center of hotspot, % from top
-  wPct: 14,    // hotspot width as % of image width
-  hPct: 22,    // hotspot height as % of image height
+  xPct: 58,    // center of book — slightly right of image center
+  yPct: 73,    // book is in the lower-middle area
+  wPct: 7,     // book is small — narrow hotspot
+  hPct: 11,    // book is roughly portrait orientation
 };
 const DEBUG = false;
 
