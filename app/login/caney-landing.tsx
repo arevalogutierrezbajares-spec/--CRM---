@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { requestSignInLink } from "@/app/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -251,14 +251,12 @@ function HolographicForm() {
     e.preventDefault();
     setStatus("sending");
     setError(null);
-    const supabase = createClient();
-    const { error: authError } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
-    });
-    if (authError) {
+    const fd = new FormData();
+    fd.set("email", email);
+    const result = await requestSignInLink(fd);
+    if (!result.ok) {
       setStatus("error");
-      setError(authError.message);
+      setError(result.error ?? "Could not send sign-in link.");
       return;
     }
     setStatus("sent");
@@ -278,7 +276,7 @@ function HolographicForm() {
           </div>
           <h1 className="text-2xl font-semibold tracking-tight">Sign in</h1>
           <p className="text-sm text-[var(--text-secondary)]">
-            Enter your email and we&apos;ll send you a magic link.
+            Access by invitation only. Enter your invited email to continue.
           </p>
         </div>
 
@@ -286,7 +284,7 @@ function HolographicForm() {
           <div className="space-y-2 rounded-md border border-[var(--green-mid)]/30 bg-[var(--green-bg)] p-3 text-sm text-[var(--green-text)]">
             <div className="font-medium">Check your inbox</div>
             <p className="text-[13px]">
-              A magic link is on its way to <strong>{email}</strong>.
+              A sign-in link is on its way to <strong>{email}</strong>.
             </p>
           </div>
         ) : (
@@ -309,7 +307,7 @@ function HolographicForm() {
               className="w-full"
               loading={status === "sending"}
             >
-              {status === "sending" ? "Sending…" : "Send magic link"}
+              Continue
             </Button>
 
             {error && (
