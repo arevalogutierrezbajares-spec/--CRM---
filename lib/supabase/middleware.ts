@@ -14,6 +14,20 @@ const PUBLIC_PATHS = [
 ];
 
 export async function updateSession(request: NextRequest) {
+  // Magic-link recovery: if Supabase's email link returned the user to a
+  // path other than /auth/callback (happens when our redirectTo wasn't on
+  // Supabase's allowlist and it fell back to Site URL), but there's still
+  // a ?code=… param, reroute to the callback so the session exchange runs.
+  // This keeps sign-in working even when Supabase URL config is out of date.
+  const incomingCode = request.nextUrl.searchParams.get("code");
+  if (incomingCode && request.nextUrl.pathname !== "/auth/callback") {
+    const url = request.nextUrl.clone();
+    const next = url.searchParams.get("next") ?? "/";
+    url.pathname = "/auth/callback";
+    url.search = `?code=${encodeURIComponent(incomingCode)}&next=${encodeURIComponent(next)}`;
+    return NextResponse.redirect(url);
+  }
+
   // Dev-only bypass — see lib/current-user.ts. Cannot fire in production
   // (gated by both NODE_ENV and an explicit env opt-in).
   if (
