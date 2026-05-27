@@ -84,6 +84,46 @@ export const waDirection = pgEnum("wa_direction", [
   "reject",
   "error",
 ]);
+export const accountType = pgEnum("account_type", [
+  "checking",
+  "savings",
+  "credit_card",
+  "cash",
+  "crypto",
+  "brokerage",
+  "loan",
+  "other",
+]);
+
+export const txnSource = pgEnum("txn_source", [
+  "manual",
+  "csv_import",
+  "email_parse",
+  "sync",
+  "api",
+]);
+
+export const categoryKind = pgEnum("category_kind", [
+  "expense",
+  "income",
+  "transfer",
+]);
+
+export const subscriptionCycle = pgEnum("subscription_cycle", [
+  "monthly",
+  "yearly",
+  "weekly",
+  "usage",
+  "one_off",
+]);
+
+export const subscriptionStatus = pgEnum("subscription_status", [
+  "active",
+  "paused",
+  "cancelled",
+  "trialing",
+]);
+
 export const workspaceRole = pgEnum("workspace_role", [
   "owner",
   "admin",
@@ -612,3 +652,255 @@ export const nudges = pgTable("nudges", {
     .defaultNow(),
   acknowledgedAt: timestamp("acknowledged_at", { withTimezone: true }),
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TREASURY — accounts, transactions, vendors, categories, subscriptions, FX
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const finCategories = pgTable("fin_categories", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  parentId: uuid("parent_id"),
+  color: text("color"), // hex like #185FA5
+  kind: categoryKind("kind").notNull().default("expense"),
+  isSystem: boolean("is_system").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const finAccounts = pgTable("fin_accounts", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  type: accountType("type").notNull(),
+  currency: text("currency").notNull().default("USD"), // ISO 4217
+  // Balances in minor units (cents). Use bigint as text to avoid JS precision.
+  balanceCents: integer("balance_cents").notNull().default(0),
+  openingBalanceCents: integer("opening_balance_cents").notNull().default(0),
+  // Color/logo hints for UI
+  color: text("color"),
+  notes: text("notes"),
+  archived: boolean("archived").notNull().default(false),
+  // Future: provider/external_id for Plaid/Belvo sync
+  provider: text("provider").notNull().default("manual"),
+  externalId: text("external_id"),
+  lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const finVendors = pgTable("fin_vendors", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  // Optional link to an existing CRM contact (org or person)
+  contactId: uuid("contact_id").references(() => contacts.id, {
+    onDelete: "set null",
+  }),
+  defaultCategoryId: uuid("default_category_id").references(
+    () => finCategories.id,
+    { onDelete: "set null" },
+  ),
+  website: text("website"),
+  logoUrl: text("logo_url"),
+  notes: text("notes"),
+  archived: boolean("archived").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const finTransactions = pgTable("fin_transactions", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  accountId: uuid("account_id")
+    .notNull()
+    .references(() => finAccounts.id, { onDelete: "cascade" }),
+  postedDate: date("posted_date").notNull(),
+  // Signed cents in the account's native currency. Negative = outflow.
+  amountCents: integer("amount_cents").notNull(),
+  currency: text("currency").notNull().default("USD"),
+  // USD equivalent computed at posted_date (for cross-currency aggregation).
+  usdAmountCents: integer("usd_amount_cents"),
+  description: text("description").notNull(),
+  vendorId: uuid("vendor_id").references(() => finVendors.id, {
+    onDelete: "set null",
+  }),
+  categoryId: uuid("category_id").references(() => finCategories.id, {
+    onDelete: "set null",
+  }),
+  // Allocation tags — tie spend to a project (= venture) and optionally a
+  // contact (e.g., spend on behalf of a client).
+  projectId: uuid("project_id").references(() => projects.id, {
+    onDelete: "set null",
+  }),
+  contactId: uuid("contact_id").references(() => contacts.id, {
+    onDelete: "set null",
+  }),
+  notes: text("notes"),
+  source: txnSource("source").notNull().default("manual"),
+  // For email-parsed receipts: original message ID for de-dup
+  externalRefId: text("external_ref_id"),
+  // For transfers between accounts: pairs two transactions
+  transferGroupId: uuid("transfer_group_id"),
+  createdBy: uuid("created_by")
+    .notNull()
+    .references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const finSubscriptions = pgTable("fin_subscriptions", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  vendorId: uuid("vendor_id")
+    .notNull()
+    .references(() => finVendors.id, { onDelete: "cascade" }),
+  planName: text("plan_name"),
+  priceCents: integer("price_cents").notNull(),
+  currency: text("currency").notNull().default("USD"),
+  cycle: subscriptionCycle("cycle").notNull().default("monthly"),
+  nextRenewalDate: date("next_renewal_date"),
+  startedOn: date("started_on"),
+  cancelledOn: date("cancelled_on"),
+  ownerUserId: uuid("owner_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  // Tie subscription to a venture for cost allocation
+  projectId: uuid("project_id").references(() => projects.id, {
+    onDelete: "set null",
+  }),
+  status: subscriptionStatus("status").notNull().default("active"),
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+  notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const finBudgets = pgTable("fin_budgets", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  // Month in YYYY-MM-01 form
+  periodMonth: date("period_month").notNull(),
+  categoryId: uuid("category_id")
+    .notNull()
+    .references(() => finCategories.id, { onDelete: "cascade" }),
+  plannedCents: integer("planned_cents").notNull(),
+  currency: text("currency").notNull().default("USD"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const finFxRates = pgTable(
+  "fin_fx_rates",
+  {
+    // Daily mid-market rate. `rate` = how many USD = 1 unit of `currency`.
+    // e.g., row for VES on 2026-05-27 might be 0.0000001 (1 VES = $0.0000001).
+    currency: text("currency").notNull(),
+    rateDate: date("rate_date").notNull(),
+    rateUsd: integer("rate_usd_per_million").notNull(), // store as integer micro-USD per unit (×1_000_000)
+    source: text("source").notNull().default("manual"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.currency, t.rateDate] }),
+  }),
+);
+
+export const finUsageSnapshots = pgTable("fin_usage_snapshots", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  vendorId: uuid("vendor_id")
+    .notNull()
+    .references(() => finVendors.id, { onDelete: "cascade" }),
+  snapshotDate: date("snapshot_date").notNull(),
+  metricName: text("metric_name").notNull(), // tokens, requests, gb, bandwidth, etc.
+  quantity: integer("quantity").notNull(),
+  costCents: integer("cost_cents"),
+  currency: text("currency").default("USD"),
+  notes: text("notes"),
+});
+
+/* ─── Treasury relations ───────────────────────────────────────────────── */
+
+export const finAccountsRelations = relations(finAccounts, ({ many }) => ({
+  transactions: many(finTransactions),
+}));
+
+export const finTransactionsRelations = relations(
+  finTransactions,
+  ({ one }) => ({
+    account: one(finAccounts, {
+      fields: [finTransactions.accountId],
+      references: [finAccounts.id],
+    }),
+    vendor: one(finVendors, {
+      fields: [finTransactions.vendorId],
+      references: [finVendors.id],
+    }),
+    category: one(finCategories, {
+      fields: [finTransactions.categoryId],
+      references: [finCategories.id],
+    }),
+    project: one(projects, {
+      fields: [finTransactions.projectId],
+      references: [projects.id],
+    }),
+  }),
+);
+
+export const finVendorsRelations = relations(finVendors, ({ one, many }) => ({
+  contact: one(contacts, {
+    fields: [finVendors.contactId],
+    references: [contacts.id],
+  }),
+  defaultCategory: one(finCategories, {
+    fields: [finVendors.defaultCategoryId],
+    references: [finCategories.id],
+  }),
+  subscriptions: many(finSubscriptions),
+  transactions: many(finTransactions),
+}));
+
+export const finSubscriptionsRelations = relations(
+  finSubscriptions,
+  ({ one }) => ({
+    vendor: one(finVendors, {
+      fields: [finSubscriptions.vendorId],
+      references: [finVendors.id],
+    }),
+    project: one(projects, {
+      fields: [finSubscriptions.projectId],
+      references: [projects.id],
+    }),
+  }),
+);

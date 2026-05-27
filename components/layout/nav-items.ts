@@ -7,6 +7,7 @@ import {
   Network,
   User,
   Users,
+  Wallet,
   type LucideIcon,
 } from "lucide-react";
 
@@ -22,6 +23,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/projects", label: "Projects", icon: LayoutGrid },
   { href: "/meetings", label: "Meetings", icon: Users },
   { href: "/pipeline", label: "Pipeline", icon: KanbanSquare },
+  { href: "/treasury", label: "Treasury", icon: Wallet },
   { href: "/network", label: "Network", icon: Network },
   { href: "/workspace", label: "Workspace", icon: Building2 },
   { href: "/profile", label: "Profile", icon: User },

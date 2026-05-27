@@ -5,6 +5,8 @@ import { MiniCalendar } from "@/components/dashboard/right/mini-calendar";
 import { PipelineSnapshot } from "@/components/dashboard/right/pipeline-snapshot";
 import { RelationshipHealth } from "@/components/dashboard/right/relationship-health";
 import { AIBriefing } from "@/components/dashboard/right/ai-briefing";
+import { TreasuryWidget } from "@/components/dashboard/right/treasury-widget";
+import { treasurySnapshot, type TreasurySnapshot } from "@/db/queries/treasury";
 import { DailyView } from "@/components/dashboard/daily/daily-view";
 import { WeeklyView } from "@/components/dashboard/weekly/weekly-view";
 import { MonthlyView } from "@/components/dashboard/monthly/monthly-view";
@@ -34,6 +36,18 @@ import {
   type RelationshipRow,
   type TopAccount,
 } from "@/db/queries/dashboard";
+
+const EMPTY_TREASURY_SNAPSHOT: TreasurySnapshot = {
+  cashUsdCents: 0,
+  cashByCurrency: [],
+  burnTodayUsdCents: 0,
+  burn30dUsdCents: 0,
+  burnMTDUsdCents: 0,
+  inflowMTDUsdCents: 0,
+  monthlyBurnRunRateUsdCents: 0,
+  runwayMonths: null,
+  accountCount: 0,
+};
 import {
   listBlockedProjects,
   type BlockedProject,
@@ -103,12 +117,17 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
     relRes,
     eventDaysRes,
     blockedRes,
+    treasuryRes,
   ] = await Promise.all([
     safeRead<DashCounts>(() => dashboardCounts(user.workspaceId), EMPTY_COUNTS),
     safeRead<PipelineStageBar[]>(() => pipelineSnapshot(user.workspaceId), []),
     safeRead<RelationshipRow[]>(() => relationshipHealth(user.workspaceId, 6), []),
     safeRead<string[]>(() => meetingDaysThisMonth(user.workspaceId), []),
     safeRead<BlockedProject[]>(() => listBlockedProjects(user.workspaceId), []),
+    safeRead<TreasurySnapshot>(
+      () => treasurySnapshot(user.workspaceId),
+      EMPTY_TREASURY_SNAPSHOT,
+    ),
   ]);
 
   /* ── View-specific data fetched conditionally ──────────────────────── */
@@ -213,6 +232,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
       rightColumn={
         <RightColumn>
           <MiniCalendar eventDays={eventDaysRes.data} />
+          <TreasuryWidget snapshot={treasuryRes.data} />
           <AIBriefing bullets={briefing} />
           <PipelineSnapshot stages={pipelineRes.data} />
           <RelationshipHealth rows={relRes.data} />
