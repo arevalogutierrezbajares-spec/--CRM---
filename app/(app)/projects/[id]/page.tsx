@@ -145,6 +145,7 @@ export default async function ProjectDetailPage(props: {
         listResearchNotes({
           workspaceId: user.workspaceId,
           projectId: displayed.id,
+          kind: "research",
           limit: 8,
         }),
       [],

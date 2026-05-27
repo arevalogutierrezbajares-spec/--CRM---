@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Brain, FolderOpen, Tag } from "lucide-react";
+import { Brain, FileCode, FolderOpen, Tag } from "lucide-react";
 import { requireUser } from "@/lib/current-user";
 import { TopBar } from "@/components/layout/top-bar";
 import { DbBanner } from "@/components/db-banner";
@@ -25,10 +25,12 @@ type SearchParams = Promise<{
   project?: string;
   source?: string;
   folder?: string;
+  kind?: string;
 }>;
 
 const EMPTY_COUNTS: ResearchCounts = {
   total: 0,
+  byKind: { research: 0, product: 0, note: 0 },
   byFolder: [],
   bySource: [],
   byProject: [],
@@ -44,11 +46,30 @@ function shortDate(d: Date | null): string {
   });
 }
 
+const KIND_META: Record<
+  "research" | "product" | "note",
+  { label: string; color: string }
+> = {
+  research: { label: "Research", color: "var(--purple-text)" },
+  product: { label: "Product", color: "var(--blue-text)" },
+  note: { label: "Misc", color: "var(--text-tertiary)" },
+};
+
 export default async function ResearchPage(props: {
   searchParams: SearchParams;
 }) {
   const user = await requireUser();
   const sp = await props.searchParams;
+
+  const kindParam =
+    sp.kind === "product" || sp.kind === "note" || sp.kind === "all"
+      ? sp.kind
+      : "research";
+
+  const kindFilter =
+    kindParam === "all"
+      ? undefined
+      : (kindParam as "research" | "product" | "note");
 
   const [notesRes, countsRes, projectsRes] = await Promise.all([
     safeRead<ResearchNoteListItem[]>(
@@ -59,6 +80,7 @@ export default async function ResearchPage(props: {
           projectId: sp.project,
           sourceRoot: sp.source,
           folder: sp.folder,
+          kind: kindFilter,
           limit: 200,
         }),
       [],
@@ -109,6 +131,17 @@ export default async function ResearchPage(props: {
     },
   ];
 
+  function pillHref(k: "research" | "product" | "note" | "all"): string {
+    const next = new URLSearchParams();
+    if (sp.q) next.set("q", sp.q);
+    if (sp.project) next.set("project", sp.project);
+    if (sp.source) next.set("source", sp.source);
+    if (sp.folder) next.set("folder", sp.folder);
+    if (k !== "research") next.set("kind", k);
+    const q = next.toString();
+    return q ? `/research?${q}` : "/research";
+  }
+
   return (
     <>
       <TopBar email={user.email} displayName={user.displayName} />
@@ -117,13 +150,58 @@ export default async function ResearchPage(props: {
           <div>
             <h1 className="text-[22px] font-medium tracking-tight">Research</h1>
             <p className="text-[13px] text-text-secondary">
-              {counts.total} notes indexed from {counts.bySource.length} Obsidian brains · last edit {shortDate(counts.newest)}
+              {counts.byKind.research} knowledge notes for inspiration + backing (whitepapers, brainstorming, data sources, frameworks, vendor entities). Toggle to Product for the {counts.byKind.product} specs/PRDs/handoffs/sprint logs.
+            </p>
+            <p className="text-tiny text-text-tertiary mt-1">
+              {counts.total} total across {counts.bySource.length} brains · last edit {shortDate(counts.newest)}
             </p>
           </div>
           <SearchBox />
         </header>
 
         {!notesRes.ok && <DbBanner error={notesRes.error} />}
+
+        {/* Kind toggle */}
+        <div
+          className="flex items-center gap-2 border-b pb-2"
+          style={{ borderColor: "var(--border-default)" }}
+        >
+          {(["research", "product", "note", "all"] as const).map((k) => {
+            const active = kindParam === k;
+            const count =
+              k === "all"
+                ? counts.total
+                : counts.byKind[k as "research" | "product" | "note"];
+            const meta =
+              k === "all"
+                ? { label: "All", color: "var(--text-secondary)" }
+                : KIND_META[k as "research" | "product" | "note"];
+            return (
+              <Link
+                key={k}
+                href={pillHref(k)}
+                className="inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-[12px] transition-colors"
+                style={
+                  active
+                    ? {
+                        background: "var(--text-primary)",
+                        color: "var(--bg-card)",
+                      }
+                    : { color: "var(--text-secondary)" }
+                }
+              >
+                {k !== "all" && (
+                  <span
+                    className="h-1.5 w-1.5 rounded-full"
+                    style={{ background: meta.color }}
+                  />
+                )}
+                <span className={active ? "font-medium" : ""}>{meta.label}</span>
+                <span className="opacity-70 tabular-nums">{count}</span>
+              </Link>
+            );
+          })}
+        </div>
 
         {/* Filters */}
         {dimensions.some((d) => d.options.length > 0) && (
@@ -136,87 +214,110 @@ export default async function ResearchPage(props: {
         {/* Notes list */}
         <DashCard>
           <SectionLabel
-            icon={FolderOpen}
+            icon={kindFilter === "product" ? FileCode : FolderOpen}
             right={
               <span className="text-tiny text-text-tertiary tabular-nums">
                 {notesRes.data.length}
               </span>
             }
           >
-            Notes
+            {kindFilter === "product"
+              ? "Product specs"
+              : kindFilter === "note"
+                ? "Misc notes"
+                : kindFilter === undefined
+                  ? "All notes"
+                  : "Knowledge notes"}
           </SectionLabel>
           {notesRes.data.length === 0 ? (
             <p className="py-6 text-center text-[12px] text-text-secondary">
               No notes match these filters. Try clearing them or run the sync
-              script: <code className="font-mono">node scripts/sync-research-brains.mjs</code>
+              via POST /api/research/sync.
             </p>
           ) : (
             <ul
               className="divide-y"
               style={{ borderColor: "var(--border-default)" }}
             >
-              {notesRes.data.map((n) => (
-                <li key={n.id} className="py-2.5">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <Link
-                        href={`/research/${n.id}`}
-                        className="text-[13.5px] font-medium text-text-primary hover:underline"
-                      >
-                        {n.title}
-                      </Link>
-                      {n.summary && (
-                        <p className="text-[12px] text-text-secondary mt-0.5 line-clamp-2">
-                          {n.summary}
-                        </p>
-                      )}
-                      <div className="mt-1.5 flex items-center gap-2 flex-wrap text-tiny text-text-tertiary">
-                        <span className="font-mono">{n.sourceRoot}</span>
-                        <span>·</span>
-                        <span className="font-mono truncate max-w-[280px]">
-                          {n.relPath}
-                        </span>
-                        <span>·</span>
-                        <span>{shortDate(n.lastModified)}</span>
-                        <span>·</span>
-                        <span>{n.wordCount} words</span>
-                      </div>
-                      {n.tags.length > 0 && (
-                        <div className="mt-1 flex items-center gap-1 flex-wrap">
-                          {n.tags.slice(0, 6).map((t) => (
-                            <span
-                              key={t}
-                              className="inline-flex items-center gap-0.5 rounded-full bg-surface px-1.5 py-0.5 text-tiny text-text-secondary"
-                            >
-                              <Tag size={8} />
-                              {t}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    {n.projectTitle && (
-                      <Link
-                        href={`/research?project=${n.projectId}`}
-                        className="shrink-0"
-                      >
-                        <DashBadge
-                          variant="neutral"
-                          className="inline-flex items-center gap-1"
-                        >
-                          {n.projectColor && (
+              {notesRes.data.map((n) => {
+                const k = n.kind as "research" | "product" | "note";
+                const meta = KIND_META[k];
+                return (
+                  <li key={n.id} className="py-2.5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <Link
+                            href={`/research/${n.id}`}
+                            className="text-[13.5px] font-medium text-text-primary hover:underline"
+                          >
+                            {n.title}
+                          </Link>
+                          <span
+                            className="inline-flex items-center gap-0.5 text-tiny"
+                            style={{ color: meta.color }}
+                            title={meta.label}
+                          >
                             <span
                               className="h-1.5 w-1.5 rounded-full"
-                              style={{ background: n.projectColor }}
+                              style={{ background: meta.color }}
                             />
-                          )}
-                          {n.projectTitle}
-                        </DashBadge>
-                      </Link>
-                    )}
-                  </div>
-                </li>
-              ))}
+                            {meta.label}
+                          </span>
+                        </div>
+                        {n.summary && (
+                          <p className="text-[12px] text-text-secondary mt-0.5 line-clamp-2">
+                            {n.summary}
+                          </p>
+                        )}
+                        <div className="mt-1.5 flex items-center gap-2 flex-wrap text-tiny text-text-tertiary">
+                          <span className="font-mono">{n.sourceRoot}</span>
+                          <span>·</span>
+                          <span className="font-mono truncate max-w-[280px]">
+                            {n.relPath}
+                          </span>
+                          <span>·</span>
+                          <span>{shortDate(n.lastModified)}</span>
+                          <span>·</span>
+                          <span>{n.wordCount} words</span>
+                        </div>
+                        {n.tags.length > 0 && (
+                          <div className="mt-1 flex items-center gap-1 flex-wrap">
+                            {n.tags.slice(0, 6).map((t) => (
+                              <span
+                                key={t}
+                                className="inline-flex items-center gap-0.5 rounded-full bg-surface px-1.5 py-0.5 text-tiny text-text-secondary"
+                              >
+                                <Tag size={8} />
+                                {t}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      {n.projectTitle && (
+                        <Link
+                          href={`/research?project=${n.projectId}`}
+                          className="shrink-0"
+                        >
+                          <DashBadge
+                            variant="neutral"
+                            className="inline-flex items-center gap-1"
+                          >
+                            {n.projectColor && (
+                              <span
+                                className="h-1.5 w-1.5 rounded-full"
+                                style={{ background: n.projectColor }}
+                              />
+                            )}
+                            {n.projectTitle}
+                          </DashBadge>
+                        </Link>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </DashCard>

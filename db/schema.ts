@@ -1224,6 +1224,8 @@ export const overlordTasksRelations = relations(overlordTasks, ({ one }) => ({
 // RESEARCH NOTES — index of Obsidian-style markdown brains on disk
 // ─────────────────────────────────────────────────────────────────────────────
 
+export const noteKind = pgEnum("note_kind", ["research", "product", "note"]);
+
 export const researchNotes = pgTable("research_notes", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   workspaceId: uuid("workspace_id")
@@ -1237,6 +1239,7 @@ export const researchNotes = pgTable("research_notes", {
   title: text("title").notNull(),
   summary: text("summary"),
   folder: text("folder"),
+  kind: noteKind("kind").notNull().default("note"),
   wordCount: integer("word_count").notNull().default(0),
   tags: jsonb("tags").$type<string[]>().notNull().default([]),
   lastModified: timestamp("last_modified", { withTimezone: true }),

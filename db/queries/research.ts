@@ -15,6 +15,7 @@ export async function listResearchNotes(opts: {
   projectId?: string;
   sourceRoot?: string;
   folder?: string;
+  kind?: "research" | "product" | "note";
   limit?: number;
 }): Promise<ResearchNoteListItem[]> {
   const conditions = [eq(researchNotes.workspaceId, opts.workspaceId)];
@@ -23,6 +24,7 @@ export async function listResearchNotes(opts: {
   if (opts.sourceRoot)
     conditions.push(eq(researchNotes.sourceRoot, opts.sourceRoot));
   if (opts.folder) conditions.push(eq(researchNotes.folder, opts.folder));
+  if (opts.kind) conditions.push(eq(researchNotes.kind, opts.kind));
   if (opts.query) {
     const q = `%${opts.query}%`;
     conditions.push(
@@ -82,6 +84,7 @@ export async function getResearchNoteById(opts: {
 
 export type ResearchCounts = {
   total: number;
+  byKind: Record<"research" | "product" | "note", number>;
   byFolder: Array<{ folder: string; count: number; sourceRoot: string }>;
   bySource: Array<{ sourceRoot: string; count: number }>;
   byProject: Array<{ projectId: string; count: number }>;
@@ -90,22 +93,32 @@ export type ResearchCounts = {
 
 export async function researchCounts(
   workspaceId: string,
+  opts: { kind?: "research" | "product" | "note" } = {},
 ): Promise<ResearchCounts> {
+  const conditions = [eq(researchNotes.workspaceId, workspaceId)];
+  if (opts.kind) conditions.push(eq(researchNotes.kind, opts.kind));
+
   const rows = await db
     .select({
       sourceRoot: researchNotes.sourceRoot,
       folder: researchNotes.folder,
       projectId: researchNotes.projectId,
+      kind: researchNotes.kind,
       lastModified: researchNotes.lastModified,
     })
     .from(researchNotes)
-    .where(eq(researchNotes.workspaceId, workspaceId));
+    .where(and(...conditions));
 
   const folderMap = new Map<string, { sourceRoot: string; count: number }>();
   const sourceMap = new Map<string, number>();
   const projectMap = new Map<string, number>();
+  const kindMap = { research: 0, product: 0, note: 0 } as Record<
+    "research" | "product" | "note",
+    number
+  >;
   let newest: Date | null = null;
   for (const r of rows) {
+    kindMap[r.kind] += 1;
     if (r.folder) {
       const key = `${r.sourceRoot}|${r.folder}`;
       const existing = folderMap.get(key);
@@ -123,6 +136,7 @@ export async function researchCounts(
 
   return {
     total: rows.length,
+    byKind: kindMap,
     byFolder: Array.from(folderMap.entries())
       .map(([key, v]) => ({
         folder: key.split("|")[1],

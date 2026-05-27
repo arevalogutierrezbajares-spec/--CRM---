@@ -6,6 +6,7 @@ import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { getCurrentUser } from "@/lib/current-user";
 import { BRAIN_ROOTS } from "@/lib/brain-roots";
+import { classifyNote } from "@/lib/note-classifier";
 
 const { researchNotes, projects } = schema;
 
@@ -136,6 +137,7 @@ export async function POST() {
       const summary = extractSummary(content);
       const tags = extractTags(content);
       const wc = wordCount(content);
+      const kind = classifyNote(rel);
 
       const existing = await db
         .select({
@@ -165,6 +167,7 @@ export async function POST() {
             title,
             summary,
             folder: topFolder,
+            kind,
             wordCount: wc,
             tags,
             lastModified: stat.mtime,
@@ -184,6 +187,7 @@ export async function POST() {
             title,
             summary,
             folder: topFolder,
+            kind,
             wordCount: wc,
             tags,
             lastModified: stat.mtime,
