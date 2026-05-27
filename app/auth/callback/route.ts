@@ -35,8 +35,17 @@ export async function GET(request: Request) {
   const token_hash = url.searchParams.get("token_hash");
   const type = url.searchParams.get("type");
   if (token_hash && type) {
+    // Per Supabase docs, the "email" type is the umbrella for magiclink+signup
+    // when using token_hash. Map "magiclink" → "email" to avoid mismatches
+    // with newer GoTrue builds that consolidated the verification surface.
+    const otpType = (type === "magiclink" ? "email" : type) as
+      | "email"
+      | "signup"
+      | "recovery"
+      | "email_change"
+      | "invite";
     const { error } = await supabase.auth.verifyOtp({
-      type: type as "magiclink" | "signup" | "recovery" | "email_change" | "email",
+      type: otpType,
       token_hash,
     });
     if (!error) {
