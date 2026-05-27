@@ -1,7 +1,17 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/login", "/auth/callback", "/api/health"];
+// Routes that must NOT redirect to /login — they're called by external
+// systems that authenticate per-request (HMAC signature, query secret,
+// Bearer CRON_SECRET, etc.) rather than via a Supabase session cookie.
+const PUBLIC_PATHS = [
+  "/login",
+  "/auth/callback",
+  "/api/health",
+  "/api/whatsapp/webhook", // Meta — verifies via WA_VERIFY_TOKEN + HMAC
+  "/api/postmark/inbound", // Postmark — verifies via ?secret= query
+  "/api/cron/", // Vercel Cron — verifies via Authorization: Bearer CRON_SECRET
+];
 
 export async function updateSession(request: NextRequest) {
   // Dev-only bypass — see lib/current-user.ts. Cannot fire in production

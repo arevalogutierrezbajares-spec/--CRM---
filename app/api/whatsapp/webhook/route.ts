@@ -59,6 +59,8 @@ export const POST = withErrorCapture(
       entry?: Array<{
         changes?: Array<{
           value?: {
+            messaging_product?: string;
+            metadata?: { phone_number_id?: string; display_phone_number?: string };
             messages?: Array<{
               from?: string;
               text?: { body?: string };
@@ -78,11 +80,36 @@ export const POST = withErrorCapture(
       return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
     }
 
+    // Multiple test numbers under one Meta app share the same webhook URL.
+    // Only handle messages destined for OUR phone_number_id; forward the rest
+    // to a sibling agent's webhook (if configured) so we don't black-hole it.
+    const ourPnid = process.env.WA_PHONE_NUMBER_ID;
+    const forwardUrl = process.env.WA_FORWARD_OTHER_PNIDS_URL || null;
+
     const useAgent = process.env.AGB_WA_AGENT === "1";
 
     const responses: { to: string; body: string }[] = [];
     for (const entry of payload.entry ?? []) {
       for (const change of entry.changes ?? []) {
+        const inboundPnid = change.value?.metadata?.phone_number_id;
+        if (ourPnid && inboundPnid && inboundPnid !== ourPnid) {
+          // Not our number. Optionally forward to the sibling webhook.
+          if (forwardUrl) {
+            // Fire-and-forget; we still 200 back to Meta on our own.
+            void fetch(forwardUrl, {
+              method: "POST",
+              headers: {
+                "content-type": "application/json",
+                // Pass Meta's signature so the downstream can verify if it wants to.
+                "x-hub-signature-256":
+                  req.headers.get("x-hub-signature-256") ?? "",
+              },
+              body: JSON.stringify({ entry: [{ changes: [change] }] }),
+            }).catch(() => {});
+          }
+          continue;
+        }
+
         for (const msg of change.value?.messages ?? []) {
           if (msg.type !== "text" || !msg.text?.body || !msg.from) continue;
 
