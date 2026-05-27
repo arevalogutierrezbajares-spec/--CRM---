@@ -2,6 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 // ─── CONFIGURATION ────────────────────────────────────────────────────────────
 // Drop your Caney photo at /public/caney.jpg (or update IMAGE_SRC below).
@@ -181,17 +184,6 @@ export function CaneyLanding() {
           60%  { opacity: 1; filter: blur(0); }
           100% { opacity: 1; transform: translate(-50%, -50%) scale(1); filter: blur(0); }
         }
-        @keyframes scanline-sweep {
-          0%   { transform: translateY(-100%); }
-          100% { transform: translateY(200%); }
-        }
-        @keyframes glitch-shift {
-          0%, 100%  { transform: translate(0); }
-          20%       { transform: translate(-1px, 1px); }
-          40%       { transform: translate(1px, -1px); }
-          60%       { transform: translate(-1px, 0); }
-          80%       { transform: translate(0, 1px); }
-        }
       `}</style>
     </main>
   );
@@ -248,7 +240,7 @@ function ShatterGrid() {
   return <>{cells}</>;
 }
 
-// ─── Holographic sign-in form ─────────────────────────────────────────────────
+// ─── Sign-in form — matches the rest of the platform ────────────────────────
 
 function HolographicForm() {
   const [email, setEmail] = useState("");
@@ -273,117 +265,61 @@ function HolographicForm() {
   }
 
   return (
-    <div
-      className="absolute left-1/2 top-1/2 z-40 w-[min(420px,calc(100vw-2rem))] [animation:form-rise_700ms_cubic-bezier(0.2,0.9,0.3,1)_forwards]"
-    >
-      {/* Frame */}
-      <div className="relative border border-cyan-300/40 bg-black/70 p-8 backdrop-blur-xl shadow-[0_0_60px_rgba(0,200,255,0.15)]">
-        {/* Grid pattern background */}
-        <div
-          className="pointer-events-none absolute inset-0 opacity-20"
-          style={{
-            backgroundImage:
-              "linear-gradient(to right, rgba(0,230,255,0.4) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,230,255,0.4) 1px, transparent 1px)",
-            backgroundSize: "24px 24px",
-          }}
-        />
-
-        {/* Scanline sweep */}
-        <div className="pointer-events-none absolute inset-0 overflow-hidden">
-          <div className="absolute left-0 right-0 h-px bg-cyan-300/60 [animation:scanline-sweep_3.5s_linear_infinite] shadow-[0_0_8px_2px_rgba(0,230,255,0.5)]" />
+    <div className="absolute left-1/2 top-1/2 z-40 w-[min(380px,calc(100vw-2rem))] [animation:form-rise_700ms_cubic-bezier(0.2,0.9,0.3,1)_forwards]">
+      <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--card)] p-7 text-[var(--text-primary)] shadow-2xl">
+        <div className="mb-6 space-y-2">
+          <div className="font-mono text-[10px] uppercase tracking-[0.35em] text-[var(--text-tertiary)]">
+            X
+            <span className="opacity-50"> . </span>
+            JEAV
+            <span className="opacity-50"> . </span>
+            TIGR
+            <span className="opacity-50"> · access</span>
+          </div>
+          <h1 className="text-2xl font-semibold tracking-tight">Sign in</h1>
+          <p className="text-sm text-[var(--text-secondary)]">
+            Enter your email and we&apos;ll send you a magic link.
+          </p>
         </div>
 
-        {/* Corner brackets */}
-        <Bracket pos="tl" />
-        <Bracket pos="tr" />
-        <Bracket pos="bl" />
-        <Bracket pos="br" />
-
-        {/* Content */}
-        <div className="relative">
-          <div className="mb-6 space-y-1">
-            <div className="font-mono text-[10px] uppercase tracking-[0.35em] text-cyan-300/70">
-              <span className="text-cyan-300/90">X</span>
-              <span className="text-cyan-300/50"> . </span>
-              JEAV
-              <span className="text-cyan-300/50"> . </span>
-              <span className="text-cyan-300/50">TIGR</span>
-              <span className="text-cyan-300/40"> · access</span>
-            </div>
-            <h1 className="font-mono text-2xl font-light tracking-wider text-white [animation:glitch-shift_4s_steps(1)_infinite]">
-              IDENTIFY
-            </h1>
+        {status === "sent" ? (
+          <div className="space-y-2 rounded-md border border-[var(--green-mid)]/30 bg-[var(--green-bg)] p-3 text-sm text-[var(--green-text)]">
+            <div className="font-medium">Check your inbox</div>
+            <p className="text-[13px]">
+              A magic link is on its way to <strong>{email}</strong>.
+            </p>
           </div>
-
-          {status === "sent" ? (
-            <div className="space-y-3 font-mono text-sm text-cyan-100">
-              <div className="flex items-center gap-2 text-cyan-300">
-                <span className="inline-block h-1.5 w-1.5 animate-pulse bg-cyan-300" />
-                LINK DISPATCHED
-              </div>
-              <p className="text-xs text-white/60">
-                Check <span className="text-cyan-300">{email}</span> for your access link.
-              </p>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                required
+                autoFocus
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+              />
             </div>
-          ) : (
-            <form onSubmit={handleSubmit} className="space-y-5">
-              <div className="space-y-2">
-                <label
-                  htmlFor="email"
-                  className="block font-mono text-[10px] uppercase tracking-[0.3em] text-cyan-300/70"
-                >
-                  ▸ email
-                </label>
-                <input
-                  id="email"
-                  type="email"
-                  required
-                  autoFocus
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full border border-cyan-300/30 bg-black/40 px-4 py-3 font-mono text-sm text-white placeholder:text-white/20 focus:border-cyan-300 focus:outline-none focus:shadow-[0_0_20px_rgba(0,230,255,0.3)] transition-all"
-                  placeholder="you@domain"
-                />
+
+            <Button
+              type="submit"
+              className="w-full"
+              loading={status === "sending"}
+            >
+              {status === "sending" ? "Sending…" : "Send magic link"}
+            </Button>
+
+            {error && (
+              <div className="rounded-md border border-[var(--red-mid)]/30 bg-[var(--red-bg)] p-3 text-sm text-[var(--red-text)]">
+                {error}
               </div>
-
-              <button
-                type="submit"
-                disabled={status === "sending"}
-                className="group relative w-full overflow-hidden border border-cyan-300/60 bg-cyan-300/10 px-4 py-3 font-mono text-xs uppercase tracking-[0.3em] text-cyan-100 transition-all hover:bg-cyan-300/20 hover:shadow-[0_0_30px_rgba(0,230,255,0.4)] disabled:opacity-50"
-              >
-                <span className="relative z-10">
-                  {status === "sending" ? "transmitting…" : "request access"}
-                </span>
-                <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-cyan-300/30 to-transparent transition-transform duration-1000 group-hover:translate-x-full" />
-              </button>
-
-              {error && (
-                <div className="border border-red-400/40 bg-red-400/10 p-3 font-mono text-xs text-red-200">
-                  ✗ {error}
-                </div>
-              )}
-            </form>
-          )}
-
-          <div className="mt-6 border-t border-cyan-300/20 pt-3 font-mono text-[9px] uppercase tracking-[0.3em] text-white/30">
-            v.0.1 · encrypted channel
-          </div>
-        </div>
+            )}
+          </form>
+        )}
       </div>
     </div>
-  );
-}
-
-function Bracket({ pos }: { pos: "tl" | "tr" | "bl" | "br" }) {
-  const cls = {
-    tl: "top-0 left-0 border-t border-l",
-    tr: "top-0 right-0 border-t border-r",
-    bl: "bottom-0 left-0 border-b border-l",
-    br: "bottom-0 right-0 border-b border-r",
-  }[pos];
-  return (
-    <div
-      className={`pointer-events-none absolute h-4 w-4 border-cyan-300 ${cls}`}
-    />
   );
 }
