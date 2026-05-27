@@ -148,8 +148,12 @@ export function CaneyLanding() {
       )}
 
       {/* Brand mark — always present, faint */}
-      <div className="pointer-events-none absolute left-8 top-8 z-30 font-mono text-[10px] uppercase tracking-[0.5em] text-white/40">
-        <span className="text-cyan-300/80">x</span>.caneycloud
+      <div className="pointer-events-none absolute left-8 top-8 z-30 font-mono text-[10px] uppercase tracking-[0.5em]">
+        <span className="text-cyan-300/80">X</span>
+        <span className="text-white/30"> . </span>
+        <span className="text-white/60">JEAV</span>
+        <span className="text-white/30"> . </span>
+        <span className="text-cyan-300/40">TIGR</span>
       </div>
 
       {/* Holographic sign-in form */}
@@ -298,8 +302,13 @@ function HolographicForm() {
         {/* Content */}
         <div className="relative">
           <div className="mb-6 space-y-1">
-            <div className="font-mono text-[10px] uppercase tracking-[0.4em] text-cyan-300/70">
-              x.caneycloud · access
+            <div className="font-mono text-[10px] uppercase tracking-[0.35em] text-cyan-300/70">
+              <span className="text-cyan-300/90">X</span>
+              <span className="text-cyan-300/50"> . </span>
+              JEAV
+              <span className="text-cyan-300/50"> . </span>
+              <span className="text-cyan-300/50">TIGR</span>
+              <span className="text-cyan-300/40"> · access</span>
             </div>
             <h1 className="font-mono text-2xl font-light tracking-wider text-white [animation:glitch-shift_4s_steps(1)_infinite]">
               IDENTIFY
