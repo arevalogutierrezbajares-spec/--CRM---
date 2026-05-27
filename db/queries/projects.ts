@@ -16,8 +16,13 @@ export type ProjectListItem = ProjectRow & {
   contactCount: number;
   milestoneOpenCount: number;
   milestoneOverdueCount: number;
+  milestoneTotalCount: number;
+  milestoneDoneCount: number;
+  milestoneProgressPct: number;
   templateName: string | null;
   computedHealth: HealthColor;
+  /** Folder-tree preview: { category: ["link label", ...] } */
+  linkPreview: Record<string, string[]>;
 };
 
 export async function listProjects(opts: {
@@ -68,6 +73,16 @@ export async function listProjects(opts: {
       .where(inArray(milestones.projectId, ids)),
   ]);
 
+  // Per-project link counts grouped by category (for card hover preview)
+  const linkRows = await db
+    .select({
+      projectId: schema.projectLinks.projectId,
+      category: schema.projectLinks.category,
+      label: schema.projectLinks.label,
+    })
+    .from(schema.projectLinks)
+    .where(inArray(schema.projectLinks.projectId, ids));
+
   const today = new Date().toISOString().slice(0, 10);
 
   return rows.map(({ project, templateName }) => {
@@ -80,6 +95,16 @@ export async function listProjects(opts: {
         dueDate: m.dueDate,
       })),
     });
+    const total = projectMs.length;
+    const doneCount = projectMs.filter((m) => m.status === "done").length;
+
+    // Build folder structure: { category: string[] (labels) }
+    const linkPreview: Record<string, string[]> = {};
+    for (const l of linkRows) {
+      if (l.projectId !== project.id) continue;
+      (linkPreview[l.category] ??= []).push(l.label);
+    }
+
     return {
       ...project,
       templateName,
@@ -89,7 +114,11 @@ export async function listProjects(opts: {
       milestoneOverdueCount: projectMs.filter(
         (m) => m.status !== "done" && m.dueDate && m.dueDate < today,
       ).length,
+      milestoneTotalCount: total,
+      milestoneDoneCount: doneCount,
+      milestoneProgressPct: total === 0 ? 0 : Math.round((doneCount / total) * 100),
       computedHealth,
+      linkPreview,
     };
   });
 }

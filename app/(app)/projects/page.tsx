@@ -73,11 +73,15 @@ export default async function ProjectsPage(props: {
     },
   ];
 
+  // Split into Featured + the rest
+  const featured = filtered.filter((p) => p.featured);
+  const rest = filtered.filter((p) => !p.featured);
+
   const groups: Record<
     "active" | "waiting" | "done" | "lost",
     ProjectListItem[]
   > = { active: [], waiting: [], done: [], lost: [] };
-  for (const p of filtered) groups[p.status].push(p);
+  for (const p of rest) groups[p.status].push(p);
 
   return (
     <>
@@ -129,6 +133,22 @@ export default async function ProjectsPage(props: {
           </div>
         ) : (
           <div className="space-y-6">
+            {/* ── Featured row (CaneyCloud + VAV at top) ─────────────── */}
+            {featured.length > 0 && (
+              <section>
+                <h2 className="text-label text-text-secondary mb-3 flex items-center gap-1.5">
+                  <span>★ Featured</span>
+                  <span className="opacity-60">· {featured.length}</span>
+                </h2>
+                <div className="grid gap-4 lg:grid-cols-2">
+                  {featured.map((p) => (
+                    <ProjectCard key={p.id} project={p} variant="featured" />
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* ── Rest grouped by status ──────────────────────────────── */}
             {(["active", "waiting", "done", "lost"] as const).map((s) => {
               const items = groups[s];
               if (items.length === 0) return null;
