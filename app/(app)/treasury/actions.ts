@@ -5,7 +5,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "@/db";
 import { requireUser } from "@/lib/current-user";
-import { toUsdCents, setRate } from "@/lib/fx";
+import { toUsdCents, setRate } from "@/lib/fx.server";
 
 const {
   finAccounts,
