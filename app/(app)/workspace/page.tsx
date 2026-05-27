@@ -18,11 +18,15 @@ import {
   revokeInvite,
   removeMember,
 } from "./actions";
+import { CopyInviteButton } from "./copy-invite-button";
 
-export default async function WorkspacePage() {
+export default async function WorkspacePage(props: {
+  searchParams: Promise<{ accepted?: string; invited?: string }>;
+}) {
   const user = await requireUser();
   const viewRes = await safeRead(() => getWorkspaceView(), null);
   const view = viewRes.data;
+  const sp = await props.searchParams;
 
   return (
     <>
@@ -36,6 +40,11 @@ export default async function WorkspacePage() {
           </p>
         </header>
 
+        {sp.accepted && (
+          <div className="mb-4 rounded-md border border-[var(--green-mid)]/30 bg-[var(--green-bg)] p-3 text-sm text-[var(--green-text)]">
+            ✓ Invite accepted. You&apos;re a member of this workspace.
+          </div>
+        )}
         {!viewRes.ok && <DbBanner error={viewRes.error} />}
         {view && (
           <>
@@ -179,32 +188,34 @@ export default async function WorkspacePage() {
                             <div className="font-medium">{i.email}</div>
                             <div className="text-xs text-[var(--muted-foreground)]">
                               {i.role} · expires{" "}
-                              {new Date(i.expiresAt).toLocaleDateString()} ·
-                              link: <code>/accept?token={i.token}</code>
+                              {new Date(i.expiresAt).toLocaleDateString()}
                             </div>
                           </div>
-                          {(view.myRole === "owner" ||
-                            view.myRole === "admin") && (
-                            <form
-                              action={async (fd) => {
-                                "use server";
-                                await revokeInvite(fd);
-                              }}
-                            >
-                              <input
-                                type="hidden"
-                                name="inviteId"
-                                value={i.id}
-                              />
-                              <Button
-                                type="submit"
-                                variant="ghost"
-                                size="sm"
+                          <div className="flex items-center gap-1">
+                            <CopyInviteButton token={i.token} />
+                            {(view.myRole === "owner" ||
+                              view.myRole === "admin") && (
+                              <form
+                                action={async (fd) => {
+                                  "use server";
+                                  await revokeInvite(fd);
+                                }}
                               >
-                                Revoke
-                              </Button>
-                            </form>
-                          )}
+                                <input
+                                  type="hidden"
+                                  name="inviteId"
+                                  value={i.id}
+                                />
+                                <Button
+                                  type="submit"
+                                  variant="ghost"
+                                  size="sm"
+                                >
+                                  Revoke
+                                </Button>
+                              </form>
+                            )}
+                          </div>
                         </div>
                       ))}
                   </div>

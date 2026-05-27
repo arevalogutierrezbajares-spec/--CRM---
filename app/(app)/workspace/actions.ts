@@ -1,11 +1,13 @@
 "use server";
 
+import { headers } from "next/headers";
 import { randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "@/db";
 import { requireUser } from "@/lib/current-user";
+import { sendEmail, isResendConfigured } from "@/lib/resend";
 
 const { workspaces, workspaceMembers, workspaceInvites, users } = schema;
 
@@ -171,8 +173,42 @@ export async function inviteMember(formData: FormData) {
       set: { role, invitedBy: user.id, token, expiresAt, acceptedAt: null },
     });
 
+  // Get workspace name + inviter display name for the email body
+  const [ws] = await db
+    .select({ name: workspaces.name })
+    .from(workspaces)
+    .where(eq(workspaces.id, user.workspaceId))
+    .limit(1);
+
+  // Build the absolute accept URL from request headers (works on any deployment)
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
+  const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
+  const acceptUrl = `${proto}://${host}/accept?token=${encodeURIComponent(token)}`;
+
+  // Try to send the invite email. If Resend isn't configured (local dev),
+  // silently degrade — the token is still in the workspace_invites row and
+  // visible in the Pending invites list, so owner can copy/share manually.
+  let emailSent = false;
+  if (isResendConfigured()) {
+    const wsName = ws?.name ?? "the workspace";
+    const subj = `${user.displayName} invited you to join ${wsName}`;
+    const html = [
+      `<h2>${user.displayName} invited you to join ${wsName}</h2>`,
+      `<p>You're invited as a <strong>${role}</strong> on the AGB CRM workspace <strong>${wsName}</strong>.</p>`,
+      `<p style="text-align:center;margin:24px 0;">`,
+      `  <a href="${acceptUrl}" style="display:inline-block;background:#1A1A1A;color:#FFF;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;">Accept invite</a>`,
+      `</p>`,
+      `<p style="font-size:12px;color:#666;">Or paste this link in your browser: ${acceptUrl}</p>`,
+      `<p style="font-size:12px;color:#666;">This invite expires in ${INVITE_TTL_DAYS} days.</p>`,
+    ].join("\n");
+    const text = `${user.displayName} invited you to join ${wsName}.\n\nAccept: ${acceptUrl}\n\nThis invite expires in ${INVITE_TTL_DAYS} days.`;
+    const result = await sendEmail({ to: email, subject: subj, html, text });
+    emailSent = result.ok;
+  }
+
   revalidatePath("/workspace");
-  return { ok: true as const, mode: "invited" as const, token };
+  return { ok: true as const, mode: "invited" as const, token, emailSent, acceptUrl };
 }
 
 export async function revokeInvite(formData: FormData) {

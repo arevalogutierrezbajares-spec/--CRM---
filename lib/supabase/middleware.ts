@@ -73,7 +73,12 @@ export async function updateSession(request: NextRequest) {
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
+    // Preserve the original path + query so post-login the user lands back
+    // here. Especially important for /accept?token=… invites where losing
+    // the token means losing the invite.
+    const nextPath = request.nextUrl.pathname + request.nextUrl.search;
     url.pathname = "/login";
+    url.search = `?next=${encodeURIComponent(nextPath)}`;
     return NextResponse.redirect(url);
   }
 

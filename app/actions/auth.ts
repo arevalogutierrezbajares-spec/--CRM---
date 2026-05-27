@@ -6,7 +6,7 @@ import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { db, schema } from "@/db";
 
-const { users } = schema;
+const { users, workspaceInvites } = schema;
 
 export async function signOut() {
   const supabase = await createClient();
@@ -30,6 +30,10 @@ export async function requestSignInLink(formData: FormData): Promise<{
     return { ok: false, error: "Enter a valid email address." };
   }
 
+  // Allow sign-in for two cases:
+  // (1) Existing workspace member (email in users table)
+  // (2) Email has a pending, non-expired workspace_invite — they need to be
+  //     able to sign in to redeem it
   const [member] = await db
     .select({ id: users.id })
     .from(users)
@@ -37,11 +41,19 @@ export async function requestSignInLink(formData: FormData): Promise<{
     .limit(1);
 
   if (!member) {
-    return {
-      ok: false,
-      error:
-        "This address isn't on the invite list. Ask the workspace owner to invite you.",
-    };
+    const [pendingInvite] = await db
+      .select({ id: workspaceInvites.id })
+      .from(workspaceInvites)
+      .where(ilike(workspaceInvites.email, email))
+      .limit(1);
+    if (!pendingInvite) {
+      return {
+        ok: false,
+        error:
+          "This address isn't on the invite list. Ask the workspace owner to invite you.",
+      };
+    }
+    // Else: has a pending invite — let them sign in so they can accept it
   }
 
   // Derive the absolute callback URL from the incoming request so it works
@@ -49,7 +61,14 @@ export async function requestSignInLink(formData: FormData): Promise<{
   const h = await headers();
   const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
   const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
-  const redirectTo = `${proto}://${host}/auth/callback`;
+
+  // Forward ?next= so post-auth the user lands back on the page they were
+  // trying to reach (e.g. /accept?token=… for invitees).
+  const nextRaw = formData.get("next");
+  const nextPath = typeof nextRaw === "string" && nextRaw.startsWith("/") ? nextRaw : "/";
+  const callbackUrl = new URL(`${proto}://${host}/auth/callback`);
+  callbackUrl.searchParams.set("next", nextPath);
+  const redirectTo = callbackUrl.toString();
 
   // We've already verified the email is on the invite list (users.email
   // lookup above). Supabase's shouldCreateUser:false would over-gate by

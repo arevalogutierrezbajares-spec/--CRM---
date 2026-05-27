@@ -81,9 +81,12 @@ export function CaneyLanding() {
         console.error("auth handoff failed:", err.error ?? resp.status);
         return;
       }
-      // Clear the hash so a reload doesn't try to re-process it, then go home.
+      // Clear the hash so a reload doesn't try to re-process it, then go to
+      // wherever the middleware originally wanted to send the user.
+      const urlNext = new URLSearchParams(window.location.search).get("next");
+      const target = urlNext && urlNext.startsWith("/") ? urlNext : "/";
       window.history.replaceState(null, "", window.location.pathname);
-      window.location.href = "/";
+      window.location.href = target;
     })();
   }, []);
 
@@ -289,6 +292,10 @@ function HolographicForm() {
     setError(null);
     const fd = new FormData();
     fd.set("email", email);
+    // Carry the ?next= param forward so the magic link redirects back to
+    // wherever the user was trying to go (e.g. /accept?token=…).
+    const urlNext = new URLSearchParams(window.location.search).get("next");
+    if (urlNext && urlNext.startsWith("/")) fd.set("next", urlNext);
     const result = await requestSignInLink(fd);
     if (!result.ok) {
       setStatus("error");
