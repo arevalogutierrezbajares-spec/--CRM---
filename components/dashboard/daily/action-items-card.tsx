@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle2, Clock, ListTodo, Mic, Plus } from "lucide-react";
@@ -40,14 +40,31 @@ export function ActionItemsCard({ items, sources }: { items: DashActionItem[]; s
   // Optimistic list: mutations apply instantly and reconcile when the server
   // action's revalidatePath streams new props (rolls back if it doesn't).
   const [optimistic, dispatch] = useOptimisticList(items);
+  const listRef = useRef<HTMLUListElement>(null);
   // Combobox picks (first @person = owner, all = notified) reconciled to the text.
   const picks = useCapturePicks();
+
+  // "Fire a queue": after clearing an item, move focus to the next item's
+  // checkbox (by id — the removed row lingers during its exit animation, so we
+  // target the surviving element explicitly). Lets you Space → Space → Space.
+  function focusNextAfter(itemId: string) {
+    const visible = optimistic.slice(0, 8);
+    const idx = visible.findIndex((x) => x.id === itemId);
+    const nextId = visible[idx + 1]?.id ?? visible[idx - 1]?.id ?? null;
+    if (!nextId) return;
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        listRef.current?.querySelector<HTMLInputElement>(`input[data-item-id="${nextId}"]`)?.focus();
+      }),
+    );
+  }
 
   // Pattern: dispatch the optimistic change (instant), run the action, then
   // refresh INSIDE the transition so the server reconciliation is masked by the
   // optimistic state (no flash, no wait). On error we skip refresh → the
   // optimistic change reverts when the transition ends.
   function complete(item: DashActionItem) {
+    focusNextAfter(item.id);
     startTransition(async () => {
       dispatch({ kind: "remove", id: item.id }); // instant collapse
       const res = await setActionItemDone({ id: item.id, done: true });
@@ -59,6 +76,7 @@ export function ActionItemsCard({ items, sources }: { items: DashActionItem[]; s
   }
 
   function snooze(item: DashActionItem, days: number) {
+    focusNextAfter(item.id);
     startTransition(async () => {
       dispatch({ kind: "remove", id: item.id });
       const res = await snoozeActionItemAction({ id: item.id, days });
@@ -123,7 +141,7 @@ export function ActionItemsCard({ items, sources }: { items: DashActionItem[]; s
           <p className="text-[12px] text-text-secondary">No open action items.</p>
         </div>
       ) : (
-        <ul className="space-y-1.5">
+        <ul ref={listRef} className="space-y-1.5">
           <AnimatePresence initial={false}>
             {optimistic.slice(0, 8).map((item) => {
               const badge = item.isOverdue
@@ -143,8 +161,8 @@ export function ActionItemsCard({ items, sources }: { items: DashActionItem[]; s
                 >
                   <input
                     type="checkbox"
+                    data-item-id={item.id}
                     aria-label={`Complete ${item.title}`}
-                    disabled={pending}
                     onChange={() => complete(item)}
                     className="mt-0.5 h-3.5 w-3.5 shrink-0 cursor-pointer accent-green-mid"
                   />
