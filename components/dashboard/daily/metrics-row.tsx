@@ -45,12 +45,14 @@ export function MetricsRow({ counts }: MetricsRowProps) {
         label="Tasks today"
         delta={tasksDelta}
         deltaTone={tasksDeltaTone as "bad" | "neutral"}
+        href="/work"
       />
       <MetricCard
         value={counts.meetingsToday}
         label="Meetings today"
         delta={meetingsDelta}
         deltaTone={meetingsDeltaTone}
+        href="/meetings"
       />
       <MetricCard
         value={counts.blockedProjects}
@@ -61,12 +63,14 @@ export function MetricsRow({ counts }: MetricsRowProps) {
             : `${counts.blockedProjects} waiting`
         }
         deltaTone={counts.blockedProjects > 0 ? "warn" : "good"}
+        href="/projects?health=red"
       />
       <MetricCard
         value={counts.activeProjects}
         label="Active projects"
         delta={projectsDelta}
         deltaTone={projectsDeltaTone}
+        href="/projects"
       />
     </div>
   );

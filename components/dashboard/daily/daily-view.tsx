@@ -5,7 +5,9 @@ import { ProjectsCard } from "./projects-card";
 import { ActionItemsCard } from "./action-items-card";
 import { AIAssistPanel } from "./ai-assist-panel";
 import { TodayBriefing } from "./today-briefing";
+import { NeedsYouNow } from "./needs-you-now";
 import { ItemDrawerProvider } from "../item-drawer";
+import type { BlockedProject } from "@/db/queries/this-week";
 import { PinnedProjects } from "../pinned-projects";
 import { CustomizableDashboard } from "../customizable-dashboard";
 import type { PinnedProject } from "@/db/queries/pins";
@@ -28,6 +30,7 @@ interface DailyViewProps {
   members: { userId: string; displayName: string }[];
   pinnedProjects: PinnedProject[];
   recentProjects: { id: string; title: string }[];
+  blocked: BlockedProject[];
   layout: DashWidget[];
   greeting: string;
   briefing: string[];
@@ -44,6 +47,7 @@ export function DailyView({
   members,
   pinnedProjects,
   recentProjects,
+  blocked,
   layout,
   greeting,
   briefing,
@@ -58,6 +62,7 @@ export function DailyView({
       initialItem={initialItem}
     >
       <TodayBriefing greeting={greeting} bullets={briefing} />
+      <NeedsYouNow actionItems={actionItems} tasks={tasks} blocked={blocked} meetings={meetings} />
       <MetricsRow counts={counts} />
       <CustomizableDashboard
         savedLayout={layout}

@@ -339,6 +339,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
           members={dailyData.members}
           pinnedProjects={dailyData.pinnedProjects}
           recentProjects={dailyData.recentProjects}
+          blocked={blockedRes.data}
           layout={dailyData.layout}
           greeting={greeting}
           briefing={briefing}

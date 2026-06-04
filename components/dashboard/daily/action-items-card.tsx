@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { CheckCircle2, ListTodo, Mic, Plus } from "lucide-react";
+import { CheckCircle2, Clock, ListTodo, Mic, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { DashCard } from "../shared/dash-card";
 import { SectionLabel } from "../shared/section-label";
@@ -11,7 +11,7 @@ import { DashBadge, type BadgeVariant } from "../shared/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { setActionItemDone } from "@/app/(app)/action-items/actions";
-import { quickCaptureAction } from "@/app/(app)/dashboard/item-actions";
+import { quickCaptureAction, snoozeActionItemAction } from "@/app/(app)/dashboard/item-actions";
 import { useItemDrawer } from "../item-drawer";
 import type { DashActionItem } from "@/db/queries/dashboard";
 
@@ -51,6 +51,18 @@ export function ActionItemsCard({ items }: { items: DashActionItem[] }) {
           n.delete(item.id);
           return n;
         });
+      }
+    });
+  }
+
+  function snooze(item: DashActionItem, days: number) {
+    startTransition(async () => {
+      const res = await snoozeActionItemAction({ id: item.id, days });
+      if (res.ok) {
+        toast.success(days === 1 ? "Snoozed to tomorrow" : `Snoozed ${days} days`, { duration: 1400 });
+        router.refresh();
+      } else {
+        toast.error(res.error);
       }
     });
   }
@@ -121,6 +133,16 @@ export function ActionItemsCard({ items }: { items: DashActionItem[] }) {
                     {item.dueDate && <div className="text-tiny text-text-tertiary">due {shortDate(item.dueDate)}</div>}
                   </button>
                   {badge && <DashBadge variant={badge.variant}>{badge.label}</DashBadge>}
+                  <button
+                    type="button"
+                    onClick={() => snooze(item, 7)}
+                    disabled={pending}
+                    title="Snooze 1 week"
+                    aria-label={`Snooze ${item.title} 1 week`}
+                    className="shrink-0 rounded p-0.5 text-text-tertiary opacity-0 transition-opacity hover:text-[var(--blue-text)] group-hover:opacity-100"
+                  >
+                    <Clock size={13} />
+                  </button>
                 </motion.li>
               );
             })}

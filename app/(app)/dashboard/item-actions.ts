@@ -72,6 +72,27 @@ export async function updateActionItemAction(opts: {
   return { ok: true, id: opts.id };
 }
 
+/**
+ * Snooze / defer an action item — push its due date forward by N days from
+ * today (clears the "overdue" state and gets it out of "Needs you now" until
+ * it matters again). Default: tomorrow.
+ */
+export async function snoozeActionItemAction(opts: {
+  id: string;
+  days?: number;
+}): Promise<Result> {
+  const user = await requireUser();
+  const days = Math.max(1, Math.min(opts.days ?? 1, 90));
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + days);
+  const dueDate = d.toISOString().slice(0, 10);
+  const ok = await updateActionItem({ workspaceId: user.workspaceId, id: opts.id, dueDate });
+  if (!ok) return { ok: false, error: "Action item not found" };
+  refresh();
+  return { ok: true, id: opts.id };
+}
+
 /* ── tasks (milestones) ───────────────────────────────────────────────── */
 
 export async function createTaskAction(opts: {

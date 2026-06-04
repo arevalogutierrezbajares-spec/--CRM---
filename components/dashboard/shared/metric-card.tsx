@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { CountUp } from "./count-up";
 
@@ -6,6 +7,7 @@ interface MetricCardProps {
   label: string;
   delta?: string;
   deltaTone?: "neutral" | "good" | "warn" | "bad";
+  href?: string;
   className?: string;
 }
 
@@ -21,19 +23,33 @@ export function MetricCard({
   label,
   delta,
   deltaTone = "neutral",
+  href,
   className,
 }: MetricCardProps) {
-  return (
-    <div className={cn("bg-surface rounded-md p-2.5", className)}>
+  const inner = (
+    <>
       <div className="text-[22px] font-medium leading-none text-text-primary">
         {typeof value === "number" ? <CountUp value={value} /> : value}
       </div>
       <div className="text-[11px] text-text-secondary mt-1">{label}</div>
       {delta && (
-        <div className={cn("text-tiny mt-0.5", DELTA_TONE[deltaTone])}>
-          {delta}
-        </div>
+        <div className={cn("text-tiny mt-0.5", DELTA_TONE[deltaTone])}>{delta}</div>
       )}
-    </div>
+    </>
   );
+
+  if (href) {
+    return (
+      <Link
+        href={href}
+        className={cn(
+          "block rounded-md bg-surface p-2.5 transition-colors hover:bg-[var(--surface-hover,var(--border))]",
+          className,
+        )}
+      >
+        {inner}
+      </Link>
+    );
+  }
+  return <div className={cn("bg-surface rounded-md p-2.5", className)}>{inner}</div>;
 }
