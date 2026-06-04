@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState } from "react";
-import { Send } from "lucide-react";
+import { Send, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { createPostAction } from "@/app/(app)/town-hall/actions";
@@ -31,15 +31,20 @@ export function Composer({
   members,
   objects,
   onPosted,
+  parentPostId,
+  placeholder,
 }: {
   members: MemberOption[];
   objects: RefObject[];
   onPosted: () => void;
+  parentPostId?: string;
+  placeholder?: string;
 }) {
   const taRef = useRef<HTMLTextAreaElement | null>(null);
   const [text, setText] = useState("");
   const [caret, setCaret] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  const [alsoWA, setAlsoWA] = useState(false);
   // Resolved tokens chosen from the autocomplete (best-effort; the server also
   // re-parses the body so hand-typed @names still resolve).
   const [pickedMentions, setPickedMentions] = useState<MemberOption[]>([]);
@@ -136,7 +141,7 @@ export function Composer({
         .filter((r) => body.toLowerCase().includes(`#${r.label.toLowerCase()}`))
         .map((r) => ({ refType: r.refType, refId: r.refId, label: r.label }));
 
-      const res = await createPostAction({ body, mentionUserIds, refs });
+      const res = await createPostAction({ body, mentionUserIds, refs, parentPostId, alsoWhatsApp: alsoWA });
       if (!res.ok) {
         toast.error(res.error || "Could not post");
         return;
@@ -145,6 +150,7 @@ export function Composer({
       setCaret(0);
       setPickedMentions([]);
       setPickedRefs([]);
+      setAlsoWA(false);
       if (res.notified > 0) {
         toast.success(
           `Posted · notified ${res.notified}${
@@ -156,7 +162,7 @@ export function Composer({
     } finally {
       setSubmitting(false);
     }
-  }, [text, submitting, pickedMentions, pickedRefs, onPosted]);
+  }, [text, submitting, pickedMentions, pickedRefs, onPosted, parentPostId, alsoWA]);
 
   const showSuggest =
     trigger &&
@@ -182,7 +188,7 @@ export function Composer({
             }
           }}
           rows={3}
-          placeholder="Share an update… @mention people, #reference a project. ⌘↵ to post."
+          placeholder={placeholder ?? "Share an update… @mention people, #reference a project. ⌘↵ to post."}
           className="w-full resize-none rounded-md border border-[var(--input)] bg-transparent px-3 py-2 text-[13px] leading-relaxed placeholder:text-text-tertiary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
         />
 
@@ -224,18 +230,26 @@ export function Composer({
         )}
       </div>
 
-      <div className="mt-2 flex items-center justify-between">
-        <span className="text-tiny text-text-tertiary">
-          Type <span className="font-mono">@</span> for people,{" "}
-          <span className="font-mono">#</span> for objects.
-        </span>
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={() => setAlsoWA((v) => !v)}
+          title="Also send this to everyone's WhatsApp"
+          className={`flex items-center gap-1 rounded-full border px-2 py-0.5 text-tiny transition-colors ${
+            alsoWA
+              ? "border-[var(--green-mid)] text-[var(--green-text)]"
+              : "border-[var(--border)] text-text-tertiary hover:text-text-secondary"
+          }`}
+        >
+          <MessageCircle size={12} /> WhatsApp
+        </button>
         <Button
           size="sm"
           onClick={() => void submit()}
           loading={submitting}
           disabled={!text.trim()}
         >
-          <Send className="h-3.5 w-3.5" /> Post
+          <Send className="h-3.5 w-3.5" /> {parentPostId ? "Reply" : "Post"}
         </Button>
       </div>
     </div>

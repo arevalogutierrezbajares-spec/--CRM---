@@ -9,6 +9,7 @@ import { listWorkspaceMembers } from "@/db/queries/team";
 import {
   createPost,
   listPosts,
+  toggleReaction,
   listNotifications,
   markNotificationsRead,
   unreadCount,
@@ -58,7 +59,7 @@ export type CreatePostResult =
 /** Lightweight refresh for the live chat — just the posts, not the whole page. */
 export async function loadRecentPostsAction(): Promise<PostView[]> {
   const user = await requireUser();
-  return listPosts({ workspaceId: user.workspaceId, limit: 40 });
+  return listPosts({ workspaceId: user.workspaceId, viewerId: user.id, limit: 40 });
 }
 
 export async function createPostAction(input: {
@@ -66,6 +67,9 @@ export async function createPostAction(input: {
   kind?: "message" | "note";
   mentionUserIds?: string[];
   refs?: Array<{ refType: PostRefType; refId: string; label: string }>;
+  parentPostId?: string | null;
+  /** Also broadcast this post to every teammate's WhatsApp. */
+  alsoWhatsApp?: boolean;
 }): Promise<CreatePostResult> {
   const user = await requireUser();
   const parsed = createPostSchema.safeParse(input);
@@ -73,6 +77,7 @@ export async function createPostAction(input: {
     return { ok: false, error: "Invalid post payload" };
   }
   const { body, kind, refs } = parsed.data;
+  const parentPostId = typeof input.parentPostId === "string" ? input.parentPostId : null;
 
   const members = await listWorkspaceMembers(user.workspaceId);
   const memberById = new Map(members.map((m) => [m.userId, m]));
@@ -117,24 +122,29 @@ export async function createPostAction(input: {
     kind,
     mentionUserIds,
     refs: validRefs,
+    parentPostId,
   });
 
-  // 4. WhatsApp DM each mentioned member (except the author) with a phone.
-  const recipients = mentionUserIds.filter((id) => id !== user.id);
+  // 4. WhatsApp out. Mentioned members get a DM; if alsoWhatsApp, the whole
+  //    team gets it (their inbox is WhatsApp). Each recipient is messaged once.
+  const link = `${process.env.NEXT_PUBLIC_SITE_URL ?? ""}/town-hall`;
+  const mentioned = new Set(mentionUserIds.filter((id) => id !== user.id));
+  const broadcast = input.alsoWhatsApp
+    ? new Set(members.map((m) => m.userId).filter((id) => id !== user.id))
+    : new Set<string>();
+  const targets = Array.from(new Set([...mentioned, ...broadcast]));
   let waSent = 0;
-  if (recipients.length > 0) {
+  if (targets.length > 0) {
     const phoneRows = await db
       .select({ id: users.id, phone: users.whatsappPhone })
       .from(users)
-      .where(inArray(users.id, recipients));
-    const link = `${process.env.NEXT_PUBLIC_SITE_URL ?? ""}/town-hall`;
-    const msg = `${user.displayName} mentioned you in town hall: "${snippet(
-      body,
-    )}" → ${link}`;
+      .where(inArray(users.id, targets));
     await Promise.all(
       phoneRows
         .filter((r) => r.phone)
         .map(async (r) => {
+          const verb = mentioned.has(r.id) ? "mentioned you in" : "posted to";
+          const msg = `${user.displayName} ${verb} town hall: "${snippet(body)}" → ${link}`;
           const res = await sendWhatsAppText({ to: r.phone as string, body: msg });
           if (res.ok) waSent += 1;
         }),
@@ -142,7 +152,18 @@ export async function createPostAction(input: {
   }
 
   revalidatePath("/town-hall");
-  return { ok: true, postId, notified: recipients.length, waSent };
+  return { ok: true, postId, notified: mentioned.size, waSent };
+}
+
+/** Toggle an emoji reaction on a post. */
+export async function toggleReactionAction(opts: {
+  postId: string;
+  emoji: string;
+}): Promise<{ ok: true; on: boolean } | { ok: false; error: string }> {
+  const user = await requireUser();
+  const emoji = opts.emoji.slice(0, 8);
+  const on = await toggleReaction({ postId: opts.postId, userId: user.id, emoji });
+  return { ok: true, on };
 }
 
 /** Recent notifications for the caller (for the bell dropdown). */

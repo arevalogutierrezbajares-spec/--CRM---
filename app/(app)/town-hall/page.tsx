@@ -13,7 +13,7 @@ export default async function TownHallPage() {
 
   const [postsRes, membersRes, projectsRes] = await Promise.all([
     safeRead<PostView[]>(
-      () => listPosts({ workspaceId: user.workspaceId, limit: 100 }),
+      () => listPosts({ workspaceId: user.workspaceId, viewerId: user.id, limit: 100 }),
       [],
     ),
     safeRead(() => listWorkspaceMembers(user.workspaceId), []),

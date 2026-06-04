@@ -15,6 +15,8 @@ import {
 import { Composer } from "./composer";
 import { Feed } from "./feed";
 import { PostBody } from "./post-body";
+import { PostReactions } from "./post-reactions";
+import { usePresence } from "@/lib/presence/presence-context";
 import type { MemberOption, PostView, RefObject } from "./types";
 
 function relTime(d: Date): string {
@@ -58,6 +60,8 @@ export function TownHallPanel({
   // append live without re-running the whole page (no router.refresh).
   const [posts, setPosts] = useState<PostView[]>(() => [...initialPosts].reverse());
   const [hasNew, setHasNew] = useState(false);
+  const presence = usePresence();
+  const online = presence?.online.length ?? 0;
 
   function scrollToBottom() {
     const el = scrollRef.current;
@@ -121,6 +125,12 @@ export function TownHallPanel({
         <div className="flex items-center gap-1.5 text-label" style={{ color: "var(--purple-text)" }}>
           <Megaphone size={14} />
           <span>Town Hall</span>
+          {online > 0 && (
+            <span className="flex items-center gap-1 text-tiny font-normal text-text-tertiary">
+              <span className="h-1.5 w-1.5 rounded-full" style={{ background: "var(--green-mid)" }} />
+              {online} online
+            </span>
+          )}
         </div>
         <button
           type="button"
@@ -139,7 +149,7 @@ export function TownHallPanel({
           </p>
         ) : (
           posts.map((post) => (
-            <div key={post.id} className="flex items-start gap-2">
+            <div key={post.id} className="group flex items-start gap-2">
               <div
                 className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-[9px] font-semibold"
                 style={{ background: "var(--surface)", color: "var(--text-secondary)" }}
@@ -152,6 +162,7 @@ export function TownHallPanel({
                   <span className="text-[10px] text-text-tertiary">{relTime(post.createdAt)}</span>
                 </div>
                 <PostBody post={post} />
+                <PostReactions postId={post.id} reactions={post.reactions} onChanged={() => void refresh()} />
               </div>
             </div>
           ))

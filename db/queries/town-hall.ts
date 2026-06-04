@@ -2,7 +2,7 @@ import "server-only";
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 
-const { posts, postMentions, postRefs, notifications, users } = schema;
+const { posts, postMentions, postRefs, postReactions, notifications, users } = schema;
 
 export type PostRefType =
   | "action_item"
@@ -19,6 +19,8 @@ export type PostRefView = {
   label: string;
 };
 
+export type PostReactionView = { emoji: string; count: number; mine: boolean };
+
 export type PostView = {
   id: string;
   body: string;
@@ -26,8 +28,10 @@ export type PostView = {
   createdAt: Date;
   authorId: string;
   authorName: string;
+  parentPostId: string | null;
   mentions: PostMentionView[];
   refs: PostRefView[];
+  reactions: PostReactionView[];
 };
 
 /**
@@ -36,6 +40,7 @@ export type PostView = {
  */
 export async function listPosts(opts: {
   workspaceId: string;
+  viewerId?: string;
   limit?: number;
 }): Promise<PostView[]> {
   const rows = await db
@@ -46,6 +51,7 @@ export async function listPosts(opts: {
       createdAt: posts.createdAt,
       authorId: posts.authorId,
       authorName: users.displayName,
+      parentPostId: posts.parentPostId,
     })
     .from(posts)
     .innerJoin(users, eq(users.id, posts.authorId))
@@ -56,7 +62,7 @@ export async function listPosts(opts: {
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.id);
 
-  const [mentionRows, refRows] = await Promise.all([
+  const [mentionRows, refRows, reactionRows] = await Promise.all([
     db
       .select({
         postId: postMentions.postId,
@@ -76,7 +82,42 @@ export async function listPosts(opts: {
       })
       .from(postRefs)
       .where(inArray(postRefs.postId, ids)),
+    db
+      .select({
+        postId: postReactions.postId,
+        emoji: postReactions.emoji,
+        userId: postReactions.userId,
+      })
+      .from(postReactions)
+      .where(inArray(postReactions.postId, ids)),
   ]);
+
+  // Bucket once (avoid O(posts × rows) re-filtering).
+  const mentionsBy = new Map<string, PostMentionView[]>();
+  for (const m of mentionRows) {
+    (mentionsBy.get(m.postId) ?? mentionsBy.set(m.postId, []).get(m.postId)!).push({
+      userId: m.userId,
+      displayName: m.displayName,
+    });
+  }
+  const refsBy = new Map<string, PostRefView[]>();
+  for (const rf of refRows) {
+    (refsBy.get(rf.postId) ?? refsBy.set(rf.postId, []).get(rf.postId)!).push({
+      id: rf.id,
+      refType: rf.refType,
+      refId: rf.refId,
+      label: rf.label,
+    });
+  }
+  // emoji → { count, mine } per post.
+  const reactionsBy = new Map<string, Map<string, { count: number; mine: boolean }>>();
+  for (const r of reactionRows) {
+    const m = reactionsBy.get(r.postId) ?? reactionsBy.set(r.postId, new Map()).get(r.postId)!;
+    const cur = m.get(r.emoji) ?? { count: 0, mine: false };
+    cur.count += 1;
+    if (opts.viewerId && r.userId === opts.viewerId) cur.mine = true;
+    m.set(r.emoji, cur);
+  }
 
   return rows.map((r) => ({
     id: r.id,
@@ -85,17 +126,14 @@ export async function listPosts(opts: {
     createdAt: r.createdAt,
     authorId: r.authorId,
     authorName: r.authorName,
-    mentions: mentionRows
-      .filter((m) => m.postId === r.id)
-      .map((m) => ({ userId: m.userId, displayName: m.displayName })),
-    refs: refRows
-      .filter((rf) => rf.postId === r.id)
-      .map((rf) => ({
-        id: rf.id,
-        refType: rf.refType,
-        refId: rf.refId,
-        label: rf.label,
-      })),
+    parentPostId: r.parentPostId ?? null,
+    mentions: mentionsBy.get(r.id) ?? [],
+    refs: refsBy.get(r.id) ?? [],
+    reactions: Array.from(reactionsBy.get(r.id)?.entries() ?? []).map(([emoji, v]) => ({
+      emoji,
+      count: v.count,
+      mine: v.mine,
+    })),
   }));
 }
 
@@ -108,6 +146,8 @@ export type NewPostInput = {
   mentionUserIds: string[];
   /** Resolved + validated object references. */
   refs: Array<{ refType: PostRefType; refId: string; label: string }>;
+  /** Reply target (light threading). */
+  parentPostId?: string | null;
 };
 
 /**
@@ -123,6 +163,7 @@ export async function createPost(input: NewPostInput): Promise<string> {
         authorId: input.authorId,
         body: input.body,
         kind: input.kind ?? "message",
+        parentPostId: input.parentPostId ?? null,
       })
       .returning({ id: posts.id });
 
@@ -250,4 +291,32 @@ export async function markNotificationsRead(opts: {
     .update(notifications)
     .set({ readAt: new Date() })
     .where(and(...conditions));
+}
+
+/** Toggle an emoji reaction on a post for a user. Returns whether it's now set. */
+export async function toggleReaction(opts: {
+  postId: string;
+  userId: string;
+  emoji: string;
+}): Promise<boolean> {
+  const existing = await db
+    .select({ id: postReactions.id })
+    .from(postReactions)
+    .where(
+      and(
+        eq(postReactions.postId, opts.postId),
+        eq(postReactions.userId, opts.userId),
+        eq(postReactions.emoji, opts.emoji),
+      ),
+    )
+    .limit(1);
+  if (existing.length) {
+    await db.delete(postReactions).where(eq(postReactions.id, existing[0].id));
+    return false;
+  }
+  await db
+    .insert(postReactions)
+    .values({ postId: opts.postId, userId: opts.userId, emoji: opts.emoji })
+    .onConflictDoNothing();
+  return true;
 }

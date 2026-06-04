@@ -1442,9 +1442,23 @@ export const posts = pgTable("posts", {
     .references(() => users.id),
   body: text("body").notNull(),
   kind: postKind("kind").notNull().default("message"),
+  // FR-TOWNHALL: light threading — a reply points at its parent post.
+  parentPostId: uuid("parent_post_id"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
+});
+
+export const postReactions = pgTable("post_reactions", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  postId: uuid("post_id")
+    .notNull()
+    .references(() => posts.id, { onDelete: "cascade" }),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  emoji: text("emoji").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const postMentions = pgTable("post_mentions", {

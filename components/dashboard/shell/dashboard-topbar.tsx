@@ -1,6 +1,7 @@
 import { UserMenu } from "@/components/layout/user-menu";
 import { MobileNav } from "@/components/layout/mobile-nav";
 import { NotificationBell } from "@/components/town-hall/notification-bell";
+import { MobileTownHallButton } from "@/components/town-hall/mobile-townhall-button";
 import { CommandSearchButton } from "@/components/command/command-search-button";
 import { ViewToggle } from "./view-toggle";
 
@@ -54,6 +55,7 @@ export function DashboardTopbar({ email, displayName }: DashboardTopbarProps) {
 
       <div className="flex shrink-0 items-center gap-2">
         <CommandSearchButton />
+        <MobileTownHallButton />
         <NotificationBell />
         <UserMenu email={email} displayName={displayName} />
       </div>

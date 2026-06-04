@@ -163,7 +163,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
       () => getActiveSprint(user.workspaceId),
       null,
     ),
-    safeRead<PostView[]>(() => listPosts({ workspaceId: user.workspaceId, limit: 40 }), []),
+    safeRead<PostView[]>(() => listPosts({ workspaceId: user.workspaceId, viewerId: user.id, limit: 40 }), []),
     // Loaded once, reused by the drawer pickers + Town Hall (no duplicate queries).
     safeRead<{ userId: string; displayName: string }[]>(
       () => listWorkspaceMembers(user.workspaceId).then((ms) => ms.map((m) => ({ userId: m.userId, displayName: m.displayName }))),

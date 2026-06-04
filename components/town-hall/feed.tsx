@@ -4,9 +4,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
+import { CornerDownRight, MessageSquare } from "lucide-react";
 import { Composer } from "./composer";
 import { ExtractNotesDialog } from "./extract-notes-dialog";
 import { PostBody } from "./post-body";
+import { PostReactions } from "./post-reactions";
 import type { MemberOption, PostView, RefObject } from "./types";
 
 function relativeTime(d: Date): string {
@@ -50,6 +52,7 @@ export function Feed({
 }) {
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
+  const [replyTo, setReplyTo] = useState<string | null>(null);
   const channelRef = useRef<RealtimeChannel | null>(null);
 
   // Subscribe once. setState lives only in the async broadcast callback —
@@ -86,6 +89,18 @@ export function Feed({
     });
   }, [router]);
 
+  // Light threading: top-level posts (newest-first as fetched) + their replies.
+  const topLevel = initialPosts.filter((p) => !p.parentPostId);
+  const repliesByParent = new Map<string, PostView[]>();
+  for (const p of initialPosts) {
+    if (!p.parentPostId) continue;
+    const arr = repliesByParent.get(p.parentPostId) ?? repliesByParent.set(p.parentPostId, []).get(p.parentPostId)!;
+    arr.push(p);
+  }
+  for (const arr of repliesByParent.values()) {
+    arr.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-end">
@@ -109,45 +124,95 @@ export function Feed({
         </div>
       ) : (
         <ul className="space-y-3">
-          {initialPosts.map((post) => (
-            <li
-              key={post.id}
-              className="rounded-lg border bg-card p-3"
-              style={{ borderColor: "var(--border)" }}
-            >
-              <div className="flex items-start gap-2.5">
-                <div
-                  className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-tiny font-semibold"
-                  style={{ background: "var(--surface)", color: "var(--text-secondary)" }}
-                >
-                  {initials(post.authorName)}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[13px] font-medium text-text-primary">
-                      {post.authorName}
-                    </span>
-                    {post.kind === "note" && (
-                      <span
-                        className="rounded px-1.5 py-0.5 text-tiny uppercase"
-                        style={{ background: "var(--surface)", color: "var(--text-tertiary)" }}
-                      >
-                        note
-                      </span>
+          {topLevel.map((post) => {
+            const replies = repliesByParent.get(post.id) ?? [];
+            return (
+              <li
+                key={post.id}
+                className="rounded-lg border bg-card p-3"
+                style={{ borderColor: "var(--border)" }}
+              >
+                <PostCard post={post} onChanged={handlePosted}>
+                  <button
+                    type="button"
+                    onClick={() => setReplyTo((r) => (r === post.id ? null : post.id))}
+                    className="flex items-center gap-1 text-tiny text-text-tertiary hover:text-text-secondary"
+                  >
+                    <MessageSquare size={11} />
+                    {replies.length > 0 ? `${replies.length} repl${replies.length === 1 ? "y" : "ies"}` : "Reply"}
+                  </button>
+                </PostCard>
+
+                {(replies.length > 0 || replyTo === post.id) && (
+                  <div className="mt-2 space-y-2 border-l-2 border-[var(--border)] pl-3">
+                    {replies.map((rep) => (
+                      <div key={rep.id} className="flex gap-1.5">
+                        <CornerDownRight size={12} className="mt-1 shrink-0 text-text-tertiary" />
+                        <div className="min-w-0 flex-1">
+                          <PostCard post={rep} onChanged={handlePosted} compact />
+                        </div>
+                      </div>
+                    ))}
+                    {replyTo === post.id && (
+                      <Composer
+                        members={members}
+                        objects={objects}
+                        parentPostId={post.id}
+                        placeholder="Reply…"
+                        onPosted={() => {
+                          setReplyTo(null);
+                          handlePosted();
+                        }}
+                      />
                     )}
-                    <span className="text-tiny text-text-tertiary">
-                      {relativeTime(post.createdAt)}
-                    </span>
                   </div>
-                  <div className="mt-1">
-                    <PostBody post={post} />
-                  </div>
-                </div>
-              </div>
-            </li>
-          ))}
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
+    </div>
+  );
+}
+
+function PostCard({
+  post,
+  onChanged,
+  compact,
+  children,
+}: {
+  post: PostView;
+  onChanged: () => void;
+  compact?: boolean;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="group flex items-start gap-2.5">
+      <div
+        className={`grid shrink-0 place-items-center rounded-full font-semibold ${compact ? "h-6 w-6 text-[10px]" : "h-7 w-7 text-tiny"}`}
+        style={{ background: "var(--surface)", color: "var(--text-secondary)" }}
+      >
+        {initials(post.authorName)}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="text-[13px] font-medium text-text-primary">{post.authorName}</span>
+          {post.kind === "note" && (
+            <span className="rounded px-1.5 py-0.5 text-tiny uppercase" style={{ background: "var(--surface)", color: "var(--text-tertiary)" }}>
+              note
+            </span>
+          )}
+          <span className="text-tiny text-text-tertiary">{relativeTime(post.createdAt)}</span>
+        </div>
+        <div className="mt-1">
+          <PostBody post={post} />
+        </div>
+        <div className="mt-1 flex items-center gap-3">
+          <PostReactions postId={post.id} reactions={post.reactions} onChanged={onChanged} />
+          {children}
+        </div>
+      </div>
     </div>
   );
 }
