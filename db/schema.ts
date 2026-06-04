@@ -1395,3 +1395,75 @@ export const actionItems = pgTable("action_items", {
     .notNull()
     .defaultNow(),
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TOWN HALL — workspace feed: posts with @mentions + #references, and
+// per-recipient notifications. (FR-TOWNHALL)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const postKind = pgEnum("post_kind", ["message", "note"]);
+export const postRefType = pgEnum("post_ref_type", [
+  "action_item",
+  "milestone",
+  "meeting",
+  "project",
+  "doc",
+]);
+
+export const posts = pgTable("posts", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  authorId: uuid("author_id")
+    .notNull()
+    .references(() => users.id),
+  body: text("body").notNull(),
+  kind: postKind("kind").notNull().default("message"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const postMentions = pgTable("post_mentions", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  postId: uuid("post_id")
+    .notNull()
+    .references(() => posts.id, { onDelete: "cascade" }),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const postRefs = pgTable("post_refs", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  postId: uuid("post_id")
+    .notNull()
+    .references(() => posts.id, { onDelete: "cascade" }),
+  refType: postRefType("ref_type").notNull(),
+  refId: uuid("ref_id").notNull(),
+  label: text("label").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const notifications = pgTable("notifications", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  // Recipient.
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  postId: uuid("post_id").references(() => posts.id, { onDelete: "cascade" }),
+  kind: text("kind").notNull().default("mention"),
+  readAt: timestamp("read_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});

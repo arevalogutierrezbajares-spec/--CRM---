@@ -8,6 +8,7 @@ import {
   LayoutGrid,
   ListTodo,
   MessageSquare,
+  Megaphone,
   Network,
   User,
   Users,
@@ -25,6 +26,7 @@ export type NavItem = {
 export const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Home", icon: Home },
   { href: "/agent", label: "Agent", icon: MessageSquare },
+  { href: "/town-hall", label: "Town Hall", icon: Megaphone },
   { href: "/contacts", label: "Contacts", icon: Contact2 },
   { href: "/projects", label: "Projects", icon: LayoutGrid },
   { href: "/meetings", label: "Meetings", icon: Users },

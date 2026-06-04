@@ -248,6 +248,21 @@ export async function listProjectsForPicker(
     .orderBy(asc(schema.projects.title));
 }
 
+/** Whether a project id belongs to the workspace (validates #refs / picks). */
+export async function projectExistsInWorkspace(
+  workspaceId: string,
+  projectId: string,
+): Promise<boolean> {
+  const [row] = await db
+    .select({ id: schema.projects.id })
+    .from(schema.projects)
+    .where(
+      and(eq(schema.projects.id, projectId), eq(schema.projects.workspaceId, workspaceId)),
+    )
+    .limit(1);
+  return Boolean(row);
+}
+
 /* ── fuzzy lookups (used by the WhatsApp agent to resolve a target) ────── */
 
 export type ItemMatch = { id: string; title: string };
