@@ -1,8 +1,11 @@
+"use client";
+
 import Link from "next/link";
 import { CalendarClock, Radio } from "lucide-react";
 import { DashCard } from "../shared/dash-card";
 import { SectionLabel } from "../shared/section-label";
 import { DashBadge } from "../shared/badge";
+import { useItemDrawer } from "../item-drawer";
 import type { DashMeeting } from "@/db/queries/dashboard";
 
 interface MeetingsCardProps {
@@ -18,26 +21,21 @@ const TYPE_LABEL: Record<DashMeeting["type"], string> = {
 };
 
 function timeOnly(d: Date): string {
-  return d.toLocaleTimeString(undefined, {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
 }
 
 function dayShort(d: Date): string {
-  return d.toLocaleDateString(undefined, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  });
+  return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
 }
 
 function isLive(m: DashMeeting): boolean {
   const now = Date.now();
-  return Math.abs(now - m.scheduledAt.getTime()) < 90 * 60_000; // within 90 min of start
+  return Math.abs(now - m.scheduledAt.getTime()) < 90 * 60_000;
 }
 
 export function MeetingsCard({ meetings, scope }: MeetingsCardProps) {
+  const drawer = useItemDrawer();
+
   return (
     <DashCard>
       <SectionLabel icon={CalendarClock}>
@@ -57,20 +55,15 @@ export function MeetingsCard({ meetings, scope }: MeetingsCardProps) {
                 <div className="w-12 shrink-0 text-tiny font-medium text-text-secondary tabular-nums">
                   {scope === "today" ? timeOnly(m.scheduledAt) : dayShort(m.scheduledAt)}
                 </div>
-                <div className="min-w-0 flex-1">
-                  <Link
-                    href={`/meetings/${m.id}`}
-                    className="block text-[12.5px] text-text-primary truncate hover:underline"
-                  >
-                    {m.title}
-                  </Link>
+                <button type="button" onClick={() => drawer?.openItem("meeting", m.id)} className="min-w-0 flex-1 text-left">
+                  <div className="block text-[12.5px] text-text-primary truncate">{m.title}</div>
                   {m.attendeeNames.length > 0 && (
                     <div className="text-tiny text-text-tertiary truncate">
                       {m.attendeeNames.slice(0, 3).join(", ")}
                       {m.attendeeNames.length > 3 && ` +${m.attendeeNames.length - 3}`}
                     </div>
                   )}
-                </div>
+                </button>
                 <div className="flex items-center gap-1.5 shrink-0">
                   <DashBadge variant="neutral">{TYPE_LABEL[m.type]}</DashBadge>
                   {live && (

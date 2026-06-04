@@ -10,6 +10,7 @@ import { SprintWidget } from "@/components/dashboard/right/sprint-widget";
 import { treasurySnapshot, type TreasurySnapshot } from "@/db/queries/treasury";
 import { getActiveSprint, type SprintWithStats } from "@/db/queries/work";
 import { DailyView } from "@/components/dashboard/daily/daily-view";
+import { listProjectsForPicker } from "@/db/queries/items";
 import { WeeklyView } from "@/components/dashboard/weekly/weekly-view";
 import { MonthlyView } from "@/components/dashboard/monthly/monthly-view";
 import { DbBanner } from "@/components/db-banner";
@@ -146,6 +147,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
     meetings: DashMeeting[];
     projects: DashProject[];
     actionItems: DashActionItem[];
+    pickerProjects: { id: string; title: string }[];
   } | null = null;
   let weeklyData: {
     tasks: DashTask[];
@@ -163,17 +165,19 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
   } | null = null;
 
   if (view === "daily") {
-    const [tasks, meetings, projects, actionItems] = await Promise.all([
+    const [tasks, meetings, projects, actionItems, pickerProjects] = await Promise.all([
       safeRead<DashTask[]>(() => listTasksToday(user.workspaceId), []),
       safeRead<DashMeeting[]>(() => listMeetingsToday(user.workspaceId), []),
       safeRead<DashProject[]>(() => listActiveProjectsForDashboard(user.workspaceId, 6), []),
       safeRead<DashActionItem[]>(() => listOpenActionItems(user.workspaceId, 12), []),
+      safeRead<{ id: string; title: string }[]>(() => listProjectsForPicker(user.workspaceId), []),
     ]);
     dailyData = {
       tasks: tasks.data,
       meetings: meetings.data,
       projects: projects.data,
       actionItems: actionItems.data,
+      pickerProjects: pickerProjects.data,
     };
   } else if (view === "weekly") {
     const [tasks, meetings, projects] = await Promise.all([
@@ -269,6 +273,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
           meetings={dailyData.meetings}
           projects={dailyData.projects}
           actionItems={dailyData.actionItems}
+          pickerProjects={dailyData.pickerProjects}
         />
       )}
 

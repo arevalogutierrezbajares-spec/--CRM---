@@ -4,6 +4,7 @@ import { MeetingsCard } from "./meetings-card";
 import { ProjectsCard } from "./projects-card";
 import { ActionItemsCard } from "./action-items-card";
 import { AIAssistPanel } from "./ai-assist-panel";
+import { ItemDrawerProvider } from "../item-drawer";
 import type {
   DashActionItem,
   DashCounts,
@@ -18,6 +19,7 @@ interface DailyViewProps {
   meetings: DashMeeting[];
   projects: DashProject[];
   actionItems: DashActionItem[];
+  pickerProjects: { id: string; title: string }[];
 }
 
 export function DailyView({
@@ -26,9 +28,10 @@ export function DailyView({
   meetings,
   projects,
   actionItems,
+  pickerProjects,
 }: DailyViewProps) {
   return (
-    <>
+    <ItemDrawerProvider projects={pickerProjects}>
       <MetricsRow counts={counts} />
       <div className="grid gap-2.5 lg:grid-cols-2">
         <ActionItemsCard items={actionItems} />
@@ -39,6 +42,6 @@ export function DailyView({
         <ProjectsCard projects={projects} />
       </div>
       <AIAssistPanel scope="daily" />
-    </>
+    </ItemDrawerProvider>
   );
 }

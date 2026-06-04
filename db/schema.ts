@@ -496,6 +496,30 @@ export const projectDocContents = pgTable("project_doc_contents", {
   updatedBy: uuid("updated_by").references(() => users.id),
 });
 
+// FR-PMO: attach docs/links directly to an action item, milestone, or meeting.
+export const itemEntityType = pgEnum("item_entity_type", [
+  "action_item",
+  "milestone",
+  "meeting",
+]);
+
+export const itemAttachments = pgTable("item_attachments", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  entityType: itemEntityType("entity_type").notNull(),
+  entityId: uuid("entity_id").notNull(),
+  // Reference to an existing project doc/file/link, OR null for a standalone url.
+  projectLinkId: uuid("project_link_id").references(() => projectLinks.id, {
+    onDelete: "cascade",
+  }),
+  url: text("url"),
+  label: text("label").notNull(),
+  createdBy: uuid("created_by").references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const projectContacts = pgTable(
   "project_contacts",
   {
