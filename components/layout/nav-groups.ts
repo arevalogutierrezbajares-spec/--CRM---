@@ -54,6 +54,7 @@ export const NAV_GROUPS: NavGroup[] = [
     id: "plan",
     label: "Plan",
     items: [
+      { href: "/priorities", label: "Priorities", icon: Target },
       { href: "/roadmap", label: "Roadmap", icon: Map },
       { href: "/sprint", label: "Sprint", icon: Flag },
       { href: "/initiatives", label: "Initiatives", icon: Target },

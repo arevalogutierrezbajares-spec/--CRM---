@@ -6,6 +6,7 @@ import {
   timestamp,
   date,
   integer,
+  doublePrecision,
   boolean,
   jsonb,
   time,
@@ -1520,4 +1521,52 @@ export const notifications = pgTable("notifications", {
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
+});
+
+/* ─── Priorities / OKRs ──────────────────────────────────────────────────── */
+// Quarterly objectives ("Rocks"), each with one owner + measurable key results.
+// Key results double as the weekly scorecard (owned numbers, target, red/green).
+
+export const objectiveStatus = pgEnum("objective_status", [
+  "on_track",
+  "at_risk",
+  "off_track",
+  "done",
+]);
+
+export const objectives = pgTable("objectives", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  description: text("description"),
+  ownerId: uuid("owner_id").references(() => users.id, { onDelete: "set null" }),
+  quarter: text("quarter").notNull(), // e.g. "2026-Q2"
+  status: objectiveStatus("status").notNull().default("on_track"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const krDirection = pgEnum("kr_direction", ["higher", "lower"]);
+
+export const keyResults = pgTable("key_results", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  objectiveId: uuid("objective_id")
+    .notNull()
+    .references(() => objectives.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  ownerId: uuid("owner_id").references(() => users.id, { onDelete: "set null" }),
+  startValue: doublePrecision("start_value").notNull().default(0),
+  target: doublePrecision("target").notNull().default(100),
+  current: doublePrecision("current").notNull().default(0),
+  unit: text("unit"), // "$", "%", "users", null
+  direction: krDirection("direction").notNull().default("higher"),
+  onScorecard: boolean("on_scorecard").notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
