@@ -6,35 +6,58 @@ import * as schema from "@/db/schema";
 export type ItemEntityType = "action_item" | "milestone" | "meeting";
 export type WorkPriority = "now" | "next" | "later" | "backlog";
 
-/** Workspace-wide document index for the @document autocomplete. RefObject-shaped. */
-export async function listWorkspaceDocs(
-  workspaceId: string,
-  limit = 200,
-): Promise<{ refType: "doc"; refId: string; label: string; href: string }[]> {
+/**
+ * Workspace-wide document index. RefObject-shaped (for the @document
+ * autocomplete) plus projectId/projectTitle/category/kind for the sidebar
+ * Explorer (group by project → section, filter).
+ */
+export type WorkspaceDoc = {
+  refType: "doc";
+  refId: string;
+  label: string;
+  href: string;
+  external: boolean;
+  kind: string;
+  category: string;
+  projectId: string;
+  projectTitle: string;
+};
+
+export async function listWorkspaceDocs(workspaceId: string, limit = 300): Promise<WorkspaceDoc[]> {
   const rows = await db
     .select({
       id: schema.projectLinks.id,
       label: schema.projectLinks.label,
       kind: schema.projectLinks.kind,
+      category: schema.projectLinks.category,
       url: schema.projectLinks.url,
       projectId: schema.projectLinks.projectId,
+      projectTitle: schema.projects.title,
     })
     .from(schema.projectLinks)
     .innerJoin(schema.projects, eq(schema.projects.id, schema.projectLinks.projectId))
     .where(eq(schema.projects.workspaceId, workspaceId))
-    .orderBy(asc(schema.projectLinks.label))
+    .orderBy(asc(schema.projects.title), asc(schema.projectLinks.label))
     .limit(limit);
-  return rows.map((r) => ({
-    refType: "doc" as const,
-    refId: r.id,
-    label: r.label,
-    href:
-      r.kind === "doc"
-        ? `/projects/${r.projectId}/docs/${r.id}`
-        : r.kind === "link" && r.url
-          ? r.url
-          : `/projects/${r.projectId}`,
-  }));
+  return rows.map((r) => {
+    const external = r.kind === "link" && Boolean(r.url);
+    return {
+      refType: "doc" as const,
+      refId: r.id,
+      label: r.label,
+      kind: r.kind,
+      category: r.category,
+      projectId: r.projectId,
+      projectTitle: r.projectTitle,
+      external,
+      href:
+        r.kind === "doc"
+          ? `/projects/${r.projectId}/docs/${r.id}`
+          : external
+            ? (r.url as string)
+            : `/projects/${r.projectId}`,
+    };
+  });
 }
 
 export type ItemAttachment = {

@@ -1,10 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { X, User, FolderGit2, FileText } from "lucide-react";
+import { X, User, FolderGit2, FileText, Users } from "lucide-react";
 import type { PickedEntity } from "@/components/ui/mention-input";
 import type { MemberOption } from "@/components/town-hall/types";
 import { personInBody, refInBody } from "@/lib/nlp/mention-tokens";
+
+/** "@all" still present in the body? */
+function allInBody(body: string): boolean {
+  return /(^|\s)@all\b/i.test(body);
+}
 
 type Doc = { linkId: string; label: string };
 type Proj = { refId: string; label: string };
@@ -19,9 +24,12 @@ export function useCapturePicks() {
   const [people, setPeople] = useState<MemberOption[]>([]);
   const [project, setProject] = useState<Proj | null>(null);
   const [docs, setDocs] = useState<Doc[]>([]);
+  const [all, setAll] = useState(false);
 
   function onPick(e: PickedEntity) {
-    if (e.kind === "person") {
+    if (e.kind === "all") {
+      setAll(true);
+    } else if (e.kind === "person") {
       setPeople((p) => (p.some((x) => x.userId === e.userId) ? p : [...p, { userId: e.userId, displayName: e.label }]));
     } else if (e.ref.refType === "project") {
       setProject({ refId: e.ref.refId, label: e.ref.label });
@@ -34,6 +42,7 @@ export function useCapturePicks() {
     setPeople([]);
     setProject(null);
     setDocs([]);
+    setAll(false);
   }
 
   /** Keep only picks whose token is still present in `body`. */
@@ -47,10 +56,11 @@ export function useCapturePicks() {
       mentionUserIds: livePeople.map((p) => p.userId),
       projectId: liveProject?.refId ?? null,
       docRefs: liveDocs.map((d) => ({ linkId: d.linkId, label: d.label })),
+      notifyAll: all && allInBody(body),
     };
   }
 
-  return { people, project, docs, onPick, reset, reconcile, setPeople, setProject, setDocs };
+  return { people, project, docs, all, onPick, reset, reconcile, setPeople, setProject, setDocs, setAll };
 }
 
 export type CapturePicks = ReturnType<typeof useCapturePicks>;
@@ -59,10 +69,19 @@ const CHIP = "flex items-center gap-1 rounded-full bg-surface px-2 py-0.5 text-t
 
 /** Shows who/what will be attached to the capture, with one-click removal. */
 export function CaptureChips({ picks }: { picks: CapturePicks }) {
-  const { people, project, docs } = picks;
-  if (people.length === 0 && !project && docs.length === 0) return null;
+  const { people, project, docs, all } = picks;
+  if (people.length === 0 && !project && docs.length === 0 && !all) return null;
   return (
     <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+      {all && (
+        <span className={`${CHIP} border border-[var(--gold)] text-gold`}>
+          <Users size={11} />
+          Everyone
+          <button type="button" aria-label="Remove everyone" onClick={() => picks.setAll(false)} className="text-text-tertiary hover:text-[var(--red-text)]">
+            <X size={11} />
+          </button>
+        </span>
+      )}
       {people.map((p, i) => (
         <span key={p.userId} className={CHIP}>
           <User size={11} className="text-text-tertiary" />

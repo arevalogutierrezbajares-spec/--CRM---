@@ -83,6 +83,7 @@ export function TasksCard({ tasks, scope, sources }: TasksCardProps) {
       assigneeUserId: r.assigneeUserId,
       mentionUserIds: r.mentionUserIds,
       docRefs: r.docRefs,
+      notifyAll: r.notifyAll,
     });
     setAdding(false);
     if (res.ok) {

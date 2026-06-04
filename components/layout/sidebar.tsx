@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { NAV_GROUPS, NAV_FOOTER, type NavLeaf } from "./nav-groups";
 import { ExplorerTree } from "./explorer-tree";
 import { PresenceDots } from "@/components/presence/presence-dots";
+import type { WorkspaceDoc } from "@/db/queries/items";
 
 const STORAGE_KEY = "agb_sidebar_collapsed_v1";
 
@@ -38,9 +39,11 @@ function NavRow({ item, pathname }: { item: NavLeaf; pathname: string }) {
 export function Sidebar({
   projects = [],
   favorites = [],
+  docs = [],
 }: {
   projects?: { id: string; title: string }[];
   favorites?: { id: string; title: string }[];
+  docs?: WorkspaceDoc[];
 }) {
   const pathname = usePathname();
   // Per-section collapsed state, persisted per browser. Initialised empty (all
@@ -141,7 +144,7 @@ export function Sidebar({
             {group.items.map((item) => (
               <NavRow key={item.href} item={item} pathname={pathname} />
             ))}
-            {group.tree && <ExplorerTree projects={projects} />}
+            {group.tree && <ExplorerTree projects={projects} docs={docs} />}
           </Section>
         ))}
       </nav>

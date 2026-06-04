@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useId, useMemo, useRef, useState } from "react";
-import { User, FolderGit2, FileText } from "lucide-react";
+import { User, FolderGit2, FileText, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { detectTrigger, spliceToken } from "@/lib/nlp/mention-trigger";
 import { personToken, refToken } from "@/lib/nlp/mention-tokens";
@@ -15,14 +15,16 @@ export type MentionSources = {
 
 export type PickedEntity =
   | { kind: "person"; userId: string; label: string }
-  | { kind: "ref"; ref: RefObject };
+  | { kind: "ref"; ref: RefObject }
+  | { kind: "all" };
 
 type Sugg =
+  | { section: "Everyone" }
   | { section: "People"; person: MemberOption }
   | { section: "Documents"; ref: RefObject }
   | { section: "Projects"; ref: RefObject };
 
-const SECTION_ICON = { People: User, Documents: FileText, Projects: FolderGit2 } as const;
+const SECTION_ICON = { Everyone: Users, People: User, Documents: FileText, Projects: FolderGit2 } as const;
 const MAX = 8;
 
 /**
@@ -74,6 +76,11 @@ export function MentionInput({
     if (!trigger) return [];
     const q = trigger.query.toLowerCase();
     if (trigger.kind === "@") {
+      // "@all" broadcast option — surfaced for an empty query or an all/everyone/team prefix.
+      const everyone: Sugg[] =
+        q === "" || "all".startsWith(q) || "everyone".startsWith(q) || "team".startsWith(q)
+          ? [{ section: "Everyone" }]
+          : [];
       // Reserve slots for docs so a query matching many people doesn't starve
       // them out entirely.
       const people = sources.people
@@ -84,7 +91,7 @@ export function MentionInput({
         .filter((d) => d.label.toLowerCase().includes(q))
         .slice(0, MAX - people.length)
         .map((ref): Sugg => ({ section: "Documents", ref }));
-      return [...people, ...docs];
+      return [...everyone, ...people, ...docs];
     }
     return sources.projects
       .filter((p) => p.label.toLowerCase().includes(q))
@@ -105,11 +112,16 @@ export function MentionInput({
     (s: Sugg) => {
       if (!trigger) return;
       const token =
-        s.section === "People" ? personToken(s.person.displayName) : refToken(trigger.kind, s.ref.label);
+        s.section === "Everyone"
+          ? "@all"
+          : s.section === "People"
+            ? personToken(s.person.displayName)
+            : refToken(trigger.kind, s.ref.label);
       const { next, caret: newCaret } = spliceToken(value, trigger.start, caret, token);
       onChange(next);
       setDismissedStart(null);
-      if (s.section === "People") onPick?.({ kind: "person", userId: s.person.userId, label: s.person.displayName });
+      if (s.section === "Everyone") onPick?.({ kind: "all" });
+      else if (s.section === "People") onPick?.({ kind: "person", userId: s.person.userId, label: s.person.displayName });
       else onPick?.({ kind: "ref", ref: s.ref });
       requestAnimationFrame(() => {
         const el = ref.current;
@@ -200,13 +212,17 @@ export function MentionInput({
           {suggestions.map((s, i) => {
             const header = i === 0 || suggestions[i - 1].section !== s.section ? s.section : null;
             const Icon = SECTION_ICON[s.section];
-            const label = s.section === "People" ? s.person.displayName : s.ref.label;
+            const label =
+              s.section === "Everyone" ? "Everyone" : s.section === "People" ? s.person.displayName : s.ref.label;
+            const key =
+              s.section === "Everyone" ? "all" : "person" in s ? s.person.userId : s.ref.refId;
+            const prefix = s.section === "Everyone" ? "@all · " : s.section === "People" ? "@" : s.section === "Projects" ? "#" : "";
             const isActive = i === activeIdx;
             return (
-              <li key={`${s.section}:${"person" in s ? s.person.userId : s.ref.refId}`} role="presentation">
+              <li key={`${s.section}:${key}`} role="presentation">
                 {header && (
                   <div className="px-2 pb-0.5 pt-1 text-tiny font-medium uppercase tracking-wide text-text-tertiary">
-                    {header}
+                    {header === "Everyone" ? "Broadcast" : header}
                   </div>
                 )}
                 <button
@@ -224,10 +240,8 @@ export function MentionInput({
                 >
                   <Icon size={13} className="shrink-0 text-text-tertiary" />
                   <span className="min-w-0 flex-1 truncate">
-                    <span style={{ color: s.section === "Projects" ? undefined : "var(--blue-text)" }}>
-                      {s.section === "People" ? "@" : s.section === "Projects" ? "#" : ""}
-                    </span>
-                    {label}
+                    <span style={{ color: s.section === "Projects" ? undefined : "var(--blue-text)" }}>{prefix}</span>
+                    {s.section === "Everyone" ? "notify the whole team" : label}
                   </span>
                 </button>
               </li>

@@ -239,6 +239,8 @@ export async function captureItemAction(opts: {
   mentionUserIds?: string[];
   /** @document picks — attached to the new item (label + project_links id). */
   docRefs?: { linkId: string; label: string }[];
+  /** @all — broadcast a notification to every teammate. */
+  notifyAll?: boolean;
 }): Promise<
   { ok: true; id: string; summary: string; notified: number } | { ok: false; error: string }
 > {
@@ -325,6 +327,22 @@ export async function captureItemAction(opts: {
       title,
       kind: "mention",
       includeActor: true,
+    });
+  }
+  // @all — broadcast to every teammate not already notified (items are already
+  // workspace-visible; this actively alerts the whole team).
+  if (opts.notifyAll) {
+    const already = new Set([assigneeUserId, ...toMention].filter(Boolean) as string[]);
+    const everyone = (await listWorkspaceMembers(user.workspaceId)).map((m) => m.userId).filter((uid) => !already.has(uid));
+    notified += await notifyUsers({
+      workspaceId: user.workspaceId,
+      actorId: user.id,
+      recipientUserIds: everyone,
+      entityType,
+      entityId: id,
+      title,
+      kind: "mention",
+      includeActor: false, // you're broadcasting; no self-notification
     });
   }
   refresh();

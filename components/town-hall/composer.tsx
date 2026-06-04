@@ -33,11 +33,14 @@ export function Composer({
   const [alsoWA, setAlsoWA] = useState(false);
   const [pickedMentions, setPickedMentions] = useState<MemberOption[]>([]);
   const [pickedRefs, setPickedRefs] = useState<RefObject[]>([]);
+  const [pickedAll, setPickedAll] = useState(false);
 
   const sources: MentionSources = { people: members, projects: objects, docs };
 
   function onPick(e: PickedEntity) {
-    if (e.kind === "person") {
+    if (e.kind === "all") {
+      setPickedAll(true);
+    } else if (e.kind === "person") {
       setPickedMentions((p) =>
         p.some((m) => m.userId === e.userId) ? p : [...p, { userId: e.userId, displayName: e.label }],
       );
@@ -54,9 +57,11 @@ export function Composer({
     setSubmitting(true);
     try {
       // Keep only picks whose token literal still appears in the body.
-      const mentionUserIds = pickedMentions
-        .filter((m) => personInBody(body, m.displayName))
-        .map((m) => m.userId);
+      // "@all" expands to every teammate.
+      const broadcast = pickedAll && /(^|\s)@all\b/i.test(body);
+      const mentionUserIds = broadcast
+        ? members.map((m) => m.userId)
+        : pickedMentions.filter((m) => personInBody(body, m.displayName)).map((m) => m.userId);
       const refs = pickedRefs
         .filter((r) => refInBody(body, r.refType === "project" ? "#" : "@", r.label))
         .map((r) => ({ refType: r.refType, refId: r.refId, label: r.label }));
@@ -69,6 +74,7 @@ export function Composer({
       setText("");
       setPickedMentions([]);
       setPickedRefs([]);
+      setPickedAll(false);
       setAlsoWA(false);
       if (res.notified > 0) {
         toast.success(

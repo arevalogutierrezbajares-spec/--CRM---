@@ -81,6 +81,7 @@ export function ActionItemsCard({ items, sources }: { items: DashActionItem[]; s
       mentionUserIds: r.mentionUserIds,
       projectId: r.projectId,
       docRefs: r.docRefs,
+      notifyAll: r.notifyAll,
     });
     setAdding(false);
     if (res.ok) {

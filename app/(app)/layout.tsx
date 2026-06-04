@@ -5,7 +5,7 @@ import { PresenceProvider } from "@/lib/presence/presence-context";
 import { CommandPalette } from "@/components/command/command-palette";
 import { MotionProvider } from "@/components/motion-provider";
 import { safeRead } from "@/lib/db-status";
-import { listProjectsForPicker } from "@/db/queries/items";
+import { listProjectsForPicker, listWorkspaceDocs, type WorkspaceDoc } from "@/db/queries/items";
 import { listFavoriteProjects } from "@/db/queries/pins";
 
 export default async function AppLayout({
@@ -14,9 +14,10 @@ export default async function AppLayout({
   children: React.ReactNode;
 }) {
   const user = await requireUser();
-  const [projectsRes, favoritesRes] = await Promise.all([
+  const [projectsRes, favoritesRes, docsRes] = await Promise.all([
     safeRead<{ id: string; title: string }[]>(() => listProjectsForPicker(user.workspaceId), []),
     safeRead<{ id: string; title: string }[]>(() => listFavoriteProjects(user.workspaceId, user.id), []),
+    safeRead<WorkspaceDoc[]>(() => listWorkspaceDocs(user.workspaceId), []),
   ]);
   return (
     <PresenceProvider
@@ -32,7 +33,7 @@ export default async function AppLayout({
         >
           Skip to content
         </a>
-        <Sidebar projects={projectsRes.data} favorites={favoritesRes.data} />
+        <Sidebar projects={projectsRes.data} favorites={favoritesRes.data} docs={docsRes.data} />
         <div id="main-content" className="flex min-w-0 flex-1 flex-col">
           {children}
         </div>

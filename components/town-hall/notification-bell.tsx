@@ -70,26 +70,34 @@ export function NotificationBell() {
     };
   }, [refreshCount]);
 
-  const onOpenChange = useCallback(
-    (next: boolean) => {
-      setOpen(next);
-      if (next) {
-        void (async () => {
-          try {
-            const list = await getNotificationsAction();
-            if (mounted.current) setItems(list);
-            if (list.some((n) => !n.readAt)) {
-              await markNotificationsReadAction();
-              if (mounted.current) setCount(0);
-            }
-          } catch {
-            /* ignore */
-          }
-        })();
-      }
-    },
-    [],
-  );
+  const onOpenChange = useCallback((next: boolean) => {
+    setOpen(next);
+    if (next) {
+      // Load, but DON'T blanket mark-read — actionable notifications (assigned/
+      // pinged/reminder) are marked read only when you click through to them.
+      void (async () => {
+        try {
+          const list = await getNotificationsAction();
+          if (mounted.current) setItems(list);
+        } catch {
+          /* ignore */
+        }
+      })();
+    }
+  }, []);
+
+  /** Mark one notification read (on click-through) + reflect it locally. */
+  const markOne = useCallback((id: string) => {
+    setItems((prev) => prev.map((n) => (n.id === id && !n.readAt ? { ...n, readAt: new Date() } : n)));
+    setCount((c) => Math.max(0, c - 1));
+    void markNotificationsReadAction([id]).catch(() => {});
+  }, []);
+
+  const markAll = useCallback(() => {
+    setItems((prev) => prev.map((n) => (n.readAt ? n : { ...n, readAt: new Date() })));
+    setCount(0);
+    void markNotificationsReadAction().catch(() => {});
+  }, []);
 
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
@@ -116,14 +124,21 @@ export function NotificationBell() {
           style={{ borderColor: "var(--border)" }}
         >
           <span className="text-[13px] font-medium">Notifications</span>
-          <Link
-            href="/town-hall"
-            className="text-tiny hover:underline"
-            style={{ color: "var(--blue-text)" }}
-            onClick={() => setOpen(false)}
-          >
-            Town Hall
-          </Link>
+          <div className="flex items-center gap-3">
+            {items.some((n) => !n.readAt) && (
+              <button type="button" onClick={markAll} className="text-tiny text-text-tertiary hover:text-text-secondary">
+                Mark all read
+              </button>
+            )}
+            <Link
+              href="/town-hall"
+              className="text-tiny hover:underline"
+              style={{ color: "var(--blue-text)" }}
+              onClick={() => setOpen(false)}
+            >
+              Town Hall
+            </Link>
+          </div>
         </div>
         <div className="max-h-80 overflow-auto">
           {items.length === 0 ? (
@@ -143,7 +158,10 @@ export function NotificationBell() {
                 >
                   <Link
                     href={n.href}
-                    onClick={() => setOpen(false)}
+                    onClick={() => {
+                      markOne(n.id);
+                      setOpen(false);
+                    }}
                     className="block"
                   >
                     <div className="flex items-baseline justify-between gap-2">

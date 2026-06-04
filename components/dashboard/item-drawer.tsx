@@ -21,6 +21,7 @@ import {
   AtSign,
   Bell,
   AlarmClock,
+  MessageCircle,
 } from "lucide-react";
 import {
   Sheet,
@@ -248,14 +249,6 @@ function DrawerForm({
   }
 
   const [pinging, setPinging] = useState(false);
-  async function pingAssignee() {
-    if (!detail.assigneeId || pinging) return;
-    setPinging(true);
-    const res = await pingItemAction({ entityType: detail.entityType, entityId: detail.id, userIds: [detail.assigneeId] });
-    setPinging(false);
-    if (res.ok) toast.success(`Pinged ${detail.assigneeName ?? "assignee"}`);
-    else toast.error(res.error);
-  }
   async function remindMe() {
     if (pinging) return;
     setPinging(true);
@@ -376,26 +369,14 @@ function DrawerForm({
 
       {/* Re-notify / remind */}
       {(isAction || isTask) && (
-        <div className="flex flex-wrap items-center gap-2">
-          {detail.assigneeId && (
-            <button
-              type="button"
-              onClick={pingAssignee}
-              disabled={pinging}
-              className="flex items-center gap-1 rounded-full border border-[var(--border)] px-2.5 py-1 text-tiny text-text-secondary transition-colors hover:bg-surface disabled:opacity-50"
-            >
-              <Bell size={12} /> Ping {detail.assigneeName ?? "assignee"}
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={remindMe}
-            disabled={pinging}
-            className="flex items-center gap-1 rounded-full border border-[var(--border)] px-2.5 py-1 text-tiny text-text-secondary transition-colors hover:bg-surface disabled:opacity-50"
-          >
-            <AlarmClock size={12} /> Remind me
-          </button>
-        </div>
+        <PingControl
+          entityType={detail.entityType}
+          entityId={detail.id}
+          members={members}
+          defaultUserId={detail.assigneeId}
+          onRemind={remindMe}
+          busy={pinging}
+        />
       )}
 
       {/* Description (action items) / agenda + meeting meta */}
@@ -662,6 +643,112 @@ function MentionComposer({ detail, members }: { detail: ItemDetail; members: Mem
         </Button>
       </div>
     </Section>
+  );
+}
+
+function PingControl({
+  entityType,
+  entityId,
+  members,
+  defaultUserId,
+  onRemind,
+  busy,
+}: {
+  entityType: ItemEntityType;
+  entityId: string;
+  members: Member[];
+  defaultUserId: string | null;
+  onRemind: () => void;
+  busy: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(() => new Set(defaultUserId ? [defaultUserId] : []));
+  const [alsoWA, setAlsoWA] = useState(false);
+  const [sending, setSending] = useState(false);
+
+  function toggle(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function ping() {
+    const userIds = Array.from(selected);
+    if (userIds.length === 0 || sending) return;
+    setSending(true);
+    const res = await pingItemAction({ entityType, entityId, userIds, alsoWhatsApp: alsoWA });
+    setSending(false);
+    if (res.ok) {
+      toast.success(`Pinged ${res.notified} ${res.notified === 1 ? "person" : "people"}`);
+      setOpen(false);
+    } else {
+      toast.error(res.error);
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          disabled={busy}
+          className="flex items-center gap-1 rounded-full border border-[var(--border)] px-2.5 py-1 text-tiny text-text-secondary transition-colors hover:bg-surface disabled:opacity-50"
+        >
+          <Bell size={12} /> Ping…
+        </button>
+        <button
+          type="button"
+          onClick={onRemind}
+          disabled={busy}
+          className="flex items-center gap-1 rounded-full border border-[var(--border)] px-2.5 py-1 text-tiny text-text-secondary transition-colors hover:bg-surface disabled:opacity-50"
+        >
+          <AlarmClock size={12} /> Remind me
+        </button>
+      </div>
+
+      {open && (
+        <div className="space-y-2 rounded-lg border border-[var(--border)] bg-surface/40 p-2.5">
+          <div className="flex flex-wrap gap-1.5">
+            {members.map((m) => {
+              const on = selected.has(m.userId);
+              return (
+                <button
+                  key={m.userId}
+                  type="button"
+                  onClick={() => toggle(m.userId)}
+                  className={`rounded-full border px-2 py-0.5 text-tiny transition-colors ${
+                    on
+                      ? "border-[var(--blue-text)] bg-[var(--blue-bg,rgba(40,110,240,0.1))] text-[var(--blue-text)]"
+                      : "border-[var(--border)] text-text-secondary hover:bg-surface"
+                  }`}
+                >
+                  {m.displayName}
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={() => setAlsoWA((v) => !v)}
+              title="Also send to their WhatsApp"
+              className={`flex items-center gap-1 rounded-full border px-2 py-0.5 text-tiny transition-colors ${
+                alsoWA ? "border-[var(--green-mid)] text-[var(--green-text)]" : "border-[var(--border)] text-text-tertiary hover:text-text-secondary"
+              }`}
+            >
+              <MessageCircle size={11} /> WhatsApp
+            </button>
+            <Button type="button" size="sm" onClick={ping} loading={sending} disabled={selected.size === 0}>
+              <Bell size={12} /> Ping {selected.size > 0 ? `(${selected.size})` : ""}
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
