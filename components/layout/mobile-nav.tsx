@@ -12,9 +12,11 @@ export function MobileNav() {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
-  // Close the drawer whenever the route changes.
+  // Close the drawer whenever the route changes. setOpen runs in a rAF callback
+  // (not synchronously in the effect body) to satisfy set-state-in-effect.
   useEffect(() => {
-    setOpen(false);
+    const raf = requestAnimationFrame(() => setOpen(false));
+    return () => cancelAnimationFrame(raf);
   }, [pathname]);
 
   // Lock body scroll while open.

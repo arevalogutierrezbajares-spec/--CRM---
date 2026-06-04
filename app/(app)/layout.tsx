@@ -4,6 +4,9 @@ import { Toaster } from "@/components/ui/toaster";
 import { PresenceProvider } from "@/lib/presence/presence-context";
 import { CommandPalette } from "@/components/command/command-palette";
 import { MotionProvider } from "@/components/motion-provider";
+import { safeRead } from "@/lib/db-status";
+import { listProjectsForPicker } from "@/db/queries/items";
+import { listFavoriteProjects } from "@/db/queries/pins";
 
 export default async function AppLayout({
   children,
@@ -11,6 +14,10 @@ export default async function AppLayout({
   children: React.ReactNode;
 }) {
   const user = await requireUser();
+  const [projectsRes, favoritesRes] = await Promise.all([
+    safeRead<{ id: string; title: string }[]>(() => listProjectsForPicker(user.workspaceId), []),
+    safeRead<{ id: string; title: string }[]>(() => listFavoriteProjects(user.workspaceId, user.id), []),
+  ]);
   return (
     <PresenceProvider
       workspaceId={user.workspaceId}
@@ -25,7 +32,7 @@ export default async function AppLayout({
         >
           Skip to content
         </a>
-        <Sidebar />
+        <Sidebar projects={projectsRes.data} favorites={favoritesRes.data} />
         <div id="main-content" className="flex min-w-0 flex-1 flex-col">
           {children}
         </div>

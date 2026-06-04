@@ -29,6 +29,24 @@ export type PinnedProject = {
   actionItems: PinnedActionItem[];
 };
 
+/** A user's pinned projects, id + title only — for the sidebar Favorites list. */
+export async function listFavoriteProjects(
+  workspaceId: string,
+  userId: string,
+): Promise<{ id: string; title: string }[]> {
+  return db
+    .select({ id: schema.projects.id, title: schema.projects.title })
+    .from(schema.projectPins)
+    .innerJoin(schema.projects, eq(schema.projects.id, schema.projectPins.projectId))
+    .where(
+      and(
+        eq(schema.projectPins.userId, userId),
+        eq(schema.projectPins.workspaceId, workspaceId),
+      ),
+    )
+    .orderBy(desc(schema.projectPins.createdAt));
+}
+
 /** A user's pinned projects, each with its docs/links + open tasks + open action items. */
 export async function listPinnedProjects(
   workspaceId: string,
