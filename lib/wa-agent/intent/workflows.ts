@@ -78,6 +78,7 @@ export const WORKFLOWS: Partial<Record<Intent, Workflow>> = {
     allowedTools: [
       "read_todo_board",
       "find_project",
+      "find_member",
       "edit_action_item",
       "edit_task",
     ],

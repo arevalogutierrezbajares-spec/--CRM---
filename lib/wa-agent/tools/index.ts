@@ -31,6 +31,7 @@ import { attachLink } from "./attach-link";
 import { addActionItem } from "./add-action-item";
 import { editActionItem } from "./edit-action-item";
 import { editTask } from "./edit-task";
+import { findMember } from "./find-member";
 
 export const TOOLS: Record<string, ToolEntry> = {
   find_contact: findContact,
@@ -58,6 +59,7 @@ export const TOOLS: Record<string, ToolEntry> = {
   add_action_item: addActionItem,
   edit_action_item: editActionItem,
   edit_task: editTask,
+  find_member: findMember,
 };
 
 export const TOOL_NAMES = Object.keys(TOOLS);

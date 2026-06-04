@@ -1,5 +1,5 @@
 import "server-only";
-import { eq, asc } from "drizzle-orm";
+import { and, asc, eq, ilike } from "drizzle-orm";
 import { db } from "@/db";
 import * as schema from "@/db/schema";
 
@@ -34,4 +34,23 @@ export async function listWorkspaceMembers(workspaceId: string): Promise<TeamMem
     role: r.role,
     lastSeenAt: r.lastSeenAt ?? null,
   }));
+}
+
+/** Fuzzy-match workspace teammates by name → {userId, displayName}. Used by the
+ *  WhatsApp agent (find_member) to resolve an assignee from a name. */
+export async function findMembers(opts: {
+  workspaceId: string;
+  query?: string;
+  limit?: number;
+}): Promise<{ userId: string; displayName: string }[]> {
+  const conds = [eq(schema.workspaceMembers.workspaceId, opts.workspaceId)];
+  const q = opts.query?.trim();
+  if (q) conds.push(ilike(schema.users.displayName, `%${q}%`));
+  return db
+    .select({ userId: schema.users.id, displayName: schema.users.displayName })
+    .from(schema.workspaceMembers)
+    .innerJoin(schema.users, eq(schema.users.id, schema.workspaceMembers.userId))
+    .where(and(...conds))
+    .orderBy(asc(schema.users.displayName))
+    .limit(opts.limit ?? 10);
 }

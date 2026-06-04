@@ -67,6 +67,11 @@ export const editActionItem: ToolEntry = {
           description:
             "Attach to this project (id from find_project). Use empty string to detach.",
         },
+        assignee_user_id: {
+          type: "string",
+          description:
+            "Assign to this teammate (id from find_member). Use empty string to unassign.",
+        },
       },
     },
   },
@@ -151,6 +156,11 @@ export const editActionItem: ToolEntry = {
     if (typeof input.project_id === "string") {
       patch.projectId = input.project_id.trim() === "" ? null : safeStr(input.project_id);
       changed.push(input.project_id.trim() === "" ? "detached project" : "project");
+    }
+    if (typeof input.assignee_user_id === "string") {
+      patch.assigneeUserId =
+        input.assignee_user_id.trim() === "" ? null : safeStr(input.assignee_user_id);
+      changed.push(input.assignee_user_id.trim() === "" ? "unassigned" : "reassigned");
     }
 
     if (changed.length === 0) {
