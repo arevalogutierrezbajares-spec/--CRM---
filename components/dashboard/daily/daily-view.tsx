@@ -31,6 +31,7 @@ interface DailyViewProps {
   pinnedProjects: PinnedProject[];
   recentProjects: { id: string; title: string }[];
   blocked: BlockedProject[];
+  nowMs: number;
   layout: DashWidget[];
   greeting: string;
   briefing: string[];
@@ -48,6 +49,7 @@ export function DailyView({
   pinnedProjects,
   recentProjects,
   blocked,
+  nowMs,
   layout,
   greeting,
   briefing,
@@ -62,7 +64,7 @@ export function DailyView({
       initialItem={initialItem}
     >
       <TodayBriefing greeting={greeting} bullets={briefing} />
-      <NeedsYouNow actionItems={actionItems} tasks={tasks} blocked={blocked} meetings={meetings} />
+      <NeedsYouNow actionItems={actionItems} tasks={tasks} blocked={blocked} meetings={meetings} nowMs={nowMs} />
       <MetricsRow counts={counts} />
       <CustomizableDashboard
         savedLayout={layout}

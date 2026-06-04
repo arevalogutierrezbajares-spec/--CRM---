@@ -73,7 +73,14 @@ export function TownHallPanel({
   // (if already there / we posted) or raise a "new messages" pill. setState runs
   // inside async/rAF callbacks — never synchronously in an effect body.
   const refresh = useCallback(async (forceBottom = false) => {
-    const next = await loadRecentPostsAction();
+    let next: PostView[];
+    try {
+      next = await loadRecentPostsAction();
+    } catch {
+      // Transient network/realtime blip — keep the current posts rather than
+      // throwing an unhandled rejection out of the broadcast handler.
+      return;
+    }
     setPosts([...next].reverse());
     requestAnimationFrame(() => {
       if (forceBottom || atBottomRef.current) scrollToBottom();
@@ -159,7 +166,7 @@ export function TownHallPanel({
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline gap-1.5">
                   <span className="text-[12px] font-medium text-text-primary">{post.authorName}</span>
-                  <span className="text-[10px] text-text-tertiary">{relTime(post.createdAt)}</span>
+                  <span className="text-[10px] text-text-tertiary" suppressHydrationWarning>{relTime(post.createdAt)}</span>
                 </div>
                 <PostBody post={post} />
                 <PostReactions postId={post.id} reactions={post.reactions} onChanged={() => void refresh()} />
@@ -200,6 +207,11 @@ export function TownHallPanel({
                 initialPosts={initialPosts}
                 members={members}
                 objects={objects}
+                // The rail panel already owns the one Realtime subscription for
+                // this workspace channel; a second subscription to the same
+                // topic on the same client collides. The popout relies on its
+                // own post→router.refresh and reopen for freshness.
+                subscribe={false}
               />
             )}
           </SheetBody>

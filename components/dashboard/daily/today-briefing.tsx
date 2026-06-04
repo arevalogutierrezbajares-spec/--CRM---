@@ -49,7 +49,7 @@ export function TodayBriefing({ greeting, bullets }: { greeting: string; bullets
             const Icon = iconFor(b);
             return (
               <motion.div
-                key={i}
+                key={b}
                 initial={{ opacity: 0, x: -4 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.1 + i * 0.06 }}

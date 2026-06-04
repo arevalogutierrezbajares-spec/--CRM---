@@ -290,7 +290,9 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
     blockedRes.data,
   );
 
-  const hour = new Date().getHours();
+  const serverNow = new Date();
+  const nowMs = serverNow.getTime();
+  const hour = serverNow.getHours();
   const timeWord = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
   const greeting = `${timeWord}, ${user.displayName.split(/\s+/)[0] || user.displayName}`;
 
@@ -340,6 +342,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
           pinnedProjects={dailyData.pinnedProjects}
           recentProjects={dailyData.recentProjects}
           blocked={blockedRes.data}
+          nowMs={nowMs}
           layout={dailyData.layout}
           greeting={greeting}
           briefing={briefing}

@@ -46,5 +46,8 @@ export function parseCapture(raw: string): ParsedCapture {
     .replace(/\s+/g, " ")
     .trim();
 
-  return { title: title || raw.trim(), dueDate, assigneeName, projectName, priority };
+  // If stripping consumed everything (input was only @/#/date/priority tokens),
+  // return an empty title rather than re-injecting the raw tokens as a junk
+  // title — the caller rejects empty titles with "Nothing to capture."
+  return { title, dueDate, assigneeName, projectName, priority };
 }

@@ -3,6 +3,7 @@
  * WhatsApp ("post to town hall: shipped the deck"). Authored as the WA sender.
  */
 import { createPost } from "@/db/queries/town-hall";
+import { broadcastNewPost } from "@/lib/town-hall/broadcast";
 import { safeStr, type ToolEntry } from "./_types";
 
 export const postToTownHall: ToolEntry = {
@@ -30,6 +31,8 @@ export const postToTownHall: ToolEntry = {
       mentionUserIds: [],
       refs: [],
     });
+    // Notify any open web feeds (no browser did the client-side broadcast here).
+    await broadcastNewPost(ctx.workspaceId);
     return {
       ok: true,
       data: { posted: true },

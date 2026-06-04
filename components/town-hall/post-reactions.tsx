@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { SmilePlus } from "lucide-react";
+import { toast } from "sonner";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toggleReactionAction } from "@/app/(app)/town-hall/actions";
 import type { PostReactionView } from "@/db/queries/town-hall";
@@ -23,8 +24,16 @@ export function PostReactions({
   function react(emoji: string) {
     setOpen(false);
     start(async () => {
-      await toggleReactionAction({ postId, emoji });
-      onChanged();
+      try {
+        const res = await toggleReactionAction({ postId, emoji });
+        if (!res.ok) {
+          toast.error(res.error);
+          return;
+        }
+        onChanged();
+      } catch {
+        toast.error("Couldn't update reaction — try again.");
+      }
     });
   }
 
@@ -51,7 +60,7 @@ export function PostReactions({
           <button
             type="button"
             aria-label="Add reaction"
-            className="rounded-full border border-[var(--border)] p-1 text-text-tertiary opacity-0 transition-opacity hover:bg-surface group-hover:opacity-100"
+            className="rounded-full border border-[var(--border)] p-1 text-text-tertiary opacity-0 transition-opacity hover:bg-surface focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
           >
             <SmilePlus size={12} />
           </button>

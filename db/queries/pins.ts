@@ -178,6 +178,15 @@ export async function recordProjectVisit(
   userId: string,
   projectId: string,
 ): Promise<void> {
+  // Fence the FK: never bind a foreign project to this workspace's visit log
+  // (a poisoned row could otherwise surface a cross-workspace title in
+  // "Recently opened"). Defends the primitive regardless of caller.
+  const [proj] = await db
+    .select({ id: schema.projects.id })
+    .from(schema.projects)
+    .where(and(eq(schema.projects.id, projectId), eq(schema.projects.workspaceId, workspaceId)))
+    .limit(1);
+  if (!proj) return;
   await db
     .insert(schema.projectVisits)
     .values({ userId, projectId, workspaceId, visitedAt: new Date() })

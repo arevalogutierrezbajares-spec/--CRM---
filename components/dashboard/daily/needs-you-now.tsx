@@ -7,8 +7,10 @@ import { useItemDrawer } from "../item-drawer";
 import type { DashActionItem, DashMeeting, DashTask } from "@/db/queries/dashboard";
 import type { BlockedProject } from "@/db/queries/this-week";
 
-function minsUntil(d: Date): number {
-  return Math.round((new Date(d).getTime() - Date.now()) / 60000);
+// `nowMs` is a server-rendered snapshot passed in (not Date.now() at render),
+// so the time math is identical on the server and at hydration — no mismatch.
+function minsUntil(d: Date, nowMs: number): number {
+  return Math.round((new Date(d).getTime() - nowMs) / 60000);
 }
 
 /**
@@ -21,25 +23,34 @@ export function NeedsYouNow({
   tasks,
   blocked,
   meetings,
+  nowMs,
 }: {
   actionItems: DashActionItem[];
   tasks: DashTask[];
   blocked: BlockedProject[];
   meetings: DashMeeting[];
+  nowMs: number;
 }) {
   const drawer = useItemDrawer();
+
   const overdueAi = actionItems.filter((a) => a.isOverdue).slice(0, 4);
   const overdueTasks = tasks.filter((t) => t.isOverdue).slice(0, 4);
+  const blockedShown = blocked.slice(0, 3);
   const soonMeeting = meetings.find((m) => {
-    const mm = minsUntil(m.scheduledAt);
+    const mm = minsUntil(m.scheduledAt, nowMs);
     return mm >= -5 && mm <= 30;
   });
 
-  const total = overdueAi.length + overdueTasks.length + blocked.length + (soonMeeting ? 1 : 0);
+  // Count reflects exactly what's rendered (capped), so the header never claims
+  // more than the chips show.
+  const total =
+    overdueAi.length + overdueTasks.length + blockedShown.length + (soonMeeting ? 1 : 0);
   if (total === 0) return null;
 
   return (
     <motion.div
+      role="region"
+      aria-label={`Needs you now — ${total} item${total === 1 ? "" : "s"}`}
       initial={{ opacity: 0, y: -4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
@@ -56,24 +67,24 @@ export function NeedsYouNow({
           <Link href={`/meetings/${soonMeeting.id}`} className="flex items-center gap-1.5 text-text-secondary hover:text-text-primary">
             <CalendarClock size={13} className="text-[var(--amber-text)]" />
             {(() => {
-              const m = minsUntil(soonMeeting.scheduledAt);
+              const m = minsUntil(soonMeeting.scheduledAt, nowMs);
               return m <= 0 ? "Now" : `${m}m`;
             })()}: {soonMeeting.title}
           </Link>
         )}
         {overdueAi.map((a) => (
-          <button key={a.id} type="button" onClick={() => drawer?.openItem("action_item", a.id)} className="flex items-center gap-1.5 text-left text-text-secondary hover:text-text-primary">
+          <button key={a.id} type="button" aria-label={`Overdue action item: ${a.title}`} onClick={() => drawer?.openItem("action_item", a.id)} className="flex items-center gap-1.5 text-left text-text-secondary hover:text-text-primary">
             <ListTodo size={13} className="text-[var(--red-text)]" />
             <span className="max-w-[220px] truncate">{a.title}</span>
           </button>
         ))}
         {overdueTasks.map((t) => (
-          <button key={t.id} type="button" onClick={() => drawer?.openItem("milestone", t.id)} className="flex items-center gap-1.5 text-left text-text-secondary hover:text-text-primary">
+          <button key={t.id} type="button" aria-label={`Overdue task: ${t.title}`} onClick={() => drawer?.openItem("milestone", t.id)} className="flex items-center gap-1.5 text-left text-text-secondary hover:text-text-primary">
             <ListChecks size={13} className="text-[var(--red-text)]" />
             <span className="max-w-[220px] truncate">{t.title}</span>
           </button>
         ))}
-        {blocked.slice(0, 3).map((b) => (
+        {blockedShown.map((b) => (
           <Link key={b.id} href={`/projects/${b.id}`} className="flex items-center gap-1.5 text-text-secondary hover:text-text-primary">
             <Ban size={13} className="text-[var(--amber-text)]" />
             <span className="max-w-[220px] truncate">{b.title} blocked</span>

@@ -10,6 +10,7 @@ import {
   createPost,
   listPosts,
   toggleReaction,
+  postExistsInWorkspace,
   listNotifications,
   markNotificationsRead,
   unreadCount,
@@ -77,7 +78,11 @@ export async function createPostAction(input: {
     return { ok: false, error: "Invalid post payload" };
   }
   const { body, kind, refs } = parsed.data;
-  const parentPostId = typeof input.parentPostId === "string" ? input.parentPostId : null;
+  // Validate the reply parent is a real post in THIS workspace (drop to null
+  // otherwise — never persist a cross-workspace parent pointer).
+  const rawParent = typeof input.parentPostId === "string" ? input.parentPostId : null;
+  const parentPostId =
+    rawParent && (await postExistsInWorkspace(user.workspaceId, rawParent)) ? rawParent : null;
 
   const members = await listWorkspaceMembers(user.workspaceId);
   const memberById = new Map(members.map((m) => [m.userId, m]));
@@ -129,9 +134,13 @@ export async function createPostAction(input: {
   //    team gets it (their inbox is WhatsApp). Each recipient is messaged once.
   const link = `${process.env.NEXT_PUBLIC_SITE_URL ?? ""}/town-hall`;
   const mentioned = new Set(mentionUserIds.filter((id) => id !== user.id));
-  const broadcast = input.alsoWhatsApp
-    ? new Set(members.map((m) => m.userId).filter((id) => id !== user.id))
-    : new Set<string>();
+  // Team-wide WhatsApp fan-out is a paid, opt-out-less blast — restrict it to
+  // owners/admins. Members can still @mention specific teammates (above).
+  const canBroadcast = user.workspaceRole === "owner" || user.workspaceRole === "admin";
+  const broadcast =
+    input.alsoWhatsApp && canBroadcast
+      ? new Set(members.map((m) => m.userId).filter((id) => id !== user.id))
+      : new Set<string>();
   const targets = Array.from(new Set([...mentioned, ...broadcast]));
   let waSent = 0;
   if (targets.length > 0) {
@@ -162,8 +171,14 @@ export async function toggleReactionAction(opts: {
 }): Promise<{ ok: true; on: boolean } | { ok: false; error: string }> {
   const user = await requireUser();
   const emoji = opts.emoji.slice(0, 8);
-  const on = await toggleReaction({ postId: opts.postId, userId: user.id, emoji });
-  return { ok: true, on };
+  const res = await toggleReaction({
+    postId: opts.postId,
+    userId: user.id,
+    emoji,
+    workspaceId: user.workspaceId,
+  });
+  if (!res.ok) return { ok: false, error: "Post not found" };
+  return { ok: true, on: res.on };
 }
 
 /** Recent notifications for the caller (for the bell dropdown). */

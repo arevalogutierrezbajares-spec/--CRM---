@@ -3,6 +3,7 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { Toaster } from "@/components/ui/toaster";
 import { PresenceProvider } from "@/lib/presence/presence-context";
 import { CommandPalette } from "@/components/command/command-palette";
+import { MotionProvider } from "@/components/motion-provider";
 
 export default async function AppLayout({
   children,
@@ -16,6 +17,7 @@ export default async function AppLayout({
       userId={user.id}
       userName={user.displayName}
     >
+      <MotionProvider>
       <div className="flex min-h-screen">
         <a
           href="#main-content"
@@ -30,6 +32,7 @@ export default async function AppLayout({
         <Toaster />
         <CommandPalette />
       </div>
+      </MotionProvider>
     </PresenceProvider>
   );
 }

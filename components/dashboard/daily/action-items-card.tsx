@@ -68,7 +68,7 @@ export function ActionItemsCard({ items }: { items: DashActionItem[] }) {
   }
 
   async function quickAdd() {
-    if (!newTitle.trim()) return;
+    if (adding || !newTitle.trim()) return; // guard against Enter+click double-fire
     setAdding(true);
     const res = await quickCaptureAction({ text: newTitle });
     setAdding(false);
@@ -139,7 +139,7 @@ export function ActionItemsCard({ items }: { items: DashActionItem[] }) {
                     disabled={pending}
                     title="Snooze 1 week"
                     aria-label={`Snooze ${item.title} 1 week`}
-                    className="shrink-0 rounded p-0.5 text-text-tertiary opacity-0 transition-opacity hover:text-[var(--blue-text)] group-hover:opacity-100"
+                    className="shrink-0 rounded p-0.5 text-text-tertiary opacity-0 transition-opacity hover:text-[var(--blue-text)] focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
                   >
                     <Clock size={13} />
                   </button>

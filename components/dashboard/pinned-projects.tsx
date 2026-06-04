@@ -119,6 +119,8 @@ export function PinnedProjects({
                       className={`shrink-0 text-text-tertiary transition-transform ${isOpen ? "rotate-90" : ""}`}
                     />
                     <span
+                      role="img"
+                      aria-label={`Health: ${p.health}`}
                       className="h-2 w-2 shrink-0 rounded-full"
                       title={`Health: ${p.health}`}
                       style={{ background: HEALTH[p.health] }}
@@ -261,7 +263,7 @@ export function PinnedProjects({
                     onClick={() => toggle(r.id)}
                     aria-label={`Pin ${r.title}`}
                     title="Pin"
-                    className="rounded-full p-0.5 text-text-tertiary opacity-0 transition-opacity hover:text-[var(--blue-text)] group-hover:opacity-100"
+                    className="rounded-full p-0.5 text-text-tertiary opacity-0 transition-opacity hover:text-[var(--blue-text)] focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
                   >
                     <Pin size={11} />
                   </button>

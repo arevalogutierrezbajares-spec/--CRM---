@@ -83,10 +83,13 @@ export async function snoozeActionItemAction(opts: {
 }): Promise<Result> {
   const user = await requireUser();
   const days = Math.max(1, Math.min(opts.days ?? 1, 90));
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() + days);
-  const dueDate = d.toISOString().slice(0, 10);
+  // Anchor on the UTC calendar date — the same basis the overdue/"today" logic
+  // uses (db/queries/dashboard.ts) — so a snoozed item reliably clears overdue.
+  // Building from getUTCFullYear/Month/Date avoids the local-midnight→toISOString
+  // drift that could land "tomorrow" on the wrong calendar day.
+  const now = new Date();
+  const target = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + days));
+  const dueDate = target.toISOString().slice(0, 10);
   const ok = await updateActionItem({ workspaceId: user.workspaceId, id: opts.id, dueDate });
   if (!ok) return { ok: false, error: "Action item not found" };
   refresh();

@@ -293,15 +293,40 @@ export async function markNotificationsRead(opts: {
     .where(and(...conditions));
 }
 
-/** Toggle an emoji reaction on a post for a user. Returns whether it's now set. */
+/** True if the post exists in the given workspace (used to fence reply parents). */
+export async function postExistsInWorkspace(workspaceId: string, postId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: posts.id })
+    .from(posts)
+    .where(and(eq(posts.id, postId), eq(posts.workspaceId, workspaceId)))
+    .limit(1);
+  return Boolean(row);
+}
+
+/**
+ * Toggle an emoji reaction on a post for a user. Workspace-fenced (the post
+ * must belong to `workspaceId`, else no-op) and atomic — the on/off decision is
+ * derived from whether the DELETE removed a row, so concurrent toggles can't
+ * desync the way a read-then-write would. Returns `{ ok, on }`.
+ */
 export async function toggleReaction(opts: {
   postId: string;
   userId: string;
   emoji: string;
-}): Promise<boolean> {
-  const existing = await db
-    .select({ id: postReactions.id })
-    .from(postReactions)
+  workspaceId: string;
+}): Promise<{ ok: boolean; on: boolean }> {
+  // Fence: the post must be in the caller's workspace (prevents cross-workspace
+  // reaction IDOR — postReactions has no workspace column of its own).
+  const [post] = await db
+    .select({ id: posts.id })
+    .from(posts)
+    .where(and(eq(posts.id, opts.postId), eq(posts.workspaceId, opts.workspaceId)))
+    .limit(1);
+  if (!post) return { ok: false, on: false };
+
+  // Atomic: delete-if-present (one statement); if nothing was removed, insert.
+  const removed = await db
+    .delete(postReactions)
     .where(
       and(
         eq(postReactions.postId, opts.postId),
@@ -309,14 +334,11 @@ export async function toggleReaction(opts: {
         eq(postReactions.emoji, opts.emoji),
       ),
     )
-    .limit(1);
-  if (existing.length) {
-    await db.delete(postReactions).where(eq(postReactions.id, existing[0].id));
-    return false;
-  }
+    .returning({ id: postReactions.id });
+  if (removed.length) return { ok: true, on: false };
   await db
     .insert(postReactions)
     .values({ postId: opts.postId, userId: opts.userId, emoji: opts.emoji })
     .onConflictDoNothing();
-  return true;
+  return { ok: true, on: true };
 }

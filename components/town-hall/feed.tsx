@@ -44,11 +44,14 @@ export function Feed({
   initialPosts,
   members,
   objects,
+  subscribe = true,
 }: {
   workspaceId: string;
   initialPosts: PostView[];
   members: MemberOption[];
   objects: RefObject[];
+  /** When false, don't open a Realtime channel (the embedding panel owns it). */
+  subscribe?: boolean;
 }) {
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
@@ -58,6 +61,7 @@ export function Feed({
   // Subscribe once. setState lives only in the async broadcast callback —
   // never synchronously in the effect body (lint: set-state-in-effect).
   useEffect(() => {
+    if (!subscribe) return; // embedded popout: the rail panel owns the channel
     const supabase = createClient();
     const channel = supabase.channel(`town-hall:${workspaceId}`, {
       config: { broadcast: { self: false } },
@@ -77,7 +81,7 @@ export function Feed({
       channel.unsubscribe();
       channelRef.current = null;
     };
-  }, [workspaceId, router]);
+  }, [workspaceId, router, subscribe]);
 
   const handlePosted = useCallback(() => {
     // Refresh our own view, and tell peers to refresh theirs.
@@ -90,11 +94,16 @@ export function Feed({
   }, [router]);
 
   // Light threading: top-level posts (newest-first as fetched) + their replies.
-  const topLevel = initialPosts.filter((p) => !p.parentPostId);
+  // A reply whose parent is OUTSIDE the fetched window (older than the page
+  // limit) would otherwise vanish entirely — promote it to top-level so the
+  // message is never silently dropped.
+  const presentIds = new Set(initialPosts.map((p) => p.id));
+  const isRooted = (p: PostView) => Boolean(p.parentPostId) && presentIds.has(p.parentPostId!);
+  const topLevel = initialPosts.filter((p) => !isRooted(p));
   const repliesByParent = new Map<string, PostView[]>();
   for (const p of initialPosts) {
-    if (!p.parentPostId) continue;
-    const arr = repliesByParent.get(p.parentPostId) ?? repliesByParent.set(p.parentPostId, []).get(p.parentPostId)!;
+    if (!isRooted(p)) continue;
+    const arr = repliesByParent.get(p.parentPostId!) ?? repliesByParent.set(p.parentPostId!, []).get(p.parentPostId!)!;
     arr.push(p);
   }
   for (const arr of repliesByParent.values()) {
@@ -203,7 +212,7 @@ function PostCard({
               note
             </span>
           )}
-          <span className="text-tiny text-text-tertiary">{relativeTime(post.createdAt)}</span>
+          <span className="text-tiny text-text-tertiary" suppressHydrationWarning>{relativeTime(post.createdAt)}</span>
         </div>
         <div className="mt-1">
           <PostBody post={post} />
