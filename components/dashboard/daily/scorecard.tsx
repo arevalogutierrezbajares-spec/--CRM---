@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { BarChart3, ArrowRight } from "lucide-react";
-import { fmtVal } from "@/components/priorities/priorities-board";
+import { fmtVal, HEALTH_LABEL } from "@/components/priorities/priorities-board";
 import type { ScorecardRow } from "@/db/queries/okrs";
 
 const HEALTH: Record<string, string> = {
@@ -31,7 +31,7 @@ export function Scorecard({ rows }: { rows: ScorecardRow[] }) {
         {rows.map((r) => {
           const pct = Math.round(r.progress * 100);
           return (
-            <div key={r.id} className="rounded-lg bg-surface p-2.5" title={`${r.objectiveTitle}${r.ownerName ? ` · ${r.ownerName}` : ""}`}>
+            <div key={r.id} className="rounded-lg bg-surface p-2.5" title={`${r.objectiveTitle}${r.ownerName ? ` · ${r.ownerName}` : ""} — ${HEALTH_LABEL[r.health]}`}>
               <div className="flex items-baseline gap-1">
                 <span className="text-[18px] font-medium leading-none tabular-nums text-text-primary">
                   {fmtVal(r.current, r.unit)}
@@ -43,7 +43,7 @@ export function Scorecard({ rows }: { rows: ScorecardRow[] }) {
                 <span className="h-1 flex-1 overflow-hidden rounded-full bg-card">
                   <span className="block h-full rounded-full" style={{ width: `${pct}%`, background: HEALTH[r.health] }} />
                 </span>
-                <span className="text-tiny tabular-nums" style={{ color: HEALTH[r.health] }}>{pct}%</span>
+                <span className="text-tiny tabular-nums" style={{ color: HEALTH[r.health] }} aria-label={`${pct}% — ${HEALTH_LABEL[r.health]}`}>{pct}%</span>
               </div>
             </div>
           );

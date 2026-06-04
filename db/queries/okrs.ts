@@ -3,6 +3,18 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import * as schema from "@/db/schema";
 
+/** True if `ownerId` (when set) is a member of `workspaceId`. Prevents attaching
+ *  a foreign user as owner (which would leak their display name cross-tenant). */
+async function ownerInWorkspace(workspaceId: string, ownerId: string | null | undefined): Promise<boolean> {
+  if (!ownerId) return true;
+  const [m] = await db
+    .select({ id: schema.workspaceMembers.userId })
+    .from(schema.workspaceMembers)
+    .where(and(eq(schema.workspaceMembers.workspaceId, workspaceId), eq(schema.workspaceMembers.userId, ownerId)))
+    .limit(1);
+  return Boolean(m);
+}
+
 export type ObjectiveStatus = "on_track" | "at_risk" | "off_track" | "done";
 export type KrDirection = "higher" | "lower";
 export type KrHealth = "green" | "amber" | "red";
@@ -96,7 +108,16 @@ export async function listObjectives(
       ownerName: schema.users.displayName,
     })
     .from(schema.objectives)
-    .leftJoin(schema.users, eq(schema.users.id, schema.objectives.ownerId))
+    // Join the owner only through workspace membership so a foreign owner id
+    // can never surface another tenant's display name.
+    .leftJoin(
+      schema.workspaceMembers,
+      and(
+        eq(schema.workspaceMembers.userId, schema.objectives.ownerId),
+        eq(schema.workspaceMembers.workspaceId, schema.objectives.workspaceId),
+      ),
+    )
+    .leftJoin(schema.users, eq(schema.users.id, schema.workspaceMembers.userId))
     .where(and(eq(schema.objectives.workspaceId, workspaceId), eq(schema.objectives.quarter, quarter)))
     .orderBy(asc(schema.objectives.sortOrder), asc(schema.objectives.createdAt));
 
@@ -106,7 +127,14 @@ export async function listObjectives(
   const krRows = await db
     .select({ kr: schema.keyResults, ownerName: schema.users.displayName })
     .from(schema.keyResults)
-    .leftJoin(schema.users, eq(schema.users.id, schema.keyResults.ownerId))
+    .leftJoin(
+      schema.workspaceMembers,
+      and(
+        eq(schema.workspaceMembers.userId, schema.keyResults.ownerId),
+        eq(schema.workspaceMembers.workspaceId, schema.keyResults.workspaceId),
+      ),
+    )
+    .leftJoin(schema.users, eq(schema.users.id, schema.workspaceMembers.userId))
     .where(inArray(schema.keyResults.objectiveId, ids))
     .orderBy(asc(schema.keyResults.sortOrder), asc(schema.keyResults.createdAt));
 
@@ -149,7 +177,14 @@ export async function listScorecard(
     })
     .from(schema.keyResults)
     .innerJoin(schema.objectives, eq(schema.objectives.id, schema.keyResults.objectiveId))
-    .leftJoin(schema.users, eq(schema.users.id, schema.keyResults.ownerId))
+    .leftJoin(
+      schema.workspaceMembers,
+      and(
+        eq(schema.workspaceMembers.userId, schema.keyResults.ownerId),
+        eq(schema.workspaceMembers.workspaceId, schema.keyResults.workspaceId),
+      ),
+    )
+    .leftJoin(schema.users, eq(schema.users.id, schema.workspaceMembers.userId))
     .where(
       and(
         eq(schema.keyResults.workspaceId, workspaceId),
@@ -171,7 +206,8 @@ export async function createObjective(input: {
   quarter: string;
   ownerId?: string | null;
   description?: string | null;
-}): Promise<{ id: string }> {
+}): Promise<{ id: string } | null> {
+  if (!(await ownerInWorkspace(input.workspaceId, input.ownerId))) return null;
   const [row] = await db
     .insert(schema.objectives)
     .values({
@@ -194,6 +230,7 @@ export async function updateObjective(input: {
   ownerId?: string | null;
   status?: ObjectiveStatus;
 }): Promise<boolean> {
+  if (input.ownerId !== undefined && !(await ownerInWorkspace(input.workspaceId, input.ownerId))) return false;
   const patch: Partial<typeof schema.objectives.$inferInsert> = {};
   if (input.title !== undefined) patch.title = input.title;
   if (input.description !== undefined) patch.description = input.description;
@@ -234,6 +271,7 @@ export async function createKeyResult(input: {
     .where(and(eq(schema.objectives.id, input.objectiveId), eq(schema.objectives.workspaceId, input.workspaceId)))
     .limit(1);
   if (!obj) return null;
+  if (!(await ownerInWorkspace(input.workspaceId, input.ownerId))) return null;
   const [row] = await db
     .insert(schema.keyResults)
     .values({
@@ -263,6 +301,7 @@ export async function updateKeyResult(input: {
   ownerId?: string | null;
   onScorecard?: boolean;
 }): Promise<boolean> {
+  if (input.ownerId !== undefined && !(await ownerInWorkspace(input.workspaceId, input.ownerId))) return false;
   const patch: Partial<typeof schema.keyResults.$inferInsert> = {};
   if (input.title !== undefined) patch.title = input.title;
   if (input.current !== undefined) patch.current = input.current;

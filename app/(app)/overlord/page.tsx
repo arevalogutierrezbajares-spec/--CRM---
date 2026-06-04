@@ -111,12 +111,12 @@ export default async function OverlordPage(props: {
               No Overlord tasks ingested yet.
               {" "}
               <span className="text-text-primary font-medium">
-                Click "Sync now" above
+                Click &ldquo;Sync now&rdquo; above
               </span>{" "}
               to pull the latest TASKS.md files from the TOURISM repo.
             </p>
             <p className="text-tiny text-text-tertiary mt-2">
-              Reading from <code>/Users/tomas/--TOURISM--/005- WIKI/operation-overlord/section-*/TASKS.md</code>
+              Reading the Operation Overlord <code>TASKS.md</code> files from the TOURISM repo.
             </p>
           </div>
         ) : (

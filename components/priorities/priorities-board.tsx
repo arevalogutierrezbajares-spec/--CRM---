@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Plus, Trash2, Target, Check, BarChart3 } from "lucide-react";
+import { Plus, Trash2, Target, Check, BarChart3, TrendingUp, TrendingDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -34,6 +34,11 @@ const HEALTH: Record<string, string> = {
   amber: "var(--amber-text)",
   red: "var(--red-text)",
 };
+export const HEALTH_LABEL: Record<string, string> = {
+  green: "on track",
+  amber: "at risk",
+  red: "off track",
+};
 const STATUS_LABEL: Record<ObjectiveStatus, string> = {
   on_track: "On track",
   at_risk: "At risk",
@@ -48,7 +53,7 @@ const STATUS_TONE: Record<ObjectiveStatus, string> = {
 };
 
 export function fmtVal(v: number, unit: string | null): string {
-  const n = Number.isInteger(v) ? v.toString() : v.toFixed(1);
+  const n = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(v);
   if (unit === "$") return `$${n}`;
   if (unit === "%") return `${n}%`;
   return unit ? `${n} ${unit}` : n;
@@ -178,6 +183,7 @@ function ObjectiveCard({
   onChanged: () => void;
 }) {
   const [, startTransition] = useTransition();
+  const hasKr = o.keyResults.length > 0;
   const pct = Math.round(o.progress * 100);
 
   function setStatus(status: ObjectiveStatus) {
@@ -218,10 +224,16 @@ function ObjectiveCard({
             <h2 className="truncate text-[15px] font-medium text-text-primary">{o.title}</h2>
           </div>
           <div className="mt-2 flex items-center gap-2">
-            <div className="h-1.5 w-40 overflow-hidden rounded-full bg-surface">
-              <div className="h-full rounded-full" style={{ width: `${pct}%`, background: "var(--green-mid)" }} />
-            </div>
-            <span className="text-tiny tabular-nums text-text-tertiary">{pct}%</span>
+            {hasKr ? (
+              <>
+                <div className="h-1.5 w-40 overflow-hidden rounded-full bg-surface">
+                  <div className="h-full rounded-full" style={{ width: `${pct}%`, background: "var(--green-mid)" }} />
+                </div>
+                <span className="text-tiny tabular-nums text-text-tertiary">{pct}%</span>
+              </>
+            ) : (
+              <span className="text-tiny text-text-tertiary">No key results yet — add a measurable target below.</span>
+            )}
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
@@ -298,7 +310,7 @@ function KrRow({ kr, onChanged }: { kr: KeyResultView; onChanged: () => void }) 
 
   return (
     <div className="group flex items-center gap-2 rounded-md px-1 py-1 hover:bg-surface">
-      <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: HEALTH[kr.health] }} title={kr.health} />
+      <span role="img" aria-label={`Health: ${HEALTH_LABEL[kr.health]}`} className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: HEALTH[kr.health] }} title={HEALTH_LABEL[kr.health]} />
       <span className="min-w-0 flex-1 truncate text-[12.5px] text-text-primary">{kr.title}</span>
       {kr.ownerName && <span className="hidden shrink-0 text-tiny text-text-tertiary sm:inline">{kr.ownerName}</span>}
       <div className="hidden h-1.5 w-20 shrink-0 overflow-hidden rounded-full bg-surface sm:block">
@@ -345,29 +357,37 @@ function KrRow({ kr, onChanged }: { kr: KeyResultView; onChanged: () => void }) 
 function AddKr({ objectiveId, onChanged }: { objectiveId: string; onChanged: () => void }) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
+  const [start, setStart] = useState("");
   const [target, setTarget] = useState("");
   const [unit, setUnit] = useState("");
+  const [direction, setDirection] = useState<"higher" | "lower">("higher");
   const [busy, setBusy] = useState(false);
 
   async function add() {
     if (busy || !title.trim() || !target.trim()) return;
-    const num = Number(target);
-    if (!Number.isFinite(num)) {
-      toast.error("Target must be a number.");
+    const targetNum = Number(target);
+    const startNum = start.trim() ? Number(start) : 0;
+    if (!Number.isFinite(targetNum) || !Number.isFinite(startNum)) {
+      toast.error("Start and target must be numbers.");
       return;
     }
     setBusy(true);
     const res = await createKeyResultAction({
       objectiveId,
       title,
-      target: num,
+      target: targetNum,
+      startValue: startNum,
+      current: startNum, // start at the baseline → 0% progress
+      direction,
       unit: unit.trim() || null,
     });
     setBusy(false);
     if (res.ok) {
       setTitle("");
+      setStart("");
       setTarget("");
       setUnit("");
+      setDirection("higher");
       setOpen(false);
       onChanged();
     } else {
@@ -395,13 +415,31 @@ function AddKr({ objectiveId, onChanged }: { objectiveId: string; onChanged: () 
         onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), void add())}
         placeholder="Key result (e.g. MRR)…"
         autoFocus
-        className="h-7 min-w-[160px] flex-1 text-tiny"
+        className="h-7 min-w-[150px] flex-1 text-tiny"
+      />
+      <button
+        type="button"
+        onClick={() => setDirection((d) => (d === "higher" ? "lower" : "higher"))}
+        title={direction === "higher" ? "Increase (higher is better)" : "Decrease (lower is better)"}
+        aria-label={`Direction: ${direction === "higher" ? "increase" : "decrease"} — click to toggle`}
+        className="flex h-7 shrink-0 items-center gap-0.5 rounded-md border border-[var(--border)] px-1.5 text-tiny text-text-secondary hover:bg-card"
+      >
+        {direction === "higher" ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+      </button>
+      <Input
+        value={start}
+        onChange={(e) => setStart(e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), void add())}
+        placeholder="From"
+        inputMode="decimal"
+        title="Starting value (baseline)"
+        className="h-7 w-16 text-tiny"
       />
       <Input
         value={target}
         onChange={(e) => setTarget(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), void add())}
-        placeholder="Target"
+        placeholder="To (target)"
         inputMode="decimal"
         className="h-7 w-20 text-tiny"
       />

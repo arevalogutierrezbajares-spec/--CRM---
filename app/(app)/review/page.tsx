@@ -18,6 +18,7 @@ import { ReviewNotes } from "@/components/review/review-notes";
 import {
   listScorecard,
   listObjectives,
+  quarterOf,
   type ScorecardRow,
   type ObjectiveView,
 } from "@/db/queries/okrs";
@@ -74,11 +75,12 @@ export default async function ReviewPage() {
   const user = await requireUser();
   const todayStr = todayInTz(user.timezone);
   const weekOf = weekMondayOf(todayStr);
+  const quarter = quarterOf(new Date(todayStr));
 
   const [scorecardRes, objectivesRes, blockedRes, actionItemsRes, headlinesRes, savedRes, pastRes] =
     await Promise.all([
-      safeRead<ScorecardRow[]>(() => listScorecard(user.workspaceId), []),
-      safeRead<ObjectiveView[]>(() => listObjectives(user.workspaceId), []),
+      safeRead<ScorecardRow[]>(() => listScorecard(user.workspaceId, quarter), []),
+      safeRead<ObjectiveView[]>(() => listObjectives(user.workspaceId, quarter), []),
       safeRead<BlockedProject[]>(() => listBlockedProjects(user.workspaceId), []),
       safeRead<DashActionItem[]>(() => listOpenActionItems(user.workspaceId, 50, todayStr), []),
       safeRead<PostView[]>(() => listPosts({ workspaceId: user.workspaceId, viewerId: user.id, limit: 6 }), []),
@@ -90,7 +92,9 @@ export default async function ReviewPage() {
   const objectives = objectivesRes.data;
   const blocked = blockedRes.data;
   const overdueTodos = actionItemsRes.data.filter((a) => a.isOverdue);
-  const todos = actionItemsRes.data;
+  // Overdue items live exclusively in the IDS section below — keep them out of
+  // the To-Dos list so the same item isn't shown twice on one screen.
+  const todos = actionItemsRes.data.filter((a) => !a.isOverdue);
   const headlines = headlinesRes.data;
   const past = pastRes.data;
 
@@ -141,7 +145,7 @@ export default async function ReviewPage() {
                   <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: STATUS_TONE[o.status] }} title={STATUS_LABEL[o.status]} />
                   <Link href="/priorities" className="min-w-0 flex-1 truncate text-text-primary hover:underline">{o.title}</Link>
                   {o.ownerName && <span className="hidden shrink-0 text-tiny text-text-tertiary sm:inline">{o.ownerName}</span>}
-                  <span className="shrink-0 text-tiny tabular-nums text-text-tertiary">{Math.round(o.progress * 100)}%</span>
+                  <span className="shrink-0 text-tiny tabular-nums text-text-tertiary">{o.keyResults.length ? `${Math.round(o.progress * 100)}%` : "—"}</span>
                   <span className="shrink-0 text-tiny" style={{ color: STATUS_TONE[o.status] }}>{STATUS_LABEL[o.status]}</span>
                 </li>
               ))}

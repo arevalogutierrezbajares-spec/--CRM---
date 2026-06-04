@@ -195,7 +195,7 @@ export default async function InitiativesPage(props: {
       />
       <main className="mx-auto w-full max-w-7xl flex-1 px-6 py-6 space-y-4">
         <header>
-          <h1 className="text-[22px] font-medium tracking-tight">Work</h1>
+          <h1 className="text-[22px] font-medium tracking-tight">Initiatives</h1>
           <p className="text-[13px] text-text-secondary">
             {allInitsRes.data.length} initiative
             {allInitsRes.data.length === 1 ? "" : "s"} across all ventures · filter

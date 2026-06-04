@@ -67,7 +67,7 @@ export function DailyView({
       members={members}
       initialItem={initialItem}
     >
-      <TodayBriefing greeting={greeting} bullets={briefing} />
+      <TodayBriefing greeting={greeting} hasUrgent={briefing.length > 0} />
       <NeedsYouNow actionItems={actionItems} tasks={tasks} blocked={blocked} meetings={meetings} nowMs={nowMs} />
       <MetricsRow counts={counts} />
       <Scorecard rows={scorecard} />

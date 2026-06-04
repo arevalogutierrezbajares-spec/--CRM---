@@ -3,10 +3,7 @@ import { requireUser } from "@/lib/current-user";
 import { TopBar } from "@/components/layout/top-bar";
 import { DbBanner } from "@/components/db-banner";
 import { WorkNav } from "@/components/work/work-nav";
-import {
-  InitiativeStatusBadge,
-  WorkPriorityBadge,
-} from "@/components/work/priority-badge";
+import { InitiativeStatusBadge } from "@/components/work/priority-badge";
 import { ThemeChips } from "@/components/work/theme-chips";
 import { safeRead } from "@/lib/db-status";
 import {
@@ -90,7 +87,7 @@ export default async function RoadmapPage() {
       <TopBar email={user.email} displayName={user.displayName} />
       <main className="mx-auto w-full max-w-7xl flex-1 px-6 py-6 space-y-4">
         <header>
-          <h1 className="text-[22px] font-medium tracking-tight">Work</h1>
+          <h1 className="text-[22px] font-medium tracking-tight">Roadmap</h1>
           <p className="text-[13px] text-text-secondary">
             6-month roadmap of initiatives and sprints.
           </p>

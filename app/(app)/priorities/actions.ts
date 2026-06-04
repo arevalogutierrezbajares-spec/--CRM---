@@ -29,16 +29,18 @@ export async function createObjectiveAction(input: {
 }): Promise<Res> {
   const user = await requireUser();
   if (!input.title.trim()) return { ok: false, error: "Give the objective a title." };
-  const { id } = await createObjective({
+  const quarter = input.quarter && /^\d{4}-Q[1-4]$/.test(input.quarter) ? input.quarter : quarterOf();
+  const row = await createObjective({
     workspaceId: user.workspaceId,
     actorId: user.id,
-    title: input.title.trim(),
-    quarter: input.quarter || quarterOf(),
+    title: input.title.trim().slice(0, 200),
+    quarter,
     ownerId: input.ownerId ?? null,
     description: input.description ?? null,
   });
+  if (!row) return { ok: false, error: "That owner isn't in your workspace." };
   refresh();
-  return { ok: true, id };
+  return { ok: true, id: row.id };
 }
 
 export async function updateObjectiveAction(input: {
@@ -50,7 +52,7 @@ export async function updateObjectiveAction(input: {
 }): Promise<Res> {
   const user = await requireUser();
   const ok = await updateObjective({ workspaceId: user.workspaceId, ...input });
-  if (!ok) return { ok: false, error: "Objective not found." };
+  if (!ok) return { ok: false, error: "Objective not found, or owner isn't in your workspace." };
   refresh();
   return { ok: true };
 }
@@ -75,9 +77,11 @@ export async function createKeyResultAction(input: {
 }): Promise<Res> {
   const user = await requireUser();
   if (!input.title.trim()) return { ok: false, error: "Give the key result a title." };
-  if (!Number.isFinite(input.target)) return { ok: false, error: "Target must be a number." };
-  const row = await createKeyResult({ workspaceId: user.workspaceId, ...input, title: input.title.trim() });
-  if (!row) return { ok: false, error: "That objective isn't in your workspace." };
+  for (const n of [input.target, input.startValue, input.current]) {
+    if (n !== undefined && !Number.isFinite(n)) return { ok: false, error: "Numbers must be finite." };
+  }
+  const row = await createKeyResult({ workspaceId: user.workspaceId, ...input, title: input.title.trim().slice(0, 200) });
+  if (!row) return { ok: false, error: "That objective or owner isn't in your workspace." };
   refresh();
   return { ok: true, id: row.id };
 }
@@ -94,8 +98,11 @@ export async function updateKeyResultAction(input: {
   onScorecard?: boolean;
 }): Promise<Res> {
   const user = await requireUser();
+  for (const n of [input.target, input.current, input.startValue]) {
+    if (n !== undefined && !Number.isFinite(n)) return { ok: false, error: "Numbers must be finite." };
+  }
   const ok = await updateKeyResult({ workspaceId: user.workspaceId, ...input });
-  if (!ok) return { ok: false, error: "Key result not found." };
+  if (!ok) return { ok: false, error: "Key result not found, or owner isn't in your workspace." };
   refresh();
   return { ok: true };
 }

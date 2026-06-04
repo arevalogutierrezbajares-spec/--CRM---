@@ -16,7 +16,7 @@ import { listWorkspaceMembers } from "@/db/queries/team";
 import { listPosts, type PostView } from "@/db/queries/town-hall";
 import { TownHallPanel } from "@/components/town-hall/town-hall-panel";
 import { listPinnedProjects, listRecentProjects, type PinnedProject } from "@/db/queries/pins";
-import { listScorecard, type ScorecardRow } from "@/db/queries/okrs";
+import { listScorecard, quarterOf, type ScorecardRow } from "@/db/queries/okrs";
 import { getDashboardLayout } from "@/db/queries/dashboard-layout";
 import { DEFAULT_WIDGETS, type DashWidget } from "@/lib/dashboard/layout";
 import { WeeklyView } from "@/components/dashboard/weekly/weekly-view";
@@ -176,7 +176,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
       [],
     ),
     safeRead<{ id: string; title: string }[]>(() => listProjectsForPicker(user.workspaceId), []),
-    safeRead<ScorecardRow[]>(() => listScorecard(user.workspaceId), []),
+    safeRead<ScorecardRow[]>(() => listScorecard(user.workspaceId, quarterOf(new Date(todayStr))), []),
   ]);
 
   const members = membersRes.data;

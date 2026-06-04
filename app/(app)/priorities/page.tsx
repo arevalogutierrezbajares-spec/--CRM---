@@ -2,6 +2,7 @@ import { requireUser } from "@/lib/current-user";
 import { TopBar } from "@/components/layout/top-bar";
 import { DbBanner } from "@/components/db-banner";
 import { safeRead } from "@/lib/db-status";
+import { todayInTz } from "@/lib/date/today";
 import { listWorkspaceMembers } from "@/db/queries/team";
 import {
   listObjectives,
@@ -16,7 +17,9 @@ type SearchParams = Promise<{ q?: string }>;
 export default async function PrioritiesPage(props: { searchParams: SearchParams }) {
   const user = await requireUser();
   const sp = await props.searchParams;
-  const quarter = sp.q || quarterOf();
+  // Default to the current quarter in the user's timezone (so a quarter-end
+  // evening in UTC-4 doesn't jump to the next, empty quarter).
+  const quarter = sp.q || quarterOf(new Date(todayInTz(user.timezone)));
 
   const [objectivesRes, quartersRes, membersRes] = await Promise.all([
     safeRead<ObjectiveView[]>(() => listObjectives(user.workspaceId, quarter), []),
