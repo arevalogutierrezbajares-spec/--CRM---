@@ -29,6 +29,8 @@ export async function triageInbound(opts: {
   }
 
   const res = await claudeChat({
+    // Deterministic classification → Haiku (~15× cheaper than Opus).
+    model: "claude-haiku-4-5",
     system:
       [
         "You triage inbound emails to a single founder's CRM.",

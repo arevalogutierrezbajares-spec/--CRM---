@@ -2,7 +2,9 @@
  * Thin Anthropic client. Activates with ANTHROPIC_API_KEY. Returns a 503-shaped
  * error result when missing so callers can degrade gracefully.
  *
- * Default model: claude-opus-4-7 (latest as of project knowledge cutoff).
+ * Default model: claude-sonnet-4-6 — ~5× cheaper than Opus and plenty smart
+ * for the summarize/triage/briefing work these callers do. Pass `model` to
+ * override (e.g. "claude-haiku-4-5" for deterministic extraction).
  */
 
 export type ClaudeResult =
@@ -121,7 +123,7 @@ export async function claudeChat(opts: {
 }): Promise<ClaudeResult> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return { ok: false, error: "ANTHROPIC_API_KEY not set" };
-  const model = opts.model ?? "claude-opus-4-7";
+  const model = opts.model ?? "claude-sonnet-4-6";
 
   const resp = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",

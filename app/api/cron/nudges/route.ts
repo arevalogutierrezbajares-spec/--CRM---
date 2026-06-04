@@ -79,6 +79,8 @@ export const GET = withErrorCapture(
     let message: string;
     if (isAnthropicConfigured()) {
       const claude = await claudeChat({
+        // Templated nudge copy → Haiku (cheap + fast).
+        model: "claude-haiku-4-5",
         system:
           "Write a friendly 2-3 sentence morning nudge from a CRM assistant. " +
           "Mention each item by name. End with: 'Reply done/snooze, or just text me.' " +

@@ -64,6 +64,8 @@ export async function POST(req: NextRequest) {
   };
   if (isAnthropicConfigured() && transcript.trim().length > 0) {
     const claude = await claudeChat({
+      // Deterministic fact extraction → Haiku (~15× cheaper than Opus).
+      model: "claude-haiku-4-5",
       system:
         [
           "You extract contact facts from a voice memo.",
