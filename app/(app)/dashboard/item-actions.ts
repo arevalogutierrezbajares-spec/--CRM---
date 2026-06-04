@@ -14,6 +14,8 @@ import {
   type ItemEntityType,
   type WorkPriority,
 } from "@/db/queries/items";
+import { listWorkspaceMembers } from "@/db/queries/team";
+import { createPostAction } from "@/app/(app)/town-hall/actions";
 
 type Result = { ok: true; id: string } | { ok: false; error: string };
 
@@ -145,6 +147,46 @@ export async function removeAttachmentAction(opts: { id: string }): Promise<Resu
   if (!ok) return { ok: false, error: "Attachment not found" };
   refresh();
   return { ok: true, id: opts.id };
+}
+
+/* ── tag teammates on Town Hall ───────────────────────────────────────── */
+
+/**
+ * @mention teammates about this action item / task — posts to the Town Hall
+ * feed with the item attached as a #reference, which notifies them in-app +
+ * via WhatsApp (reuses the Town Hall post pipeline).
+ */
+export async function mentionItemAction(opts: {
+  entityType: ItemEntityType;
+  entityId: string;
+  label: string;
+  mentionUserIds: string[];
+  message?: string;
+}): Promise<Result> {
+  const user = await requireUser();
+  if (!opts.mentionUserIds.length) {
+    return { ok: false, error: "Pick at least one teammate to tag." };
+  }
+  const members = await listWorkspaceMembers(user.workspaceId);
+  const nameById = new Map(members.map((m) => [m.userId, m.displayName]));
+  const handles = opts.mentionUserIds
+    .map((id) => nameById.get(id))
+    .filter((n): n is string => Boolean(n))
+    .map((n) => `@${n.toLowerCase().replace(/\s+/g, "")}`);
+
+  // #label goes last so the ref token doesn't swallow trailing text.
+  const body = [handles.join(" "), opts.message?.trim(), `re: #${opts.label}`]
+    .filter(Boolean)
+    .join(" ");
+
+  const res = await createPostAction({
+    body,
+    mentionUserIds: opts.mentionUserIds,
+    refs: [{ refType: opts.entityType, refId: opts.entityId, label: opts.label }],
+  });
+  if (!res.ok) return { ok: false, error: res.error };
+  revalidatePath("/town-hall");
+  return { ok: true, id: res.postId };
 }
 
 /* ── detail loader (used by the drawer) ───────────────────────────────── */

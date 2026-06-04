@@ -18,6 +18,7 @@ import {
   FileText,
   Link as LinkIcon,
   CornerDownRight,
+  AtSign,
 } from "lucide-react";
 import {
   Sheet,
@@ -44,6 +45,7 @@ import {
   updateTaskAction,
   addAttachmentAction,
   removeAttachmentAction,
+  mentionItemAction,
 } from "@/app/(app)/dashboard/item-actions";
 import type { ItemDetail, ItemEntityType } from "@/db/queries/items";
 
@@ -360,6 +362,9 @@ function DrawerForm({
       {/* Direct attachments */}
       <Attachments detail={detail} onChanged={onChanged} />
 
+      {/* Tag teammates → posts to Town Hall */}
+      {(isAction || isTask) && <MentionComposer detail={detail} members={members} />}
+
       {/* Related items */}
       {detail.relatedItems.length > 0 && (
         <Section title={isMeeting ? "Tasks from this meeting" : "Sub-tasks"}>
@@ -489,6 +494,82 @@ function Attachments({ detail, onChanged }: { detail: ItemDetail; onChanged: () 
         <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Label" className="h-8 text-[12.5px]" />
         <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…" className="h-8 text-[12.5px]" />
         <Button type="button" size="sm" variant="outline" onClick={add} loading={adding}>Add</Button>
+      </div>
+    </Section>
+  );
+}
+
+function MentionComposer({ detail, members }: { detail: ItemDetail; members: Member[] }) {
+  const router = useRouter();
+  const [selected, setSelected] = useState<string[]>([]);
+  const [message, setMessage] = useState("");
+  const [posting, setPosting] = useState(false);
+
+  function toggle(id: string) {
+    setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+  }
+
+  async function post() {
+    if (!selected.length) return;
+    setPosting(true);
+    const res = await mentionItemAction({
+      entityType: detail.entityType,
+      entityId: detail.id,
+      label: detail.title,
+      mentionUserIds: selected,
+      message: message.trim() || undefined,
+    });
+    setPosting(false);
+    if (res.ok) {
+      toast.success("Posted to Town Hall");
+      setSelected([]);
+      setMessage("");
+      router.refresh();
+    } else {
+      toast.error(res.error);
+    }
+  }
+
+  if (members.length === 0) return null;
+
+  return (
+    <Section title="Tag on Town Hall">
+      <div className="flex flex-wrap gap-1.5">
+        {members.map((m) => {
+          const on = selected.includes(m.userId);
+          return (
+            <button
+              key={m.userId}
+              type="button"
+              onClick={() => toggle(m.userId)}
+              className={`rounded-full px-2 py-0.5 text-tiny transition-colors ${
+                on
+                  ? "bg-[var(--blue-text)] text-white"
+                  : "bg-surface text-text-secondary hover:text-text-primary"
+              }`}
+            >
+              @{m.displayName}
+            </button>
+          );
+        })}
+      </div>
+      <div className="mt-2 flex items-center gap-1.5">
+        <Input
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          placeholder="Add a note (optional)…"
+          className="h-8 text-[12.5px]"
+        />
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={post}
+          loading={posting}
+          disabled={!selected.length}
+        >
+          <AtSign size={14} /> Post
+        </Button>
       </div>
     </Section>
   );
