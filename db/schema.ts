@@ -1570,3 +1570,16 @@ export const keyResults = pgTable("key_results", {
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// Weekly review (Level-10): saved notes + a JSON snapshot of the agenda.
+export const weeklyReviews = pgTable("weekly_reviews", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  weekOf: date("week_of").notNull(),
+  facilitatorId: uuid("facilitator_id").references(() => users.id, { onDelete: "set null" }),
+  notes: text("notes"),
+  snapshot: jsonb("snapshot"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});

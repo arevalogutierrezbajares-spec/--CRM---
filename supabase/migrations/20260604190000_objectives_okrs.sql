@@ -58,3 +58,23 @@ create policy key_results_ws on public.key_results
   for all to authenticated
   using (public.is_workspace_member(workspace_id))
   with check (public.is_workspace_member(workspace_id));
+
+-- Weekly review (Level-10) — saved notes + a snapshot of the agenda at the time.
+create table if not exists public.weekly_reviews (
+  id             uuid primary key default gen_random_uuid(),
+  workspace_id   uuid not null references public.workspaces(id) on delete cascade,
+  week_of        date not null,
+  facilitator_id uuid references public.users(id) on delete set null,
+  notes          text,
+  snapshot       jsonb,
+  created_at     timestamptz not null default now()
+);
+create index if not exists weekly_reviews_ws_idx
+  on public.weekly_reviews (workspace_id, week_of desc);
+
+alter table public.weekly_reviews enable row level security;
+drop policy if exists weekly_reviews_ws on public.weekly_reviews;
+create policy weekly_reviews_ws on public.weekly_reviews
+  for all to authenticated
+  using (public.is_workspace_member(workspace_id))
+  with check (public.is_workspace_member(workspace_id));

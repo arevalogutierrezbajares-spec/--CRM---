@@ -8,6 +8,7 @@ import {
   Map,
   Flag,
   Target,
+  CalendarCheck,
   KanbanSquare,
   Contact2,
   Network,
@@ -55,6 +56,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Plan",
     items: [
       { href: "/priorities", label: "Priorities", icon: Target },
+      { href: "/review", label: "Weekly Review", icon: CalendarCheck },
       { href: "/roadmap", label: "Roadmap", icon: Map },
       { href: "/sprint", label: "Sprint", icon: Flag },
       { href: "/initiatives", label: "Initiatives", icon: Target },
