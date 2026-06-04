@@ -12,6 +12,8 @@ import { getActiveSprint, type SprintWithStats } from "@/db/queries/work";
 import { DailyView } from "@/components/dashboard/daily/daily-view";
 import { listProjectsForPicker } from "@/db/queries/items";
 import { listWorkspaceMembers } from "@/db/queries/team";
+import { listPosts, type PostView } from "@/db/queries/town-hall";
+import { TownHallPanel } from "@/components/town-hall/town-hall-panel";
 import { WeeklyView } from "@/components/dashboard/weekly/weekly-view";
 import { MonthlyView } from "@/components/dashboard/monthly/monthly-view";
 import { DbBanner } from "@/components/db-banner";
@@ -141,6 +143,8 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
     blockedRes,
     treasuryRes,
     sprintRes,
+    townHallPostsRes,
+    townHallMembersRes,
   ] = await Promise.all([
     safeRead<DashCounts>(() => dashboardCounts(user.workspaceId), EMPTY_COUNTS),
     safeRead<PipelineStageBar[]>(() => pipelineSnapshot(user.workspaceId), []),
@@ -155,7 +159,17 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
       () => getActiveSprint(user.workspaceId),
       null,
     ),
+    safeRead<PostView[]>(() => listPosts({ workspaceId: user.workspaceId, limit: 40 }), []),
+    safeRead<{ userId: string; displayName: string }[]>(
+      () => listWorkspaceMembers(user.workspaceId).then((ms) => ms.map((m) => ({ userId: m.userId, displayName: m.displayName }))),
+      [],
+    ),
   ]);
+
+  // Town Hall chat panel (right rail) — members + #-referenceable projects.
+  const townHallObjects = (
+    await safeRead<{ id: string; title: string }[]>(() => listProjectsForPicker(user.workspaceId), [])
+  ).data.map((p) => ({ refType: "project" as const, refId: p.id, label: p.title, href: `/projects/${p.id}` }));
 
   /* ── View-specific data fetched conditionally ──────────────────────── */
 
@@ -273,6 +287,12 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
       displayName={user.displayName}
       rightColumn={
         <RightColumn>
+          <TownHallPanel
+            workspaceId={user.workspaceId}
+            initialPosts={townHallPostsRes.data}
+            members={townHallMembersRes.data}
+            objects={townHallObjects}
+          />
           <MiniCalendar eventDays={eventDaysRes.data} />
           <SprintWidget sprint={sprintRes.data} />
           <TreasuryWidget snapshot={treasuryRes.data} />
