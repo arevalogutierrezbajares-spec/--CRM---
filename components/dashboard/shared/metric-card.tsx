@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { CountUp } from "./count-up";
 
 interface MetricCardProps {
   value: string | number;
@@ -25,7 +26,7 @@ export function MetricCard({
   return (
     <div className={cn("bg-surface rounded-md p-2.5", className)}>
       <div className="text-[22px] font-medium leading-none text-text-primary">
-        {value}
+        {typeof value === "number" ? <CountUp value={value} /> : value}
       </div>
       <div className="text-[11px] text-text-secondary mt-1">{label}</div>
       {delta && (

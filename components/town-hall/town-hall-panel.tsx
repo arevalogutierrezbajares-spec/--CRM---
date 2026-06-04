@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
-import { Megaphone, Maximize2 } from "lucide-react";
+import { Megaphone, Maximize2, ArrowDown } from "lucide-react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
+import { loadRecentPostsAction } from "@/app/(app)/town-hall/actions";
 import {
   Sheet,
   SheetContent,
@@ -50,44 +50,68 @@ export function TownHallPanel({
   members: MemberOption[];
   objects: RefObject[];
 }) {
-  const router = useRouter();
   const scrollRef = useRef<HTMLDivElement>(null);
   const channelRef = useRef<RealtimeChannel | null>(null);
+  const atBottomRef = useRef(true);
   const [expanded, setExpanded] = useState(false);
+  // Chat order: oldest at top, newest at the bottom. Held in state so we can
+  // append live without re-running the whole page (no router.refresh).
+  const [posts, setPosts] = useState<PostView[]>(() => [...initialPosts].reverse());
+  const [hasNew, setHasNew] = useState(false);
 
-  // Chat order: oldest at top, newest at the bottom.
-  const posts = [...initialPosts].reverse();
+  function scrollToBottom() {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+    setHasNew(false);
+  }
 
-  // Live updates. No setState in the effect body — only router.refresh + the DOM.
+  // Lightweight refresh: fetch just the posts, then either stick to the bottom
+  // (if already there / we posted) or raise a "new messages" pill. setState runs
+  // inside async/rAF callbacks — never synchronously in an effect body.
+  const refresh = useCallback(async (forceBottom = false) => {
+    const next = await loadRecentPostsAction();
+    setPosts([...next].reverse());
+    requestAnimationFrame(() => {
+      if (forceBottom || atBottomRef.current) scrollToBottom();
+      else setHasNew(true);
+    });
+  }, []);
+
   useEffect(() => {
     const supabase = createClient();
     const channel = supabase.channel(`town-hall:${workspaceId}`, {
       config: { broadcast: { self: false } },
     });
     channelRef.current = channel;
-    channel
-      .on("broadcast", { event: "new-post" }, () => router.refresh())
-      .subscribe();
+    channel.on("broadcast", { event: "new-post" }, () => void refresh()).subscribe();
     return () => {
       channel.unsubscribe();
       channelRef.current = null;
     };
-  }, [workspaceId, router]);
+  }, [workspaceId, refresh]);
 
-  // Stick to the bottom as new messages arrive.
+  // Scroll to bottom once on mount (DOM only).
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [initialPosts.length]);
+  }, []);
+
+  function onScroll() {
+    const el = scrollRef.current;
+    if (!el) return;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
+    atBottomRef.current = atBottom;
+    if (atBottom && hasNew) setHasNew(false);
+  }
 
   const handlePosted = useCallback(() => {
-    router.refresh();
+    void refresh(true); // we posted → jump to bottom
     channelRef.current?.send({ type: "broadcast", event: "new-post", payload: {} });
-  }, [router]);
+  }, [refresh]);
 
   return (
     <div
-      className="flex flex-col overflow-hidden rounded-lg border bg-card"
+      className="relative flex flex-col overflow-hidden rounded-lg border bg-card"
       style={{ borderColor: "var(--border)", maxHeight: "62vh" }}
     >
       <div
@@ -108,7 +132,7 @@ export function TownHallPanel({
         </button>
       </div>
 
-      <div ref={scrollRef} className="min-h-[120px] flex-1 space-y-2.5 overflow-y-auto px-3 py-2.5">
+      <div ref={scrollRef} onScroll={onScroll} className="relative min-h-[120px] flex-1 space-y-2.5 overflow-y-auto px-3 py-2.5">
         {posts.length === 0 ? (
           <p className="py-8 text-center text-tiny text-text-tertiary">
             No messages yet. Say hi to the team 👋
@@ -133,6 +157,17 @@ export function TownHallPanel({
           ))
         )}
       </div>
+
+      {hasNew && (
+        <button
+          type="button"
+          onClick={scrollToBottom}
+          className="absolute bottom-[68px] left-1/2 z-10 flex -translate-x-1/2 items-center gap-1 rounded-full px-2.5 py-1 text-tiny font-medium text-white shadow-lg"
+          style={{ background: "var(--blue-text)" }}
+        >
+          <ArrowDown size={12} /> New messages
+        </button>
+      )}
 
       <div className="shrink-0 border-t px-2.5 py-2" style={{ borderColor: "var(--border)" }}>
         <Composer members={members} objects={objects} onPosted={handlePosted} />

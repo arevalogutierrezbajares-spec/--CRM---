@@ -287,6 +287,10 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
     blockedRes.data,
   );
 
+  const hour = new Date().getHours();
+  const timeWord = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+  const greeting = `${timeWord}, ${user.displayName.split(/\s+/)[0] || user.displayName}`;
+
   const dbError =
     !countsRes.ok || !pipelineRes.ok || !relRes.ok || !eventDaysRes.ok;
 
@@ -332,6 +336,8 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
           members={dailyData.members}
           pinnedProjects={dailyData.pinnedProjects}
           layout={dailyData.layout}
+          greeting={greeting}
+          briefing={briefing}
           initialItem={initialItem}
         />
       )}

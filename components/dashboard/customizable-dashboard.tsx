@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { motion } from "framer-motion";
 import { toast } from "sonner";
 import {
   SlidersHorizontal,
@@ -119,7 +120,14 @@ export function CustomizableDashboard({
           const node = nodeById.get(w.id);
           if (!node) return null;
           return (
-            <div key={w.id} className={w.width === "full" ? "lg:col-span-2" : "lg:col-span-1"}>
+            <motion.div
+              key={w.id}
+              layout
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: editing ? 0 : Math.min(i, 6) * 0.05, ease: "easeOut" }}
+              className={w.width === "full" ? "lg:col-span-2" : "lg:col-span-1"}
+            >
               {editing && (
                 <div className="mb-1 flex items-center gap-1 rounded-md border border-dashed border-[var(--border)] px-2 py-1">
                   <span className="mr-auto truncate text-tiny font-medium text-text-secondary">
@@ -143,7 +151,7 @@ export function CustomizableDashboard({
                 </div>
               )}
               <div className={editing && w.hidden ? "opacity-40" : ""}>{node}</div>
-            </div>
+            </motion.div>
           );
         })}
       </div>

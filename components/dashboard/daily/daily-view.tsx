@@ -4,6 +4,7 @@ import { MeetingsCard } from "./meetings-card";
 import { ProjectsCard } from "./projects-card";
 import { ActionItemsCard } from "./action-items-card";
 import { AIAssistPanel } from "./ai-assist-panel";
+import { TodayBriefing } from "./today-briefing";
 import { ItemDrawerProvider } from "../item-drawer";
 import { PinnedProjects } from "../pinned-projects";
 import { CustomizableDashboard } from "../customizable-dashboard";
@@ -27,6 +28,8 @@ interface DailyViewProps {
   members: { userId: string; displayName: string }[];
   pinnedProjects: PinnedProject[];
   layout: DashWidget[];
+  greeting: string;
+  briefing: string[];
   initialItem?: { entityType: "action_item" | "milestone" | "meeting"; id: string } | null;
 }
 
@@ -40,6 +43,8 @@ export function DailyView({
   members,
   pinnedProjects,
   layout,
+  greeting,
+  briefing,
   initialItem,
 }: DailyViewProps) {
   return (
@@ -50,6 +55,7 @@ export function DailyView({
       members={members}
       initialItem={initialItem}
     >
+      <TodayBriefing greeting={greeting} bullets={briefing} />
       <MetricsRow counts={counts} />
       <CustomizableDashboard
         savedLayout={layout}

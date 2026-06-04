@@ -8,11 +8,13 @@ import { requireUser } from "@/lib/current-user";
 import { listWorkspaceMembers } from "@/db/queries/team";
 import {
   createPost,
+  listPosts,
   listNotifications,
   markNotificationsRead,
   unreadCount,
   type NotificationView,
   type PostRefType,
+  type PostView,
 } from "@/db/queries/town-hall";
 import {
   createActionItem,
@@ -53,6 +55,12 @@ export type CreatePostResult =
  * (post + mentions + refs + notifications) transactionally, then fan out a
  * WhatsApp DM to each mentioned member who has a phone on file.
  */
+/** Lightweight refresh for the live chat — just the posts, not the whole page. */
+export async function loadRecentPostsAction(): Promise<PostView[]> {
+  const user = await requireUser();
+  return listPosts({ workspaceId: user.workspaceId, limit: 40 });
+}
+
 export async function createPostAction(input: {
   body: string;
   kind?: "message" | "note";
