@@ -88,17 +88,29 @@ const ENTITY_NOUN: Record<ItemEntityType, string> = {
 export function ItemDrawerProvider({
   projects,
   members,
+  initialItem,
   children,
 }: {
   projects: Project[];
   members: Member[];
+  initialItem?: Target | null;
   children: React.ReactNode;
 }) {
-  const [target, setTarget] = useState<Target | null>(null);
+  // Lazy-init from the server-provided ?item= deep-link so a Town Hall #ref
+  // opens straight into the drawer (no effect → no setState-in-effect).
+  const [target, setTarget] = useState<Target | null>(initialItem ?? null);
   const openItem = useCallback(
     (entityType: ItemEntityType, id: string) => setTarget({ entityType, id }),
     [],
   );
+
+  function close() {
+    setTarget(null);
+    // Drop the ?item= param so a refresh doesn't reopen the drawer.
+    if (typeof window !== "undefined" && window.location.search.includes("item=")) {
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+  }
 
   return (
     <Ctx.Provider value={{ openItem, projects, members }}>
@@ -108,7 +120,7 @@ export function ItemDrawerProvider({
         projects={projects}
         members={members}
         onOpenItem={openItem}
-        onClose={() => setTarget(null)}
+        onClose={close}
       />
     </Ctx.Provider>
   );

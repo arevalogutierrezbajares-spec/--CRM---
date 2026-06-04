@@ -21,6 +21,7 @@ interface DailyViewProps {
   actionItems: DashActionItem[];
   pickerProjects: { id: string; title: string }[];
   members: { userId: string; displayName: string }[];
+  initialItem?: { entityType: "action_item" | "milestone" | "meeting"; id: string } | null;
 }
 
 export function DailyView({
@@ -31,9 +32,10 @@ export function DailyView({
   actionItems,
   pickerProjects,
   members,
+  initialItem,
 }: DailyViewProps) {
   return (
-    <ItemDrawerProvider projects={pickerProjects} members={members}>
+    <ItemDrawerProvider projects={pickerProjects} members={members} initialItem={initialItem}>
       <MetricsRow counts={counts} />
       <div className="grid gap-2.5 lg:grid-cols-2">
         <ActionItemsCard items={actionItems} />

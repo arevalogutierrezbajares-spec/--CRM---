@@ -60,7 +60,7 @@ import {
   type DueItem,
 } from "@/db/queries/this-week";
 
-type SearchParams = Promise<{ view?: string }>;
+type SearchParams = Promise<{ view?: string; item?: string }>;
 
 const EMPTY_COUNTS: DashCounts = {
   tasksToday: 0,
@@ -110,10 +110,26 @@ function briefingBullets(
   return out.slice(0, 4);
 }
 
+type InitialItem = { entityType: "action_item" | "milestone" | "meeting"; id: string } | null;
+
+function parseItemParam(raw: string | string[] | undefined): InitialItem {
+  if (typeof raw !== "string") return null;
+  const i = raw.indexOf(":");
+  if (i < 0) return null;
+  const t = raw.slice(0, i);
+  const id = raw.slice(i + 1);
+  if ((t === "action_item" || t === "milestone" || t === "meeting") && id) {
+    return { entityType: t, id };
+  }
+  return null;
+}
+
 export default async function HomePage(props: { searchParams: SearchParams }) {
   const user = await requireUser();
   const sp = await props.searchParams;
   const view = sp.view === "weekly" || sp.view === "monthly" ? sp.view : "daily";
+  // ?item=<type>:<id> deep-link (e.g. from a Town Hall #ref) → auto-open drawer.
+  const initialItem = parseItemParam(sp.item);
 
   /* ── Persistent right-column data + counts ─────────────────────────── */
 
@@ -285,6 +301,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
           actionItems={dailyData.actionItems}
           pickerProjects={dailyData.pickerProjects}
           members={dailyData.members}
+          initialItem={initialItem}
         />
       )}
 

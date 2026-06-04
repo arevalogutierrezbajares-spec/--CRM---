@@ -18,11 +18,12 @@ export function refHref(refType: RefObject["refType"], refId: string): string {
     case "project":
       return `/projects/${refId}`;
     case "milestone":
-      return `/work`;
+      // Deep-link home to auto-open the task's detail drawer.
+      return `/?item=milestone:${refId}`;
     case "meeting":
       return `/meetings/${refId}`;
     case "action_item":
-      return `/action-items`;
+      return `/?item=action_item:${refId}`;
     case "doc":
       return `/projects?doc=${refId}`;
     default:
