@@ -289,15 +289,10 @@ export async function commitActionItemsAction(
 
     await createActionItem({
       workspaceId: user.workspaceId,
-      // The caller is always the creator. action_items has no assignee column,
-      // so encode the suggested assignee in the description and link the project.
       actorId: user.id,
       title,
-      description: safeAssignee
-        ? `${description ? `${description}\n` : ""}Assignee: ${
-            members.find((m) => m.userId === safeAssignee)?.displayName ?? ""
-          }`
-        : description ?? null,
+      description: description ?? null,
+      assigneeUserId: safeAssignee,
       dueDate: dueDate ?? null,
       priority: priority ?? null,
       projectId: safeProjectId,

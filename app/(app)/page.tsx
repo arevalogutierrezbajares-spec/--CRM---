@@ -11,6 +11,7 @@ import { treasurySnapshot, type TreasurySnapshot } from "@/db/queries/treasury";
 import { getActiveSprint, type SprintWithStats } from "@/db/queries/work";
 import { DailyView } from "@/components/dashboard/daily/daily-view";
 import { listProjectsForPicker } from "@/db/queries/items";
+import { listWorkspaceMembers } from "@/db/queries/team";
 import { WeeklyView } from "@/components/dashboard/weekly/weekly-view";
 import { MonthlyView } from "@/components/dashboard/monthly/monthly-view";
 import { DbBanner } from "@/components/db-banner";
@@ -148,6 +149,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
     projects: DashProject[];
     actionItems: DashActionItem[];
     pickerProjects: { id: string; title: string }[];
+    members: { userId: string; displayName: string }[];
   } | null = null;
   let weeklyData: {
     tasks: DashTask[];
@@ -165,12 +167,19 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
   } | null = null;
 
   if (view === "daily") {
-    const [tasks, meetings, projects, actionItems, pickerProjects] = await Promise.all([
+    const [tasks, meetings, projects, actionItems, pickerProjects, members] = await Promise.all([
       safeRead<DashTask[]>(() => listTasksToday(user.workspaceId), []),
       safeRead<DashMeeting[]>(() => listMeetingsToday(user.workspaceId), []),
       safeRead<DashProject[]>(() => listActiveProjectsForDashboard(user.workspaceId, 6), []),
       safeRead<DashActionItem[]>(() => listOpenActionItems(user.workspaceId, 12), []),
       safeRead<{ id: string; title: string }[]>(() => listProjectsForPicker(user.workspaceId), []),
+      safeRead<{ userId: string; displayName: string }[]>(
+        () =>
+          listWorkspaceMembers(user.workspaceId).then((ms) =>
+            ms.map((m) => ({ userId: m.userId, displayName: m.displayName })),
+          ),
+        [],
+      ),
     ]);
     dailyData = {
       tasks: tasks.data,
@@ -178,6 +187,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
       projects: projects.data,
       actionItems: actionItems.data,
       pickerProjects: pickerProjects.data,
+      members: members.data,
     };
   } else if (view === "weekly") {
     const [tasks, meetings, projects] = await Promise.all([
@@ -274,6 +284,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
           projects={dailyData.projects}
           actionItems={dailyData.actionItems}
           pickerProjects={dailyData.pickerProjects}
+          members={dailyData.members}
         />
       )}
 

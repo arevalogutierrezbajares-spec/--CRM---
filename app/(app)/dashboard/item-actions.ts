@@ -31,6 +31,7 @@ export async function createActionItemAction(opts: {
   priority?: WorkPriority | null;
   projectId?: string | null;
   contactId?: string | null;
+  assigneeUserId?: string | null;
 }): Promise<Result> {
   const user = await requireUser();
   if (!opts.title.trim()) return { ok: false, error: "Give it a title." };
@@ -43,6 +44,7 @@ export async function createActionItemAction(opts: {
     priority: opts.priority,
     projectId: opts.projectId,
     contactId: opts.contactId,
+    assigneeUserId: opts.assigneeUserId,
   });
   refresh();
   return { ok: true, id };
@@ -57,6 +59,7 @@ export async function updateActionItemAction(opts: {
   status?: "open" | "done";
   projectId?: string | null;
   contactId?: string | null;
+  assigneeUserId?: string | null;
 }): Promise<Result> {
   const user = await requireUser();
   const ok = await updateActionItem({ workspaceId: user.workspaceId, ...opts });

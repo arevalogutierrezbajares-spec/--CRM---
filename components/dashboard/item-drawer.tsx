@@ -48,11 +48,13 @@ import {
 import type { ItemDetail, ItemEntityType } from "@/db/queries/items";
 
 type Project = { id: string; title: string };
+type Member = { userId: string; displayName: string };
 type Target = { entityType: ItemEntityType; id: string };
 
 const Ctx = createContext<{
   openItem: (entityType: ItemEntityType, id: string) => void;
   projects: Project[];
+  members: Member[];
 } | null>(null);
 
 export function useItemDrawer() {
@@ -83,9 +85,11 @@ const ENTITY_NOUN: Record<ItemEntityType, string> = {
 
 export function ItemDrawerProvider({
   projects,
+  members,
   children,
 }: {
   projects: Project[];
+  members: Member[];
   children: React.ReactNode;
 }) {
   const [target, setTarget] = useState<Target | null>(null);
@@ -95,11 +99,12 @@ export function ItemDrawerProvider({
   );
 
   return (
-    <Ctx.Provider value={{ openItem, projects }}>
+    <Ctx.Provider value={{ openItem, projects, members }}>
       {children}
       <ItemDetailDrawer
         target={target}
         projects={projects}
+        members={members}
         onOpenItem={openItem}
         onClose={() => setTarget(null)}
       />
@@ -110,11 +115,13 @@ export function ItemDrawerProvider({
 function ItemDetailDrawer({
   target,
   projects,
+  members,
   onOpenItem,
   onClose,
 }: {
   target: Target | null;
   projects: Project[];
+  members: Member[];
   onOpenItem: (t: ItemEntityType, id: string) => void;
   onClose: () => void;
 }) {
@@ -160,6 +167,7 @@ function ItemDetailDrawer({
               key={detail.id}
               detail={detail}
               projects={projects}
+              members={members}
               onOpenItem={onOpenItem}
               onChanged={() => setReloadKey((k) => k + 1)}
             />
@@ -173,11 +181,13 @@ function ItemDetailDrawer({
 function DrawerForm({
   detail,
   projects,
+  members,
   onOpenItem,
   onChanged,
 }: {
   detail: ItemDetail;
   projects: Project[];
+  members: Member[];
   onOpenItem: (t: ItemEntityType, id: string) => void;
   onChanged: () => void;
 }) {
@@ -287,6 +297,21 @@ function DrawerForm({
                 {isAction && <SelectItem value={NONE}>None</SelectItem>}
                 {projects.map((p) => (
                   <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+
+          <Field label="Assignee">
+            <Select
+              value={detail.assigneeId ?? NONE}
+              onValueChange={(v) => save({ assigneeUserId: v === NONE ? null : v })}
+            >
+              <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NONE}>Unassigned</SelectItem>
+                {members.map((m) => (
+                  <SelectItem key={m.userId} value={m.userId}>{m.displayName}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

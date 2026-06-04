@@ -1387,6 +1387,8 @@ export const actionItems = pgTable("action_items", {
   contactId: uuid("contact_id").references(() => contacts.id, {
     onDelete: "set null",
   }),
+  // FR-PMO: who's responsible (a workspace user). Distinct from contactId.
+  assigneeUserId: uuid("assignee_user_id").references(() => users.id),
   createdBy: uuid("created_by")
     .notNull()
     .references(() => users.id),

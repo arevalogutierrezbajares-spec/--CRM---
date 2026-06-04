@@ -63,6 +63,7 @@ export async function createActionItem(input: {
   priority?: WorkPriority | null;
   projectId?: string | null;
   contactId?: string | null;
+  assigneeUserId?: string | null;
 }): Promise<{ id: string }> {
   const [row] = await db
     .insert(schema.actionItems)
@@ -74,6 +75,7 @@ export async function createActionItem(input: {
       priority: input.priority ?? null,
       projectId: input.projectId ?? null,
       contactId: input.contactId ?? null,
+      assigneeUserId: input.assigneeUserId ?? null,
       createdBy: input.actorId,
     })
     .returning({ id: schema.actionItems.id });
@@ -90,6 +92,7 @@ export async function updateActionItem(input: {
   status?: "open" | "done";
   projectId?: string | null;
   contactId?: string | null;
+  assigneeUserId?: string | null;
 }): Promise<{ id: string; title: string } | null> {
   const patch: Partial<typeof schema.actionItems.$inferInsert> = {};
   if (input.title !== undefined) patch.title = input.title;
@@ -98,6 +101,7 @@ export async function updateActionItem(input: {
   if (input.priority !== undefined) patch.priority = input.priority;
   if (input.projectId !== undefined) patch.projectId = input.projectId;
   if (input.contactId !== undefined) patch.contactId = input.contactId;
+  if (input.assigneeUserId !== undefined) patch.assigneeUserId = input.assigneeUserId;
   if (input.status !== undefined) {
     patch.status = input.status;
     patch.completedAt = input.status === "done" ? new Date() : null;
@@ -371,10 +375,13 @@ export async function getItemDetail(
         projectTitle: schema.projects.title,
         contactId: schema.actionItems.contactId,
         contactName: schema.contacts.name,
+        assigneeId: schema.actionItems.assigneeUserId,
+        assigneeName: u.displayName,
       })
       .from(schema.actionItems)
       .leftJoin(schema.projects, eq(schema.projects.id, schema.actionItems.projectId))
       .leftJoin(schema.contacts, eq(schema.contacts.id, schema.actionItems.contactId))
+      .leftJoin(u, eq(u.id, schema.actionItems.assigneeUserId))
       .where(and(eq(schema.actionItems.id, id), eq(schema.actionItems.workspaceId, workspaceId)))
       .limit(1);
     if (!row) return null;
@@ -396,6 +403,8 @@ export async function getItemDetail(
       projectTitle: row.projectTitle,
       contactId: row.contactId,
       contactName: row.contactName,
+      assigneeId: row.assigneeId,
+      assigneeName: row.assigneeName,
       projectDocs,
       attachments,
       relatedItems: [],
