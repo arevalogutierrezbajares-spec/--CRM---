@@ -8,13 +8,18 @@ import {
   Plus,
   Megaphone,
   LayoutGrid,
+  FileText,
+  User,
+  Target,
+  Clock,
   CornerDownLeft,
   Search,
 } from "lucide-react";
 import { NAV_ITEMS } from "@/components/layout/nav-items";
+import { GOTO_CHIP } from "@/lib/shortcuts";
 import { quickCaptureAction } from "@/app/(app)/dashboard/item-actions";
 import { createPostAction } from "@/app/(app)/town-hall/actions";
-import { paletteProjectsAction } from "@/app/(app)/dashboard/palette-actions";
+import { paletteDataAction, type PaletteData, type PaletteEntity } from "@/app/(app)/dashboard/palette-actions";
 
 const OPEN_EVENT = "open-command-palette";
 
@@ -23,14 +28,15 @@ export function openCommandPalette() {
   window.dispatchEvent(new Event(OPEN_EVENT));
 }
 
+const EMPTY: PaletteData = { recent: [], projects: [], docs: [], people: [], objectives: [] };
+
 export function CommandPalette() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState(false);
-  const [projects, setProjects] = useState<{ id: string; title: string }[]>([]);
+  const [data, setData] = useState<PaletteData>(EMPTY);
 
-  // ⌘K / Ctrl-K + the custom open event.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
@@ -49,12 +55,12 @@ export function CommandPalette() {
     };
   }, []);
 
-  // Lazy-load projects when first opened (setState in async callback — lint-safe).
+  // Lazy-load everything navigable on first open (setState in async callback).
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    paletteProjectsAction()
-      .then((p) => !cancelled && setProjects(p))
+    paletteDataAction()
+      .then((d) => !cancelled && setData(d))
       .catch(() => {});
     return () => {
       cancelled = true;
@@ -65,6 +71,14 @@ export function CommandPalette() {
     setOpen(false);
     setQuery("");
   }, []);
+
+  const go = useCallback(
+    (href: string) => {
+      router.push(href);
+      close();
+    },
+    [router, close],
+  );
 
   async function capture() {
     if (!query.trim() || busy) return;
@@ -95,8 +109,13 @@ export function CommandPalette() {
   }
 
   const q = query.trim().toLowerCase();
-  const navMatches = NAV_ITEMS.filter((n) => n.label.toLowerCase().includes(q)).slice(0, 6);
-  const projMatches = (q ? projects.filter((p) => p.title.toLowerCase().includes(q)) : projects).slice(0, 6);
+  const match = (e: PaletteEntity) => !q || e.label.toLowerCase().includes(q);
+  const navMatches = NAV_ITEMS.filter((n) => n.label.toLowerCase().includes(q)).slice(0, 8);
+
+  const projects = q ? data.projects.filter(match).slice(0, 6) : [];
+  const docs = q ? data.docs.filter(match).slice(0, 6) : [];
+  const people = q ? data.people.filter(match).slice(0, 5) : [];
+  const objectives = q ? data.objectives.filter(match).slice(0, 5) : [];
 
   return (
     <Command.Dialog
@@ -104,69 +123,112 @@ export function CommandPalette() {
       onOpenChange={(o) => (o ? setOpen(true) : close())}
       label="Command palette"
       shouldFilter={false}
-      className="fixed left-1/2 top-[18%] z-[100] w-[min(560px,94vw)] -translate-x-1/2 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--background)] shadow-2xl"
+      className="fixed left-1/2 top-[16%] z-[100] w-[min(600px,94vw)] -translate-x-1/2 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--background)] shadow-2xl"
     >
       <div className="flex items-center gap-2 border-b border-[var(--border)] px-3">
         <Search size={15} className="text-text-tertiary" />
         <Command.Input
           value={query}
           onValueChange={setQuery}
-          placeholder="Capture a to-do, post to Town Hall, or jump to…"
+          placeholder="Search anything — or capture a to-do…"
           className="h-11 flex-1 bg-transparent text-[14px] text-text-primary outline-none placeholder:text-text-tertiary"
         />
         <kbd className="rounded bg-surface px-1.5 py-0.5 text-[10px] text-text-tertiary">esc</kbd>
       </div>
 
-      <Command.List className="max-h-[340px] overflow-y-auto p-1.5">
+      <Command.List className="max-h-[380px] overflow-y-auto p-1.5">
         <Command.Empty className="px-3 py-6 text-center text-tiny text-text-tertiary">
-          Type to capture a to-do or search.
+          No matches. Press Enter to capture “{query.trim()}” as a to-do.
         </Command.Empty>
 
+        {/* Create — always offered when there's text (fallback never dead-ends). */}
         {query.trim() && (
-          <Command.Group heading="Create" className="text-tiny text-text-tertiary [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1">
-            <PaletteItem icon={Plus} onSelect={capture} disabled={busy}>
+          <Group heading="Create">
+            <Row icon={Plus} onSelect={capture} disabled={busy}>
               Add to-do: <span className="text-text-primary">“{query.trim()}”</span>
-              <Hint>parses dates · @people · #project</Hint>
-            </PaletteItem>
-            <PaletteItem icon={Megaphone} onSelect={post} disabled={busy}>
+            </Row>
+            <Row icon={Megaphone} onSelect={post} disabled={busy}>
               Post to Town Hall: <span className="text-text-primary">“{query.trim()}”</span>
-            </PaletteItem>
-          </Command.Group>
+            </Row>
+          </Group>
         )}
 
-        {projMatches.length > 0 && (
-          <Command.Group heading="Projects" className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1 [&_[cmdk-group-heading]]:text-tiny [&_[cmdk-group-heading]]:text-text-tertiary">
-            {projMatches.map((p) => (
-              <PaletteItem key={p.id} icon={LayoutGrid} onSelect={() => { router.push(`/projects/${p.id}`); close(); }}>
-                {p.title}
-              </PaletteItem>
+        {/* Recents — shown before you type. */}
+        {!q && data.recent.length > 0 && (
+          <Group heading="Recent">
+            {data.recent.map((e) => (
+              <Row key={e.id} icon={Clock} onSelect={() => go(e.href)}>{e.label}</Row>
             ))}
-          </Command.Group>
+          </Group>
+        )}
+
+        {projects.length > 0 && (
+          <Group heading="Projects">
+            {projects.map((e) => (
+              <Row key={e.id} icon={LayoutGrid} onSelect={() => go(e.href)}>{e.label}</Row>
+            ))}
+          </Group>
+        )}
+        {docs.length > 0 && (
+          <Group heading="Documents">
+            {docs.map((e) => (
+              <Row key={e.id} icon={FileText} sub={e.sub} onSelect={() => go(e.href)}>{e.label}</Row>
+            ))}
+          </Group>
+        )}
+        {people.length > 0 && (
+          <Group heading="People">
+            {people.map((e) => (
+              <Row key={e.id} icon={User} sub={e.sub} onSelect={() => go(e.href)}>{e.label}</Row>
+            ))}
+          </Group>
+        )}
+        {objectives.length > 0 && (
+          <Group heading="Priorities">
+            {objectives.map((e) => (
+              <Row key={e.id} icon={Target} sub={e.sub} onSelect={() => go(e.href)}>{e.label}</Row>
+            ))}
+          </Group>
         )}
 
         {navMatches.length > 0 && (
-          <Command.Group heading="Go to" className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1 [&_[cmdk-group-heading]]:text-tiny [&_[cmdk-group-heading]]:text-text-tertiary">
+          <Group heading="Go to">
             {navMatches.map((n) => (
-              <PaletteItem key={n.href} icon={n.icon} onSelect={() => { router.push(n.href); close(); }}>
+              <Row key={n.href} icon={n.icon} chip={GOTO_CHIP[n.href]} onSelect={() => go(n.href)}>
                 {n.label}
-              </PaletteItem>
+              </Row>
             ))}
-          </Command.Group>
+          </Group>
         )}
       </Command.List>
     </Command.Dialog>
   );
 }
 
-function PaletteItem({
+function Group({ heading, children }: { heading: string; children: React.ReactNode }) {
+  return (
+    <Command.Group
+      heading={heading}
+      className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1 [&_[cmdk-group-heading]]:text-tiny [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wide [&_[cmdk-group-heading]]:text-text-tertiary"
+    >
+      {children}
+    </Command.Group>
+  );
+}
+
+function Row({
   icon: Icon,
   onSelect,
   disabled,
+  sub,
+  chip,
   children,
 }: {
   icon: React.ComponentType<{ size?: number; className?: string }>;
   onSelect: () => void;
   disabled?: boolean;
+  sub?: string;
+  chip?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -177,11 +239,12 @@ function PaletteItem({
     >
       <Icon size={15} className="shrink-0 text-text-tertiary" />
       <span className="min-w-0 flex-1 truncate">{children}</span>
-      <CornerDownLeft size={12} className="shrink-0 text-text-tertiary opacity-0 data-[selected=true]:opacity-100" />
+      {sub && <span className="shrink-0 truncate text-tiny text-text-tertiary">{sub}</span>}
+      {chip ? (
+        <kbd className="shrink-0 rounded bg-surface px-1.5 py-0.5 font-mono text-[10px] text-text-tertiary">{chip}</kbd>
+      ) : (
+        <CornerDownLeft size={12} className="shrink-0 text-text-tertiary opacity-0 data-[selected=true]:opacity-100" />
+      )}
     </Command.Item>
   );
-}
-
-function Hint({ children }: { children: React.ReactNode }) {
-  return <span className="ml-1.5 text-tiny text-text-tertiary">· {children}</span>;
 }

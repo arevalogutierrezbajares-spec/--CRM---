@@ -131,12 +131,12 @@ export function NotificationBell() {
               </button>
             )}
             <Link
-              href="/town-hall"
+              href="/inbox"
               className="text-tiny hover:underline"
               style={{ color: "var(--blue-text)" }}
               onClick={() => setOpen(false)}
             >
-              Town Hall
+              Open Inbox →
             </Link>
           </div>
         </div>

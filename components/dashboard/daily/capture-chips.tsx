@@ -1,10 +1,23 @@
 "use client";
 
-import { useState } from "react";
-import { X, User, FolderGit2, FileText, Users } from "lucide-react";
+import { useMemo, useState } from "react";
+import { X, User, FolderGit2, FileText, Users, CalendarClock, Flag } from "lucide-react";
 import type { PickedEntity } from "@/components/ui/mention-input";
 import type { MemberOption } from "@/components/town-hall/types";
 import { personInBody, refInBody } from "@/lib/nlp/mention-tokens";
+import { parseCapture } from "@/lib/nlp/parse-capture";
+
+const PRIORITY_LABEL: Record<string, { label: string; color: string }> = {
+  now: { label: "Now", color: "var(--red-text)" },
+  next: { label: "Next", color: "var(--amber-text)" },
+  later: { label: "Later", color: "var(--blue-text)" },
+  backlog: { label: "Backlog", color: "var(--text-tertiary)" },
+};
+
+function fmtDue(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" });
+}
 
 /** "@all" still present in the body? */
 function allInBody(body: string): boolean {
@@ -67,12 +80,31 @@ export type CapturePicks = ReturnType<typeof useCapturePicks>;
 
 const CHIP = "flex items-center gap-1 rounded-full bg-surface px-2 py-0.5 text-tiny text-text-secondary";
 
-/** Shows who/what will be attached to the capture, with one-click removal. */
-export function CaptureChips({ picks }: { picks: CapturePicks }) {
+/**
+ * Shows what the capture parsed/picked: the chrono-parsed due date + priority
+ * (live, as you type) and the @people / #project / @doc / @all picks, each
+ * removable. Makes NL capture visible instead of a black box.
+ */
+export function CaptureChips({ picks, text = "" }: { picks: CapturePicks; text?: string }) {
   const { people, project, docs, all } = picks;
-  if (people.length === 0 && !project && docs.length === 0 && !all) return null;
+  const parsed = useMemo(() => parseCapture(text), [text]);
+  const prio = parsed.priority ? PRIORITY_LABEL[parsed.priority] : null;
+  const hasAny = people.length > 0 || !!project || docs.length > 0 || all || !!parsed.dueDate || !!prio;
+  if (!hasAny) return null;
   return (
     <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+      {parsed.dueDate && (
+        <span className={CHIP}>
+          <CalendarClock size={11} className="text-text-tertiary" />
+          {fmtDue(parsed.dueDate)}
+        </span>
+      )}
+      {prio && (
+        <span className={CHIP} style={{ color: prio.color }}>
+          <Flag size={11} style={{ color: prio.color }} />
+          {prio.label}
+        </span>
+      )}
       {all && (
         <span className={`${CHIP} border border-[var(--gold)] text-gold`}>
           <Users size={11} />

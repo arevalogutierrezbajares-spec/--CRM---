@@ -12,6 +12,7 @@ import {
   toggleReaction,
   postExistsInWorkspace,
   listNotifications,
+  snoozeNotification,
   markNotificationsRead,
   unreadCount,
   type NotificationView,
@@ -189,6 +190,28 @@ export async function getNotificationsAction(): Promise<NotificationView[]> {
     userId: user.id,
     limit: 20,
   });
+}
+
+/** The active inbox queue for the caller (unread + not snoozed). */
+export async function getInboxAction(): Promise<NotificationView[]> {
+  const user = await requireUser();
+  return listNotifications({ workspaceId: user.workspaceId, userId: user.id, limit: 100, activeOnly: true });
+}
+
+/** Snooze (ISO string) or un-snooze (null) one of the caller's notifications. */
+export async function snoozeNotificationAction(
+  id: string,
+  untilIso: string | null,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const user = await requireUser();
+  const ok = await snoozeNotification({
+    workspaceId: user.workspaceId,
+    userId: user.id,
+    id,
+    until: untilIso ? new Date(untilIso) : null,
+  });
+  if (!ok) return { ok: false, error: "Notification not found" };
+  return { ok: true };
 }
 
 /** Unread notification count for the caller (for the bell badge). */

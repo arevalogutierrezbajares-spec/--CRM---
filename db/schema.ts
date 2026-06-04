@@ -1524,6 +1524,7 @@ export const notifications = pgTable("notifications", {
   title: text("title"),
   kind: text("kind").notNull().default("mention"),
   readAt: timestamp("read_at", { withTimezone: true }),
+  snoozedUntil: timestamp("snoozed_until", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

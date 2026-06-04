@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db, schema } from "@/db";
 
@@ -219,6 +219,7 @@ export type NotificationView = {
   entityType: string | null;
   entityId: string | null;
   title: string | null;
+  snoozedUntil: Date | null;
   /** Where clicking the notification goes. */
   href: string;
 };
@@ -265,6 +266,21 @@ export async function notifyUsers(opts: {
   const recipients = members.map((m) => m.userId);
   if (recipients.length === 0) return 0;
 
+  // Auto-unsnooze: new activity on this entity resurfaces any snoozed
+  // notification about it (Linear's "snooze is a timer OR a trigger").
+  await db
+    .update(notifications)
+    .set({ snoozedUntil: null })
+    .where(
+      and(
+        eq(notifications.workspaceId, opts.workspaceId),
+        inArray(notifications.userId, recipients),
+        eq(notifications.entityType, opts.entityType),
+        eq(notifications.entityId, opts.entityId),
+        isNull(notifications.readAt),
+      ),
+    );
+
   if (opts.dedupe) {
     await db
       .delete(notifications)
@@ -294,12 +310,26 @@ export async function notifyUsers(opts: {
   return recipients.length;
 }
 
-/** Recent notifications for a recipient in a workspace, newest first. */
+/** Notifications are "active" (in the inbox queue) when unread AND not snoozed. */
+function notSnoozed() {
+  return or(isNull(notifications.snoozedUntil), lte(notifications.snoozedUntil, sql`now()`));
+}
+
+/**
+ * Notifications for a recipient, newest first. `activeOnly` = the inbox queue
+ * (unread + not currently snoozed); otherwise everything (the bell history).
+ */
 export async function listNotifications(opts: {
   workspaceId: string;
   userId: string;
   limit?: number;
+  activeOnly?: boolean;
 }): Promise<NotificationView[]> {
+  const conds = [eq(notifications.workspaceId, opts.workspaceId), eq(notifications.userId, opts.userId)];
+  if (opts.activeOnly) {
+    conds.push(isNull(notifications.readAt));
+    conds.push(notSnoozed()!);
+  }
   const rows = await db
     .select({
       id: notifications.id,
@@ -310,6 +340,7 @@ export async function listNotifications(opts: {
       entityType: notifications.entityType,
       entityId: notifications.entityId,
       title: notifications.title,
+      snoozedUntil: notifications.snoozedUntil,
       body: posts.body,
       postAuthor: users.displayName,
       actorName: actorUsers.displayName,
@@ -318,12 +349,7 @@ export async function listNotifications(opts: {
     .leftJoin(posts, eq(posts.id, notifications.postId))
     .leftJoin(users, eq(users.id, posts.authorId))
     .leftJoin(actorUsers, eq(actorUsers.id, notifications.actorId))
-    .where(
-      and(
-        eq(notifications.workspaceId, opts.workspaceId),
-        eq(notifications.userId, opts.userId),
-      ),
-    )
+    .where(and(...conds))
     .orderBy(desc(notifications.createdAt))
     .limit(opts.limit ?? 30);
 
@@ -338,8 +364,30 @@ export async function listNotifications(opts: {
     entityType: r.entityType,
     entityId: r.entityId,
     title: r.title,
+    snoozedUntil: r.snoozedUntil,
     href: notificationHref(r.entityType, r.entityId),
   }));
+}
+
+/** Snooze (or un-snooze with null) a notification — workspace+user fenced. */
+export async function snoozeNotification(opts: {
+  workspaceId: string;
+  userId: string;
+  id: string;
+  until: Date | null;
+}): Promise<boolean> {
+  const res = await db
+    .update(notifications)
+    .set({ snoozedUntil: opts.until })
+    .where(
+      and(
+        eq(notifications.id, opts.id),
+        eq(notifications.workspaceId, opts.workspaceId),
+        eq(notifications.userId, opts.userId),
+      ),
+    )
+    .returning({ id: notifications.id });
+  return res.length > 0;
 }
 
 /** Count of unread notifications for a recipient. */
@@ -355,6 +403,7 @@ export async function unreadCount(opts: {
         eq(notifications.workspaceId, opts.workspaceId),
         eq(notifications.userId, opts.userId),
         isNull(notifications.readAt),
+        notSnoozed(),
       ),
     );
   return row?.n ?? 0;

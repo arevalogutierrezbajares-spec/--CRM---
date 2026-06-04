@@ -3,6 +3,7 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { Toaster } from "@/components/ui/toaster";
 import { PresenceProvider } from "@/lib/presence/presence-context";
 import { CommandPalette } from "@/components/command/command-palette";
+import { GlobalShortcuts } from "@/components/command/global-shortcuts";
 import { MotionProvider } from "@/components/motion-provider";
 import { safeRead } from "@/lib/db-status";
 import { listProjectsForPicker, listWorkspaceDocs, type WorkspaceDoc } from "@/db/queries/items";
@@ -39,6 +40,7 @@ export default async function AppLayout({
         </div>
         <Toaster />
         <CommandPalette />
+        <GlobalShortcuts />
       </div>
       </MotionProvider>
     </PresenceProvider>

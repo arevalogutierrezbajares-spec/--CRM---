@@ -54,11 +54,12 @@ export function Composer({
   async function submit() {
     const body = text.trim();
     if (!body || submitting) return;
+    // Keep only picks whose token literal still appears in the body.
+    // "@all" expands to every teammate.
+    const broadcast = pickedAll && /(^|\s)@all\b/i.test(body);
+    if (broadcast && !confirm(`Notify all ${members.length} teammates?`)) return;
     setSubmitting(true);
     try {
-      // Keep only picks whose token literal still appears in the body.
-      // "@all" expands to every teammate.
-      const broadcast = pickedAll && /(^|\s)@all\b/i.test(body);
       const mentionUserIds = broadcast
         ? members.map((m) => m.userId)
         : pickedMentions.filter((m) => personInBody(body, m.displayName)).map((m) => m.userId);

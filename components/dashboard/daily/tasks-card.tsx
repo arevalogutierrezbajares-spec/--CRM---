@@ -74,8 +74,9 @@ export function TasksCard({ tasks, scope, sources }: TasksCardProps) {
       toast.error("Pick a project for the task (or type #project).");
       return;
     }
-    setAdding(true);
     const r = picks.reconcile(newTitle);
+    if (r.notifyAll && !confirm(`Notify all ${effectiveSources.people.length} teammates about this?`)) return;
+    setAdding(true);
     const res = await captureItemAction({
       rawText: newTitle,
       itemKind: "task",
@@ -163,7 +164,7 @@ export function TasksCard({ tasks, scope, sources }: TasksCardProps) {
           )}
         </div>
       )}
-      {projects.length > 0 && <CaptureChips picks={picks} />}
+      {projects.length > 0 && <CaptureChips picks={picks} text={newTitle} />}
 
       {tasks.length > 8 && <p className="mt-1 text-tiny text-text-tertiary">+{tasks.length - 8} more</p>}
     </DashCard>

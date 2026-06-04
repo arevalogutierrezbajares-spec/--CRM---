@@ -74,9 +74,45 @@ export function PrioritiesBoard({
   const [newTitle, setNewTitle] = useState("");
   const [newOwner, setNewOwner] = useState<string>("");
   const [adding, setAdding] = useState(false);
+  const [hidden, setHidden] = useState<Set<string>>(new Set());
 
   function refresh() {
     router.refresh();
+  }
+
+  // Delete with a 5s undo window — no confirm dialog. The row hides instantly;
+  // the actual delete only commits when the toast closes un-undone.
+  function deleteWithUndo(o: ObjectiveView) {
+    setHidden((s) => new Set(s).add(o.id));
+    let undone = false;
+    const unhide = () =>
+      setHidden((s) => {
+        const n = new Set(s);
+        n.delete(o.id);
+        return n;
+      });
+    const commit = () => {
+      if (undone) return;
+      void deleteObjectiveAction(o.id).then((res) => {
+        if (res.ok) router.refresh();
+        else {
+          toast.error(res.error);
+          unhide();
+        }
+      });
+    };
+    toast(`Deleted “${o.title}”`, {
+      duration: 5000,
+      action: {
+        label: "Undo",
+        onClick: () => {
+          undone = true;
+          unhide();
+        },
+      },
+      onAutoClose: commit,
+      onDismiss: commit,
+    });
   }
 
   async function addObjective() {
@@ -164,9 +200,11 @@ export function PrioritiesBoard({
         </div>
       ) : (
         <div className="space-y-3">
-          {objectives.map((o) => (
-            <ObjectiveCard key={o.id} objective={o} members={members} onChanged={refresh} />
-          ))}
+          {objectives
+            .filter((o) => !hidden.has(o.id))
+            .map((o) => (
+              <ObjectiveCard key={o.id} objective={o} members={members} onChanged={refresh} onDelete={() => deleteWithUndo(o)} />
+            ))}
         </div>
       )}
     </div>
@@ -177,10 +215,12 @@ function ObjectiveCard({
   objective: o,
   members,
   onChanged,
+  onDelete,
 }: {
   objective: ObjectiveView;
   members: Member[];
   onChanged: () => void;
+  onDelete: () => void;
 }) {
   const [, startTransition] = useTransition();
   const hasKr = o.keyResults.length > 0;
@@ -200,17 +240,6 @@ function ObjectiveCard({
       else toast.error(res.error);
     });
   }
-  function remove() {
-    if (!confirm(`Delete objective "${o.title}" and its key results?`)) return;
-    startTransition(async () => {
-      const res = await deleteObjectiveAction(o.id);
-      if (res.ok) {
-        toast.success("Objective deleted");
-        onChanged();
-      } else toast.error(res.error);
-    });
-  }
-
   return (
     <div className="rounded-lg border border-[var(--border)] bg-card p-3.5">
       <div className="flex items-start justify-between gap-3">
@@ -259,7 +288,7 @@ function ObjectiveCard({
           </Select>
           <button
             type="button"
-            onClick={remove}
+            onClick={onDelete}
             aria-label="Delete objective"
             className="rounded p-1 text-text-tertiary hover:text-[var(--red-text)]"
           >

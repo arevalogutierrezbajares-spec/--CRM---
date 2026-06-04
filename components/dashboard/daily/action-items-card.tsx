@@ -72,8 +72,10 @@ export function ActionItemsCard({ items, sources }: { items: DashActionItem[]; s
 
   async function quickAdd() {
     if (adding || !newTitle.trim()) return; // guard against Enter+click double-fire
-    setAdding(true);
     const r = picks.reconcile(newTitle); // drop picks whose token was deleted
+    // @all is a broadcast — confirm the blast radius (Slack-style friction).
+    if (r.notifyAll && !confirm(`Notify all ${sources.people.length} teammates about this?`)) return;
+    setAdding(true);
     const res = await captureItemAction({
       rawText: newTitle,
       itemKind: "action_item",
@@ -124,7 +126,7 @@ export function ActionItemsCard({ items, sources }: { items: DashActionItem[]; s
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: "auto" }}
                   exit={{ opacity: 0, height: 0, x: 12 }}
-                  transition={{ duration: 0.2 }}
+                  transition={{ duration: 0.15, ease: "easeOut" }}
                   className="flex items-start gap-2 group overflow-hidden rounded px-1 py-1 hover:bg-surface"
                 >
                   <input
@@ -180,7 +182,7 @@ export function ActionItemsCard({ items, sources }: { items: DashActionItem[]; s
           <Button type="button" size="sm" variant="ghost" onClick={quickAdd} loading={adding}>Add</Button>
         )}
       </div>
-      <CaptureChips picks={picks} />
+      <CaptureChips picks={picks} text={newTitle} />
 
       {items.length > 8 && <p className="mt-1 text-tiny text-text-tertiary">+{items.length - 8} more</p>}
     </DashCard>

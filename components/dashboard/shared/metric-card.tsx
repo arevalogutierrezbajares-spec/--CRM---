@@ -28,7 +28,7 @@ export function MetricCard({
 }: MetricCardProps) {
   const inner = (
     <>
-      <div className="text-[22px] font-medium leading-none text-text-primary">
+      <div className="text-[22px] font-medium leading-none tabular-nums text-text-primary">
         {typeof value === "number" ? <CountUp value={value} /> : value}
       </div>
       <div className="text-[11px] text-text-secondary mt-1">{label}</div>
