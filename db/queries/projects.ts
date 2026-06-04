@@ -185,6 +185,15 @@ export type ProjectLinkWithAuthor = ProjectLinkRow & {
   createdByName: string | null;
 };
 
+/**
+ * A link row enriched with whether the thing it points to is actually reachable:
+ *  - file  → the storage object exists
+ *  - link  → it has a URL
+ *  - note  → never "attached" (legacy text-only rows)
+ * Drives the greyed-out / "Missing" treatment in the board.
+ */
+export type ProjectLinkView = ProjectLinkWithAuthor & { attached: boolean };
+
 export async function listProjectLinks(opts: {
   projectId: string;
   workspaceId: string;

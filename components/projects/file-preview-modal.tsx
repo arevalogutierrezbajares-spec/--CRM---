@@ -1,6 +1,9 @@
 "use client";
 
-import { Download, ExternalLink, Loader2, FileQuestion } from "lucide-react";
+import { useEffect, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { Download, ExternalLink, Loader2, FileQuestion, Pencil } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -39,6 +42,7 @@ export function FilePreviewModal({
   url,
   error,
   loading,
+  onEditDetails,
 }: {
   file: PreviewFile | null;
   open: boolean;
@@ -46,6 +50,8 @@ export function FilePreviewModal({
   url: string | null;
   error: string | null;
   loading: boolean;
+  /** Provided when the current user may rename/recategorize this file. */
+  onEditDetails?: () => void;
 }) {
   const kind = file ? previewKind(file.filename) : "none";
   const chip = file ? chipForFile(file.filename, file.mime) : "FILE";
@@ -83,7 +89,14 @@ export function FilePreviewModal({
           )}
         </div>
 
-        <div className="flex items-center justify-end gap-2">
+        <div className="flex items-center gap-2">
+          {onEditDetails && (
+            <Button type="button" variant="ghost" size="sm" onClick={onEditDetails}>
+              <Pencil size={14} />
+              Edit details
+            </Button>
+          )}
+          <div className="flex flex-1 items-center justify-end gap-2">
           {url && (
             <>
               <Button
@@ -115,6 +128,7 @@ export function FilePreviewModal({
               </Button>
             </>
           )}
+          </div>
         </div>
       </DialogContent>
     </Dialog>
@@ -133,6 +147,10 @@ function PreviewBody({
   if (kind === "image") {
     // eslint-disable-next-line @next/next/no-img-element
     return <img src={url} alt={label} className="h-full w-full object-contain" />;
+  }
+
+  if (kind === "markdown") {
+    return <MarkdownPreview url={url} label={label} />;
   }
 
   if (kind === "pdf" || kind === "text") {
@@ -154,6 +172,64 @@ function PreviewBody({
           No inline preview for this file type. Use download to open it.
         </p>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Markdown files render as formatted prose (GFM tables/lists/etc.). The text is
+ * fetched from the signed URL in an effect — setState only fires inside the
+ * async callback, never synchronously, to satisfy the no-setState-in-effect rule.
+ * Falls back to the raw-text iframe if the fetch is blocked (e.g. CORS).
+ */
+function MarkdownPreview({ url, label }: { url: string; label: string }) {
+  const [text, setText] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(url)
+      .then((r) => (r.ok ? r.text() : Promise.reject(new Error(String(r.status)))))
+      .then((t) => {
+        if (!cancelled) setText(t);
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [url]);
+
+  if (failed) {
+    return <iframe src={url} title={label} className="h-full w-full" />;
+  }
+
+  if (text === null) {
+    return (
+      <div className="grid h-full place-items-center text-text-tertiary">
+        <Loader2 className="h-6 w-6 animate-spin" />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="h-full w-full overflow-auto px-7 py-6 text-sm leading-relaxed text-text-secondary
+        [&_a]:text-[var(--blue-text)] [&_a]:underline
+        [&_blockquote]:border-l-2 [&_blockquote]:border-[var(--border)] [&_blockquote]:pl-3 [&_blockquote]:text-text-tertiary
+        [&_code]:rounded [&_code]:bg-surface [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-[12px]
+        [&_h1]:mb-3 [&_h1]:mt-1 [&_h1]:text-xl [&_h1]:font-semibold [&_h1]:text-text-primary
+        [&_h2]:mb-2 [&_h2]:mt-5 [&_h2]:text-lg [&_h2]:font-semibold [&_h2]:text-text-primary
+        [&_h3]:mb-2 [&_h3]:mt-4 [&_h3]:text-base [&_h3]:font-semibold [&_h3]:text-text-primary
+        [&_li]:my-0.5 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5
+        [&_p]:my-2 [&_pre]:my-3 [&_pre]:overflow-auto [&_pre]:rounded [&_pre]:bg-surface [&_pre]:p-3
+        [&_table]:my-3 [&_table]:w-full [&_table]:border-collapse
+        [&_td]:border [&_td]:border-[var(--border)] [&_td]:px-2 [&_td]:py-1
+        [&_th]:border [&_th]:border-[var(--border)] [&_th]:bg-surface [&_th]:px-2 [&_th]:py-1 [&_th]:text-left
+        [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5"
+    >
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
     </div>
   );
 }

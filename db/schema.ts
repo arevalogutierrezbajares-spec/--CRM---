@@ -210,6 +210,8 @@ export const users = pgTable("users", {
   // Default workspace shown after sign-in. Null only briefly after sign-up,
   // before the first workspace is auto-created.
   currentWorkspaceId: uuid("current_workspace_id"),
+  // FR-PRESENCE: last time the user was active (heartbeat). Null = never seen.
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -420,6 +422,7 @@ export const projectLinkKind = pgEnum("project_link_kind", [
   "note",
   "link",
   "file",
+  "doc",
 ]);
 
 export const projectLinks = pgTable("project_links", {
@@ -475,6 +478,22 @@ export const projectLinkAudits = pgTable("project_link_audits", {
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
+});
+
+// FR-DOC-COLLAB: editable content for kind='doc' rows. 1:1 with project_links.
+export const projectDocContents = pgTable("project_doc_contents", {
+  linkId: uuid("link_id")
+    .primaryKey()
+    .references(() => projectLinks.id, { onDelete: "cascade" }),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  // Yjs CRDT state (Y.encodeStateAsUpdate), base64. Null until first save.
+  ydoc: text("ydoc"),
+  // Markdown mirror of the latest content for list previews + search.
+  text: text("text").notNull().default(""),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedBy: uuid("updated_by").references(() => users.id),
 });
 
 export const projectContacts = pgTable(

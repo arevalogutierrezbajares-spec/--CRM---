@@ -84,7 +84,13 @@ export function canonicalMime(filename: string, declared: string): string {
  *  - "office" → docx/xlsx/pptx via the Microsoft Office web viewer
  *  - "none"   → no inline preview; download only
  */
-export type PreviewKind = "pdf" | "image" | "text" | "office" | "none";
+export type PreviewKind =
+  | "pdf"
+  | "image"
+  | "text"
+  | "markdown"
+  | "office"
+  | "none";
 
 const PREVIEW_BY_EXT: Record<string, PreviewKind> = {
   ".pdf": "pdf",
@@ -94,7 +100,7 @@ const PREVIEW_BY_EXT: Record<string, PreviewKind> = {
   ".webp": "image",
   ".gif": "image",
   ".txt": "text",
-  ".md": "text",
+  ".md": "markdown",
   ".csv": "text",
   ".docx": "office",
   ".xlsx": "office",

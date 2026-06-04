@@ -13,17 +13,23 @@ import {
   Link as LinkIcon,
   ExternalLink,
   Eye,
+  AlertTriangle,
   Plus,
   Pencil,
   Trash2,
   ChevronUp,
   ChevronDown,
+  FileText,
+  FilePlus,
   type LucideIcon,
 } from "lucide-react";
 import { DashCard } from "@/components/dashboard/shared/dash-card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Button } from "@/components/ui/button";
-import type { ProjectLinkWithAuthor } from "@/db/queries/projects";
+import type {
+  ProjectLinkWithAuthor,
+  ProjectLinkView,
+} from "@/db/queries/projects";
 import type { LinkCategory } from "@/lib/project-links/detect-category";
 import { brandForUrl } from "@/lib/project-links/host-brands";
 import { formatBytes } from "@/lib/project-files/limits";
@@ -35,7 +41,9 @@ import {
   reorderLinksAction,
 } from "@/app/(app)/projects/actions";
 import { formatRelative } from "@/lib/utils";
+import { createDocAction } from "@/app/(app)/projects/docs-actions";
 import { AddLinkModal, type LinkModalInitial } from "./add-link-modal";
+import { EditFileModal, type FileEditInitial } from "./edit-file-modal";
 import { FilePreviewModal, type PreviewFile } from "./file-preview-modal";
 import { UploadTray } from "./upload-tray";
 
@@ -104,7 +112,7 @@ export function LinksBoard({
   currentUserRole,
 }: {
   projectId: string;
-  links: ProjectLinkWithAuthor[];
+  links: ProjectLinkView[];
   currentUserId: string;
   currentUserRole: "owner" | "admin" | "member";
 }) {
@@ -115,6 +123,8 @@ export function LinksBoard({
   const [modalCategory, setModalCategory] = useState<LinkCategory | undefined>(
     undefined,
   );
+  const [fileEditing, setFileEditing] = useState<FileEditInitial | undefined>(undefined);
+  const [fileModalOpen, setFileModalOpen] = useState(false);
   const [previewFile, setPreviewFile] = useState<PreviewFile | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -127,7 +137,7 @@ export function LinksBoard({
 
   // Group links by category, each sorted by sortOrder.
   const byCategory = useMemo(() => {
-    const map = new Map<LinkCategory, ProjectLinkWithAuthor[]>();
+    const map = new Map<LinkCategory, ProjectLinkView[]>();
     for (const c of CATEGORIES) map.set(c, []);
     for (const l of links) {
       const cat = (CATEGORIES as string[]).includes(l.category)
@@ -148,13 +158,25 @@ export function LinksBoard({
   }
 
   function openEdit(l: ProjectLinkWithAuthor) {
+    const category = ((CATEGORIES as string[]).includes(l.category)
+      ? l.category
+      : "other") as LinkCategory;
+    if (l.kind === "file" || l.kind === "doc") {
+      setFileEditing({
+        linkId: l.id,
+        label: l.label,
+        category,
+        description: l.description,
+        filename: l.originalFilename ?? l.label,
+      });
+      setFileModalOpen(true);
+      return;
+    }
     setEditing({
       linkId: l.id,
       url: l.url ?? "",
       label: l.label,
-      category: ((CATEGORIES as string[]).includes(l.category)
-        ? l.category
-        : "other") as LinkCategory,
+      category,
       description: l.description,
     });
     setModalCategory(undefined);
@@ -176,7 +198,26 @@ export function LinksBoard({
     });
   }
 
-  function preview(l: ProjectLinkWithAuthor) {
+  function openDoc(l: ProjectLinkView) {
+    router.push(`/projects/${projectId}/docs/${l.id}`);
+  }
+
+  function newDoc(category?: LinkCategory) {
+    startTransition(async () => {
+      const res = await createDocAction({ projectId, category });
+      if (res.ok) {
+        router.push(`/projects/${projectId}/docs/${res.id}`);
+      } else {
+        toast.error(res.error);
+      }
+    });
+  }
+
+  function preview(l: ProjectLinkView) {
+    if (l.kind === "file" && !l.attached) {
+      toast.error("File missing — re-upload to restore it.");
+      return;
+    }
     setPreviewFile({
       linkId: l.id,
       label: l.label,
@@ -260,6 +301,7 @@ export function LinksBoard({
                 <LinkRow
                   link={l}
                   accent={meta.color}
+                  attached={l.attached}
                   canEdit={canEditRow(l)}
                   isFirst={i === 0}
                   isLast={i === list.length - 1}
@@ -267,6 +309,7 @@ export function LinksBoard({
                   onEdit={() => openEdit(l)}
                   onDelete={() => remove(l)}
                   onPreview={() => preview(l)}
+                  onOpenDoc={() => openDoc(l)}
                   onMoveUp={() => move(category, i, -1)}
                   onMoveDown={() => move(category, i, 1)}
                 />
@@ -288,16 +331,28 @@ export function LinksBoard({
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-label text-text-secondary">Links & Documents</h2>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => openCreate()}
-            disabled={pending}
-          >
-            <Plus size={14} />
-            Add link
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => newDoc()}
+              disabled={pending}
+            >
+              <FilePlus size={14} />
+              New doc
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => openCreate()}
+              disabled={pending}
+            >
+              <Plus size={14} />
+              Add link
+            </Button>
+          </div>
         </div>
 
         <div className="grid gap-3 lg:grid-cols-3">
@@ -320,6 +375,13 @@ export function LinksBoard({
           defaultCategory={modalCategory}
         />
 
+        <EditFileModal
+          projectId={projectId}
+          open={fileModalOpen}
+          onOpenChange={setFileModalOpen}
+          initial={fileEditing}
+        />
+
         <FilePreviewModal
           file={previewFile}
           open={previewOpen}
@@ -327,6 +389,15 @@ export function LinksBoard({
           url={previewUrl}
           error={previewError}
           loading={previewLoading}
+          onEditDetails={(() => {
+            if (!previewFile) return undefined;
+            const l = links.find((x) => x.id === previewFile.linkId);
+            if (!l || !canEditRow(l)) return undefined;
+            return () => {
+              setPreviewOpen(false);
+              openEdit(l);
+            };
+          })()}
         />
       </div>
     </UploadTray>
@@ -336,6 +407,7 @@ export function LinksBoard({
 function LinkRow({
   link: l,
   accent,
+  attached,
   canEdit,
   isFirst,
   isLast,
@@ -343,11 +415,13 @@ function LinkRow({
   onEdit,
   onDelete,
   onPreview,
+  onOpenDoc,
   onMoveUp,
   onMoveDown,
 }: {
-  link: ProjectLinkWithAuthor;
+  link: ProjectLinkView;
   accent: string;
+  attached: boolean;
   canEdit: boolean;
   isFirst: boolean;
   isLast: boolean;
@@ -355,24 +429,57 @@ function LinkRow({
   onEdit: () => void;
   onDelete: () => void;
   onPreview: () => void;
+  onOpenDoc: () => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
 }) {
   const isFile = l.kind === "file";
-  const brand = !isFile && l.url ? brandForUrl(l.url) : null;
-  const chip = isFile ? chipForFile(l.originalFilename ?? "", l.mimeType ?? "") : null;
+  const isDoc = l.kind === "doc";
+  const brand = !isFile && !isDoc && l.url ? brandForUrl(l.url) : null;
+  const chip = isFile
+    ? chipForFile(l.originalFilename ?? "", l.mimeType ?? "")
+    : isDoc
+      ? "DOC"
+      : null;
 
   const labelBlock = (
     <div className="min-w-0 flex-1">
-      <div className="text-[12.5px] text-text-primary truncate flex items-center gap-1.5">
+      <div
+        className={`text-[12.5px] truncate flex items-center gap-1.5 ${
+          attached ? "text-text-primary" : "text-text-tertiary"
+        }`}
+      >
         {chip && (
-          <span className="shrink-0 rounded bg-surface px-1 text-[9px] font-medium text-text-secondary tabular-nums">
+          <span
+            className={`shrink-0 rounded px-1 text-[9px] font-medium tabular-nums ${
+              attached
+                ? "bg-surface text-text-secondary"
+                : "bg-surface text-text-tertiary line-through"
+            }`}
+          >
             {chip}
           </span>
         )}
         <span className="truncate">{l.label}</span>
-        {isFile ? (
+        {!attached ? (
+          <span
+            className="inline-flex shrink-0 items-center gap-1 rounded bg-[var(--amber-bg,rgba(180,120,20,0.12))] px-1 text-[9px] font-medium text-[var(--amber-text)]"
+            title={
+              isFile
+                ? "File missing from storage — re-upload to restore."
+                : "No file or link attached."
+            }
+          >
+            <AlertTriangle size={9} />
+            {isFile ? "Missing" : "No file"}
+          </span>
+        ) : isFile ? (
           <Eye
+            size={10}
+            className="text-text-tertiary opacity-0 group-hover:opacity-100"
+          />
+        ) : isDoc ? (
+          <FileText
             size={10}
             className="text-text-tertiary opacity-0 group-hover:opacity-100"
           />
@@ -409,9 +516,18 @@ function LinkRow({
     <div className="flex items-start gap-2 group rounded px-2 py-1.5 hover:bg-surface transition-colors">
       <div
         className="mt-1 h-1.5 w-1.5 rounded-full shrink-0"
-        style={{ background: accent }}
+        style={{ background: accent, opacity: attached ? 1 : 0.35 }}
       />
-      {isFile ? (
+      {isDoc ? (
+        <button
+          type="button"
+          onClick={onOpenDoc}
+          disabled={disabled}
+          className="min-w-0 flex-1 text-left"
+        >
+          {labelBlock}
+        </button>
+      ) : isFile ? (
         <button
           type="button"
           onClick={onPreview}
@@ -453,17 +569,15 @@ function LinkRow({
           >
             <ChevronDown size={12} />
           </button>
-          {!isFile && (
-            <button
-              type="button"
-              onClick={onEdit}
-              disabled={disabled}
-              aria-label={`Edit ${l.label}`}
-              className="rounded p-0.5 text-text-tertiary hover:text-text-primary"
-            >
-              <Pencil size={12} />
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={onEdit}
+            disabled={disabled}
+            aria-label={`Edit ${l.label}`}
+            className="rounded p-0.5 text-text-tertiary hover:text-text-primary"
+          >
+            <Pencil size={12} />
+          </button>
           <ConfirmDialog
             title={isFile ? "Remove this file?" : "Remove this link?"}
             description={`"${l.label}" will be removed from this project${isFile ? " and deleted from storage" : ""}.`}

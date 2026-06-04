@@ -24,6 +24,9 @@
     "verify": "tsx scripts/verify.ts"
   },
   "dependencies": {
+    "@blocknote/core": "^0.51.4",
+    "@blocknote/mantine": "^0.51.4",
+    "@blocknote/react": "^0.51.4",
     "@radix-ui/react-checkbox": "^1.3.3",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-dropdown-menu": "^2.1.16",
@@ -44,10 +47,14 @@
     "postgres": "^3.4.5",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.6.0",
     "tw-animate-css": "^1.4.0",
+    "y-protocols": "^1.0.7",
     "yaml": "^2.9.0",
+    "yjs": "^13.6.31",
     "zod": "^3.24.1"
   },
   "devDependencies": {

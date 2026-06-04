@@ -128,6 +128,22 @@ export async function purgeWorkspaceStorage(
   return { removed, failed };
 }
 
+/**
+ * Set of storage paths that actually exist under a project's prefix, for
+ * flagging file rows whose object was lost (deleted out-of-band, reaped, etc).
+ * One list call covers the whole project. Returns `null` when storage is
+ * unconfigured — callers should treat that as "unknown, assume attached"
+ * rather than greying out every file.
+ */
+export async function listAttachedPaths(
+  workspaceId: string,
+  projectId: string,
+): Promise<Set<string> | null> {
+  if (!serviceClient()) return null;
+  const paths = await listAllUnder(`${workspaceId}/${projectId}`);
+  return new Set(paths);
+}
+
 /** FR-DOC-22 — list all object paths under a prefix (paginated). */
 export async function listAllUnder(prefix: string): Promise<string[]> {
   const supabase = serviceClient();

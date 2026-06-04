@@ -30,7 +30,9 @@ import {
   listProjects,
   type ProjectListItem,
   type ProjectLinkWithAuthor,
+  type ProjectLinkView,
 } from "@/db/queries/projects";
+import { listAttachedPaths } from "@/lib/project-files/storage";
 import { listTouchesForProject } from "@/db/queries/touches";
 import {
   listResearchNotes,
@@ -151,6 +153,27 @@ export default async function ProjectDetailPage(props: {
       [],
     ),
   ]);
+
+  // Flag links whose target is actually reachable so the board can grey out
+  // files whose storage object was lost and notes/links with nothing behind them.
+  const attachedPaths = await safeRead(
+    () => listAttachedPaths(user.workspaceId, displayed.id),
+    null,
+  );
+  const linksView: ProjectLinkView[] = linksRes.data.map((l) => ({
+    ...l,
+    attached:
+      l.kind === "file"
+        ? // Unknown (storage unconfigured) → assume attached rather than greying all.
+          attachedPaths.data == null
+          ? true
+          : Boolean(l.storagePath) && attachedPaths.data.has(l.storagePath!)
+        : l.kind === "link"
+          ? Boolean(l.url)
+          : l.kind === "doc"
+            ? true
+            : false,
+  }));
 
   const accent = displayed.coverColor ?? "var(--text-tertiary)";
   const health = computeHealth({
@@ -399,7 +422,7 @@ export default async function ProjectDetailPage(props: {
 
         <LinksBoard
           projectId={displayed.id}
-          links={linksRes.data}
+          links={linksView}
           currentUserId={user.id}
           currentUserRole={user.workspaceRole}
         />
