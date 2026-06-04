@@ -33,6 +33,7 @@ import {
   type ProjectLinkView,
 } from "@/db/queries/projects";
 import { listAttachedPaths } from "@/lib/project-files/storage";
+import { recordProjectVisit } from "@/db/queries/pins";
 import { listTouchesForProject } from "@/db/queries/touches";
 import {
   listResearchNotes,
@@ -174,6 +175,9 @@ export default async function ProjectDetailPage(props: {
             ? true
             : false,
   }));
+
+  // Record the visit for Home's "Recently opened" (best-effort, non-blocking).
+  void recordProjectVisit(user.workspaceId, user.id, displayed.id).catch(() => {});
 
   const accent = displayed.coverColor ?? "var(--text-tertiary)";
   const health = computeHealth({

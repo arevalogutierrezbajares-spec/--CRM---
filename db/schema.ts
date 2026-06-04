@@ -516,6 +516,24 @@ export const projectPins = pgTable(
   (t) => ({ pk: primaryKey({ columns: [t.userId, t.projectId] }) }),
 );
 
+// FR-PMO: recently-opened projects per user (Home "Recent").
+export const projectVisits = pgTable(
+  "project_visits",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    visitedAt: timestamp("visited_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.userId, t.projectId] }) }),
+);
+
 // FR-PMO: attach docs/links directly to an action item, milestone, or meeting.
 export const itemEntityType = pgEnum("item_entity_type", [
   "action_item",

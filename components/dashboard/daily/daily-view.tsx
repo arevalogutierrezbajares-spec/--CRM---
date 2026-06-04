@@ -27,6 +27,7 @@ interface DailyViewProps {
   pickerProjects: { id: string; title: string }[];
   members: { userId: string; displayName: string }[];
   pinnedProjects: PinnedProject[];
+  recentProjects: { id: string; title: string }[];
   layout: DashWidget[];
   greeting: string;
   briefing: string[];
@@ -42,6 +43,7 @@ export function DailyView({
   pickerProjects,
   members,
   pinnedProjects,
+  recentProjects,
   layout,
   greeting,
   briefing,
@@ -60,7 +62,7 @@ export function DailyView({
       <CustomizableDashboard
         savedLayout={layout}
         widgets={[
-          { id: "pinned", node: <PinnedProjects pinned={pinnedProjects} allProjects={pickerProjects} /> },
+          { id: "pinned", node: <PinnedProjects pinned={pinnedProjects} allProjects={pickerProjects} recent={recentProjects} /> },
           { id: "action_items", node: <ActionItemsCard items={actionItems} /> },
           { id: "tasks", node: <TasksCard tasks={tasks} scope="today" /> },
           { id: "meetings", node: <MeetingsCard meetings={meetings} scope="today" /> },

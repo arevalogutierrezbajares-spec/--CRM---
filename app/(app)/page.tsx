@@ -14,7 +14,7 @@ import { listProjectsForPicker } from "@/db/queries/items";
 import { listWorkspaceMembers } from "@/db/queries/team";
 import { listPosts, type PostView } from "@/db/queries/town-hall";
 import { TownHallPanel } from "@/components/town-hall/town-hall-panel";
-import { listPinnedProjects, type PinnedProject } from "@/db/queries/pins";
+import { listPinnedProjects, listRecentProjects, type PinnedProject } from "@/db/queries/pins";
 import { getDashboardLayout } from "@/db/queries/dashboard-layout";
 import { DEFAULT_WIDGETS, type DashWidget } from "@/lib/dashboard/layout";
 import { WeeklyView } from "@/components/dashboard/weekly/weekly-view";
@@ -192,6 +192,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
     pickerProjects: { id: string; title: string }[];
     members: { userId: string; displayName: string }[];
     pinnedProjects: PinnedProject[];
+    recentProjects: { id: string; title: string }[];
     layout: DashWidget[];
   } | null = null;
   let weeklyData: {
@@ -210,12 +211,13 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
   } | null = null;
 
   if (view === "daily") {
-    const [tasks, meetings, projects, actionItems, pinnedProjects, layoutRes] = await Promise.all([
+    const [tasks, meetings, projects, actionItems, pinnedProjects, recentProjects, layoutRes] = await Promise.all([
       safeRead<DashTask[]>(() => listTasksToday(user.workspaceId), []),
       safeRead<DashMeeting[]>(() => listMeetingsToday(user.workspaceId), []),
       safeRead<DashProject[]>(() => listActiveProjectsForDashboard(user.workspaceId, 6), []),
       safeRead<DashActionItem[]>(() => listOpenActionItems(user.workspaceId, 12), []),
       safeRead<PinnedProject[]>(() => listPinnedProjects(user.workspaceId, user.id), []),
+      safeRead<{ id: string; title: string }[]>(() => listRecentProjects(user.workspaceId, user.id, 8), []),
       safeRead<DashWidget[]>(() => getDashboardLayout(user.id), DEFAULT_WIDGETS),
     ]);
     dailyData = {
@@ -226,6 +228,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
       pickerProjects,
       members,
       pinnedProjects: pinnedProjects.data,
+      recentProjects: recentProjects.data,
       layout: layoutRes.data,
     };
   } else if (view === "weekly") {
@@ -335,6 +338,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
           pickerProjects={dailyData.pickerProjects}
           members={dailyData.members}
           pinnedProjects={dailyData.pinnedProjects}
+          recentProjects={dailyData.recentProjects}
           layout={dailyData.layout}
           greeting={greeting}
           briefing={briefing}
