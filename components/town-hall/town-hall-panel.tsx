@@ -1,12 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { Megaphone, Maximize2 } from "lucide-react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetBody,
+} from "@/components/ui/sheet";
 import { Composer } from "./composer";
+import { Feed } from "./feed";
 import { PostBody } from "./post-body";
 import type { MemberOption, PostView, RefObject } from "./types";
 
@@ -46,6 +53,7 @@ export function TownHallPanel({
   const router = useRouter();
   const scrollRef = useRef<HTMLDivElement>(null);
   const channelRef = useRef<RealtimeChannel | null>(null);
+  const [expanded, setExpanded] = useState(false);
 
   // Chat order: oldest at top, newest at the bottom.
   const posts = [...initialPosts].reverse();
@@ -90,13 +98,14 @@ export function TownHallPanel({
           <Megaphone size={14} />
           <span>Town Hall</span>
         </div>
-        <Link
-          href="/town-hall"
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
           aria-label="Expand Town Hall"
           className="rounded p-1 text-text-tertiary transition-colors hover:bg-surface hover:text-text-primary"
         >
           <Maximize2 size={13} />
-        </Link>
+        </button>
       </div>
 
       <div ref={scrollRef} className="min-h-[120px] flex-1 space-y-2.5 overflow-y-auto px-3 py-2.5">
@@ -128,6 +137,28 @@ export function TownHallPanel({
       <div className="shrink-0 border-t px-2.5 py-2" style={{ borderColor: "var(--border)" }}>
         <Composer members={members} objects={objects} onPosted={handlePosted} />
       </div>
+
+      {/* Half-screen popout — the full feed (composer + notes→action-items). */}
+      <Sheet open={expanded} onOpenChange={setExpanded}>
+        <SheetContent className="w-[min(760px,96vw)]">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-1.5">
+              <Megaphone size={16} style={{ color: "var(--purple-text)" }} />
+              Town Hall
+            </SheetTitle>
+          </SheetHeader>
+          <SheetBody>
+            {expanded && (
+              <Feed
+                workspaceId={workspaceId}
+                initialPosts={initialPosts}
+                members={members}
+                objects={objects}
+              />
+            )}
+          </SheetBody>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

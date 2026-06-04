@@ -14,6 +14,7 @@ import { listProjectsForPicker } from "@/db/queries/items";
 import { listWorkspaceMembers } from "@/db/queries/team";
 import { listPosts, type PostView } from "@/db/queries/town-hall";
 import { TownHallPanel } from "@/components/town-hall/town-hall-panel";
+import { listPinnedProjects, type PinnedProject } from "@/db/queries/pins";
 import { WeeklyView } from "@/components/dashboard/weekly/weekly-view";
 import { MonthlyView } from "@/components/dashboard/monthly/monthly-view";
 import { DbBanner } from "@/components/db-banner";
@@ -180,6 +181,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
     actionItems: DashActionItem[];
     pickerProjects: { id: string; title: string }[];
     members: { userId: string; displayName: string }[];
+    pinnedProjects: PinnedProject[];
   } | null = null;
   let weeklyData: {
     tasks: DashTask[];
@@ -197,7 +199,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
   } | null = null;
 
   if (view === "daily") {
-    const [tasks, meetings, projects, actionItems, pickerProjects, members] = await Promise.all([
+    const [tasks, meetings, projects, actionItems, pickerProjects, members, pinnedProjects] = await Promise.all([
       safeRead<DashTask[]>(() => listTasksToday(user.workspaceId), []),
       safeRead<DashMeeting[]>(() => listMeetingsToday(user.workspaceId), []),
       safeRead<DashProject[]>(() => listActiveProjectsForDashboard(user.workspaceId, 6), []),
@@ -210,6 +212,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
           ),
         [],
       ),
+      safeRead<PinnedProject[]>(() => listPinnedProjects(user.workspaceId, user.id), []),
     ]);
     dailyData = {
       tasks: tasks.data,
@@ -218,6 +221,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
       actionItems: actionItems.data,
       pickerProjects: pickerProjects.data,
       members: members.data,
+      pinnedProjects: pinnedProjects.data,
     };
   } else if (view === "weekly") {
     const [tasks, meetings, projects] = await Promise.all([
@@ -321,6 +325,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
           actionItems={dailyData.actionItems}
           pickerProjects={dailyData.pickerProjects}
           members={dailyData.members}
+          pinnedProjects={dailyData.pinnedProjects}
           initialItem={initialItem}
         />
       )}
