@@ -6,7 +6,9 @@ import { ActionItemsCard } from "./action-items-card";
 import { AIAssistPanel } from "./ai-assist-panel";
 import { ItemDrawerProvider } from "../item-drawer";
 import { PinnedProjects } from "../pinned-projects";
+import { CustomizableDashboard } from "../customizable-dashboard";
 import type { PinnedProject } from "@/db/queries/pins";
+import type { DashWidget } from "@/lib/dashboard/layout";
 import type {
   DashActionItem,
   DashCounts,
@@ -24,6 +26,7 @@ interface DailyViewProps {
   pickerProjects: { id: string; title: string }[];
   members: { userId: string; displayName: string }[];
   pinnedProjects: PinnedProject[];
+  layout: DashWidget[];
   initialItem?: { entityType: "action_item" | "milestone" | "meeting"; id: string } | null;
 }
 
@@ -36,6 +39,7 @@ export function DailyView({
   pickerProjects,
   members,
   pinnedProjects,
+  layout,
   initialItem,
 }: DailyViewProps) {
   return (
@@ -47,18 +51,17 @@ export function DailyView({
       initialItem={initialItem}
     >
       <MetricsRow counts={counts} />
-      {(pinnedProjects.length > 0 || pickerProjects.length > 0) && (
-        <PinnedProjects pinned={pinnedProjects} allProjects={pickerProjects} />
-      )}
-      <div className="grid gap-2.5 lg:grid-cols-2">
-        <ActionItemsCard items={actionItems} />
-        <TasksCard tasks={tasks} scope="today" />
-      </div>
-      <div className="grid gap-2.5 lg:grid-cols-2">
-        <MeetingsCard meetings={meetings} scope="today" />
-        <ProjectsCard projects={projects} />
-      </div>
-      <AIAssistPanel scope="daily" />
+      <CustomizableDashboard
+        savedLayout={layout}
+        widgets={[
+          { id: "pinned", node: <PinnedProjects pinned={pinnedProjects} allProjects={pickerProjects} /> },
+          { id: "action_items", node: <ActionItemsCard items={actionItems} /> },
+          { id: "tasks", node: <TasksCard tasks={tasks} scope="today" /> },
+          { id: "meetings", node: <MeetingsCard meetings={meetings} scope="today" /> },
+          { id: "projects", node: <ProjectsCard projects={projects} /> },
+          { id: "ai", node: <AIAssistPanel scope="daily" /> },
+        ]}
+      />
     </ItemDrawerProvider>
   );
 }

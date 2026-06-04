@@ -212,6 +212,8 @@ export const users = pgTable("users", {
   currentWorkspaceId: uuid("current_workspace_id"),
   // FR-PRESENCE: last time the user was active (heartbeat). Null = never seen.
   lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
+  // FR-PMO: Home dashboard layout — [{ id, hidden, width }]. Null = defaults.
+  dashboardLayout: jsonb("dashboard_layout"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

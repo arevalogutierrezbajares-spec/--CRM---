@@ -15,6 +15,8 @@ import { listWorkspaceMembers } from "@/db/queries/team";
 import { listPosts, type PostView } from "@/db/queries/town-hall";
 import { TownHallPanel } from "@/components/town-hall/town-hall-panel";
 import { listPinnedProjects, type PinnedProject } from "@/db/queries/pins";
+import { getDashboardLayout } from "@/db/queries/dashboard-layout";
+import type { DashWidget } from "@/lib/dashboard/layout";
 import { WeeklyView } from "@/components/dashboard/weekly/weekly-view";
 import { MonthlyView } from "@/components/dashboard/monthly/monthly-view";
 import { DbBanner } from "@/components/db-banner";
@@ -182,6 +184,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
     pickerProjects: { id: string; title: string }[];
     members: { userId: string; displayName: string }[];
     pinnedProjects: PinnedProject[];
+    layout: DashWidget[];
   } | null = null;
   let weeklyData: {
     tasks: DashTask[];
@@ -214,6 +217,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
       ),
       safeRead<PinnedProject[]>(() => listPinnedProjects(user.workspaceId, user.id), []),
     ]);
+    const layout = await getDashboardLayout(user.id);
     dailyData = {
       tasks: tasks.data,
       meetings: meetings.data,
@@ -222,6 +226,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
       pickerProjects: pickerProjects.data,
       members: members.data,
       pinnedProjects: pinnedProjects.data,
+      layout,
     };
   } else if (view === "weekly") {
     const [tasks, meetings, projects] = await Promise.all([
@@ -326,6 +331,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
           pickerProjects={dailyData.pickerProjects}
           members={dailyData.members}
           pinnedProjects={dailyData.pinnedProjects}
+          layout={dailyData.layout}
           initialItem={initialItem}
         />
       )}
