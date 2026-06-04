@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { captureItemAction } from "@/app/(app)/dashboard/item-actions";
+import { parseCapture } from "@/lib/nlp/parse-capture";
 import { useItemDrawer } from "../item-drawer";
 import type { DashTask } from "@/db/queries/dashboard";
 
@@ -76,7 +77,7 @@ export function TasksCard({ tasks, scope, sources }: TasksCardProps) {
     }
     const raw = newTitle;
     const r = picks.reconcile(raw);
-    if (r.notifyAll && !confirm(`Notify all ${effectiveSources.people.length} teammates about this?`)) return;
+    if (r.notifyAll && !confirm("Notify the whole team about this?")) return;
     setNewTitle(""); // clear instantly
     picks.reset();
     startTransition(async () => {
@@ -88,6 +89,7 @@ export function TasksCard({ tasks, scope, sources }: TasksCardProps) {
         mentionUserIds: r.mentionUserIds,
         docRefs: r.docRefs,
         notifyAll: r.notifyAll,
+        dueDate: parseCapture(raw).dueDate, // client-resolved (tz-correct)
       });
       if (res.ok) {
         if (res.notified > 0) toast.success(res.summary, { duration: 1600 });

@@ -138,7 +138,7 @@ export function CommandPalette() {
 
       <Command.List className="max-h-[380px] overflow-y-auto p-1.5">
         <Command.Empty className="px-3 py-6 text-center text-tiny text-text-tertiary">
-          No matches. Press Enter to capture “{query.trim()}” as a to-do.
+          No matches.
         </Command.Empty>
 
         {/* Create — always offered when there's text (fallback never dead-ends). */}

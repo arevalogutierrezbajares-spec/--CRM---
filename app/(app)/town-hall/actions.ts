@@ -184,13 +184,15 @@ export async function toggleReactionAction(opts: {
   return { ok: true, on: res.on };
 }
 
-/** Recent notifications for the caller (for the bell dropdown). */
+/** The active queue for the caller (for the bell dropdown) — matches the badge
+ *  count (unread + not snoozed); the full /inbox view shows everything. */
 export async function getNotificationsAction(): Promise<NotificationView[]> {
   const user = await requireUser();
   return listNotifications({
     workspaceId: user.workspaceId,
     userId: user.id,
     limit: 20,
+    activeOnly: true,
   });
 }
 
@@ -206,11 +208,16 @@ export async function snoozeNotificationAction(
   untilIso: string | null,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const user = await requireUser();
+  let until: Date | null = null;
+  if (untilIso) {
+    until = new Date(untilIso);
+    if (Number.isNaN(until.getTime())) return { ok: false, error: "Invalid snooze time" };
+  }
   const ok = await snoozeNotification({
     workspaceId: user.workspaceId,
     userId: user.id,
     id,
-    until: untilIso ? new Date(untilIso) : null,
+    until,
   });
   if (!ok) return { ok: false, error: "Notification not found" };
   return { ok: true };

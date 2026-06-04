@@ -49,6 +49,9 @@ export function GlobalShortcuts() {
         gMode.current = true;
         gTimer.current = window.setTimeout(clearG, 1500);
       } else if (e.key === "c" || e.key === "C" || e.key === "/") {
+        // Don't stack the palette over the shortcuts overlay or any open dialog
+        // (the overlay + Radix dialogs carry aria-modal / data-state=open).
+        if (document.querySelector('[aria-modal="true"],[role="dialog"][data-state="open"]')) return;
         e.preventDefault();
         openCommandPalette();
       }

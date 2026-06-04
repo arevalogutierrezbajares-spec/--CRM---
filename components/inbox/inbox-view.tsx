@@ -79,6 +79,7 @@ export function InboxView({ initial }: { initial: NotificationView[] }) {
 
   useEffect(() => {
     function onKey(ev: KeyboardEvent) {
+      if (ev.defaultPrevented) return; // a global shortcut (e.g. a g-chord) already claimed it
       const t = ev.target as HTMLElement;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
       if (ev.metaKey || ev.ctrlKey || ev.altKey) return;

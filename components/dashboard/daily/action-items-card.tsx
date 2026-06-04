@@ -92,7 +92,7 @@ export function ActionItemsCard({ items, sources }: { items: DashActionItem[]; s
     const raw = newTitle;
     const r = picks.reconcile(raw); // drop picks whose token was deleted
     // @all is a broadcast — confirm the blast radius (Slack-style friction).
-    if (r.notifyAll && !confirm(`Notify all ${sources.people.length} teammates about this?`)) return;
+    if (r.notifyAll && !confirm("Notify the whole team about this?")) return;
     const parsed = parseCapture(raw);
     setNewTitle(""); // clear instantly — the input is the source of double-submit
     picks.reset();
@@ -118,6 +118,7 @@ export function ActionItemsCard({ items, sources }: { items: DashActionItem[]; s
         projectId: r.projectId,
         docRefs: r.docRefs,
         notifyAll: r.notifyAll,
+        dueDate: parsed.dueDate, // client-resolved (tz-correct)
       });
       if (res.ok) {
         toast.success(res.summary, { duration: 1800 });
@@ -149,6 +150,9 @@ export function ActionItemsCard({ items, sources }: { items: DashActionItem[]; s
                 : item.priority
                   ? PRIORITY_BADGE[item.priority]
                   : null;
+              // A just-added optimistic row has no real server id yet — keep it
+              // non-interactive until the persisted row reconciles in.
+              const isTemp = item.id.startsWith("tmp-");
               return (
                 <motion.li
                   key={item.id}
@@ -157,17 +161,19 @@ export function ActionItemsCard({ items, sources }: { items: DashActionItem[]; s
                   animate={{ opacity: 1, height: "auto" }}
                   exit={{ opacity: 0, height: 0, x: 12 }}
                   transition={{ duration: 0.15, ease: "easeOut" }}
-                  className="flex items-start gap-2 group overflow-hidden rounded px-1 py-1 hover:bg-surface"
+                  className={`flex items-start gap-2 group overflow-hidden rounded px-1 py-1 hover:bg-surface ${isTemp ? "opacity-60" : ""}`}
                 >
                   <input
                     type="checkbox"
                     data-item-id={item.id}
                     aria-label={`Complete ${item.title}`}
+                    disabled={isTemp}
                     onChange={() => complete(item)}
-                    className="mt-0.5 h-3.5 w-3.5 shrink-0 cursor-pointer accent-green-mid"
+                    className="mt-0.5 h-3.5 w-3.5 shrink-0 cursor-pointer accent-green-mid disabled:cursor-default"
                   />
                   <button
                     type="button"
+                    disabled={isTemp}
                     onClick={() => drawer?.openItem("action_item", item.id)}
                     className="min-w-0 flex-1 text-left"
                   >
@@ -181,7 +187,7 @@ export function ActionItemsCard({ items, sources }: { items: DashActionItem[]; s
                   <button
                     type="button"
                     onClick={() => snooze(item, 7)}
-                    disabled={pending}
+                    disabled={isTemp}
                     title="Snooze 1 week"
                     aria-label={`Snooze ${item.title} 1 week`}
                     className="shrink-0 rounded p-0.5 text-text-tertiary opacity-0 transition-opacity hover:text-[var(--blue-text)] focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100"

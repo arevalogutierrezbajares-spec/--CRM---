@@ -241,12 +241,17 @@ export async function captureItemAction(opts: {
   docRefs?: { linkId: string; label: string }[];
   /** @all — broadcast a notification to every teammate. */
   notifyAll?: boolean;
+  /** Pre-resolved due date (YYYY-MM-DD) from the CLIENT's chrono parse — avoids
+   *  a client/server timezone divergence on "tomorrow" near midnight. */
+  dueDate?: string | null;
 }): Promise<
   { ok: true; id: string; summary: string; notified: number } | { ok: false; error: string }
 > {
   const user = await requireUser();
   const parsed = parseCapture(opts.rawText);
   if (!parsed.title.trim()) return { ok: false, error: "Nothing to capture." };
+  // Prefer the client-resolved due date (their timezone) over re-parsing here.
+  const dueDate = opts.dueDate !== undefined ? opts.dueDate : parsed.dueDate;
 
   // Fall back to resolving any hand-typed @name / #project that wasn't picked.
   let assigneeUserId = opts.assigneeUserId ?? null;
@@ -269,7 +274,7 @@ export async function captureItemAction(opts: {
         actorId: user.id,
         title,
         projectId,
-        dueDate: parsed.dueDate,
+        dueDate,
         priority: parsed.priority,
         assigneeUserId,
       }));
@@ -281,7 +286,7 @@ export async function captureItemAction(opts: {
       workspaceId: user.workspaceId,
       actorId: user.id,
       title,
-      dueDate: parsed.dueDate,
+      dueDate,
       priority: parsed.priority,
       assigneeUserId,
       projectId,
@@ -346,7 +351,7 @@ export async function captureItemAction(opts: {
     });
   }
   refresh();
-  const bits = [parsed.dueDate && `due ${parsed.dueDate}`, notified > 0 && `notified ${notified}`].filter(Boolean);
+  const bits = [dueDate && `due ${dueDate}`, notified > 0 && `notified ${notified}`].filter(Boolean);
   return { ok: true, id, summary: bits.length ? `Added — ${bits.join(", ")}` : "Added", notified };
 }
 

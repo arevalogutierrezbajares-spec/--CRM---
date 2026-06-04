@@ -57,7 +57,7 @@ export function Composer({
     // Keep only picks whose token literal still appears in the body.
     // "@all" expands to every teammate.
     const broadcast = pickedAll && /(^|\s)@all\b/i.test(body);
-    if (broadcast && !confirm(`Notify all ${members.length} teammates?`)) return;
+    if (broadcast && !confirm("Notify the whole team?")) return;
     setSubmitting(true);
     try {
       const mentionUserIds = broadcast
