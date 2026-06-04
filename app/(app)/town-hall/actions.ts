@@ -179,6 +179,8 @@ export async function toggleReactionAction(opts: {
     workspaceId: user.workspaceId,
   });
   if (!res.ok) return { ok: false, error: "Post not found" };
+  revalidatePath("/town-hall");
+  revalidatePath("/");
   return { ok: true, on: res.on };
 }
 

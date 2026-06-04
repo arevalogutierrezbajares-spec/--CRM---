@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, ListChecks, Plus } from "lucide-react";
@@ -49,7 +49,7 @@ export function TasksCard({ tasks, scope, sources }: TasksCardProps) {
   const projects = useMemo(() => drawer?.projects ?? [], [drawer]);
   const [newTitle, setNewTitle] = useState("");
   const [projectId, setProjectId] = useState("");
-  const [adding, setAdding] = useState(false);
+  const [pending, startTransition] = useTransition();
   const picks = useCapturePicks();
   const effectiveSources: MentionSources = useMemo(
     () =>
@@ -68,33 +68,32 @@ export function TasksCard({ tasks, scope, sources }: TasksCardProps) {
     else picks.onPick(e);
   }
 
-  async function quickAdd() {
-    if (adding || !newTitle.trim()) return;
+  function quickAdd() {
+    if (!newTitle.trim()) return;
     if (!projectId) {
       toast.error("Pick a project for the task (or type #project).");
       return;
     }
-    const r = picks.reconcile(newTitle);
+    const raw = newTitle;
+    const r = picks.reconcile(raw);
     if (r.notifyAll && !confirm(`Notify all ${effectiveSources.people.length} teammates about this?`)) return;
-    setAdding(true);
-    const res = await captureItemAction({
-      rawText: newTitle,
-      itemKind: "task",
-      projectId,
-      assigneeUserId: r.assigneeUserId,
-      mentionUserIds: r.mentionUserIds,
-      docRefs: r.docRefs,
-      notifyAll: r.notifyAll,
+    setNewTitle(""); // clear instantly
+    picks.reset();
+    startTransition(async () => {
+      const res = await captureItemAction({
+        rawText: raw,
+        itemKind: "task",
+        projectId,
+        assigneeUserId: r.assigneeUserId,
+        mentionUserIds: r.mentionUserIds,
+        docRefs: r.docRefs,
+        notifyAll: r.notifyAll,
+      });
+      if (res.ok) {
+        if (res.notified > 0) toast.success(res.summary, { duration: 1600 });
+        router.refresh(); // show the new task (no optimistic add — it may be out of scope)
+      } else toast.error(res.error);
     });
-    setAdding(false);
-    if (res.ok) {
-      setNewTitle("");
-      picks.reset();
-      if (res.notified > 0) toast.success(res.summary, { duration: 1600 });
-      router.refresh();
-    } else {
-      toast.error(res.error);
-    }
   }
 
   return (
@@ -160,7 +159,7 @@ export function TasksCard({ tasks, scope, sources }: TasksCardProps) {
             </SelectContent>
           </Select>
           {newTitle.trim() && (
-            <Button type="button" size="sm" variant="ghost" onClick={quickAdd} loading={adding}>Add</Button>
+            <Button type="button" size="sm" variant="ghost" onClick={quickAdd} loading={pending}>Add</Button>
           )}
         </div>
       )}

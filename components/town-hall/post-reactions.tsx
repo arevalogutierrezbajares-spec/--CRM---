@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useOptimistic, useState, useTransition } from "react";
 import { SmilePlus } from "lucide-react";
 import { toast } from "sonner";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -8,6 +8,19 @@ import { toggleReactionAction } from "@/app/(app)/town-hall/actions";
 import type { PostReactionView } from "@/db/queries/town-hall";
 
 const QUICK = ["👍", "🎉", "❤️", "🔥", "✅", "👀", "🙏", "😂"];
+
+/** Optimistically toggle the viewer's reaction for `emoji`. */
+function toggleReaction(state: PostReactionView[], emoji: string): PostReactionView[] {
+  const ex = state.find((r) => r.emoji === emoji);
+  if (!ex) return [...state, { emoji, count: 1, mine: true }];
+  if (ex.mine) {
+    const count = ex.count - 1;
+    return count <= 0
+      ? state.filter((r) => r.emoji !== emoji)
+      : state.map((r) => (r.emoji === emoji ? { ...r, count, mine: false } : r));
+  }
+  return state.map((r) => (r.emoji === emoji ? { ...r, count: r.count + 1, mine: true } : r));
+}
 
 export function PostReactions({
   postId,
@@ -20,17 +33,19 @@ export function PostReactions({
 }) {
   const [pending, start] = useTransition();
   const [open, setOpen] = useState(false);
+  const [optimistic, addOptimistic] = useOptimistic(reactions, toggleReaction);
 
   function react(emoji: string) {
     setOpen(false);
     start(async () => {
+      addOptimistic(emoji); // instant chip/count toggle
       try {
         const res = await toggleReactionAction({ postId, emoji });
         if (!res.ok) {
           toast.error(res.error);
           return;
         }
-        onChanged();
+        onChanged(); // reconcile
       } catch {
         toast.error("Couldn't update reaction — try again.");
       }
@@ -39,7 +54,7 @@ export function PostReactions({
 
   return (
     <div className="mt-1 flex flex-wrap items-center gap-1">
-      {reactions.map((r) => (
+      {optimistic.map((r) => (
         <button
           key={r.emoji}
           type="button"

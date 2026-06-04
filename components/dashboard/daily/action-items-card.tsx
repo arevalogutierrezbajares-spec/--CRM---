@@ -11,6 +11,8 @@ import { DashBadge, type BadgeVariant } from "../shared/badge";
 import { Button } from "@/components/ui/button";
 import { MentionInput, type MentionSources } from "@/components/ui/mention-input";
 import { CaptureChips, useCapturePicks } from "./capture-chips";
+import { useOptimisticList } from "@/lib/use-optimistic-list";
+import { parseCapture } from "@/lib/nlp/parse-capture";
 import { setActionItemDone } from "@/app/(app)/action-items/actions";
 import { captureItemAction, snoozeActionItemAction } from "@/app/(app)/dashboard/item-actions";
 import { useItemDrawer } from "../item-drawer";
@@ -35,77 +37,87 @@ export function ActionItemsCard({ items, sources }: { items: DashActionItem[]; s
   const drawer = useItemDrawer();
   const [pending, startTransition] = useTransition();
   const [newTitle, setNewTitle] = useState("");
-  const [adding, setAdding] = useState(false);
-  const [removing, setRemoving] = useState<Set<string>>(new Set());
+  // Optimistic list: mutations apply instantly and reconcile when the server
+  // action's revalidatePath streams new props (rolls back if it doesn't).
+  const [optimistic, dispatch] = useOptimisticList(items);
   // Combobox picks (first @person = owner, all = notified) reconciled to the text.
   const picks = useCapturePicks();
 
+  // Pattern: dispatch the optimistic change (instant), run the action, then
+  // refresh INSIDE the transition so the server reconciliation is masked by the
+  // optimistic state (no flash, no wait). On error we skip refresh → the
+  // optimistic change reverts when the transition ends.
   function complete(item: DashActionItem) {
-    setRemoving((s) => new Set(s).add(item.id)); // optimistic collapse
     startTransition(async () => {
+      dispatch({ kind: "remove", id: item.id }); // instant collapse
       const res = await setActionItemDone({ id: item.id, done: true });
       if (res.ok) {
         toast.success("Done ✓", { duration: 1200 });
         router.refresh();
-      } else {
-        toast.error(res.error);
-        setRemoving((s) => {
-          const n = new Set(s);
-          n.delete(item.id);
-          return n;
-        });
-      }
+      } else toast.error(res.error);
     });
   }
 
   function snooze(item: DashActionItem, days: number) {
     startTransition(async () => {
+      dispatch({ kind: "remove", id: item.id });
       const res = await snoozeActionItemAction({ id: item.id, days });
       if (res.ok) {
         toast.success(days === 1 ? "Snoozed to tomorrow" : `Snoozed ${days} days`, { duration: 1400 });
         router.refresh();
-      } else {
-        toast.error(res.error);
-      }
+      } else toast.error(res.error);
     });
   }
 
-  async function quickAdd() {
-    if (adding || !newTitle.trim()) return; // guard against Enter+click double-fire
-    const r = picks.reconcile(newTitle); // drop picks whose token was deleted
+  function quickAdd() {
+    if (!newTitle.trim()) return;
+    const raw = newTitle;
+    const r = picks.reconcile(raw); // drop picks whose token was deleted
     // @all is a broadcast — confirm the blast radius (Slack-style friction).
     if (r.notifyAll && !confirm(`Notify all ${sources.people.length} teammates about this?`)) return;
-    setAdding(true);
-    const res = await captureItemAction({
-      rawText: newTitle,
-      itemKind: "action_item",
-      assigneeUserId: r.assigneeUserId,
-      mentionUserIds: r.mentionUserIds,
-      projectId: r.projectId,
-      docRefs: r.docRefs,
-      notifyAll: r.notifyAll,
+    const parsed = parseCapture(raw);
+    setNewTitle(""); // clear instantly — the input is the source of double-submit
+    picks.reset();
+    startTransition(async () => {
+      dispatch({
+        kind: "add",
+        prepend: true,
+        item: {
+          id: `tmp-${crypto.randomUUID()}`,
+          title: parsed.title || raw.trim(),
+          dueDate: parsed.dueDate,
+          priority: parsed.priority,
+          fromVoice: false,
+          createdAt: new Date(),
+          isOverdue: false,
+        },
+      });
+      const res = await captureItemAction({
+        rawText: raw,
+        itemKind: "action_item",
+        assigneeUserId: r.assigneeUserId,
+        mentionUserIds: r.mentionUserIds,
+        projectId: r.projectId,
+        docRefs: r.docRefs,
+        notifyAll: r.notifyAll,
+      });
+      if (res.ok) {
+        toast.success(res.summary, { duration: 1800 });
+        router.refresh(); // reconcile the temp row → the real persisted one
+      } else toast.error(res.error);
     });
-    setAdding(false);
-    if (res.ok) {
-      setNewTitle("");
-      picks.reset();
-      toast.success(res.summary, { duration: 1800 });
-      router.refresh();
-    } else {
-      toast.error(res.error);
-    }
   }
 
   return (
     <DashCard>
       <div className="flex items-center justify-between">
         <SectionLabel icon={ListTodo}>Action items</SectionLabel>
-        {items.length > 0 && (
-          <span className="text-tiny text-text-tertiary tabular-nums">{items.length} open</span>
+        {optimistic.length > 0 && (
+          <span className="text-tiny text-text-tertiary tabular-nums">{optimistic.length} open</span>
         )}
       </div>
 
-      {items.length === 0 ? (
+      {optimistic.length === 0 ? (
         <div className="flex flex-col items-center gap-1.5 py-5 text-center">
           <CheckCircle2 size={20} className="text-green-mid" />
           <p className="text-[12px] text-text-secondary">No open action items.</p>
@@ -113,7 +125,7 @@ export function ActionItemsCard({ items, sources }: { items: DashActionItem[]; s
       ) : (
         <ul className="space-y-1.5">
           <AnimatePresence initial={false}>
-            {items.slice(0, 8).filter((item) => !removing.has(item.id)).map((item) => {
+            {optimistic.slice(0, 8).map((item) => {
               const badge = item.isOverdue
                 ? { label: "Overdue", variant: "red" as BadgeVariant }
                 : item.priority
@@ -179,12 +191,12 @@ export function ActionItemsCard({ items, sources }: { items: DashActionItem[]; s
           inputClassName="h-7 w-full border-0 bg-transparent px-0 text-[12.5px] outline-none placeholder:text-text-tertiary"
         />
         {newTitle.trim() && (
-          <Button type="button" size="sm" variant="ghost" onClick={quickAdd} loading={adding}>Add</Button>
+          <Button type="button" size="sm" variant="ghost" onClick={quickAdd} loading={pending}>Add</Button>
         )}
       </div>
       <CaptureChips picks={picks} text={newTitle} />
 
-      {items.length > 8 && <p className="mt-1 text-tiny text-text-tertiary">+{items.length - 8} more</p>}
+      {optimistic.length > 8 && <p className="mt-1 text-tiny text-text-tertiary">+{optimistic.length - 8} more</p>}
     </DashCard>
   );
 }
