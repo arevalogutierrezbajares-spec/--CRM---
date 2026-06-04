@@ -1,7 +1,26 @@
 import "server-only";
-import { and, asc, eq, ilike } from "drizzle-orm";
+import { and, asc, eq, ilike, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import * as schema from "@/db/schema";
+
+/** WhatsApp phone numbers for the given users, fenced to workspace membership. */
+export async function getMemberPhones(
+  workspaceId: string,
+  userIds: string[],
+): Promise<{ userId: string; phone: string }[]> {
+  if (userIds.length === 0) return [];
+  const rows = await db
+    .select({ userId: schema.users.id, phone: schema.users.whatsappPhone })
+    .from(schema.users)
+    .innerJoin(schema.workspaceMembers, eq(schema.workspaceMembers.userId, schema.users.id))
+    .where(
+      and(
+        eq(schema.workspaceMembers.workspaceId, workspaceId),
+        inArray(schema.users.id, userIds),
+      ),
+    );
+  return rows.filter((r): r is { userId: string; phone: string } => Boolean(r.phone));
+}
 
 export type TeamMember = {
   userId: string;

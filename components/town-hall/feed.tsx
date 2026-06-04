@@ -44,12 +44,14 @@ export function Feed({
   initialPosts,
   members,
   objects,
+  docs = [],
   subscribe = true,
 }: {
   workspaceId: string;
   initialPosts: PostView[];
   members: MemberOption[];
   objects: RefObject[];
+  docs?: RefObject[];
   /** When false, don't open a Realtime channel (the embedding panel owns it). */
   subscribe?: boolean;
 }) {
@@ -116,7 +118,7 @@ export function Feed({
         <ExtractNotesDialog />
       </div>
 
-      <Composer members={members} objects={objects} onPosted={handlePosted} />
+      <Composer members={members} objects={objects} docs={docs} onPosted={handlePosted} />
 
       {refreshing && (
         <p className="text-tiny text-text-tertiary">New activity — updating…</p>
@@ -166,6 +168,7 @@ export function Feed({
                       <Composer
                         members={members}
                         objects={objects}
+                        docs={docs}
                         parentPostId={post.id}
                         placeholder="Reply…"
                         onPosted={() => {

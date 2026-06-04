@@ -8,8 +8,8 @@ import { toast } from "sonner";
 import { DashCard } from "../shared/dash-card";
 import { SectionLabel } from "../shared/section-label";
 import { DashBadge, type BadgeVariant } from "../shared/badge";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { MentionInput, type MentionSources, type PickedEntity } from "@/components/ui/mention-input";
 import {
   Select,
   SelectContent,
@@ -17,13 +17,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { createTaskAction } from "@/app/(app)/dashboard/item-actions";
+import { captureItemAction } from "@/app/(app)/dashboard/item-actions";
 import { useItemDrawer } from "../item-drawer";
 import type { DashTask } from "@/db/queries/dashboard";
 
 interface TasksCardProps {
   tasks: DashTask[];
   scope: "today" | "week" | "month";
+  /** Full @people/#project/@doc sources; falls back to drawer projects only. */
+  sources?: MentionSources;
 }
 
 function scopeLabel(scope: TasksCardProps["scope"]): string {
@@ -40,25 +42,47 @@ function shortDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-export function TasksCard({ tasks, scope }: TasksCardProps) {
+export function TasksCard({ tasks, scope, sources }: TasksCardProps) {
   const router = useRouter();
   const drawer = useItemDrawer();
   const projects = drawer?.projects ?? [];
   const [newTitle, setNewTitle] = useState("");
   const [projectId, setProjectId] = useState("");
   const [adding, setAdding] = useState(false);
+  const [pickedPeople, setPickedPeople] = useState<string[]>([]);
+  const effectiveSources: MentionSources = sources ?? {
+    people: [],
+    projects: projects.map((p) => ({ refType: "project" as const, refId: p.id, label: p.title, href: `/projects/${p.id}` })),
+    docs: [],
+  };
+
+  function onPick(e: PickedEntity) {
+    if (e.kind === "person") {
+      setPickedPeople((prev) => (prev.includes(e.userId) ? prev : [...prev, e.userId]));
+    } else if (e.ref.refType === "project") {
+      setProjectId(e.ref.refId); // #project syncs the picker
+    }
+  }
 
   async function quickAdd() {
-    if (!newTitle.trim()) return;
+    if (adding || !newTitle.trim()) return;
     if (!projectId) {
-      toast.error("Pick a project for the task.");
+      toast.error("Pick a project for the task (or type #project).");
       return;
     }
     setAdding(true);
-    const res = await createTaskAction({ title: newTitle, projectId });
+    const res = await captureItemAction({
+      rawText: newTitle,
+      itemKind: "task",
+      projectId,
+      assigneeUserId: pickedPeople[0] ?? null,
+      mentionUserIds: pickedPeople,
+    });
     setAdding(false);
     if (res.ok) {
       setNewTitle("");
+      setPickedPeople([]);
+      if (res.notified > 0) toast.success(res.summary, { duration: 1600 });
       router.refresh();
     } else {
       toast.error(res.error);
@@ -108,17 +132,16 @@ export function TasksCard({ tasks, scope }: TasksCardProps) {
       {projects.length > 0 && (
         <div className="mt-2 flex items-center gap-1.5">
           <Plus size={13} className="shrink-0 text-text-tertiary" />
-          <Input
+          <MentionInput
             value={newTitle}
-            onChange={(e) => setNewTitle(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                void quickAdd();
-              }
-            }}
-            placeholder="Add a task…"
-            className="h-7 flex-1 border-0 bg-transparent px-0 text-[12.5px] focus-visible:ring-0"
+            onChange={setNewTitle}
+            onPick={onPick}
+            onSubmit={quickAdd}
+            sources={effectiveSources}
+            aria-label="Add a task"
+            placeholder="Add a task… @assign  #project  @doc"
+            className="flex-1"
+            inputClassName="h-7 w-full border-0 bg-transparent px-0 text-[12.5px] outline-none placeholder:text-text-tertiary"
           />
           <Select value={projectId} onValueChange={setProjectId}>
             <SelectTrigger className="h-7 w-28 text-tiny"><SelectValue placeholder="Project" /></SelectTrigger>

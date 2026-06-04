@@ -1516,6 +1516,12 @@ export const notifications = pgTable("notifications", {
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
   postId: uuid("post_id").references(() => posts.id, { onDelete: "cascade" }),
+  // Who triggered it + what it's about (action_item / milestone / meeting /
+  // post). Null entity = legacy post-only notification (use postId).
+  actorId: uuid("actor_id").references(() => users.id, { onDelete: "set null" }),
+  entityType: text("entity_type"),
+  entityId: uuid("entity_id"),
+  title: text("title"),
   kind: text("kind").notNull().default("mention"),
   readAt: timestamp("read_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })

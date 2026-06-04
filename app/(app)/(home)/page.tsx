@@ -11,7 +11,8 @@ import { SprintWidget } from "@/components/dashboard/right/sprint-widget";
 import { treasurySnapshot, type TreasurySnapshot } from "@/db/queries/treasury";
 import { getActiveSprint, type SprintWithStats } from "@/db/queries/work";
 import { DailyView } from "@/components/dashboard/daily/daily-view";
-import { listProjectsForPicker } from "@/db/queries/items";
+import { listProjectsForPicker, listWorkspaceDocs } from "@/db/queries/items";
+import type { RefObject } from "@/components/town-hall/types";
 import { listWorkspaceMembers } from "@/db/queries/team";
 import { listPosts, type PostView } from "@/db/queries/town-hall";
 import { TownHallPanel } from "@/components/town-hall/town-hall-panel";
@@ -155,6 +156,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
     membersRes,
     projectListRes,
     scorecardRes,
+    docsRes,
   ] = await Promise.all([
     safeRead<DashCounts>(() => dashboardCounts(user.workspaceId, todayStr), EMPTY_COUNTS),
     safeRead<PipelineStageBar[]>(() => pipelineSnapshot(user.workspaceId), []),
@@ -177,6 +179,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
     ),
     safeRead<{ id: string; title: string }[]>(() => listProjectsForPicker(user.workspaceId), []),
     safeRead<ScorecardRow[]>(() => listScorecard(user.workspaceId, quarterOf(new Date(todayStr))), []),
+    safeRead<RefObject[]>(() => listWorkspaceDocs(user.workspaceId), []),
   ]);
 
   const members = membersRes.data;
@@ -317,6 +320,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
             initialPosts={townHallPostsRes.data}
             members={members}
             objects={townHallObjects}
+            docs={docsRes.data}
           />
           <MiniCalendar eventDays={eventDaysRes.data} />
           <SprintWidget sprint={sprintRes.data} />
@@ -348,6 +352,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
           members={dailyData.members}
           pinnedProjects={dailyData.pinnedProjects}
           recentProjects={dailyData.recentProjects}
+          docs={docsRes.data}
           blocked={blockedRes.data}
           scorecard={scorecardRes.data}
           nowMs={nowMs}

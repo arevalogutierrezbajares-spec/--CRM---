@@ -25,6 +25,18 @@ function relativeTime(d: Date | string): string {
   return `${Math.floor(h / 24)}d`;
 }
 
+const VERB: Record<string, string> = {
+  assigned: "assigned you",
+  mention: "mentioned you",
+  ping: "pinged you",
+};
+
+/** The notification headline — handles self-reminders (no actor verb). */
+function headline(n: NotificationView): string {
+  if (n.kind === "reminder") return "⏰ Reminder";
+  return `${n.authorName ?? "Someone"} ${VERB[n.kind] ?? "mentioned you"}`;
+}
+
 /**
  * Top-bar notification bell. Shows an unread count and, on open, the recent
  * @mentions. Opening marks everything read. Polls the count periodically so the
@@ -130,21 +142,21 @@ export function NotificationBell() {
                   }}
                 >
                   <Link
-                    href="/town-hall"
+                    href={n.href}
                     onClick={() => setOpen(false)}
                     className="block"
                   >
                     <div className="flex items-baseline justify-between gap-2">
                       <span className="text-[13px] font-medium text-text-primary">
-                        {n.authorName ?? "Someone"} mentioned you
+                        {headline(n)}
                       </span>
                       <span className="shrink-0 text-tiny text-text-tertiary">
                         {relativeTime(n.createdAt)}
                       </span>
                     </div>
-                    {n.body && (
+                    {(n.title || n.body) && (
                       <p className="mt-0.5 line-clamp-2 text-tiny text-text-secondary">
-                        {n.body}
+                        {n.title ? `“${n.title}”` : n.body}
                       </p>
                     )}
                   </Link>

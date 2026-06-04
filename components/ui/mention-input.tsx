@@ -1,0 +1,234 @@
+"use client";
+
+import { useCallback, useMemo, useRef, useState } from "react";
+import { User, FolderGit2, FileText } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { detectTrigger, spliceToken } from "@/lib/nlp/mention-trigger";
+import type { MemberOption, RefObject } from "@/components/town-hall/types";
+
+export type MentionSources = {
+  people: MemberOption[];
+  projects: RefObject[];
+  docs: RefObject[];
+};
+
+export type PickedEntity =
+  | { kind: "person"; userId: string; label: string }
+  | { kind: "ref"; ref: RefObject };
+
+type Sugg =
+  | { section: "People"; person: MemberOption }
+  | { section: "Documents"; ref: RefObject }
+  | { section: "Projects"; ref: RefObject };
+
+const SECTION_ICON = { People: User, Documents: FileText, Projects: FolderGit2 } as const;
+const MAX = 8;
+
+/**
+ * Controlled input/textarea with an at-caret @/# autocomplete and full keyboard
+ * navigation. `@` suggests people + documents, `#` suggests projects. ↑/↓ move
+ * the active option, Enter/Tab pick it, Esc closes; with the menu closed Enter
+ * (single-line) or ⌘/Ctrl+Enter (multiline) calls `onSubmit`. Resolved picks are
+ * reported via `onPick` so callers don't have to re-parse the text.
+ */
+export function MentionInput({
+  value,
+  onChange,
+  sources,
+  onPick,
+  onSubmit,
+  multiline = false,
+  placeholder,
+  autoFocus,
+  rows = 3,
+  className,
+  inputClassName,
+  "aria-label": ariaLabel,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  sources: MentionSources;
+  onPick?: (e: PickedEntity) => void;
+  onSubmit?: () => void;
+  multiline?: boolean;
+  placeholder?: string;
+  autoFocus?: boolean;
+  rows?: number;
+  className?: string;
+  inputClassName?: string;
+  "aria-label"?: string;
+}) {
+  const ref = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
+  const [caret, setCaret] = useState(0);
+  const [active, setActive] = useState(0);
+  const [open, setOpen] = useState(true); // closed only after Esc until next edit
+
+  const trigger = useMemo(() => detectTrigger(value, caret), [value, caret]);
+
+  const suggestions = useMemo<Sugg[]>(() => {
+    if (!trigger) return [];
+    const q = trigger.query.toLowerCase();
+    if (trigger.kind === "@") {
+      const people = sources.people
+        .filter((m) => m.displayName.toLowerCase().includes(q))
+        .slice(0, 6)
+        .map((person): Sugg => ({ section: "People", person }));
+      const docs = sources.docs
+        .filter((d) => d.label.toLowerCase().includes(q))
+        .slice(0, MAX - people.length)
+        .map((ref): Sugg => ({ section: "Documents", ref }));
+      return [...people, ...docs];
+    }
+    return sources.projects
+      .filter((p) => p.label.toLowerCase().includes(q))
+      .slice(0, MAX)
+      .map((ref): Sugg => ({ section: "Projects", ref }));
+  }, [trigger, sources]);
+
+  const showMenu = open && suggestions.length > 0;
+  const activeIdx = Math.min(active, suggestions.length - 1);
+
+  const syncCaret = useCallback(() => {
+    const el = ref.current;
+    if (el) setCaret(el.selectionStart ?? 0);
+  }, []);
+
+  const pick = useCallback(
+    (s: Sugg) => {
+      if (!trigger) return;
+      const token =
+        s.section === "People"
+          ? `@${s.person.displayName.replace(/\s+/g, "")}`
+          : `${trigger.kind}${s.ref.label}`;
+      const { next, caret: newCaret } = spliceToken(value, trigger.start, caret, token);
+      onChange(next);
+      setOpen(true);
+      if (s.section === "People") onPick?.({ kind: "person", userId: s.person.userId, label: s.person.displayName });
+      else onPick?.({ kind: "ref", ref: s.ref });
+      requestAnimationFrame(() => {
+        const el = ref.current;
+        if (el) {
+          el.focus();
+          el.setSelectionRange(newCaret, newCaret);
+          setCaret(newCaret);
+        }
+      });
+    },
+    [trigger, value, caret, onChange, onPick],
+  );
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    if (showMenu) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setActive((i) => (i + 1) % suggestions.length);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setActive((i) => (i - 1 + suggestions.length) % suggestions.length);
+        return;
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        pick(suggestions[activeIdx]);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setOpen(false);
+        return;
+      }
+    }
+    // Submit when the menu is not capturing the key.
+    const wantSubmit = multiline ? (e.metaKey || e.ctrlKey) && e.key === "Enter" : e.key === "Enter";
+    if (wantSubmit && onSubmit) {
+      e.preventDefault();
+      onSubmit();
+    }
+  };
+
+  const listboxId = "mention-listbox";
+  const optionId = (i: number) => `mention-opt-${i}`;
+
+  const setEl = (el: HTMLInputElement | HTMLTextAreaElement | null) => {
+    ref.current = el;
+  };
+
+  const shared = {
+    value,
+    autoFocus,
+    placeholder,
+    "aria-label": ariaLabel,
+    role: "combobox" as const,
+    "aria-expanded": showMenu,
+    "aria-controls": showMenu ? listboxId : undefined,
+    "aria-activedescendant": showMenu ? optionId(activeIdx) : undefined,
+    "aria-autocomplete": "list" as const,
+    onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      onChange(e.target.value);
+      setCaret(e.target.selectionStart ?? 0);
+      setActive(0);
+      setOpen(true);
+    },
+    onKeyUp: syncCaret,
+    onClick: syncCaret,
+    onKeyDown,
+  };
+
+  return (
+    <div className={cn("relative", className)}>
+      {multiline ? (
+        <textarea ref={setEl} {...shared} rows={rows} className={inputClassName} />
+      ) : (
+        <input ref={setEl} {...shared} type="text" className={inputClassName} />
+      )}
+
+      {showMenu && (
+        <ul
+          id={listboxId}
+          role="listbox"
+          className="absolute left-0 right-0 top-full z-30 mt-1 max-h-60 overflow-auto rounded-md border bg-[var(--popover)] p-1 shadow-lg"
+          style={{ borderColor: "var(--border)" }}
+        >
+          {suggestions.map((s, i) => {
+            const header = i === 0 || suggestions[i - 1].section !== s.section ? s.section : null;
+            const Icon = SECTION_ICON[s.section];
+            const label = s.section === "People" ? s.person.displayName : s.ref.label;
+            const isActive = i === activeIdx;
+            return (
+              <li key={`${s.section}:${"person" in s ? s.person.userId : s.ref.refId}`} role="presentation">
+                {header && (
+                  <div className="px-2 pb-0.5 pt-1 text-tiny font-medium uppercase tracking-wide text-text-tertiary">
+                    {header}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  id={optionId(i)}
+                  role="option"
+                  aria-selected={isActive}
+                  onMouseEnter={() => setActive(i)}
+                  onMouseDown={(e) => e.preventDefault() /* keep focus in the input */}
+                  onClick={() => pick(s)}
+                  className={cn(
+                    "flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[13px]",
+                    isActive ? "bg-surface text-text-primary" : "text-text-secondary",
+                  )}
+                >
+                  <Icon size={13} className="shrink-0 text-text-tertiary" />
+                  <span className="min-w-0 flex-1 truncate">
+                    <span style={{ color: s.section === "Projects" ? undefined : "var(--blue-text)" }}>
+                      {s.section === "People" ? "@" : s.section === "Projects" ? "#" : ""}
+                    </span>
+                    {label}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}

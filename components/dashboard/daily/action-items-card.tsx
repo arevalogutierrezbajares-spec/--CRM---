@@ -8,10 +8,10 @@ import { toast } from "sonner";
 import { DashCard } from "../shared/dash-card";
 import { SectionLabel } from "../shared/section-label";
 import { DashBadge, type BadgeVariant } from "../shared/badge";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { MentionInput, type MentionSources, type PickedEntity } from "@/components/ui/mention-input";
 import { setActionItemDone } from "@/app/(app)/action-items/actions";
-import { quickCaptureAction, snoozeActionItemAction } from "@/app/(app)/dashboard/item-actions";
+import { captureItemAction, snoozeActionItemAction } from "@/app/(app)/dashboard/item-actions";
 import { useItemDrawer } from "../item-drawer";
 import type { DashActionItem } from "@/db/queries/dashboard";
 
@@ -29,13 +29,24 @@ function shortDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-export function ActionItemsCard({ items }: { items: DashActionItem[] }) {
+export function ActionItemsCard({ items, sources }: { items: DashActionItem[]; sources: MentionSources }) {
   const router = useRouter();
   const drawer = useItemDrawer();
   const [pending, startTransition] = useTransition();
   const [newTitle, setNewTitle] = useState("");
   const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState<Set<string>>(new Set());
+  // Entities resolved from the combobox (first @person = assignee, all = notified).
+  const [pickedPeople, setPickedPeople] = useState<string[]>([]);
+  const [pickedProjectId, setPickedProjectId] = useState<string | null>(null);
+
+  function onPick(e: PickedEntity) {
+    if (e.kind === "person") {
+      setPickedPeople((prev) => (prev.includes(e.userId) ? prev : [...prev, e.userId]));
+    } else if (e.ref.refType === "project") {
+      setPickedProjectId(e.ref.refId);
+    }
+  }
 
   function complete(item: DashActionItem) {
     setRemoving((s) => new Set(s).add(item.id)); // optimistic collapse
@@ -70,10 +81,18 @@ export function ActionItemsCard({ items }: { items: DashActionItem[] }) {
   async function quickAdd() {
     if (adding || !newTitle.trim()) return; // guard against Enter+click double-fire
     setAdding(true);
-    const res = await quickCaptureAction({ text: newTitle });
+    const res = await captureItemAction({
+      rawText: newTitle,
+      itemKind: "action_item",
+      assigneeUserId: pickedPeople[0] ?? null,
+      mentionUserIds: pickedPeople,
+      projectId: pickedProjectId,
+    });
     setAdding(false);
     if (res.ok) {
       setNewTitle("");
+      setPickedPeople([]);
+      setPickedProjectId(null);
       toast.success(res.summary, { duration: 1800 });
       router.refresh();
     } else {
@@ -152,17 +171,16 @@ export function ActionItemsCard({ items }: { items: DashActionItem[] }) {
 
       <div className="mt-2 flex items-center gap-1.5">
         <Plus size={13} className="shrink-0 text-text-tertiary" />
-        <Input
+        <MentionInput
           value={newTitle}
-          onChange={(e) => setNewTitle(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              void quickAdd();
-            }
-          }}
-          placeholder="Add an action item…"
-          className="h-7 border-0 bg-transparent px-0 text-[12.5px] focus-visible:ring-0"
+          onChange={setNewTitle}
+          onPick={onPick}
+          onSubmit={quickAdd}
+          sources={sources}
+          aria-label="Add an action item"
+          placeholder="Add a to-do… @assign  #project  @doc"
+          className="flex-1"
+          inputClassName="h-7 w-full border-0 bg-transparent px-0 text-[12.5px] outline-none placeholder:text-text-tertiary"
         />
         {newTitle.trim() && (
           <Button type="button" size="sm" variant="ghost" onClick={quickAdd} loading={adding}>Add</Button>

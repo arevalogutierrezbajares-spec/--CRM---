@@ -13,6 +13,8 @@ import type { ScorecardRow } from "@/db/queries/okrs";
 import { PinnedProjects } from "../pinned-projects";
 import { CustomizableDashboard } from "../customizable-dashboard";
 import type { PinnedProject } from "@/db/queries/pins";
+import type { MentionSources } from "@/components/ui/mention-input";
+import type { RefObject } from "@/components/town-hall/types";
 import type { DashWidget } from "@/lib/dashboard/layout";
 import type {
   DashActionItem,
@@ -30,6 +32,7 @@ interface DailyViewProps {
   actionItems: DashActionItem[];
   pickerProjects: { id: string; title: string }[];
   members: { userId: string; displayName: string }[];
+  docs: RefObject[];
   pinnedProjects: PinnedProject[];
   recentProjects: { id: string; title: string }[];
   blocked: BlockedProject[];
@@ -49,6 +52,7 @@ export function DailyView({
   actionItems,
   pickerProjects,
   members,
+  docs,
   pinnedProjects,
   recentProjects,
   blocked,
@@ -59,6 +63,16 @@ export function DailyView({
   briefing,
   initialItem,
 }: DailyViewProps) {
+  const mentionSources: MentionSources = {
+    people: members,
+    projects: pickerProjects.map((p) => ({
+      refType: "project" as const,
+      refId: p.id,
+      label: p.title,
+      href: `/projects/${p.id}`,
+    })),
+    docs,
+  };
   return (
     <ItemDrawerProvider
       // Remount when the ?item= deep-link changes so it opens the new item.
@@ -75,8 +89,8 @@ export function DailyView({
         savedLayout={layout}
         widgets={[
           { id: "pinned", node: <PinnedProjects pinned={pinnedProjects} allProjects={pickerProjects} recent={recentProjects} /> },
-          { id: "action_items", node: <ActionItemsCard items={actionItems} /> },
-          { id: "tasks", node: <TasksCard tasks={tasks} scope="today" /> },
+          { id: "action_items", node: <ActionItemsCard items={actionItems} sources={mentionSources} /> },
+          { id: "tasks", node: <TasksCard tasks={tasks} scope="today" sources={mentionSources} /> },
           { id: "meetings", node: <MeetingsCard meetings={meetings} scope="today" /> },
           { id: "projects", node: <ProjectsCard projects={projects} /> },
           { id: "ai", node: <AIAssistPanel scope="daily" /> },

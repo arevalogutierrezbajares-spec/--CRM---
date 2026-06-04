@@ -46,11 +46,13 @@ export function TownHallPanel({
   initialPosts,
   members,
   objects,
+  docs = [],
 }: {
   workspaceId: string;
   initialPosts: PostView[];
   members: MemberOption[];
   objects: RefObject[];
+  docs?: RefObject[];
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const channelRef = useRef<RealtimeChannel | null>(null);
@@ -188,7 +190,7 @@ export function TownHallPanel({
       )}
 
       <div className="shrink-0 border-t px-2.5 py-2" style={{ borderColor: "var(--border)" }}>
-        <Composer members={members} objects={objects} onPosted={handlePosted} />
+        <Composer members={members} objects={objects} docs={docs} onPosted={handlePosted} />
       </div>
 
       {/* Half-screen popout — the full feed (composer + notes→action-items). */}
@@ -207,6 +209,7 @@ export function TownHallPanel({
                 initialPosts={initialPosts}
                 members={members}
                 objects={objects}
+                docs={docs}
                 // The rail panel already owns the one Realtime subscription for
                 // this workspace channel; a second subscription to the same
                 // topic on the same client collides. The popout relies on its

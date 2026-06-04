@@ -19,6 +19,8 @@ import {
   Link as LinkIcon,
   CornerDownRight,
   AtSign,
+  Bell,
+  AlarmClock,
 } from "lucide-react";
 import {
   Sheet,
@@ -46,6 +48,8 @@ import {
   addAttachmentAction,
   removeAttachmentAction,
   mentionItemAction,
+  pingItemAction,
+  remindMeAction,
 } from "@/app/(app)/dashboard/item-actions";
 import type { ItemDetail, ItemEntityType } from "@/db/queries/items";
 
@@ -243,6 +247,24 @@ function DrawerForm({
     router.refresh();
   }
 
+  const [pinging, setPinging] = useState(false);
+  async function pingAssignee() {
+    if (!detail.assigneeId || pinging) return;
+    setPinging(true);
+    const res = await pingItemAction({ entityType: detail.entityType, entityId: detail.id, userIds: [detail.assigneeId] });
+    setPinging(false);
+    if (res.ok) toast.success(`Pinged ${detail.assigneeName ?? "assignee"}`);
+    else toast.error(res.error);
+  }
+  async function remindMe() {
+    if (pinging) return;
+    setPinging(true);
+    const res = await remindMeAction({ entityType: detail.entityType, entityId: detail.id });
+    setPinging(false);
+    if (res.ok) toast.success("Reminder added to your bell");
+    else toast.error(res.error);
+  }
+
   const deepLink =
     isMeeting && detail.id
       ? `/meetings/${detail.id}`
@@ -349,6 +371,30 @@ function DrawerForm({
               </SelectContent>
             </Select>
           </Field>
+        </div>
+      )}
+
+      {/* Re-notify / remind */}
+      {(isAction || isTask) && (
+        <div className="flex flex-wrap items-center gap-2">
+          {detail.assigneeId && (
+            <button
+              type="button"
+              onClick={pingAssignee}
+              disabled={pinging}
+              className="flex items-center gap-1 rounded-full border border-[var(--border)] px-2.5 py-1 text-tiny text-text-secondary transition-colors hover:bg-surface disabled:opacity-50"
+            >
+              <Bell size={12} /> Ping {detail.assigneeName ?? "assignee"}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={remindMe}
+            disabled={pinging}
+            className="flex items-center gap-1 rounded-full border border-[var(--border)] px-2.5 py-1 text-tiny text-text-secondary transition-colors hover:bg-surface disabled:opacity-50"
+          >
+            <AlarmClock size={12} /> Remind me
+          </button>
         </div>
       )}
 

@@ -1,8 +1,12 @@
 import "server-only";
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { db, schema } from "@/db";
 
 const { posts, postMentions, postRefs, postReactions, notifications, users } = schema;
+// Second alias of users so a notification can join BOTH the post author and the
+// actor (who assigned/pinged) in one query.
+const actorUsers = alias(users, "actor_users");
 
 export type PostRefType =
   | "action_item"
@@ -210,8 +214,56 @@ export type NotificationView = {
   readAt: Date | null;
   createdAt: Date;
   body: string | null;
+  /** Display name of whoever triggered it (actor for items, author for posts). */
   authorName: string | null;
+  entityType: string | null;
+  entityId: string | null;
+  title: string | null;
+  /** Where clicking the notification goes. */
+  href: string;
 };
+
+/** Deep-link for a notification — to the item drawer, the meeting, or the feed. */
+function notificationHref(entityType: string | null, entityId: string | null): string {
+  if (entityType && entityId) {
+    if (entityType === "action_item" || entityType === "milestone") return `/?item=${entityType}:${entityId}`;
+    if (entityType === "meeting") return `/meetings/${entityId}`;
+  }
+  return "/town-hall";
+}
+
+/**
+ * Insert notifications for a generic entity (action item / task / meeting).
+ * Dedupes recipients and, by default, excludes the actor unless `includeActor`
+ * (self-notify). Returns how many were created.
+ */
+export async function notifyUsers(opts: {
+  workspaceId: string;
+  actorId: string;
+  recipientUserIds: string[];
+  entityType: string;
+  entityId: string;
+  title: string;
+  kind: string;
+  includeActor?: boolean;
+}): Promise<number> {
+  const recipients = Array.from(new Set(opts.recipientUserIds)).filter(
+    (id) => opts.includeActor || id !== opts.actorId,
+  );
+  if (recipients.length === 0) return 0;
+  await db.insert(notifications).values(
+    recipients.map((userId) => ({
+      workspaceId: opts.workspaceId,
+      userId,
+      actorId: opts.actorId,
+      entityType: opts.entityType,
+      entityId: opts.entityId,
+      title: opts.title.slice(0, 300),
+      kind: opts.kind,
+    })),
+  );
+  return recipients.length;
+}
 
 /** Recent notifications for a recipient in a workspace, newest first. */
 export async function listNotifications(opts: {
@@ -226,12 +278,17 @@ export async function listNotifications(opts: {
       kind: notifications.kind,
       readAt: notifications.readAt,
       createdAt: notifications.createdAt,
+      entityType: notifications.entityType,
+      entityId: notifications.entityId,
+      title: notifications.title,
       body: posts.body,
-      authorName: users.displayName,
+      postAuthor: users.displayName,
+      actorName: actorUsers.displayName,
     })
     .from(notifications)
     .leftJoin(posts, eq(posts.id, notifications.postId))
     .leftJoin(users, eq(users.id, posts.authorId))
+    .leftJoin(actorUsers, eq(actorUsers.id, notifications.actorId))
     .where(
       and(
         eq(notifications.workspaceId, opts.workspaceId),
@@ -248,7 +305,11 @@ export async function listNotifications(opts: {
     readAt: r.readAt,
     createdAt: r.createdAt,
     body: r.body,
-    authorName: r.authorName,
+    authorName: r.actorName ?? r.postAuthor,
+    entityType: r.entityType,
+    entityId: r.entityId,
+    title: r.title,
+    href: notificationHref(r.entityType, r.entityId),
   }));
 }
 

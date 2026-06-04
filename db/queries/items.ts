@@ -6,6 +6,37 @@ import * as schema from "@/db/schema";
 export type ItemEntityType = "action_item" | "milestone" | "meeting";
 export type WorkPriority = "now" | "next" | "later" | "backlog";
 
+/** Workspace-wide document index for the @document autocomplete. RefObject-shaped. */
+export async function listWorkspaceDocs(
+  workspaceId: string,
+  limit = 200,
+): Promise<{ refType: "doc"; refId: string; label: string; href: string }[]> {
+  const rows = await db
+    .select({
+      id: schema.projectLinks.id,
+      label: schema.projectLinks.label,
+      kind: schema.projectLinks.kind,
+      url: schema.projectLinks.url,
+      projectId: schema.projectLinks.projectId,
+    })
+    .from(schema.projectLinks)
+    .innerJoin(schema.projects, eq(schema.projects.id, schema.projectLinks.projectId))
+    .where(eq(schema.projects.workspaceId, workspaceId))
+    .orderBy(asc(schema.projectLinks.label))
+    .limit(limit);
+  return rows.map((r) => ({
+    refType: "doc" as const,
+    refId: r.id,
+    label: r.label,
+    href:
+      r.kind === "doc"
+        ? `/projects/${r.projectId}/docs/${r.id}`
+        : r.kind === "link" && r.url
+          ? r.url
+          : `/projects/${r.projectId}`,
+  }));
+}
+
 export type ItemAttachment = {
   id: string;
   label: string;
