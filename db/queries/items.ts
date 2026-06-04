@@ -352,6 +352,21 @@ export async function findActionItems(opts: {
     .limit(opts.limit ?? 15);
 }
 
+/** Fuzzy-match a project by title within the workspace → id (for #refs / capture). */
+export async function findProjectByName(
+  workspaceId: string,
+  name: string,
+): Promise<string | null> {
+  const q = name.trim();
+  if (!q) return null;
+  const [p] = await db
+    .select({ id: schema.projects.id })
+    .from(schema.projects)
+    .where(and(eq(schema.projects.workspaceId, workspaceId), ilike(schema.projects.title, `%${q}%`)))
+    .limit(1);
+  return p?.id ?? null;
+}
+
 /** Open milestones (not done/cancelled) with their project, newest first. */
 export async function findTasks(opts: {
   workspaceId: string;

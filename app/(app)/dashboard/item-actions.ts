@@ -14,8 +14,10 @@ import {
   type ItemEntityType,
   type WorkPriority,
 } from "@/db/queries/items";
-import { listWorkspaceMembers } from "@/db/queries/team";
+import { listWorkspaceMembers, findMembers } from "@/db/queries/team";
 import { createPostAction } from "@/app/(app)/town-hall/actions";
+import { findProjectByName } from "@/db/queries/items";
+import { parseCapture } from "@/lib/nlp/parse-capture";
 
 type Result = { ok: true; id: string } | { ok: false; error: string };
 
@@ -155,6 +157,46 @@ export async function removeAttachmentAction(opts: { id: string }): Promise<Resu
   if (!ok) return { ok: false, error: "Attachment not found" };
   refresh();
   return { ok: true, id: opts.id };
+}
+
+/* ── natural-language quick capture ───────────────────────────────────── */
+
+/**
+ * Create an action item from free text — "call Ana tomorrow 3pm @ana #acme
+ * urgent" → title + due date (chrono) + assignee (@) + project (#) + priority.
+ */
+export async function quickCaptureAction(opts: {
+  text: string;
+}): Promise<{ ok: true; id: string; summary: string } | { ok: false; error: string }> {
+  const user = await requireUser();
+  const parsed = parseCapture(opts.text);
+  if (!parsed.title.trim()) return { ok: false, error: "Nothing to capture." };
+
+  let assigneeUserId: string | null = null;
+  if (parsed.assigneeName) {
+    const m = await findMembers({ workspaceId: user.workspaceId, query: parsed.assigneeName, limit: 1 });
+    assigneeUserId = m[0]?.userId ?? null;
+  }
+  const projectId = parsed.projectName
+    ? await findProjectByName(user.workspaceId, parsed.projectName)
+    : null;
+
+  const { id } = await createActionItem({
+    workspaceId: user.workspaceId,
+    actorId: user.id,
+    title: parsed.title,
+    dueDate: parsed.dueDate,
+    priority: parsed.priority,
+    assigneeUserId,
+    projectId,
+  });
+  refresh();
+  const bits = [
+    parsed.dueDate && `due ${parsed.dueDate}`,
+    assigneeUserId && parsed.assigneeName && `@${parsed.assigneeName}`,
+    projectId && parsed.projectName && `#${parsed.projectName}`,
+  ].filter(Boolean);
+  return { ok: true, id, summary: bits.length ? `Added — ${bits.join(", ")}` : "Added" };
 }
 
 /* ── tag teammates on Town Hall ───────────────────────────────────────── */

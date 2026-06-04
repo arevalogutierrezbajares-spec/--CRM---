@@ -11,7 +11,7 @@ import { DashBadge, type BadgeVariant } from "../shared/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { setActionItemDone } from "@/app/(app)/action-items/actions";
-import { createActionItemAction } from "@/app/(app)/dashboard/item-actions";
+import { quickCaptureAction } from "@/app/(app)/dashboard/item-actions";
 import { useItemDrawer } from "../item-drawer";
 import type { DashActionItem } from "@/db/queries/dashboard";
 
@@ -58,10 +58,11 @@ export function ActionItemsCard({ items }: { items: DashActionItem[] }) {
   async function quickAdd() {
     if (!newTitle.trim()) return;
     setAdding(true);
-    const res = await createActionItemAction({ title: newTitle });
+    const res = await quickCaptureAction({ text: newTitle });
     setAdding(false);
     if (res.ok) {
       setNewTitle("");
+      toast.success(res.summary, { duration: 1800 });
       router.refresh();
     } else {
       toast.error(res.error);

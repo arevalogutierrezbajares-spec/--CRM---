@@ -2,6 +2,7 @@ import { requireUser } from "@/lib/current-user";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Toaster } from "@/components/ui/toaster";
 import { PresenceProvider } from "@/lib/presence/presence-context";
+import { CommandPalette } from "@/components/command/command-palette";
 
 export default async function AppLayout({
   children,
@@ -27,6 +28,7 @@ export default async function AppLayout({
           {children}
         </div>
         <Toaster />
+        <CommandPalette />
       </div>
     </PresenceProvider>
   );

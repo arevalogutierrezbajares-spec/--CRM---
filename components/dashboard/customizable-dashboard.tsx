@@ -4,22 +4,34 @@ import { useMemo, useState, useTransition } from "react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  arrayMove,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import {
   SlidersHorizontal,
   Check,
-  ArrowUp,
-  ArrowDown,
   Eye,
   EyeOff,
   RectangleHorizontal,
   Square,
+  GripVertical,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { saveDashboardLayoutAction } from "@/app/(app)/dashboard/layout-actions";
-import {
-  WIDGET_LABELS,
-  DEFAULT_WIDGETS,
-  type DashWidget,
-} from "@/lib/dashboard/layout";
+import { WIDGET_LABELS, DEFAULT_WIDGETS, type DashWidget } from "@/lib/dashboard/layout";
 
 export function CustomizableDashboard({
   widgets,
@@ -33,15 +45,18 @@ export function CustomizableDashboard({
   const [saving, startSave] = useTransition();
 
   const nodeById = useMemo(() => new Map(widgets.map((w) => [w.id, w.node])), [widgets]);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
 
-  function move(id: string, dir: -1 | 1) {
+  function onDragEnd(e: DragEndEvent) {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
     setLayout((prev) => {
-      const i = prev.findIndex((w) => w.id === id);
-      const j = i + dir;
-      if (i < 0 || j < 0 || j >= prev.length) return prev;
-      const next = [...prev];
-      [next[i], next[j]] = [next[j], next[i]];
-      return next;
+      const from = prev.findIndex((w) => w.id === active.id);
+      const to = prev.findIndex((w) => w.id === over.id);
+      return from < 0 || to < 0 ? prev : arrayMove(prev, from, to);
     });
   }
   function toggleHide(id: string) {
@@ -52,7 +67,6 @@ export function CustomizableDashboard({
       prev.map((w) => (w.id === id ? { ...w, width: w.width === "full" ? "half" : "full" } : w)),
     );
   }
-
   function done() {
     startSave(async () => {
       const res = await saveDashboardLayoutAction(layout);
@@ -65,24 +79,15 @@ export function CustomizableDashboard({
     });
   }
 
-  // Edit mode shows every widget (hidden ones dimmed); normal mode hides them.
-  const shown = editing ? layout : layout.filter((w) => !w.hidden);
+  const shown = layout.filter((w) => !w.hidden);
 
   return (
     <div className="space-y-2.5">
       <div className="flex items-center justify-end gap-2">
         {editing ? (
           <>
-            <span className="mr-auto text-tiny text-text-tertiary">
-              Reorder, hide, or resize your widgets.
-            </span>
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              onClick={() => setLayout(DEFAULT_WIDGETS.map((w) => ({ ...w })))}
-              className="text-text-tertiary"
-            >
+            <span className="mr-auto text-tiny text-text-tertiary">Drag to reorder · hide · resize.</span>
+            <Button type="button" size="sm" variant="ghost" onClick={() => setLayout(DEFAULT_WIDGETS.map((w) => ({ ...w })))} className="text-text-tertiary">
               Reset
             </Button>
             <Button type="button" size="sm" onClick={done} loading={saving}>
@@ -90,94 +95,108 @@ export function CustomizableDashboard({
             </Button>
           </>
         ) : (
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            onClick={() => setEditing(true)}
-            className="text-text-tertiary"
-          >
+          <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(true)} className="text-text-tertiary">
             <SlidersHorizontal size={13} /> Customize
           </Button>
         )}
       </div>
 
-      {!editing && shown.length === 0 && (
+      {editing ? (
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+          <SortableContext items={layout.map((w) => w.id)} strategy={verticalListSortingStrategy}>
+            <div className="space-y-2">
+              {layout.map((w) => (
+                <SortableRow
+                  key={w.id}
+                  w={w}
+                  node={nodeById.get(w.id)}
+                  onHide={() => toggleHide(w.id)}
+                  onWidth={() => toggleWidth(w.id)}
+                />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
+      ) : shown.length === 0 ? (
         <div className="rounded-lg border border-dashed border-[var(--border)] p-8 text-center">
           <p className="text-[13px] text-text-secondary">All widgets are hidden.</p>
-          <button
-            type="button"
-            onClick={() => setEditing(true)}
-            className="mt-1 text-tiny text-[var(--blue-text)] hover:underline"
-          >
+          <button type="button" onClick={() => setEditing(true)} className="mt-1 text-tiny text-[var(--blue-text)] hover:underline">
             Customize to bring them back
           </button>
         </div>
+      ) : (
+        <div className="grid gap-2.5 lg:grid-cols-2">
+          {shown.map((w, i) => {
+            const node = nodeById.get(w.id);
+            if (!node) return null;
+            return (
+              <motion.div
+                key={w.id}
+                layout
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, delay: Math.min(i, 6) * 0.05, ease: "easeOut" }}
+                className={w.width === "full" ? "lg:col-span-2" : "lg:col-span-1"}
+              >
+                {node}
+              </motion.div>
+            );
+          })}
+        </div>
       )}
-
-      <div className="grid gap-2.5 lg:grid-cols-2">
-        {shown.map((w, i) => {
-          const node = nodeById.get(w.id);
-          if (!node) return null;
-          return (
-            <motion.div
-              key={w.id}
-              layout
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: editing ? 0 : Math.min(i, 6) * 0.05, ease: "easeOut" }}
-              className={w.width === "full" ? "lg:col-span-2" : "lg:col-span-1"}
-            >
-              {editing && (
-                <div className="mb-1 flex items-center gap-1 rounded-md border border-dashed border-[var(--border)] px-2 py-1">
-                  <span className="mr-auto truncate text-tiny font-medium text-text-secondary">
-                    {WIDGET_LABELS[w.id] ?? w.id}
-                  </span>
-                  <EditBtn label="Move up" disabled={i === 0} onClick={() => move(w.id, -1)}>
-                    <ArrowUp size={12} />
-                  </EditBtn>
-                  <EditBtn label="Move down" disabled={i === shown.length - 1} onClick={() => move(w.id, 1)}>
-                    <ArrowDown size={12} />
-                  </EditBtn>
-                  <EditBtn
-                    label={w.width === "full" ? "Make half width" : "Make full width"}
-                    onClick={() => toggleWidth(w.id)}
-                  >
-                    {w.width === "full" ? <Square size={12} /> : <RectangleHorizontal size={12} />}
-                  </EditBtn>
-                  <EditBtn label={w.hidden ? "Show" : "Hide"} onClick={() => toggleHide(w.id)}>
-                    {w.hidden ? <EyeOff size={12} /> : <Eye size={12} />}
-                  </EditBtn>
-                </div>
-              )}
-              <div className={editing && w.hidden ? "opacity-40" : ""}>{node}</div>
-            </motion.div>
-          );
-        })}
-      </div>
     </div>
   );
 }
 
-function EditBtn({
-  label,
-  disabled,
-  onClick,
-  children,
+function SortableRow({
+  w,
+  node,
+  onHide,
+  onWidth,
 }: {
-  label: string;
-  disabled?: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
+  w: DashWidget;
+  node: React.ReactNode;
+  onHide: () => void;
+  onWidth: () => void;
 }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: w.id });
+  const style = { transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 10 : undefined };
+
+  return (
+    <div ref={setNodeRef} style={style} className={isDragging ? "opacity-80" : ""}>
+      <div className="mb-1 flex items-center gap-1 rounded-md border border-dashed border-[var(--border)] bg-card px-1.5 py-1">
+        <button
+          type="button"
+          aria-label="Drag to reorder"
+          className="cursor-grab rounded p-1 text-text-tertiary hover:text-text-primary active:cursor-grabbing"
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical size={13} />
+        </button>
+        <span className="mr-auto truncate text-tiny font-medium text-text-secondary">
+          {WIDGET_LABELS[w.id] ?? w.id}
+        </span>
+        <EditBtn label={w.width === "full" ? "Make half width" : "Make full width"} onClick={onWidth}>
+          {w.width === "full" ? <Square size={12} /> : <RectangleHorizontal size={12} />}
+        </EditBtn>
+        <EditBtn label={w.hidden ? "Show" : "Hide"} onClick={onHide}>
+          {w.hidden ? <EyeOff size={12} /> : <Eye size={12} />}
+        </EditBtn>
+      </div>
+      <div className={w.hidden ? "opacity-40" : ""}>{node}</div>
+    </div>
+  );
+}
+
+function EditBtn({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
       type="button"
       aria-label={label}
       title={label}
-      disabled={disabled}
       onClick={onClick}
-      className="rounded p-1 text-text-tertiary hover:bg-surface hover:text-text-primary disabled:opacity-30"
+      className="rounded p-1 text-text-tertiary hover:bg-surface hover:text-text-primary"
     >
       {children}
     </button>
