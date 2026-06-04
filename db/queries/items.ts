@@ -52,6 +52,52 @@ export type ItemDetail = {
   relatedItems: RelatedItem[];
 };
 
+/* ── workspace-scope guards for foreign-key writes ────────────────────────
+ * Defense for BOTH the web actions and the WhatsApp tools: never persist an
+ * assignee / project / contact / initiative that belongs to another workspace
+ * (the row's own workspace is fenced separately by the WHERE clause). A foreign
+ * value is dropped to null rather than written. */
+
+async function memberOrNull(workspaceId: string, userId?: string | null): Promise<string | null> {
+  if (!userId) return null;
+  const [r] = await db
+    .select({ id: schema.workspaceMembers.userId })
+    .from(schema.workspaceMembers)
+    .where(
+      and(
+        eq(schema.workspaceMembers.workspaceId, workspaceId),
+        eq(schema.workspaceMembers.userId, userId),
+      ),
+    )
+    .limit(1);
+  return r ? userId : null;
+}
+
+async function contactOrNull(workspaceId: string, contactId?: string | null): Promise<string | null> {
+  if (!contactId) return null;
+  const [r] = await db
+    .select({ id: schema.contacts.id })
+    .from(schema.contacts)
+    .where(and(eq(schema.contacts.id, contactId), eq(schema.contacts.workspaceId, workspaceId)))
+    .limit(1);
+  return r ? contactId : null;
+}
+
+async function initiativeOrNull(workspaceId: string, initiativeId?: string | null): Promise<string | null> {
+  if (!initiativeId) return null;
+  const [r] = await db
+    .select({ id: schema.initiatives.id })
+    .from(schema.initiatives)
+    .where(and(eq(schema.initiatives.id, initiativeId), eq(schema.initiatives.workspaceId, workspaceId)))
+    .limit(1);
+  return r ? initiativeId : null;
+}
+
+async function projectOrNull(workspaceId: string, projectId?: string | null): Promise<string | null> {
+  if (!projectId) return null;
+  return (await projectExistsInWorkspace(workspaceId, projectId)) ? projectId : null;
+}
+
 /* ── create / update ──────────────────────────────────────────────────── */
 
 export async function createActionItem(input: {
@@ -73,9 +119,9 @@ export async function createActionItem(input: {
       description: input.description ?? null,
       dueDate: input.dueDate ?? null,
       priority: input.priority ?? null,
-      projectId: input.projectId ?? null,
-      contactId: input.contactId ?? null,
-      assigneeUserId: input.assigneeUserId ?? null,
+      projectId: await projectOrNull(input.workspaceId, input.projectId),
+      contactId: await contactOrNull(input.workspaceId, input.contactId),
+      assigneeUserId: await memberOrNull(input.workspaceId, input.assigneeUserId),
       createdBy: input.actorId,
     })
     .returning({ id: schema.actionItems.id });
@@ -99,9 +145,10 @@ export async function updateActionItem(input: {
   if (input.description !== undefined) patch.description = input.description;
   if (input.dueDate !== undefined) patch.dueDate = input.dueDate;
   if (input.priority !== undefined) patch.priority = input.priority;
-  if (input.projectId !== undefined) patch.projectId = input.projectId;
-  if (input.contactId !== undefined) patch.contactId = input.contactId;
-  if (input.assigneeUserId !== undefined) patch.assigneeUserId = input.assigneeUserId;
+  // Workspace-fence foreign keys before writing (covers WA tools + web).
+  if (input.projectId !== undefined) patch.projectId = await projectOrNull(input.workspaceId, input.projectId);
+  if (input.contactId !== undefined) patch.contactId = await contactOrNull(input.workspaceId, input.contactId);
+  if (input.assigneeUserId !== undefined) patch.assigneeUserId = await memberOrNull(input.workspaceId, input.assigneeUserId);
   if (input.status !== undefined) {
     patch.status = input.status;
     patch.completedAt = input.status === "done" ? new Date() : null;
@@ -126,6 +173,10 @@ export async function createTask(input: {
   assigneeUserId?: string | null;
   initiativeId?: string | null;
 }): Promise<{ id: string }> {
+  // A task must belong to a project in THIS workspace.
+  if (!(await projectExistsInWorkspace(input.workspaceId, input.projectId))) {
+    throw new Error("Project not found in workspace");
+  }
   const [row] = await db
     .insert(schema.milestones)
     .values({
@@ -134,8 +185,8 @@ export async function createTask(input: {
       title: input.title,
       dueDate: input.dueDate ?? null,
       priority: input.priority ?? null,
-      assigneeUserId: input.assigneeUserId ?? null,
-      initiativeId: input.initiativeId ?? null,
+      assigneeUserId: await memberOrNull(input.workspaceId, input.assigneeUserId),
+      initiativeId: await initiativeOrNull(input.workspaceId, input.initiativeId),
       createdBy: input.actorId,
     })
     .returning({ id: schema.milestones.id });
@@ -157,9 +208,14 @@ export async function updateTask(input: {
   if (input.title !== undefined) patch.title = input.title;
   if (input.dueDate !== undefined) patch.dueDate = input.dueDate;
   if (input.priority !== undefined) patch.priority = input.priority;
-  if (input.projectId !== undefined) patch.projectId = input.projectId;
-  if (input.assigneeUserId !== undefined) patch.assigneeUserId = input.assigneeUserId;
-  if (input.initiativeId !== undefined) patch.initiativeId = input.initiativeId;
+  // Moving project: only to a project in this workspace (ignore otherwise — a
+  // task must always have a valid project).
+  if (input.projectId !== undefined) {
+    const ok = await projectOrNull(input.workspaceId, input.projectId);
+    if (ok) patch.projectId = ok;
+  }
+  if (input.assigneeUserId !== undefined) patch.assigneeUserId = await memberOrNull(input.workspaceId, input.assigneeUserId);
+  if (input.initiativeId !== undefined) patch.initiativeId = await initiativeOrNull(input.workspaceId, input.initiativeId);
   if (input.status !== undefined) {
     patch.status = input.status;
     patch.completedAt = input.status === "done" ? new Date() : null;

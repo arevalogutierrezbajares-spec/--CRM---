@@ -96,9 +96,11 @@ export function ItemDrawerProvider({
   initialItem?: Target | null;
   children: React.ReactNode;
 }) {
-  // Lazy-init from the server-provided ?item= deep-link so a Town Hall #ref
-  // opens straight into the drawer (no effect → no setState-in-effect).
+  // Open from the server-provided ?item= deep-link (a Town Hall #ref). The
+  // provider is keyed by the deep-link in DailyView, so a new ?item= value
+  // remounts it and this lazy-init opens the right item — no effect/ref needed.
   const [target, setTarget] = useState<Target | null>(initialItem ?? null);
+
   const openItem = useCallback(
     (entityType: ItemEntityType, id: string) => setTarget({ entityType, id }),
     [],
@@ -106,9 +108,13 @@ export function ItemDrawerProvider({
 
   function close() {
     setTarget(null);
-    // Drop the ?item= param so a refresh doesn't reopen the drawer.
-    if (typeof window !== "undefined" && window.location.search.includes("item=")) {
-      window.history.replaceState(null, "", window.location.pathname);
+    // Drop ONLY the ?item= param (keep ?view= etc.) so a refresh doesn't reopen.
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has("item")) {
+        url.searchParams.delete("item");
+        window.history.replaceState(null, "", url.pathname + url.search);
+      }
     }
   }
 

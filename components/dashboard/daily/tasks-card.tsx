@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, ListChecks, Plus } from "lucide-react";
 import { toast } from "sonner";
@@ -80,10 +81,17 @@ export function TasksCard({ tasks, scope }: TasksCardProps) {
             return (
               <li key={t.id} className="flex items-start gap-2 group rounded px-1 py-1 hover:bg-surface transition-colors">
                 <input type="checkbox" aria-label={`Complete ${t.title}`} className="mt-0.5 h-3.5 w-3.5 shrink-0 cursor-pointer accent-green-mid" disabled />
-                <button type="button" onClick={() => drawer?.openItem("milestone", t.id)} className="min-w-0 flex-1 text-left">
-                  <div className="block text-[12.5px] text-text-primary truncate">{t.title}</div>
-                  <div className="text-tiny text-text-tertiary truncate">{t.projectTitle} · {shortDate(t.dueDate)}</div>
-                </button>
+                {drawer ? (
+                  <button type="button" onClick={() => drawer.openItem("milestone", t.id)} className="min-w-0 flex-1 text-left">
+                    <div className="block text-[12.5px] text-text-primary truncate">{t.title}</div>
+                    <div className="text-tiny text-text-tertiary truncate">{t.projectTitle} · {shortDate(t.dueDate)}</div>
+                  </button>
+                ) : (
+                  <Link href={`/projects/${t.projectId}`} className="min-w-0 flex-1">
+                    <div className="block text-[12.5px] text-text-primary truncate hover:underline">{t.title}</div>
+                    <div className="text-tiny text-text-tertiary truncate">{t.projectTitle} · {shortDate(t.dueDate)}</div>
+                  </Link>
+                )}
                 <DashBadge variant={badge.variant}>{badge.label}</DashBadge>
               </li>
             );

@@ -6,60 +6,72 @@ import type { PostView } from "@/db/queries/town-hall";
 import { refHref } from "./types";
 
 /**
- * Render a post body, linkifying @mentions (against the post's resolved
- * mentions) and #references (against the post's resolved refs). We tokenize the
- * raw text and, for each @handle / #label, swap in a link when it matches a
- * persisted mention/ref. Unmatched tokens render as plain text.
+ * Render a post body, linkifying @mentions and #references. We match the EXACT
+ * known tokens from the post's persisted mentions/refs (longest-first, case-
+ * insensitive) rather than a generic character class — so labels/handles with
+ * punctuation, spaces, accents, or arbitrary length still linkify, and a
+ * multi-word ref can't greedily swallow trailing prose.
  */
-export function PostBody({ post }: { post: PostView }) {
-  const mentionByHandle = new Map(
-    post.mentions.map((m) => [
-      m.displayName.toLowerCase().replace(/\s+/g, ""),
-      m,
-    ]),
-  );
-  const refByLabel = new Map(
-    post.refs.map((r) => [r.label.toLowerCase(), r]),
-  );
+function escapeRe(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
-  // Split on @handle and #label tokens, keeping the delimiters.
-  const parts = post.body.split(/(@[a-zA-Z0-9._-]+|#[a-zA-Z0-9._\- ]{1,60})/g);
+export function PostBody({ post }: { post: PostView }) {
+  type Tok =
+    | { kind: "mention"; text: string }
+    | { kind: "ref"; text: string; refType: PostView["refs"][number]["refType"]; refId: string };
+
+  const tokens: Tok[] = [
+    ...post.mentions.map((m) => ({
+      kind: "mention" as const,
+      text: `@${m.displayName.toLowerCase().replace(/\s+/g, "")}`,
+    })),
+    ...post.refs.map((r) => ({
+      kind: "ref" as const,
+      text: `#${r.label}`,
+      refType: r.refType,
+      refId: r.refId,
+    })),
+  ]
+    // Longest first so e.g. "@anabel" wins over "@ana", and a long #label
+    // isn't shadowed by a shorter prefix.
+    .sort((a, b) => b.text.length - a.text.length);
+
+  const body = post.body;
+
+  if (tokens.length === 0) {
+    return (
+      <p className="whitespace-pre-wrap break-words text-[13px] leading-relaxed text-text-primary">
+        {body}
+      </p>
+    );
+  }
+
+  const re = new RegExp(`(${tokens.map((t) => escapeRe(t.text)).join("|")})`, "gi");
+  const parts = body.split(re);
 
   return (
     <p className="whitespace-pre-wrap break-words text-[13px] leading-relaxed text-text-primary">
       {parts.map((part, i) => {
-        if (part.startsWith("@")) {
-          const handle = part.slice(1).toLowerCase().replace(/\s+/g, "");
-          const m = mentionByHandle.get(handle);
-          if (m) {
-            return (
-              <span
-                key={i}
-                className="rounded px-0.5 font-medium"
-                style={{ color: "var(--blue-text)" }}
-              >
-                {part}
-              </span>
-            );
-          }
-          return <Fragment key={i}>{part}</Fragment>;
+        const tok = tokens.find((t) => t.text.toLowerCase() === part.toLowerCase());
+        if (tok?.kind === "mention") {
+          return (
+            <span key={i} className="rounded px-0.5 font-medium" style={{ color: "var(--blue-text)" }}>
+              {part}
+            </span>
+          );
         }
-        if (part.startsWith("#")) {
-          const label = part.slice(1).trim().toLowerCase();
-          const r = refByLabel.get(label);
-          if (r) {
-            return (
-              <Link
-                key={i}
-                href={refHref(r.refType, r.refId)}
-                className="rounded px-0.5 font-medium hover:underline"
-                style={{ color: "var(--blue-text)" }}
-              >
-                {part.trim()}
-              </Link>
-            );
-          }
-          return <Fragment key={i}>{part}</Fragment>;
+        if (tok?.kind === "ref") {
+          return (
+            <Link
+              key={i}
+              href={refHref(tok.refType, tok.refId)}
+              className="rounded px-0.5 font-medium hover:underline"
+              style={{ color: "var(--blue-text)" }}
+            >
+              {part}
+            </Link>
+          );
         }
         return <Fragment key={i}>{part}</Fragment>;
       })}

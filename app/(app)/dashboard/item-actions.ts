@@ -83,16 +83,21 @@ export async function createTaskAction(opts: {
   const user = await requireUser();
   if (!opts.title.trim()) return { ok: false, error: "Give it a title." };
   if (!opts.projectId) return { ok: false, error: "Pick a project for the task." };
-  const { id } = await createTask({
-    workspaceId: user.workspaceId,
-    actorId: user.id,
-    title: opts.title.trim(),
-    projectId: opts.projectId,
-    dueDate: opts.dueDate,
-    priority: opts.priority,
-    assigneeUserId: opts.assigneeUserId,
-    initiativeId: opts.initiativeId,
-  });
+  let id: string;
+  try {
+    ({ id } = await createTask({
+      workspaceId: user.workspaceId,
+      actorId: user.id,
+      title: opts.title.trim(),
+      projectId: opts.projectId,
+      dueDate: opts.dueDate,
+      priority: opts.priority,
+      assigneeUserId: opts.assigneeUserId,
+      initiativeId: opts.initiativeId,
+    }));
+  } catch {
+    return { ok: false, error: "That project isn't in your workspace." };
+  }
   refresh();
   return { ok: true, id };
 }
@@ -128,6 +133,9 @@ export async function addAttachmentAction(opts: {
   if (!opts.url && !opts.projectLinkId) {
     return { ok: false, error: "Provide a URL or pick a project doc." };
   }
+  // The target item must exist in this workspace (entityId has no FK).
+  const target = await getItemDetail(user.workspaceId, opts.entityType, opts.entityId);
+  if (!target) return { ok: false, error: "Item not found." };
   const { id } = await addItemAttachment({
     workspaceId: user.workspaceId,
     actorId: user.id,
@@ -174,15 +182,18 @@ export async function mentionItemAction(opts: {
     .filter((n): n is string => Boolean(n))
     .map((n) => `@${n.toLowerCase().replace(/\s+/g, "")}`);
 
-  // #label goes last so the ref token doesn't swallow trailing text.
-  const body = [handles.join(" "), opts.message?.trim(), `re: #${opts.label}`]
+  // Clamp the label so a very long title can't blow the 200-char post-ref limit
+  // (which would reject the whole post). #label goes last so the ref token
+  // doesn't swallow trailing text.
+  const label = opts.label.trim().slice(0, 120) || "item";
+  const body = [handles.join(" "), opts.message?.trim(), `re: #${label}`]
     .filter(Boolean)
     .join(" ");
 
   const res = await createPostAction({
     body,
     mentionUserIds: opts.mentionUserIds,
-    refs: [{ refType: opts.entityType, refId: opts.entityId, label: opts.label }],
+    refs: [{ refType: opts.entityType, refId: opts.entityId, label }],
   });
   if (!res.ok) return { ok: false, error: res.error };
   revalidatePath("/town-hall");

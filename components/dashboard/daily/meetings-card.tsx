@@ -55,15 +55,27 @@ export function MeetingsCard({ meetings, scope }: MeetingsCardProps) {
                 <div className="w-12 shrink-0 text-tiny font-medium text-text-secondary tabular-nums">
                   {scope === "today" ? timeOnly(m.scheduledAt) : dayShort(m.scheduledAt)}
                 </div>
-                <button type="button" onClick={() => drawer?.openItem("meeting", m.id)} className="min-w-0 flex-1 text-left">
-                  <div className="block text-[12.5px] text-text-primary truncate">{m.title}</div>
-                  {m.attendeeNames.length > 0 && (
-                    <div className="text-tiny text-text-tertiary truncate">
-                      {m.attendeeNames.slice(0, 3).join(", ")}
-                      {m.attendeeNames.length > 3 && ` +${m.attendeeNames.length - 3}`}
-                    </div>
-                  )}
-                </button>
+                {drawer ? (
+                  <button type="button" onClick={() => drawer.openItem("meeting", m.id)} className="min-w-0 flex-1 text-left">
+                    <div className="block text-[12.5px] text-text-primary truncate">{m.title}</div>
+                    {m.attendeeNames.length > 0 && (
+                      <div className="text-tiny text-text-tertiary truncate">
+                        {m.attendeeNames.slice(0, 3).join(", ")}
+                        {m.attendeeNames.length > 3 && ` +${m.attendeeNames.length - 3}`}
+                      </div>
+                    )}
+                  </button>
+                ) : (
+                  <Link href={`/meetings/${m.id}`} className="min-w-0 flex-1">
+                    <div className="block text-[12.5px] text-text-primary truncate hover:underline">{m.title}</div>
+                    {m.attendeeNames.length > 0 && (
+                      <div className="text-tiny text-text-tertiary truncate">
+                        {m.attendeeNames.slice(0, 3).join(", ")}
+                        {m.attendeeNames.length > 3 && ` +${m.attendeeNames.length - 3}`}
+                      </div>
+                    )}
+                  </Link>
+                )}
                 <div className="flex items-center gap-1.5 shrink-0">
                   <DashBadge variant="neutral">{TYPE_LABEL[m.type]}</DashBadge>
                   {live && (

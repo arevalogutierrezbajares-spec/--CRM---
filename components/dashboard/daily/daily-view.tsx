@@ -35,7 +35,13 @@ export function DailyView({
   initialItem,
 }: DailyViewProps) {
   return (
-    <ItemDrawerProvider projects={pickerProjects} members={members} initialItem={initialItem}>
+    <ItemDrawerProvider
+      // Remount when the ?item= deep-link changes so it opens the new item.
+      key={initialItem ? `${initialItem.entityType}:${initialItem.id}` : "none"}
+      projects={pickerProjects}
+      members={members}
+      initialItem={initialItem}
+    >
       <MetricsRow counts={counts} />
       <div className="grid gap-2.5 lg:grid-cols-2">
         <ActionItemsCard items={actionItems} />
