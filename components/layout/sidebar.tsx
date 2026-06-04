@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { NAV_ITEMS } from "./nav-items";
+import { PresenceDots } from "@/components/presence/presence-dots";
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -64,6 +65,8 @@ export function Sidebar() {
           );
         })}
       </nav>
+
+      <PresenceDots />
 
       <div
         className="border-t px-4 py-2.5 text-tiny text-text-tertiary"

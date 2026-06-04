@@ -11,6 +11,7 @@ import {
   Network,
   User,
   Users,
+  UsersRound,
   Wallet,
   type LucideIcon,
 } from "lucide-react";
@@ -33,6 +34,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/pipeline", label: "Pipeline", icon: KanbanSquare },
   { href: "/treasury", label: "Treasury", icon: Wallet },
   { href: "/network", label: "Network", icon: Network },
+  { href: "/team", label: "Team", icon: UsersRound },
   { href: "/workspace", label: "Workspace", icon: Building2 },
   { href: "/profile", label: "Profile", icon: User },
 ];
