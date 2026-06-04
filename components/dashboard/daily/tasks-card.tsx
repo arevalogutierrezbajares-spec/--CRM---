@@ -80,7 +80,13 @@ export function TasksCard({ tasks, scope }: TasksCardProps) {
             const badge = bucketBadge(t);
             return (
               <li key={t.id} className="flex items-start gap-2 group rounded px-1 py-1 hover:bg-surface transition-colors">
-                <input type="checkbox" aria-label={`Complete ${t.title}`} className="mt-0.5 h-3.5 w-3.5 shrink-0 cursor-pointer accent-green-mid" disabled />
+                {/* Status dot (decorative) — tasks are completed from the detail drawer, not here. */}
+                <span
+                  aria-hidden
+                  className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${
+                    t.isOverdue ? "bg-[var(--red-text)]" : t.status === "blocked" ? "bg-[var(--amber-text)]" : "bg-[var(--blue-text)]"
+                  }`}
+                />
                 {drawer ? (
                   <button type="button" onClick={() => drawer.openItem("milestone", t.id)} className="min-w-0 flex-1 text-left">
                     <div className="block text-[12.5px] text-text-primary truncate">{t.title}</div>

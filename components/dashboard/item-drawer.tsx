@@ -154,14 +154,23 @@ function ItemDetailDrawer({
     getItemDetailAction({ entityType: target.entityType, id: target.id })
       .then((res) => {
         if (cancelled) return;
-        if (res.ok) setDetail(res.detail);
-        else toast.error(res.error);
+        if (res.ok) {
+          setDetail(res.detail);
+        } else {
+          // e.g. a Town Hall #ref to a since-deleted item — don't spin forever.
+          toast.error(res.error);
+          onClose();
+        }
       })
-      .catch(() => !cancelled && toast.error("Could not load item"));
+      .catch(() => {
+        if (cancelled) return;
+        toast.error("Could not load item");
+        onClose();
+      });
     return () => {
       cancelled = true;
     };
-  }, [target, reloadKey]);
+  }, [target, reloadKey, onClose]);
 
   // Derived (not setState-in-effect): show the spinner until the loaded detail
   // matches the requested target, so switching items never flashes stale data.
@@ -300,6 +309,9 @@ function DrawerForm({
 
           <Field label="Due date">
             <Input
+              // Key on the value so a refetch (e.g. a concurrent WhatsApp edit)
+              // resyncs the field instead of keeping a stale defaultValue.
+              key={detail.dueDate ?? "nodue"}
               type="date"
               defaultValue={detail.dueDate ?? ""}
               onChange={(e) => save({ dueDate: e.target.value || null })}
@@ -451,6 +463,13 @@ function Attachments({ detail, onChanged }: { detail: ItemDetail; onChanged: () 
   const [url, setUrl] = useState("");
   const [adding, setAdding] = useState(false);
 
+  function onAttachKey(e: React.KeyboardEvent) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      void add();
+    }
+  }
+
   async function add() {
     if (!label.trim() || !url.trim()) {
       toast.error("Label and URL required.");
@@ -509,8 +528,8 @@ function Attachments({ detail, onChanged }: { detail: ItemDetail; onChanged: () 
         </ul>
       )}
       <div className="flex items-center gap-1.5">
-        <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Label" className="h-8 text-[12.5px]" />
-        <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…" className="h-8 text-[12.5px]" />
+        <Input value={label} onChange={(e) => setLabel(e.target.value)} onKeyDown={onAttachKey} placeholder="Label" className="h-8 text-[12.5px]" />
+        <Input value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={onAttachKey} placeholder="https://…" className="h-8 text-[12.5px]" />
         <Button type="button" size="sm" variant="outline" onClick={add} loading={adding}>Add</Button>
       </div>
     </Section>
@@ -575,6 +594,12 @@ function MentionComposer({ detail, members }: { detail: ItemDetail; members: Mem
         <Input
           value={message}
           onChange={(e) => setMessage(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && selected.length) {
+              e.preventDefault();
+              void post();
+            }
+          }}
           placeholder="Add a note (optional)…"
           className="h-8 text-[12.5px]"
         />

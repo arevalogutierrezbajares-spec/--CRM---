@@ -7,6 +7,7 @@ import {
   KanbanSquare,
   LayoutGrid,
   ListTodo,
+  Mic,
   MessageSquare,
   Megaphone,
   Network,
@@ -26,6 +27,7 @@ export type NavItem = {
 export const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Home", icon: Home },
   { href: "/agent", label: "Agent", icon: MessageSquare },
+  { href: "/record", label: "Record Call", icon: Mic },
   { href: "/town-hall", label: "Town Hall", icon: Megaphone },
   { href: "/contacts", label: "Contacts", icon: Contact2 },
   { href: "/projects", label: "Projects", icon: LayoutGrid },

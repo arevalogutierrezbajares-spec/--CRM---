@@ -8,8 +8,10 @@ export type DownloadResult =
  *   2. GET {url} → downloads the binary
  */
 export async function downloadWaMedia(mediaId: string): Promise<DownloadResult> {
-  const token = process.env.WHATSAPP_TOKEN;
-  if (!token) return { ok: false, error: "WHATSAPP_TOKEN not configured" };
+  // Accept either name — the rest of the app configures WA_ACCESS_TOKEN.
+  const token = process.env.WHATSAPP_TOKEN || process.env.WA_ACCESS_TOKEN;
+  if (!token)
+    return { ok: false, error: "WA_ACCESS_TOKEN (or WHATSAPP_TOKEN) not configured" };
 
   try {
     // Step 1 — get the download URL
