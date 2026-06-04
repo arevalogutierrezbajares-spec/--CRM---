@@ -74,6 +74,30 @@ export const WORKFLOWS: Partial<Record<Intent, Workflow>> = {
       "INSTRUCTION: The user wants their action items. You MUST call read_todo_board (or at minimum list_reminders + status_report) to get live data. Do NOT list todos from memory or conversation history.",
   },
 
+  update_item: {
+    allowedTools: [
+      "read_todo_board",
+      "find_project",
+      "edit_action_item",
+      "edit_task",
+    ],
+    requiredTools: ["edit_action_item", "edit_task"],
+    model: "claude-haiku-4-5",
+    supplement:
+      "INSTRUCTION: The user wants to CHANGE an existing action item or task (status, due date, " +
+      "priority, assignee, or project) — not create one. " +
+      "Decide whether it is a standalone action item (use edit_action_item) or a project " +
+      "milestone/task (use edit_task). " +
+      "To target the right item: if you don't already have its id from this conversation, pass a " +
+      "title_query (a few words of the item's name) — the tool fuzzy-matches and, if several open " +
+      "items match, returns the candidates so you can ask the user which one. Prefer passing an " +
+      "explicit id when read_todo_board or find_project already surfaced it. " +
+      "Resolve any relative date ('Friday', 'next week') to an absolute YYYY-MM-DD in the user's " +
+      "timezone before calling. Only set the fields the user asked to change. " +
+      "After editing, reply with a one-line confirmation of what changed. " +
+      "To mark a milestone fully done, prefer the milestone_done flow (mark_milestone_done) which confirms first.",
+  },
+
   reminder_set: {
     allowedTools: ["schedule_reminder", "find_contact"],
     supplement:

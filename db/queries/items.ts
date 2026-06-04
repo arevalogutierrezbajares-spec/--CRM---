@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, sql } from "drizzle-orm";
 import { db } from "@/db";
 import * as schema from "@/db/schema";
 
@@ -90,7 +90,7 @@ export async function updateActionItem(input: {
   status?: "open" | "done";
   projectId?: string | null;
   contactId?: string | null;
-}): Promise<boolean> {
+}): Promise<{ id: string; title: string } | null> {
   const patch: Partial<typeof schema.actionItems.$inferInsert> = {};
   if (input.title !== undefined) patch.title = input.title;
   if (input.description !== undefined) patch.description = input.description;
@@ -108,8 +108,8 @@ export async function updateActionItem(input: {
     .where(
       and(eq(schema.actionItems.id, input.id), eq(schema.actionItems.workspaceId, input.workspaceId)),
     )
-    .returning({ id: schema.actionItems.id });
-  return rows.length > 0;
+    .returning({ id: schema.actionItems.id, title: schema.actionItems.title });
+  return rows[0] ?? null;
 }
 
 export async function createTask(input: {
@@ -148,7 +148,7 @@ export async function updateTask(input: {
   projectId?: string;
   assigneeUserId?: string | null;
   initiativeId?: string | null;
-}): Promise<boolean> {
+}): Promise<{ id: string; title: string } | null> {
   const patch: Partial<typeof schema.milestones.$inferInsert> = {};
   if (input.title !== undefined) patch.title = input.title;
   if (input.dueDate !== undefined) patch.dueDate = input.dueDate;
@@ -166,8 +166,8 @@ export async function updateTask(input: {
     .where(
       and(eq(schema.milestones.id, input.id), eq(schema.milestones.workspaceId, input.workspaceId)),
     )
-    .returning({ id: schema.milestones.id });
-  return rows.length > 0;
+    .returning({ id: schema.milestones.id, title: schema.milestones.title });
+  return rows[0] ?? null;
 }
 
 /* ── attachments ──────────────────────────────────────────────────────── */
@@ -246,6 +246,62 @@ export async function listProjectsForPicker(
     .from(schema.projects)
     .where(eq(schema.projects.workspaceId, workspaceId))
     .orderBy(asc(schema.projects.title));
+}
+
+/* ── fuzzy lookups (used by the WhatsApp agent to resolve a target) ────── */
+
+export type ItemMatch = { id: string; title: string };
+export type MilestoneMatch = ItemMatch & {
+  projectId: string;
+  projectTitle: string;
+  status: string;
+};
+
+/** Open action items, newest first; narrowed by title when `query` is given. */
+export async function findActionItems(opts: {
+  workspaceId: string;
+  query?: string;
+  limit?: number;
+}): Promise<ItemMatch[]> {
+  const conds = [
+    eq(schema.actionItems.workspaceId, opts.workspaceId),
+    eq(schema.actionItems.status, "open"),
+  ];
+  const q = opts.query?.trim();
+  if (q) conds.push(ilike(schema.actionItems.title, `%${q}%`));
+  return db
+    .select({ id: schema.actionItems.id, title: schema.actionItems.title })
+    .from(schema.actionItems)
+    .where(and(...conds))
+    .orderBy(desc(schema.actionItems.createdAt))
+    .limit(opts.limit ?? 15);
+}
+
+/** Open milestones (not done/cancelled) with their project, newest first. */
+export async function findTasks(opts: {
+  workspaceId: string;
+  query?: string;
+  limit?: number;
+}): Promise<MilestoneMatch[]> {
+  const conds = [
+    eq(schema.milestones.workspaceId, opts.workspaceId),
+    sql`${schema.milestones.status} not in ('done', 'cancelled')`,
+  ];
+  const q = opts.query?.trim();
+  if (q) conds.push(ilike(schema.milestones.title, `%${q}%`));
+  return db
+    .select({
+      id: schema.milestones.id,
+      title: schema.milestones.title,
+      projectId: schema.milestones.projectId,
+      projectTitle: schema.projects.title,
+      status: schema.milestones.status,
+    })
+    .from(schema.milestones)
+    .innerJoin(schema.projects, eq(schema.projects.id, schema.milestones.projectId))
+    .where(and(...conds))
+    .orderBy(desc(schema.milestones.createdAt))
+    .limit(opts.limit ?? 15);
 }
 
 /* ── unified detail ───────────────────────────────────────────────────── */

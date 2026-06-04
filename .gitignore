@@ -53,3 +53,6 @@ next-env.d.ts
 # stray .next dirs from running dev/build outside the project root
 _tasks/.next/
 .gstack/
+
+# agent worktrees (isolation)
+.claude/worktrees/

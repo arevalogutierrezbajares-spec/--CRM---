@@ -11,6 +11,7 @@ export type Intent =
   | "contact_add"
   | "contact_find"
   | "todo_query"
+  | "update_item"
   | "reminder_set"
   | "reminder_list"
   | "reminder_cancel"
@@ -81,6 +82,14 @@ const PATTERNS: Array<[RegExp, Intent]> = [
   [
     /\b(todos?|action items?|to-?do list?|task list?|what'?s on my list|pending (tasks?|items?)|open items?|what should i (focus on|work on|do)|what'?s next|priorities|focus today|my priorities|what are my priorities)\b/i,
     "todo_query",
+  ],
+
+  // Update an existing action item / task — editing, not creating or marking
+  // done. Placed after action_capture (new tasks) and todo_query (listing), and
+  // deliberately excludes "done/complete" so those still route to milestone_done.
+  [
+    /\b(reschedule|re-?prioriti[sz]e|re-?assign|push (back|out)|move\b.{0,40}?\b(task|item|milestone|deadline|due)|change (the |its |my )?(due date|deadline|priority|status|assignee|owner)|update (the |my )?(task|item|milestone|action item|due date|priority|status)|set (the |its )?(priority|status|due date|deadline)|bump (the )?(priority|deadline|due)|mark\b.+\b(in[- ]?progress|in[- ]?review|blocked|pending|cancell?ed|open)\b)\b/i,
+    "update_item",
   ],
 
   // Reminder cancel — must come before reminder_set (both match "reminder")
@@ -155,6 +164,7 @@ const SPANISH_PATTERNS: Array<[RegExp, Intent]> = [
   [/\b(pon(me)?|agrega|crea|añade) (un |una )?(nota|apunte)/i, "note_write"],
   [/\b(necesito|tengo que|hay que|no (te |me )?olvides? de|anota (esto|estas tareas)|apunta (esto|estas tareas)|(tareas?|pendientes?|acciones?)\s*:)\b/i, "action_capture"],
   [/\b(mis (pendientes|tareas|to-?dos?)|qué (tengo|hay) (pendiente|por hacer)|lista de tareas|en qué (debo|tengo que) enfocarme|qué hago primero|mis prioridades|qué sigue)\b/i, "todo_query"],
+  [/\b(reprograma|reagenda|reasigna|cambia (la |el |su )?(fecha|prioridad|estado|responsable|asignad)|actualiza (la |el )?(tarea|pendiente|fecha|prioridad|estado)|mueve (la |el )?(tarea|fecha|pendiente|hito)|posterga|aplaza)\b/i, "update_item"],
   [/\b(ponme|pon|agrega|crea|añade) (un |una )?(recordatorio|aviso|alarma)/i, "reminder_set"],
   [/\b(mis recordatorios|ver recordatorios|qué recordatorios)\b/i, "reminder_list"],
   [/\b(redacta(me)?|escríbe(me)?|prepara(me)?) (un |una )?(mensaje|email|correo|whatsapp)/i, "draft_send"],
