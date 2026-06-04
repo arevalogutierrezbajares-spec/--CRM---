@@ -80,6 +80,22 @@ create index if not exists notifications_recipient_idx
 -- (mentions/refs) authorize via the parent post's workspace.
 -- ─────────────────────────────────────────────────────────────────────────────
 
+-- Self-contained: define the workspace-membership helper if the base RLS
+-- migration (20260527000000) hasn't been applied to this database.
+create or replace function public.is_workspace_member(ws uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.workspace_members wm
+    where wm.workspace_id = ws and wm.user_id = auth.uid()
+  );
+$$;
+grant execute on function public.is_workspace_member(uuid) to authenticated, service_role;
+
 alter table public.posts enable row level security;
 alter table public.post_mentions enable row level security;
 alter table public.post_refs enable row level security;
