@@ -412,6 +412,16 @@ export const projects = pgTable("projects", {
     .defaultNow(),
 });
 
+// project_link.kind discriminates the row variant:
+//   'note' — legacy freeform entry with no URL (existing 134 seeded rows)
+//   'link' — external URL (Google Docs, Figma, etc.) — Step 1
+//   'file' — uploaded file in Supabase Storage — Step 2
+export const projectLinkKind = pgEnum("project_link_kind", [
+  "note",
+  "link",
+  "file",
+]);
+
 export const projectLinks = pgTable("project_links", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   workspaceId: uuid("workspace_id")
@@ -420,11 +430,48 @@ export const projectLinks = pgTable("project_links", {
   projectId: uuid("project_id")
     .notNull()
     .references(() => projects.id, { onDelete: "cascade" }),
+  // FR-DOC-13 discriminator. Defaults to 'link' for new inserts via the
+  // create-link server action; the 134 existing url=null rows are backfilled
+  // to 'note'.
+  kind: projectLinkKind("kind").notNull().default("link"),
   category: linkCategory("category").notNull().default("other"),
   label: text("label").notNull(),
-  url: text("url"), // can be null for "note" entries
+  url: text("url"), // set when kind='link'
   description: text("description"),
   sortOrder: integer("sort_order").notNull().default(0),
+  // FR-DOC-13: file-mode columns. Null unless kind='file'.
+  storagePath: text("storage_path"),
+  mimeType: text("mime_type"),
+  sizeBytes: integer("size_bytes"),
+  originalFilename: text("original_filename"),
+  // FR-DOC-1/4: ownership + audit. createdBy is nullable to accommodate the
+  // 134 pre-existing note rows; new inserts via server actions always set it.
+  createdBy: uuid("created_by").references(() => users.id),
+  updatedAt: timestamp("updated_at", { withTimezone: true }),
+  updatedBy: uuid("updated_by").references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+// FR-DOC-11 audit log: every create/update/delete writes one row in the same
+// transaction as the data mutation. link_id is NOT a foreign key so the row
+// survives the link's deletion (forensic trail).
+export const projectLinkAudits = pgTable("project_link_audits", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  projectId: uuid("project_id").references(() => projects.id, {
+    onDelete: "set null",
+  }),
+  linkId: uuid("link_id").notNull(), // intentionally NOT a FK
+  actorId: uuid("actor_id")
+    .notNull()
+    .references(() => users.id),
+  action: text("action").notNull(), // 'create' | 'update' | 'delete' | 'file_missing' | 'storage_orphan'
+  before: jsonb("before"),
+  after: jsonb("after"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -1245,6 +1292,63 @@ export const researchNotes = pgTable("research_notes", {
   lastModified: timestamp("last_modified", { withTimezone: true }),
   contentHash: text("content_hash"),
   indexedAt: timestamp("indexed_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VOICE NOTES + ACTION ITEMS
+// Capture: a WhatsApp voice note is transcribed (Whisper) into a voice_notes
+// row; the agent extracts action_items from the transcript. View: open items
+// surface on the Home dashboard.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const actionItemStatus = pgEnum("action_item_status", ["open", "done"]);
+
+export const voiceNotes = pgTable("voice_notes", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  transcript: text("transcript").notNull(),
+  // WhatsApp number the note came from (raw, as received).
+  sourcePhone: text("source_phone"),
+  durationSecs: integer("duration_secs"),
+  language: text("language"),
+  createdBy: uuid("created_by")
+    .notNull()
+    .references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const actionItems = pgTable("action_items", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  description: text("description"),
+  status: actionItemStatus("status").notNull().default("open"),
+  dueDate: date("due_date"),
+  priority: workPriority("priority"),
+  // Provenance: which voice note this was extracted from (null for manual).
+  voiceNoteId: uuid("voice_note_id").references(() => voiceNotes.id, {
+    onDelete: "set null",
+  }),
+  // Optional links — standalone in v1, attachable later.
+  projectId: uuid("project_id").references(() => projects.id, {
+    onDelete: "set null",
+  }),
+  contactId: uuid("contact_id").references(() => contacts.id, {
+    onDelete: "set null",
+  }),
+  createdBy: uuid("created_by")
+    .notNull()
+    .references(() => users.id),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
 });

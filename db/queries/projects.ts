@@ -180,14 +180,22 @@ export async function listStagesForTemplate(templateId: string) {
 /* ─── Project links (Business / Marketing / Tech / etc.) ───────────────── */
 
 export type ProjectLinkRow = typeof schema.projectLinks.$inferSelect;
+/** Row enriched with the uploader's display name (FR-DOC-17 attribution). */
+export type ProjectLinkWithAuthor = ProjectLinkRow & {
+  createdByName: string | null;
+};
 
 export async function listProjectLinks(opts: {
   projectId: string;
   workspaceId: string;
-}): Promise<ProjectLinkRow[]> {
-  return db
-    .select()
+}): Promise<ProjectLinkWithAuthor[]> {
+  const rows = await db
+    .select({
+      link: schema.projectLinks,
+      createdByName: schema.users.displayName,
+    })
     .from(schema.projectLinks)
+    .leftJoin(schema.users, eq(schema.users.id, schema.projectLinks.createdBy))
     .where(
       and(
         eq(schema.projectLinks.projectId, opts.projectId),
@@ -195,4 +203,304 @@ export async function listProjectLinks(opts: {
       ),
     )
     .orderBy(asc(schema.projectLinks.category), asc(schema.projectLinks.sortOrder));
+  return rows.map((r) => ({ ...r.link, createdByName: r.createdByName }));
+}
+
+/* ─── Project link mutations (FR-DOC-1/4/5/6/11) ────────────────────────── */
+
+export type ProjectLinkCategory = (typeof schema.linkCategory.enumValues)[number];
+
+export type ProjectLinkInput = {
+  workspaceId: string;
+  projectId: string;
+  actorId: string;
+  label: string;
+  url: string;
+  category: ProjectLinkCategory;
+  description?: string | null;
+};
+
+/**
+ * Insert a project_links row with kind='link'. Also writes a 'create' row
+ * to project_link_audits in the same transaction. sort_order is computed
+ * as MAX+1 within (project, category) so the new link lands at the bottom.
+ */
+export async function createProjectLink(input: ProjectLinkInput): Promise<ProjectLinkRow> {
+  return db.transaction(async (tx) => {
+    const [{ nextOrder }] = await tx
+      .select({
+        nextOrder: rawSql<number>`COALESCE(MAX(${schema.projectLinks.sortOrder}), -1) + 1`,
+      })
+      .from(schema.projectLinks)
+      .where(
+        and(
+          eq(schema.projectLinks.projectId, input.projectId),
+          eq(schema.projectLinks.category, input.category as ProjectLinkCategory),
+        ),
+      );
+
+    const [row] = await tx
+      .insert(schema.projectLinks)
+      .values({
+        workspaceId: input.workspaceId,
+        projectId: input.projectId,
+        kind: "link",
+        category: input.category as ProjectLinkCategory,
+        label: input.label,
+        url: input.url,
+        description: input.description ?? null,
+        sortOrder: Number(nextOrder),
+        createdBy: input.actorId,
+      })
+      .returning();
+
+    await tx.insert(schema.projectLinkAudits).values({
+      workspaceId: input.workspaceId,
+      projectId: input.projectId,
+      linkId: row.id,
+      actorId: input.actorId,
+      action: "create",
+      before: null,
+      after: row,
+    });
+
+    return row;
+  });
+}
+
+export type ProjectLinkUpdate = {
+  workspaceId: string;
+  projectId: string;
+  actorId: string;
+  linkId: string;
+  label?: string;
+  url?: string;
+  category?: ProjectLinkCategory;
+  description?: string | null;
+};
+
+/** Update mutable fields; if category changes, append to bottom of new category. */
+export async function updateProjectLink(input: ProjectLinkUpdate): Promise<ProjectLinkRow> {
+  return db.transaction(async (tx) => {
+    const [before] = await tx
+      .select()
+      .from(schema.projectLinks)
+      .where(
+        and(
+          eq(schema.projectLinks.id, input.linkId),
+          eq(schema.projectLinks.workspaceId, input.workspaceId),
+        ),
+      );
+    if (!before) throw new Error("Link not found");
+
+    const patch: Partial<typeof schema.projectLinks.$inferInsert> = {
+      updatedAt: new Date(),
+      updatedBy: input.actorId,
+    };
+    if (input.label !== undefined) patch.label = input.label;
+    if (input.url !== undefined) patch.url = input.url;
+    if (input.description !== undefined) patch.description = input.description;
+    if (input.category && input.category !== before.category) {
+      const [{ nextOrder }] = await tx
+        .select({
+          nextOrder: rawSql<number>`COALESCE(MAX(${schema.projectLinks.sortOrder}), -1) + 1`,
+        })
+        .from(schema.projectLinks)
+        .where(
+          and(
+            eq(schema.projectLinks.projectId, before.projectId),
+            eq(schema.projectLinks.category, input.category),
+          ),
+        );
+      patch.category = input.category;
+      patch.sortOrder = Number(nextOrder);
+    }
+
+    const [row] = await tx
+      .update(schema.projectLinks)
+      .set(patch)
+      .where(eq(schema.projectLinks.id, input.linkId))
+      .returning();
+
+    await tx.insert(schema.projectLinkAudits).values({
+      workspaceId: input.workspaceId,
+      projectId: input.projectId,
+      linkId: row.id,
+      actorId: input.actorId,
+      action: "update",
+      before,
+      after: row,
+    });
+
+    return row;
+  });
+}
+
+/** Hard-delete the row + write audit with full snapshot in `before`. */
+export async function deleteProjectLink(input: {
+  workspaceId: string;
+  projectId: string;
+  actorId: string;
+  linkId: string;
+}): Promise<ProjectLinkRow> {
+  return db.transaction(async (tx) => {
+    const [before] = await tx
+      .select()
+      .from(schema.projectLinks)
+      .where(
+        and(
+          eq(schema.projectLinks.id, input.linkId),
+          eq(schema.projectLinks.workspaceId, input.workspaceId),
+        ),
+      );
+    if (!before) throw new Error("Link not found");
+
+    await tx.delete(schema.projectLinks).where(eq(schema.projectLinks.id, input.linkId));
+
+    await tx.insert(schema.projectLinkAudits).values({
+      workspaceId: input.workspaceId,
+      projectId: input.projectId,
+      linkId: input.linkId,
+      actorId: input.actorId,
+      action: "delete",
+      before,
+      after: null,
+    });
+
+    return before;
+  });
+}
+
+/** Bulk-set sort_order for a list of (linkId, sortOrder) pairs within one category. */
+export async function reorderProjectLinks(input: {
+  workspaceId: string;
+  projectId: string;
+  actorId: string;
+  category: ProjectLinkCategory;
+  orderedLinkIds: string[];
+}): Promise<void> {
+  await db.transaction(async (tx) => {
+    for (let i = 0; i < input.orderedLinkIds.length; i++) {
+      await tx
+        .update(schema.projectLinks)
+        .set({ sortOrder: i, updatedAt: new Date(), updatedBy: input.actorId })
+        .where(
+          and(
+            eq(schema.projectLinks.id, input.orderedLinkIds[i]),
+            eq(schema.projectLinks.workspaceId, input.workspaceId),
+            eq(schema.projectLinks.projectId, input.projectId),
+            eq(schema.projectLinks.category, input.category),
+          ),
+        );
+    }
+    // Single audit row for the bulk reorder
+    await tx.insert(schema.projectLinkAudits).values({
+      workspaceId: input.workspaceId,
+      projectId: input.projectId,
+      linkId: input.orderedLinkIds[0] ?? input.actorId, // satisfies NOT NULL; reorder is a bulk op
+      actorId: input.actorId,
+      action: "reorder",
+      before: null,
+      after: { category: input.category, order: input.orderedLinkIds },
+    });
+  });
+}
+
+/* ─── Project files (Step 2 — FR-DOC-13/18/19) ──────────────────────────── */
+
+export async function getProjectLinkById(opts: {
+  linkId: string;
+  workspaceId: string;
+}): Promise<ProjectLinkRow | null> {
+  const [row] = await db
+    .select()
+    .from(schema.projectLinks)
+    .where(
+      and(
+        eq(schema.projectLinks.id, opts.linkId),
+        eq(schema.projectLinks.workspaceId, opts.workspaceId),
+      ),
+    )
+    .limit(1);
+  return row ?? null;
+}
+
+export type ProjectFileInput = {
+  workspaceId: string;
+  projectId: string;
+  actorId: string;
+  label: string;
+  category: ProjectLinkCategory;
+  storagePath: string;
+  mimeType: string;
+  sizeBytes: number;
+  originalFilename: string;
+};
+
+/** Insert a kind='file' row + 'create' audit. sort_order = MAX+1 in category. */
+export async function createProjectFile(input: ProjectFileInput): Promise<ProjectLinkRow> {
+  return db.transaction(async (tx) => {
+    const [{ nextOrder }] = await tx
+      .select({
+        nextOrder: rawSql<number>`COALESCE(MAX(${schema.projectLinks.sortOrder}), -1) + 1`,
+      })
+      .from(schema.projectLinks)
+      .where(
+        and(
+          eq(schema.projectLinks.projectId, input.projectId),
+          eq(schema.projectLinks.category, input.category),
+        ),
+      );
+
+    const [row] = await tx
+      .insert(schema.projectLinks)
+      .values({
+        workspaceId: input.workspaceId,
+        projectId: input.projectId,
+        kind: "file",
+        category: input.category,
+        label: input.label,
+        url: null,
+        storagePath: input.storagePath,
+        mimeType: input.mimeType,
+        sizeBytes: input.sizeBytes,
+        originalFilename: input.originalFilename,
+        sortOrder: Number(nextOrder),
+        createdBy: input.actorId,
+      })
+      .returning();
+
+    await tx.insert(schema.projectLinkAudits).values({
+      workspaceId: input.workspaceId,
+      projectId: input.projectId,
+      linkId: row.id,
+      actorId: input.actorId,
+      action: "create",
+      before: null,
+      after: row,
+    });
+
+    return row;
+  });
+}
+
+/** Write a standalone audit row (e.g. 'file_missing', 'storage_orphan'). */
+export async function recordLinkAudit(input: {
+  workspaceId: string;
+  projectId: string | null;
+  linkId: string;
+  actorId: string;
+  action: string;
+  before?: unknown;
+  after?: unknown;
+}): Promise<void> {
+  await db.insert(schema.projectLinkAudits).values({
+    workspaceId: input.workspaceId,
+    projectId: input.projectId,
+    linkId: input.linkId,
+    actorId: input.actorId,
+    action: input.action,
+    before: input.before ?? null,
+    after: input.after ?? null,
+  });
 }

@@ -15,7 +15,7 @@ import { HealthBadge } from "@/components/ui/health-badge";
 import { DbBanner } from "@/components/db-banner";
 import { MilestoneList } from "@/components/projects/milestone-list";
 import { TouchList } from "@/components/touches/touch-list";
-import { LinkSection } from "@/components/projects/link-section";
+import { LinksBoard } from "@/components/projects/links-board";
 import {
   ModuleSwitcher,
   type ModuleTab,
@@ -29,7 +29,7 @@ import {
   listProjectLinks,
   listProjects,
   type ProjectListItem,
-  type ProjectLinkRow,
+  type ProjectLinkWithAuthor,
 } from "@/db/queries/projects";
 import { listTouchesForProject } from "@/db/queries/touches";
 import {
@@ -132,7 +132,7 @@ export default async function ProjectDetailPage(props: {
         }),
       [],
     ),
-    safeRead<ProjectLinkRow[]>(
+    safeRead<ProjectLinkWithAuthor[]>(
       () =>
         listProjectLinks({
           projectId: displayed.id,
@@ -397,34 +397,12 @@ export default async function ProjectDetailPage(props: {
           </DashCard>
         )}
 
-        <div className="grid gap-3 lg:grid-cols-3">
-          <LinkSection
-            category="business"
-            links={linksRes.data}
-            emptyHint="No business links yet — add product briefs, pricing docs, deals, agreements."
-          />
-          <LinkSection
-            category="marketing"
-            links={linksRes.data}
-            emptyHint="No marketing assets — add landing page, brand guide, social links, decks."
-          />
-          <LinkSection
-            category="tech"
-            links={linksRes.data}
-            emptyHint="No tech links — add repo, deploy URLs, architecture docs, dashboards."
-          />
-        </div>
-
-        {(["ops", "design", "finance", "other"] as const).some((c) =>
-          linksRes.data.some((l) => l.category === c),
-        ) && (
-          <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
-            {(["ops", "design", "finance", "other"] as const).map((c) => {
-              if (!linksRes.data.some((l) => l.category === c)) return null;
-              return <LinkSection key={c} category={c} links={linksRes.data} />;
-            })}
-          </div>
-        )}
+        <LinksBoard
+          projectId={displayed.id}
+          links={linksRes.data}
+          currentUserId={user.id}
+          currentUserRole={user.workspaceRole}
+        />
 
         <div className="grid gap-4 lg:grid-cols-[1fr_300px]">
           <div className="space-y-4">
