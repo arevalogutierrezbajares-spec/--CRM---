@@ -1,6 +1,7 @@
-import { Bell, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { UserMenu } from "@/components/layout/user-menu";
 import { MobileNav } from "@/components/layout/mobile-nav";
+import { NotificationBell } from "@/components/town-hall/notification-bell";
 import { ViewToggle } from "./view-toggle";
 
 interface DashboardTopbarProps {
@@ -59,13 +60,7 @@ export function DashboardTopbar({ email, displayName }: DashboardTopbarProps) {
         >
           <Search size={16} />
         </button>
-        <button
-          type="button"
-          className="hidden sm:grid h-8 w-8 place-items-center rounded-md text-text-secondary hover:bg-surface hover:text-text-primary transition-colors"
-          aria-label="Notifications"
-        >
-          <Bell size={16} />
-        </button>
+        <NotificationBell />
         <UserMenu email={email} displayName={displayName} />
       </div>
     </header>

@@ -1,5 +1,6 @@
 import { UserMenu } from "./user-menu";
 import { MobileNav } from "./mobile-nav";
+import { NotificationBell } from "@/components/town-hall/notification-bell";
 
 export function TopBar({
   email,
@@ -24,6 +25,7 @@ export function TopBar({
       </div>
       <div className="flex shrink-0 items-center gap-2 sm:gap-3">
         {action}
+        <NotificationBell />
         <UserMenu email={email} displayName={displayName} />
       </div>
     </header>

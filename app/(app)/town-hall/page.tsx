@@ -7,7 +7,6 @@ import { listWorkspaceMembers } from "@/db/queries/team";
 import { listProjectsForPicker } from "@/db/queries/items";
 import { Feed } from "@/components/town-hall/feed";
 import type { MemberOption, RefObject } from "@/components/town-hall/types";
-import { NotificationBell } from "@/components/town-hall/notification-bell";
 
 export default async function TownHallPage() {
   const user = await requireUser();
@@ -41,7 +40,6 @@ export default async function TownHallPage() {
         email={user.email}
         displayName={user.displayName}
         title="Town Hall"
-        action={<NotificationBell />}
       />
       <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-6 space-y-4">
         <header>
