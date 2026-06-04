@@ -6,7 +6,6 @@ import { Mic, Square, Check, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 type State = "idle" | "connecting" | "recording" | "saving" | "done" | "error";
-
 type Lang = "es" | "en" | "multi";
 
 type SaveResult = {
@@ -16,7 +15,11 @@ type SaveResult = {
   contact: { id: string; name: string } | null;
 };
 
-// Deepgram model/params per language choice.
+// Deepgram tries 'token' first (the documented browser subprotocol); if the
+// handshake fails before opening we retry with 'bearer' so it works regardless
+// of how the account/token is provisioned.
+const AUTH_SCHEMES = ["token", "bearer"] as const;
+
 function dgQuery(lang: Lang, sampleRate: number): string {
   const base =
     `encoding=linear16&sample_rate=${sampleRate}&channels=1` +
@@ -41,7 +44,12 @@ export function LiveCallRecorder() {
   const streamRef = useRef<MediaStream | null>(null);
   const nodeRef = useRef<AudioWorkletNode | null>(null);
   const tickRef = useRef<number | null>(null);
+  // Refs so WebSocket handlers never read stale React state.
   const finalsRef = useRef<string[]>([]);
+  const interimRef = useRef("");
+  const openedRef = useRef(false);
+  const stoppingRef = useRef(false);
+  const schemeIdxRef = useRef(0);
 
   useEffect(() => () => teardown(), []);
 
@@ -57,7 +65,8 @@ export function LiveCallRecorder() {
       streamRef.current?.getTracks().forEach((t) => t.stop());
     } catch {}
     try {
-      if (ctxRef.current && ctxRef.current.state !== "closed") void ctxRef.current.close();
+      if (ctxRef.current && ctxRef.current.state !== "closed")
+        void ctxRef.current.close();
     } catch {}
     try {
       if (wsRef.current && wsRef.current.readyState <= 1) wsRef.current.close();
@@ -68,92 +77,110 @@ export function LiveCallRecorder() {
     wsRef.current = null;
   }
 
+  function openSocket(token: string, sampleRate: number) {
+    const scheme = AUTH_SCHEMES[schemeIdxRef.current];
+    const url = `wss://api.deepgram.com/v1/listen?${dgQuery(lang, sampleRate)}`;
+    const ws = new WebSocket(url, [scheme, token]);
+    ws.binaryType = "arraybuffer";
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      openedRef.current = true;
+      setState("recording");
+      if (tickRef.current === null) {
+        tickRef.current = window.setInterval(
+          () => setElapsed((s) => s + 1),
+          1000,
+        );
+      }
+    };
+
+    ws.onmessage = (ev) => {
+      let data: {
+        channel?: { alternatives?: Array<{ transcript?: string }> };
+        is_final?: boolean;
+      };
+      try {
+        data = JSON.parse(ev.data as string);
+      } catch {
+        return;
+      }
+      const text = data.channel?.alternatives?.[0]?.transcript ?? "";
+      if (!text) return;
+      if (data.is_final) {
+        finalsRef.current = [...finalsRef.current, text];
+        interimRef.current = "";
+        setFinals(finalsRef.current);
+        setInterim("");
+      } else {
+        interimRef.current = text;
+        setInterim(text);
+      }
+    };
+
+    ws.onerror = () => {
+      // Let onclose decide messaging/retry — onerror has no useful detail.
+    };
+
+    ws.onclose = (ev) => {
+      if (stoppingRef.current) return;
+      // Handshake failed before opening → try the alternate auth scheme once.
+      if (!openedRef.current && schemeIdxRef.current < AUTH_SCHEMES.length - 1) {
+        schemeIdxRef.current += 1;
+        openSocket(token, sampleRate);
+        return;
+      }
+      if (ev.code !== 1000) {
+        setError(
+          openedRef.current
+            ? `Live connection dropped (${ev.code}${ev.reason ? `: ${ev.reason}` : ""}).`
+            : `Couldn't authenticate to Deepgram (${ev.code}${ev.reason ? `: ${ev.reason}` : ""}). Check DEEPGRAM_API_KEY and that the plan allows streaming.`,
+        );
+        setState("error");
+        teardown();
+      }
+    };
+  }
+
   async function start() {
     setError(null);
     setResult(null);
     setFinals([]);
-    finalsRef.current = [];
     setInterim("");
     setElapsed(0);
+    finalsRef.current = [];
+    interimRef.current = "";
+    openedRef.current = false;
+    stoppingRef.current = false;
+    schemeIdxRef.current = 0;
     setState("connecting");
 
     try {
-      // 1. Mic.
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
 
-      // 2. Short-lived Deepgram token.
       const tokRes = await fetch("/api/voice/live-token", { method: "POST" });
       const tok = (await tokRes.json()) as { token?: string; error?: string };
       if (!tokRes.ok || !tok.token) {
         throw new Error(tok.error || `Token request failed (${tokRes.status})`);
       }
 
-      // 3. Audio graph → PCM worklet.
       const ctx = new AudioContext();
       ctxRef.current = ctx;
+      if (ctx.state === "suspended") await ctx.resume();
       await ctx.audioWorklet.addModule("/dg-pcm-processor.js");
       const source = ctx.createMediaStreamSource(stream);
       const node = new AudioWorkletNode(ctx, "dg-pcm-processor");
       nodeRef.current = node;
       source.connect(node);
-      node.connect(ctx.destination); // keeps the graph pulling; worklet emits no audio
-
-      // 4. Deepgram streaming socket (browser auth via Bearer subprotocol).
-      const url = `wss://api.deepgram.com/v1/listen?${dgQuery(lang, Math.round(ctx.sampleRate))}`;
-      const ws = new WebSocket(url, ["Bearer", tok.token]);
-      ws.binaryType = "arraybuffer";
-      wsRef.current = ws;
+      node.connect(ctx.destination); // keeps the graph pulling; emits silence
 
       node.port.onmessage = (e: MessageEvent) => {
-        if (ws.readyState === WebSocket.OPEN) ws.send(e.data as ArrayBuffer);
+        const ws = wsRef.current;
+        if (ws && ws.readyState === WebSocket.OPEN) ws.send(e.data as ArrayBuffer);
       };
 
-      ws.onopen = () => {
-        setState("recording");
-        tickRef.current = window.setInterval(
-          () => setElapsed((s) => s + 1),
-          1000,
-        );
-      };
-
-      ws.onmessage = (ev) => {
-        let data: {
-          channel?: { alternatives?: Array<{ transcript?: string }> };
-          is_final?: boolean;
-        };
-        try {
-          data = JSON.parse(ev.data as string);
-        } catch {
-          return;
-        }
-        const text = data.channel?.alternatives?.[0]?.transcript ?? "";
-        if (!text) return;
-        if (data.is_final) {
-          finalsRef.current = [...finalsRef.current, text];
-          setFinals(finalsRef.current);
-          setInterim("");
-        } else {
-          setInterim(text);
-        }
-      };
-
-      ws.onerror = () => {
-        if (state !== "saving" && state !== "done") {
-          setError(
-            "Live transcription connection error. Check DEEPGRAM_API_KEY and that your plan allows streaming.",
-          );
-          setState("error");
-        }
-      };
-
-      ws.onclose = (ev) => {
-        // 1011/4xxx with a reason usually means an auth/param problem.
-        if (ev.code !== 1000 && state === "recording") {
-          setError(`Deepgram closed the connection (${ev.code}${ev.reason ? `: ${ev.reason}` : ""}).`);
-          setState("error");
-        }
-      };
+      openSocket(tok.token, Math.round(ctx.sampleRate));
     } catch (e) {
       teardown();
       setError(e instanceof Error ? e.message : "Could not start recording");
@@ -163,21 +190,24 @@ export function LiveCallRecorder() {
 
   async function stop() {
     const seconds = elapsed;
+    stoppingRef.current = true;
     if (tickRef.current !== null) {
       window.clearInterval(tickRef.current);
       tickRef.current = null;
     }
-    // Tell Deepgram to flush, then tear the audio graph down.
     try {
       if (wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({ type: "CloseStream" }));
       }
     } catch {}
-    // small grace period for the last finals
+    // brief grace period for the last finals to arrive
     await new Promise((r) => setTimeout(r, 600));
     teardown();
 
-    const transcript = [...finalsRef.current, interim].join(" ").trim();
+    const transcript = [...finalsRef.current, interimRef.current]
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
     setInterim("");
     if (!transcript) {
       setError("No speech captured.");
@@ -196,7 +226,10 @@ export function LiveCallRecorder() {
           contactName: contactName.trim() || undefined,
         }),
       });
-      const body = (await r.json()) as SaveResult & { ok?: boolean; error?: string };
+      const body = (await r.json()) as SaveResult & {
+        ok?: boolean;
+        error?: string;
+      };
       if (!r.ok || !body.ok) throw new Error(body.error || `Save failed (${r.status})`);
       setResult({
         title: body.title,
@@ -217,7 +250,6 @@ export function LiveCallRecorder() {
 
   return (
     <div className="space-y-4">
-      {/* Controls */}
       <div className="flex flex-wrap items-center gap-3">
         {recording ? (
           <Button type="button" variant="destructive" onClick={stop}>
@@ -269,7 +301,6 @@ export function LiveCallRecorder() {
         </p>
       )}
 
-      {/* Live transcript */}
       {(recording || liveText) && state !== "done" && (
         <div className="max-h-72 overflow-y-auto rounded-md border border-[var(--border)] bg-[var(--muted)]/20 p-4 text-sm leading-relaxed">
           {liveText ? (
@@ -285,7 +316,6 @@ export function LiveCallRecorder() {
 
       {error && <p className="text-sm text-[var(--destructive)]">{error}</p>}
 
-      {/* Result */}
       {result && (
         <div className="rounded-md border border-[var(--health-green)]/40 bg-[var(--health-green)]/10 p-4">
           <div className="mb-2 flex items-center gap-2 text-sm font-medium text-[var(--health-green)]">
