@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { requestSignInLink } from "@/app/actions/auth";
+import { requestSignInLink, signInWithPassword } from "@/app/actions/auth";
 import { createClient as createBrowserSupabase } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -283,23 +283,49 @@ function ShatterGrid() {
 
 function HolographicForm() {
   const [email, setEmail] = useState("");
-  const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [password, setPassword] = useState("");
+  // signing-in with a password, or sending a setup/forgot link.
+  const [status, setStatus] = useState<"idle" | "signing" | "sending" | "sent" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
 
-  async function handleSubmit(e: React.FormEvent) {
+  function nextTarget() {
+    const urlNext = new URLSearchParams(window.location.search).get("next");
+    return urlNext && urlNext.startsWith("/") ? urlNext : "/";
+  }
+
+  async function handleSignIn(e: React.FormEvent) {
     e.preventDefault();
+    setStatus("signing");
+    setError(null);
+    const fd = new FormData();
+    fd.set("email", email);
+    fd.set("password", password);
+    const result = await signInWithPassword(fd);
+    if (!result.ok) {
+      setStatus("error");
+      setError(result.error ?? "Could not sign in.");
+      return;
+    }
+    window.location.href = nextTarget();
+  }
+
+  // First time / forgot password → email a magic link that lands on
+  // /set-password (after which the user signs in with their password).
+  async function handleSetupLink() {
+    if (!email || !email.includes("@")) {
+      setStatus("error");
+      setError("Enter your email first, then request a setup link.");
+      return;
+    }
     setStatus("sending");
     setError(null);
     const fd = new FormData();
     fd.set("email", email);
-    // Carry the ?next= param forward so the magic link redirects back to
-    // wherever the user was trying to go (e.g. /accept?token=…).
-    const urlNext = new URLSearchParams(window.location.search).get("next");
-    if (urlNext && urlNext.startsWith("/")) fd.set("next", urlNext);
+    fd.set("next", "/set-password");
     const result = await requestSignInLink(fd);
     if (!result.ok) {
       setStatus("error");
-      setError(result.error ?? "Could not send sign-in link.");
+      setError(result.error ?? "Could not send the setup link.");
       return;
     }
     setStatus("sent");
@@ -319,7 +345,7 @@ function HolographicForm() {
           </div>
           <h1 className="text-2xl font-semibold tracking-tight">Sign in</h1>
           <p className="text-sm text-[var(--text-secondary)]">
-            Access by invitation only. Enter your invited email to continue.
+            Access by invitation only. Sign in with your email and password.
           </p>
         </div>
 
@@ -327,11 +353,12 @@ function HolographicForm() {
           <div className="space-y-2 rounded-md border border-[var(--green-mid)]/30 bg-[var(--green-bg)] p-3 text-sm text-[var(--green-text)]">
             <div className="font-medium">Check your inbox</div>
             <p className="text-[13px]">
-              A sign-in link is on its way to <strong>{email}</strong>.
+              A link to set your password is on its way to <strong>{email}</strong>. Open it,
+              choose a password, and you&apos;re in.
             </p>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSignIn} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -339,18 +366,34 @@ function HolographicForm() {
                 type="email"
                 required
                 autoFocus
+                autoComplete="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setError(null);
+                  setEmail(e.target.value);
+                }}
                 placeholder="you@example.com"
               />
             </div>
 
-            <Button
-              type="submit"
-              className="w-full"
-              loading={status === "sending"}
-            >
-              Continue
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                required
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => {
+                  setError(null);
+                  setPassword(e.target.value);
+                }}
+                placeholder="Your password"
+              />
+            </div>
+
+            <Button type="submit" className="w-full" loading={status === "signing"}>
+              Sign in
             </Button>
 
             {error && (
@@ -358,6 +401,17 @@ function HolographicForm() {
                 {error}
               </div>
             )}
+
+            <button
+              type="button"
+              onClick={handleSetupLink}
+              disabled={status === "sending"}
+              className="w-full text-center text-[13px] text-[var(--text-tertiary)] underline-offset-4 hover:text-[var(--text-secondary)] hover:underline disabled:opacity-50"
+            >
+              {status === "sending"
+                ? "Sending link…"
+                : "First time, or forgot your password? Email me a setup link"}
+            </button>
           </form>
         )}
       </div>

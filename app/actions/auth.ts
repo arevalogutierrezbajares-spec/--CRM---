@@ -5,6 +5,7 @@ import { eq, ilike } from "drizzle-orm";
 import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { db, schema } from "@/db";
+import { isValidPassword, PASSWORD_RULE } from "@/lib/auth/password";
 
 const { users, workspaceInvites } = schema;
 
@@ -12,6 +13,89 @@ export async function signOut() {
   const supabase = await createClient();
   await supabase.auth.signOut();
   redirect("/login");
+}
+
+/**
+ * Returning-user sign-in with email + password. Only succeeds for users who
+ * have already verified their email and set a password — which inherently
+ * keeps it invite-only (auth users are created via the magic-link path below).
+ */
+export async function signInWithPassword(formData: FormData): Promise<{
+  ok: boolean;
+  error?: string;
+}> {
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const password = String(formData.get("password") ?? "");
+  if (!email || !email.includes("@") || !password) {
+    return { ok: false, error: "Enter your email and password." };
+  }
+  const supabase = await createClient();
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) {
+    return {
+      ok: false,
+      error: "Incorrect email or password. First time, or forgot it? Use the setup link below.",
+    };
+  }
+  return { ok: true };
+}
+
+/**
+ * Set (or change) the signed-in user's password. Reached only after an
+ * email-verified magic link establishes a session (first-time setup, forgot,
+ * or change), so the email is always verified at this point.
+ */
+export async function setPassword(formData: FormData): Promise<{
+  ok: boolean;
+  error?: string;
+}> {
+  const password = String(formData.get("password") ?? "");
+  const confirm = String(formData.get("confirm") ?? "");
+  if (!isValidPassword(password)) return { ok: false, error: PASSWORD_RULE };
+  if (password !== confirm) return { ok: false, error: "The two passwords don't match." };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return {
+      ok: false,
+      error: "Your link expired. Request a new setup link from the sign-in page.",
+    };
+  }
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/**
+ * Email-verified password change for a signed-in user: sends a magic link that
+ * lands on /set-password. Used by the "Change password" button in settings so
+ * a password change always requires confirming control of the inbox.
+ */
+export async function requestPasswordChange(): Promise<{
+  ok: boolean;
+  error?: string;
+}> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user?.email) return { ok: false, error: "You're not signed in." };
+
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
+  const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
+  const callbackUrl = new URL(`${proto}://${host}/auth/callback`);
+  callbackUrl.searchParams.set("next", "/set-password");
+
+  const { error } = await supabase.auth.signInWithOtp({
+    email: user.email,
+    options: { emailRedirectTo: callbackUrl.toString() },
+  });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
 }
 
 /**
