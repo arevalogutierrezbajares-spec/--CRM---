@@ -16,7 +16,7 @@ import { listPosts, type PostView } from "@/db/queries/town-hall";
 import { TownHallPanel } from "@/components/town-hall/town-hall-panel";
 import { listPinnedProjects, type PinnedProject } from "@/db/queries/pins";
 import { getDashboardLayout } from "@/db/queries/dashboard-layout";
-import type { DashWidget } from "@/lib/dashboard/layout";
+import { DEFAULT_WIDGETS, type DashWidget } from "@/lib/dashboard/layout";
 import { WeeklyView } from "@/components/dashboard/weekly/weekly-view";
 import { MonthlyView } from "@/components/dashboard/monthly/monthly-view";
 import { DbBanner } from "@/components/db-banner";
@@ -147,7 +147,8 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
     treasuryRes,
     sprintRes,
     townHallPostsRes,
-    townHallMembersRes,
+    membersRes,
+    projectListRes,
   ] = await Promise.all([
     safeRead<DashCounts>(() => dashboardCounts(user.workspaceId), EMPTY_COUNTS),
     safeRead<PipelineStageBar[]>(() => pipelineSnapshot(user.workspaceId), []),
@@ -163,16 +164,23 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
       null,
     ),
     safeRead<PostView[]>(() => listPosts({ workspaceId: user.workspaceId, limit: 40 }), []),
+    // Loaded once, reused by the drawer pickers + Town Hall (no duplicate queries).
     safeRead<{ userId: string; displayName: string }[]>(
       () => listWorkspaceMembers(user.workspaceId).then((ms) => ms.map((m) => ({ userId: m.userId, displayName: m.displayName }))),
       [],
     ),
+    safeRead<{ id: string; title: string }[]>(() => listProjectsForPicker(user.workspaceId), []),
   ]);
 
-  // Town Hall chat panel (right rail) — members + #-referenceable projects.
-  const townHallObjects = (
-    await safeRead<{ id: string; title: string }[]>(() => listProjectsForPicker(user.workspaceId), [])
-  ).data.map((p) => ({ refType: "project" as const, refId: p.id, label: p.title, href: `/projects/${p.id}` }));
+  const members = membersRes.data;
+  const pickerProjects = projectListRes.data;
+  // Town Hall #-referenceable objects (projects today).
+  const townHallObjects = pickerProjects.map((p) => ({
+    refType: "project" as const,
+    refId: p.id,
+    label: p.title,
+    href: `/projects/${p.id}`,
+  }));
 
   /* ── View-specific data fetched conditionally ──────────────────────── */
 
@@ -202,31 +210,23 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
   } | null = null;
 
   if (view === "daily") {
-    const [tasks, meetings, projects, actionItems, pickerProjects, members, pinnedProjects] = await Promise.all([
+    const [tasks, meetings, projects, actionItems, pinnedProjects, layoutRes] = await Promise.all([
       safeRead<DashTask[]>(() => listTasksToday(user.workspaceId), []),
       safeRead<DashMeeting[]>(() => listMeetingsToday(user.workspaceId), []),
       safeRead<DashProject[]>(() => listActiveProjectsForDashboard(user.workspaceId, 6), []),
       safeRead<DashActionItem[]>(() => listOpenActionItems(user.workspaceId, 12), []),
-      safeRead<{ id: string; title: string }[]>(() => listProjectsForPicker(user.workspaceId), []),
-      safeRead<{ userId: string; displayName: string }[]>(
-        () =>
-          listWorkspaceMembers(user.workspaceId).then((ms) =>
-            ms.map((m) => ({ userId: m.userId, displayName: m.displayName })),
-          ),
-        [],
-      ),
       safeRead<PinnedProject[]>(() => listPinnedProjects(user.workspaceId, user.id), []),
+      safeRead<DashWidget[]>(() => getDashboardLayout(user.id), DEFAULT_WIDGETS),
     ]);
-    const layout = await getDashboardLayout(user.id);
     dailyData = {
       tasks: tasks.data,
       meetings: meetings.data,
       projects: projects.data,
       actionItems: actionItems.data,
-      pickerProjects: pickerProjects.data,
-      members: members.data,
+      pickerProjects,
+      members,
       pinnedProjects: pinnedProjects.data,
-      layout,
+      layout: layoutRes.data,
     };
   } else if (view === "weekly") {
     const [tasks, meetings, projects] = await Promise.all([
@@ -299,7 +299,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
           <TownHallPanel
             workspaceId={user.workspaceId}
             initialPosts={townHallPostsRes.data}
-            members={townHallMembersRes.data}
+            members={members}
             objects={townHallObjects}
           />
           <MiniCalendar eventDays={eventDaysRes.data} />

@@ -238,6 +238,7 @@ function DrawerForm({
       toast.error(res.error);
       return;
     }
+    toast.success("Saved", { duration: 1200 });
     onChanged();
     router.refresh();
   }

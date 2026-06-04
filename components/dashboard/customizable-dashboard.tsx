@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { saveDashboardLayoutAction } from "@/app/(app)/dashboard/layout-actions";
 import {
   WIDGET_LABELS,
+  DEFAULT_WIDGETS,
   type DashWidget,
 } from "@/lib/dashboard/layout";
 
@@ -74,6 +75,15 @@ export function CustomizableDashboard({
             <span className="mr-auto text-tiny text-text-tertiary">
               Reorder, hide, or resize your widgets.
             </span>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => setLayout(DEFAULT_WIDGETS.map((w) => ({ ...w })))}
+              className="text-text-tertiary"
+            >
+              Reset
+            </Button>
             <Button type="button" size="sm" onClick={done} loading={saving}>
               <Check size={14} /> Done
             </Button>
@@ -90,6 +100,19 @@ export function CustomizableDashboard({
           </Button>
         )}
       </div>
+
+      {!editing && shown.length === 0 && (
+        <div className="rounded-lg border border-dashed border-[var(--border)] p-8 text-center">
+          <p className="text-[13px] text-text-secondary">All widgets are hidden.</p>
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="mt-1 text-tiny text-[var(--blue-text)] hover:underline"
+          >
+            Customize to bring them back
+          </button>
+        </div>
+      )}
 
       <div className="grid gap-2.5 lg:grid-cols-2">
         {shown.map((w, i) => {

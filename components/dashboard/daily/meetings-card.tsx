@@ -29,8 +29,9 @@ function dayShort(d: Date): string {
 }
 
 function isLive(m: DashMeeting): boolean {
-  const now = Date.now();
-  return Math.abs(now - m.scheduledAt.getTime()) < 90 * 60_000;
+  // From 5 min before start through ~60 min after — not a 90-min-early "Live".
+  const delta = Date.now() - m.scheduledAt.getTime();
+  return delta >= -5 * 60_000 && delta <= 60 * 60_000;
 }
 
 export function MeetingsCard({ meetings, scope }: MeetingsCardProps) {
