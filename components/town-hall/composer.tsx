@@ -5,6 +5,7 @@ import { Send, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { MentionInput, type MentionSources, type PickedEntity } from "@/components/ui/mention-input";
+import { personInBody, refInBody } from "@/lib/nlp/mention-tokens";
 import { createPostAction } from "@/app/(app)/town-hall/actions";
 import type { MemberOption, RefObject } from "./types";
 
@@ -54,10 +55,10 @@ export function Composer({
     try {
       // Keep only picks whose token literal still appears in the body.
       const mentionUserIds = pickedMentions
-        .filter((m) => body.toLowerCase().includes(`@${m.displayName.replace(/\s+/g, "").toLowerCase()}`))
+        .filter((m) => personInBody(body, m.displayName))
         .map((m) => m.userId);
       const refs = pickedRefs
-        .filter((r) => body.toLowerCase().includes(`${r.refType === "project" ? "#" : "@"}${r.label.toLowerCase()}`))
+        .filter((r) => refInBody(body, r.refType === "project" ? "#" : "@", r.label))
         .map((r) => ({ refType: r.refType, refId: r.refId, label: r.label }));
 
       const res = await createPostAction({ body, mentionUserIds, refs, parentPostId, alsoWhatsApp: alsoWA });

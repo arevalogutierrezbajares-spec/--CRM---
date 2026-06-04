@@ -9,7 +9,8 @@ import { DashCard } from "../shared/dash-card";
 import { SectionLabel } from "../shared/section-label";
 import { DashBadge, type BadgeVariant } from "../shared/badge";
 import { Button } from "@/components/ui/button";
-import { MentionInput, type MentionSources, type PickedEntity } from "@/components/ui/mention-input";
+import { MentionInput, type MentionSources } from "@/components/ui/mention-input";
+import { CaptureChips, useCapturePicks } from "./capture-chips";
 import { setActionItemDone } from "@/app/(app)/action-items/actions";
 import { captureItemAction, snoozeActionItemAction } from "@/app/(app)/dashboard/item-actions";
 import { useItemDrawer } from "../item-drawer";
@@ -36,17 +37,8 @@ export function ActionItemsCard({ items, sources }: { items: DashActionItem[]; s
   const [newTitle, setNewTitle] = useState("");
   const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState<Set<string>>(new Set());
-  // Entities resolved from the combobox (first @person = assignee, all = notified).
-  const [pickedPeople, setPickedPeople] = useState<string[]>([]);
-  const [pickedProjectId, setPickedProjectId] = useState<string | null>(null);
-
-  function onPick(e: PickedEntity) {
-    if (e.kind === "person") {
-      setPickedPeople((prev) => (prev.includes(e.userId) ? prev : [...prev, e.userId]));
-    } else if (e.ref.refType === "project") {
-      setPickedProjectId(e.ref.refId);
-    }
-  }
+  // Combobox picks (first @person = owner, all = notified) reconciled to the text.
+  const picks = useCapturePicks();
 
   function complete(item: DashActionItem) {
     setRemoving((s) => new Set(s).add(item.id)); // optimistic collapse
@@ -81,18 +73,19 @@ export function ActionItemsCard({ items, sources }: { items: DashActionItem[]; s
   async function quickAdd() {
     if (adding || !newTitle.trim()) return; // guard against Enter+click double-fire
     setAdding(true);
+    const r = picks.reconcile(newTitle); // drop picks whose token was deleted
     const res = await captureItemAction({
       rawText: newTitle,
       itemKind: "action_item",
-      assigneeUserId: pickedPeople[0] ?? null,
-      mentionUserIds: pickedPeople,
-      projectId: pickedProjectId,
+      assigneeUserId: r.assigneeUserId,
+      mentionUserIds: r.mentionUserIds,
+      projectId: r.projectId,
+      docRefs: r.docRefs,
     });
     setAdding(false);
     if (res.ok) {
       setNewTitle("");
-      setPickedPeople([]);
-      setPickedProjectId(null);
+      picks.reset();
       toast.success(res.summary, { duration: 1800 });
       router.refresh();
     } else {
@@ -174,7 +167,7 @@ export function ActionItemsCard({ items, sources }: { items: DashActionItem[]; s
         <MentionInput
           value={newTitle}
           onChange={setNewTitle}
-          onPick={onPick}
+          onPick={picks.onPick}
           onSubmit={quickAdd}
           sources={sources}
           aria-label="Add an action item"
@@ -186,6 +179,7 @@ export function ActionItemsCard({ items, sources }: { items: DashActionItem[]; s
           <Button type="button" size="sm" variant="ghost" onClick={quickAdd} loading={adding}>Add</Button>
         )}
       </div>
+      <CaptureChips picks={picks} />
 
       {items.length > 8 && <p className="mt-1 text-tiny text-text-tertiary">+{items.length - 8} more</p>}
     </DashCard>

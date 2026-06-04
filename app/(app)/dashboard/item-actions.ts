@@ -237,6 +237,8 @@ export async function captureItemAction(opts: {
   projectId?: string | null;
   assigneeUserId?: string | null;
   mentionUserIds?: string[];
+  /** @document picks — attached to the new item (label + project_links id). */
+  docRefs?: { linkId: string; label: string }[];
 }): Promise<
   { ok: true; id: string; summary: string; notified: number } | { ok: false; error: string }
 > {
@@ -284,7 +286,20 @@ export async function captureItemAction(opts: {
     }));
   }
 
-  const entityType = opts.itemKind === "task" ? "milestone" : "action_item";
+  const entityType: ItemEntityType = opts.itemKind === "task" ? "milestone" : "action_item";
+
+  // Attach any @document picks to the new item.
+  for (const d of opts.docRefs ?? []) {
+    await addItemAttachment({
+      workspaceId: user.workspaceId,
+      actorId: user.id,
+      entityType,
+      entityId: id,
+      label: d.label.slice(0, 200),
+      projectLinkId: d.linkId,
+    }).catch(() => {}); // best-effort; a bad link id shouldn't fail the capture
+  }
+
   const mentions = Array.from(new Set(opts.mentionUserIds ?? []));
   let notified = 0;
   if (assigneeUserId) {
@@ -340,6 +355,7 @@ export async function pingItemAction(opts: {
     title: detail.title,
     kind: "ping",
     includeActor: true,
+    dedupe: true,
   });
   if (opts.alsoWhatsApp) {
     const phones = await getMemberPhones(user.workspaceId, recipients);
@@ -371,6 +387,7 @@ export async function remindMeAction(opts: {
     title: detail.title,
     kind: "reminder",
     includeActor: true,
+    dedupe: true,
   });
   refresh();
   return { ok: true };

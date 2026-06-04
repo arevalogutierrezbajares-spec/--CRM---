@@ -3,7 +3,7 @@ import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db, schema } from "@/db";
 
-const { posts, postMentions, postRefs, postReactions, notifications, users } = schema;
+const { posts, postMentions, postRefs, postReactions, notifications, users, workspaceMembers } = schema;
 // Second alias of users so a notification can join BOTH the post author and the
 // actor (who assigned/pinged) in one query.
 const actorUsers = alias(users, "actor_users");
@@ -246,11 +246,40 @@ export async function notifyUsers(opts: {
   title: string;
   kind: string;
   includeActor?: boolean;
+  /** When true, clear any existing unread same-(user,entity,kind) row first
+   *  (reminders/pings) so repeats don't pile up. */
+  dedupe?: boolean;
 }): Promise<number> {
-  const recipients = Array.from(new Set(opts.recipientUserIds)).filter(
+  const requested = Array.from(new Set(opts.recipientUserIds)).filter(
     (id) => opts.includeActor || id !== opts.actorId,
   );
+  if (requested.length === 0) return 0;
+
+  // SECURITY: only notify actual members of this workspace. recipientUserIds
+  // can originate from the client (mention combobox), so a foreign id must
+  // never get a notification row pointing into this workspace.
+  const members = await db
+    .select({ userId: workspaceMembers.userId })
+    .from(workspaceMembers)
+    .where(and(eq(workspaceMembers.workspaceId, opts.workspaceId), inArray(workspaceMembers.userId, requested)));
+  const recipients = members.map((m) => m.userId);
   if (recipients.length === 0) return 0;
+
+  if (opts.dedupe) {
+    await db
+      .delete(notifications)
+      .where(
+        and(
+          eq(notifications.workspaceId, opts.workspaceId),
+          inArray(notifications.userId, recipients),
+          eq(notifications.entityType, opts.entityType),
+          eq(notifications.entityId, opts.entityId),
+          eq(notifications.kind, opts.kind),
+          isNull(notifications.readAt),
+        ),
+      );
+  }
+
   await db.insert(notifications).values(
     recipients.map((userId) => ({
       workspaceId: opts.workspaceId,

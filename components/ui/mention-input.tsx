@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useId, useMemo, useRef, useState } from "react";
 import { User, FolderGit2, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { detectTrigger, spliceToken } from "@/lib/nlp/mention-trigger";
+import { personToken, refToken } from "@/lib/nlp/mention-tokens";
 import type { MemberOption, RefObject } from "@/components/town-hall/types";
 
 export type MentionSources = {
@@ -59,9 +60,13 @@ export function MentionInput({
   "aria-label"?: string;
 }) {
   const ref = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
+  const uid = useId();
   const [caret, setCaret] = useState(0);
   const [active, setActive] = useState(0);
-  const [open, setOpen] = useState(true); // closed only after Esc until next edit
+  // Trigger-start at which Esc dismissed the menu; the menu stays hidden only
+  // while the caret sits on that same trigger, and reopens on any other trigger
+  // or on the next edit (so caret moves after Esc aren't stuck closed).
+  const [dismissedStart, setDismissedStart] = useState<number | null>(null);
 
   const trigger = useMemo(() => detectTrigger(value, caret), [value, caret]);
 
@@ -69,9 +74,11 @@ export function MentionInput({
     if (!trigger) return [];
     const q = trigger.query.toLowerCase();
     if (trigger.kind === "@") {
+      // Reserve slots for docs so a query matching many people doesn't starve
+      // them out entirely.
       const people = sources.people
         .filter((m) => m.displayName.toLowerCase().includes(q))
-        .slice(0, 6)
+        .slice(0, 5)
         .map((person): Sugg => ({ section: "People", person }));
       const docs = sources.docs
         .filter((d) => d.label.toLowerCase().includes(q))
@@ -85,7 +92,8 @@ export function MentionInput({
       .map((ref): Sugg => ({ section: "Projects", ref }));
   }, [trigger, sources]);
 
-  const showMenu = open && suggestions.length > 0;
+  const dismissed = dismissedStart !== null && trigger != null && trigger.start === dismissedStart;
+  const showMenu = !dismissed && suggestions.length > 0;
   const activeIdx = Math.min(active, suggestions.length - 1);
 
   const syncCaret = useCallback(() => {
@@ -97,12 +105,10 @@ export function MentionInput({
     (s: Sugg) => {
       if (!trigger) return;
       const token =
-        s.section === "People"
-          ? `@${s.person.displayName.replace(/\s+/g, "")}`
-          : `${trigger.kind}${s.ref.label}`;
+        s.section === "People" ? personToken(s.person.displayName) : refToken(trigger.kind, s.ref.label);
       const { next, caret: newCaret } = spliceToken(value, trigger.start, caret, token);
       onChange(next);
-      setOpen(true);
+      setDismissedStart(null);
       if (s.section === "People") onPick?.({ kind: "person", userId: s.person.userId, label: s.person.displayName });
       else onPick?.({ kind: "ref", ref: s.ref });
       requestAnimationFrame(() => {
@@ -136,7 +142,7 @@ export function MentionInput({
       }
       if (e.key === "Escape") {
         e.preventDefault();
-        setOpen(false);
+        setDismissedStart(trigger?.start ?? -1);
         return;
       }
     }
@@ -148,8 +154,8 @@ export function MentionInput({
     }
   };
 
-  const listboxId = "mention-listbox";
-  const optionId = (i: number) => `mention-opt-${i}`;
+  const listboxId = `${uid}-listbox`;
+  const optionId = (i: number) => `${uid}-opt-${i}`;
 
   const setEl = (el: HTMLInputElement | HTMLTextAreaElement | null) => {
     ref.current = el;
@@ -169,7 +175,7 @@ export function MentionInput({
       onChange(e.target.value);
       setCaret(e.target.selectionStart ?? 0);
       setActive(0);
-      setOpen(true);
+      setDismissedStart(null);
     },
     onKeyUp: syncCaret,
     onClick: syncCaret,

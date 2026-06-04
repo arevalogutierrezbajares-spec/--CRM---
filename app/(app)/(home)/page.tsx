@@ -135,7 +135,13 @@ function parseItemParam(raw: string | string[] | undefined): InitialItem {
 export default async function HomePage(props: { searchParams: SearchParams }) {
   const user = await requireUser();
   const sp = await props.searchParams;
-  const view = sp.view === "weekly" || sp.view === "monthly" ? sp.view : "daily";
+  // A notification/deep-link (?item=) opens the drawer, which only mounts on the
+  // daily view — so force daily when an item is being opened.
+  const view = sp.item
+    ? "daily"
+    : sp.view === "weekly" || sp.view === "monthly"
+      ? sp.view
+      : "daily";
   // "Today" in the user's timezone — so overdue/due-today isn't a day off in the
   // evening for non-UTC users (e.g. Venezuela, UTC-4).
   const todayStr = todayInTz(user.timezone);

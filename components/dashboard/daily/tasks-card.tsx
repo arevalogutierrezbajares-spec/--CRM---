@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, ListChecks, Plus } from "lucide-react";
@@ -10,6 +10,7 @@ import { SectionLabel } from "../shared/section-label";
 import { DashBadge, type BadgeVariant } from "../shared/badge";
 import { Button } from "@/components/ui/button";
 import { MentionInput, type MentionSources, type PickedEntity } from "@/components/ui/mention-input";
+import { CaptureChips, useCapturePicks } from "./capture-chips";
 import {
   Select,
   SelectContent,
@@ -45,23 +46,26 @@ function shortDate(iso: string): string {
 export function TasksCard({ tasks, scope, sources }: TasksCardProps) {
   const router = useRouter();
   const drawer = useItemDrawer();
-  const projects = drawer?.projects ?? [];
+  const projects = useMemo(() => drawer?.projects ?? [], [drawer]);
   const [newTitle, setNewTitle] = useState("");
   const [projectId, setProjectId] = useState("");
   const [adding, setAdding] = useState(false);
-  const [pickedPeople, setPickedPeople] = useState<string[]>([]);
-  const effectiveSources: MentionSources = sources ?? {
-    people: [],
-    projects: projects.map((p) => ({ refType: "project" as const, refId: p.id, label: p.title, href: `/projects/${p.id}` })),
-    docs: [],
-  };
+  const picks = useCapturePicks();
+  const effectiveSources: MentionSources = useMemo(
+    () =>
+      sources ?? {
+        people: [],
+        projects: projects.map((p) => ({ refType: "project" as const, refId: p.id, label: p.title, href: `/projects/${p.id}` })),
+        docs: [],
+      },
+    [sources, projects],
+  );
 
   function onPick(e: PickedEntity) {
-    if (e.kind === "person") {
-      setPickedPeople((prev) => (prev.includes(e.userId) ? prev : [...prev, e.userId]));
-    } else if (e.ref.refType === "project") {
-      setProjectId(e.ref.refId); // #project syncs the picker
-    }
+    // #project syncs the picker (the Select is the task's project source of
+    // truth); people + docs go to the chip strip.
+    if (e.kind === "ref" && e.ref.refType === "project") setProjectId(e.ref.refId);
+    else picks.onPick(e);
   }
 
   async function quickAdd() {
@@ -71,17 +75,19 @@ export function TasksCard({ tasks, scope, sources }: TasksCardProps) {
       return;
     }
     setAdding(true);
+    const r = picks.reconcile(newTitle);
     const res = await captureItemAction({
       rawText: newTitle,
       itemKind: "task",
       projectId,
-      assigneeUserId: pickedPeople[0] ?? null,
-      mentionUserIds: pickedPeople,
+      assigneeUserId: r.assigneeUserId,
+      mentionUserIds: r.mentionUserIds,
+      docRefs: r.docRefs,
     });
     setAdding(false);
     if (res.ok) {
       setNewTitle("");
-      setPickedPeople([]);
+      picks.reset();
       if (res.notified > 0) toast.success(res.summary, { duration: 1600 });
       router.refresh();
     } else {
@@ -156,6 +162,7 @@ export function TasksCard({ tasks, scope, sources }: TasksCardProps) {
           )}
         </div>
       )}
+      {projects.length > 0 && <CaptureChips picks={picks} />}
 
       {tasks.length > 8 && <p className="mt-1 text-tiny text-text-tertiary">+{tasks.length - 8} more</p>}
     </DashCard>
