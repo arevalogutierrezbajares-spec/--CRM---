@@ -2,6 +2,7 @@ import "server-only";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import * as schema from "@/db/schema";
+import { utcToday } from "@/lib/date/today";
 
 export type PinnedDoc = {
   id: string;
@@ -32,6 +33,7 @@ export type PinnedProject = {
 export async function listPinnedProjects(
   workspaceId: string,
   userId: string,
+  today: string = utcToday(),
 ): Promise<PinnedProject[]> {
   const pinned = await db
     .select({
@@ -110,7 +112,6 @@ export async function listPinnedProjects(
 
   const byProject = <T extends { projectId: string | null }>(rows: T[], pid: string, n: number) =>
     rows.filter((r) => r.projectId === pid).slice(0, n);
-  const today = new Date().toISOString().slice(0, 10);
 
   return pinned.map((p) => {
     const openForP = tasks.filter((t) => t.projectId === p.id);

@@ -18,6 +18,7 @@ import { listWorkspaceMembers, findMembers } from "@/db/queries/team";
 import { createPostAction } from "@/app/(app)/town-hall/actions";
 import { findProjectByName } from "@/db/queries/items";
 import { parseCapture } from "@/lib/nlp/parse-capture";
+import { todayInTz, addDaysToISODate } from "@/lib/date/today";
 
 type Result = { ok: true; id: string } | { ok: false; error: string };
 
@@ -83,13 +84,10 @@ export async function snoozeActionItemAction(opts: {
 }): Promise<Result> {
   const user = await requireUser();
   const days = Math.max(1, Math.min(opts.days ?? 1, 90));
-  // Anchor on the UTC calendar date — the same basis the overdue/"today" logic
-  // uses (db/queries/dashboard.ts) — so a snoozed item reliably clears overdue.
-  // Building from getUTCFullYear/Month/Date avoids the local-midnight→toISOString
-  // drift that could land "tomorrow" on the wrong calendar day.
-  const now = new Date();
-  const target = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + days));
-  const dueDate = target.toISOString().slice(0, 10);
+  // Anchor on "today" in the user's timezone — the same basis the overdue/
+  // "today" logic now uses — so a snoozed item reliably clears overdue (and
+  // "snooze to tomorrow" lands on the user's tomorrow, not UTC's).
+  const dueDate = addDaysToISODate(todayInTz(user.timezone), days);
   const ok = await updateActionItem({ workspaceId: user.workspaceId, id: opts.id, dueDate });
   if (!ok) return { ok: false, error: "Action item not found" };
   refresh();

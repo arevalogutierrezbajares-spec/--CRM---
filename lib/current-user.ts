@@ -10,7 +10,11 @@ export type SessionUser = {
   workspaceId: string;
   workspaceRole: "owner" | "admin" | "member";
   whatsappPhone: string | null;
+  /** IANA tz (e.g. "America/Caracas") — drives "today"/overdue date math. */
+  timezone: string;
 };
+
+const DEFAULT_TZ = "America/New_York";
 
 function devFakeUser() {
   if (process.env.NODE_ENV !== "development") return null;
@@ -35,6 +39,7 @@ export async function ensureUserAndWorkspace(args: {
   workspaceId: string;
   workspaceRole: "owner" | "admin" | "member";
   whatsappPhone: string | null;
+  timezone: string;
 }> {
   // 1. Upsert user row.
   await db
@@ -68,6 +73,7 @@ export async function ensureUserAndWorkspace(args: {
         workspaceId: u.currentWorkspaceId,
         workspaceRole: member.role,
         whatsappPhone: u.whatsappPhone ?? null,
+        timezone: u.timezone ?? DEFAULT_TZ,
       };
     }
   }
@@ -88,6 +94,7 @@ export async function ensureUserAndWorkspace(args: {
       workspaceId: existingMembership.workspaceId,
       workspaceRole: existingMembership.role,
       whatsappPhone: u?.whatsappPhone ?? null,
+      timezone: u?.timezone ?? DEFAULT_TZ,
     };
   }
 
@@ -130,6 +137,7 @@ export async function ensureUserAndWorkspace(args: {
       workspaceId: pendingInvite.workspaceId,
       workspaceRole: pendingInvite.role,
       whatsappPhone: u?.whatsappPhone ?? null,
+      timezone: u?.timezone ?? DEFAULT_TZ,
     };
   }
 
@@ -153,6 +161,7 @@ export async function ensureUserAndWorkspace(args: {
     workspaceId: ws.id,
     workspaceRole: "owner",
     whatsappPhone: u?.whatsappPhone ?? null,
+    timezone: u?.timezone ?? DEFAULT_TZ,
   };
 }
 
@@ -181,6 +190,7 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
     workspaceId: ws.workspaceId,
     workspaceRole: ws.workspaceRole,
     whatsappPhone: ws.whatsappPhone,
+    timezone: ws.timezone,
   };
 }
 

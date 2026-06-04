@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
+import { utcToday } from "@/lib/date/today";
 
 const {
   meetings,
@@ -61,8 +62,8 @@ export type DashTask = {
 async function listTasksDueBy(
   workspaceId: string,
   endDate: string,
+  today: string = utcToday(),
 ): Promise<DashTask[]> {
-  const today = new Date().toISOString().slice(0, 10);
   const rows = await db
     .select({
       id: milestones.id,
@@ -95,14 +96,14 @@ async function listTasksDueBy(
   }));
 }
 
-export async function listTasksToday(workspaceId: string) {
-  return listTasksDueBy(workspaceId, new Date().toISOString().slice(0, 10));
+export async function listTasksToday(workspaceId: string, today: string = utcToday()) {
+  return listTasksDueBy(workspaceId, today, today);
 }
-export async function listTasksThisWeek(workspaceId: string) {
-  return listTasksDueBy(workspaceId, endOfWeek().toISOString().slice(0, 10));
+export async function listTasksThisWeek(workspaceId: string, today: string = utcToday()) {
+  return listTasksDueBy(workspaceId, endOfWeek().toISOString().slice(0, 10), today);
 }
-export async function listTasksThisMonth(workspaceId: string) {
-  return listTasksDueBy(workspaceId, endOfMonth().toISOString().slice(0, 10));
+export async function listTasksThisMonth(workspaceId: string, today: string = utcToday()) {
+  return listTasksDueBy(workspaceId, endOfMonth().toISOString().slice(0, 10), today);
 }
 
 /* ─── Meetings windows ──────────────────────────────────────────────────── */
@@ -182,8 +183,8 @@ export type DashCounts = {
 
 export async function dashboardCounts(
   workspaceId: string,
+  today: string = utcToday(),
 ): Promise<DashCounts> {
-  const today = new Date().toISOString().slice(0, 10);
   const now = new Date();
 
   const [tasksRow, meetingsRow, projectsRow, blockedRow] = await Promise.all([
@@ -384,6 +385,7 @@ export type DashProject = {
 export async function listActiveProjectsForDashboard(
   workspaceId: string,
   limit = 6,
+  today: string = utcToday(),
 ): Promise<DashProject[]> {
   const projRows = await db
     .select({
@@ -416,8 +418,6 @@ export async function listActiveProjectsForDashboard(
     .from(milestones)
     .where(inArray(milestones.projectId, ids))
     .orderBy(milestones.dueDate);
-
-  const today = new Date().toISOString().slice(0, 10);
 
   return projRows.map((p) => {
     const projMs = ms.filter((m) => m.projectId === p.id);
@@ -643,8 +643,8 @@ export type DashActionItem = {
 export async function listOpenActionItems(
   workspaceId: string,
   limit = 12,
+  today: string = utcToday(),
 ): Promise<DashActionItem[]> {
-  const today = new Date().toISOString().slice(0, 10);
   const rows = await db
     .select({
       id: actionItems.id,

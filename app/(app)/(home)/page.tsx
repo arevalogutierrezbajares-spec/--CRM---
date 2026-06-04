@@ -1,4 +1,5 @@
 import { requireUser } from "@/lib/current-user";
+import { todayInTz } from "@/lib/date/today";
 import { DashboardShell } from "@/components/dashboard/shell/dashboard-shell";
 import { RightColumn } from "@/components/dashboard/shell/right-column";
 import { MiniCalendar } from "@/components/dashboard/right/mini-calendar";
@@ -133,6 +134,9 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
   const user = await requireUser();
   const sp = await props.searchParams;
   const view = sp.view === "weekly" || sp.view === "monthly" ? sp.view : "daily";
+  // "Today" in the user's timezone — so overdue/due-today isn't a day off in the
+  // evening for non-UTC users (e.g. Venezuela, UTC-4).
+  const todayStr = todayInTz(user.timezone);
   // ?item=<type>:<id> deep-link (e.g. from a Town Hall #ref) → auto-open drawer.
   const initialItem = parseItemParam(sp.item);
 
@@ -150,7 +154,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
     membersRes,
     projectListRes,
   ] = await Promise.all([
-    safeRead<DashCounts>(() => dashboardCounts(user.workspaceId), EMPTY_COUNTS),
+    safeRead<DashCounts>(() => dashboardCounts(user.workspaceId, todayStr), EMPTY_COUNTS),
     safeRead<PipelineStageBar[]>(() => pipelineSnapshot(user.workspaceId), []),
     safeRead<RelationshipRow[]>(() => relationshipHealth(user.workspaceId, 6), []),
     safeRead<string[]>(() => meetingDaysThisMonth(user.workspaceId), []),
@@ -212,11 +216,11 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
 
   if (view === "daily") {
     const [tasks, meetings, projects, actionItems, pinnedProjects, recentProjects, layoutRes] = await Promise.all([
-      safeRead<DashTask[]>(() => listTasksToday(user.workspaceId), []),
+      safeRead<DashTask[]>(() => listTasksToday(user.workspaceId, todayStr), []),
       safeRead<DashMeeting[]>(() => listMeetingsToday(user.workspaceId), []),
-      safeRead<DashProject[]>(() => listActiveProjectsForDashboard(user.workspaceId, 6), []),
-      safeRead<DashActionItem[]>(() => listOpenActionItems(user.workspaceId, 12), []),
-      safeRead<PinnedProject[]>(() => listPinnedProjects(user.workspaceId, user.id), []),
+      safeRead<DashProject[]>(() => listActiveProjectsForDashboard(user.workspaceId, 6, todayStr), []),
+      safeRead<DashActionItem[]>(() => listOpenActionItems(user.workspaceId, 12, todayStr), []),
+      safeRead<PinnedProject[]>(() => listPinnedProjects(user.workspaceId, user.id, todayStr), []),
       safeRead<{ id: string; title: string }[]>(() => listRecentProjects(user.workspaceId, user.id, 8), []),
       safeRead<DashWidget[]>(() => getDashboardLayout(user.id), DEFAULT_WIDGETS),
     ]);
@@ -233,9 +237,9 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
     };
   } else if (view === "weekly") {
     const [tasks, meetings, projects] = await Promise.all([
-      safeRead<DashTask[]>(() => listTasksThisWeek(user.workspaceId), []),
+      safeRead<DashTask[]>(() => listTasksThisWeek(user.workspaceId, todayStr), []),
       safeRead<DashMeeting[]>(() => listMeetingsThisWeek(user.workspaceId), []),
-      safeRead<DashProject[]>(() => listActiveProjectsForDashboard(user.workspaceId, 6), []),
+      safeRead<DashProject[]>(() => listActiveProjectsForDashboard(user.workspaceId, 6, todayStr), []),
     ]);
     weeklyData = {
       tasks: tasks.data,
@@ -246,8 +250,8 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
   } else {
     const [meetings, projects, overdueTasks, top, stats] = await Promise.all([
       safeRead<DashMeeting[]>(() => listMeetingsThisMonth(user.workspaceId), []),
-      safeRead<DashProject[]>(() => listActiveProjectsForDashboard(user.workspaceId, 6), []),
-      safeRead<DashTask[]>(() => listTasksThisMonth(user.workspaceId), []),
+      safeRead<DashProject[]>(() => listActiveProjectsForDashboard(user.workspaceId, 6, todayStr), []),
+      safeRead<DashTask[]>(() => listTasksThisMonth(user.workspaceId, todayStr), []),
       safeRead<TopAccount[]>(() => topAccountsThisMonth(user.workspaceId, 6), []),
       safeRead(() => monthStats(user.workspaceId), EMPTY_MONTH_STATS),
     ]);
