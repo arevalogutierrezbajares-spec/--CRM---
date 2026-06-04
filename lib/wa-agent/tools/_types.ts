@@ -13,6 +13,11 @@ export type ToolContext = {
   userId: string;
   ownerTimezone: string;
   now: Date;
+  /**
+   * Set when the inbound message originated from a transcribed voice note.
+   * Action items created this turn link back to it for provenance.
+   */
+  sourceVoiceNoteId?: string | null;
 };
 
 export type ToolExecutor = (

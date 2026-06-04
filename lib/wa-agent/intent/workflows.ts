@@ -42,6 +42,16 @@ export const WORKFLOWS: Partial<Record<Intent, Workflow>> = {
       "Record a note. Use any PRE-RESOLVED contact_ids directly; only call find_contact if a name is mentioned that wasn't pre-resolved.",
   },
 
+  action_capture: {
+    allowedTools: ["add_action_item"],
+    model: "claude-sonnet-4-6",
+    supplement:
+      "The user is dictating tasks (often a transcribed voice note). Identify EACH distinct action item and call add_action_item once per item. " +
+      "Keep titles short and imperative. Resolve relative dates ('tomorrow', 'Friday') to an absolute YYYY-MM-DD in the user's timezone for due_date. " +
+      "If the message contains no actionable tasks, do not call the tool — just reply briefly. " +
+      "After capturing, reply with a one-line confirmation listing what you saved.",
+  },
+
   contact_add: {
     allowedTools: ["find_contact", "create_contact", "propose_add_contact"],
     requireConfirmation: true,

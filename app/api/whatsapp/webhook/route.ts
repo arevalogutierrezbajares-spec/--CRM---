@@ -14,8 +14,10 @@ import {
   resolveSender,
 } from "@/lib/whatsapp-agent";
 import { checkRateLimit } from "@/lib/wa-rate-limit";
+import { downloadWaMedia } from "@/lib/wa-agent/media/download";
+import { transcribeVoice } from "@/lib/wa-agent/media/transcribe";
 
-const { touches, contacts, waActivity } = schema;
+const { touches, contacts, waActivity, voiceNotes } = schema;
 
 // GET — Meta webhook verification handshake.
 export const GET = withErrorCapture(
@@ -65,6 +67,7 @@ export const POST = withErrorCapture(
               from?: string;
               text?: { body?: string };
               type?: string;
+              audio?: { id?: string; mime_type?: string; voice?: boolean };
             }>;
             contacts?: Array<{ wa_id?: string; profile?: { name?: string } }>;
           };
@@ -111,7 +114,10 @@ export const POST = withErrorCapture(
         }
 
         for (const msg of change.value?.messages ?? []) {
-          if (msg.type !== "text" || !msg.text?.body || !msg.from) continue;
+          if (!msg.from) continue;
+          const isText = msg.type === "text" && !!msg.text?.body;
+          const isAudio = msg.type === "audio" && !!msg.audio?.id;
+          if (!isText && !isAudio) continue;
 
           const verdict = await checkRateLimit(msg.from);
           if (!verdict.allowed) {
@@ -122,10 +128,78 @@ export const POST = withErrorCapture(
             continue;
           }
 
+          // Resolve the message to a text body. Voice notes are downloaded,
+          // transcribed (Whisper) and persisted as a voice_notes row so the
+          // agent can extract action items linked back to it.
+          let body = isText ? (msg.text!.body as string) : "";
+          let sourceVoiceNoteId: string | null = null;
+
+          if (isAudio) {
+            if (!useAgent) {
+              responses.push({
+                to: msg.from,
+                body: "Voice notes need the AI assistant enabled. Send text for now.",
+              });
+              continue;
+            }
+            const resolved = await resolveSender(msg.from);
+            if (!resolved) {
+              responses.push({
+                to: msg.from,
+                body: "I don't recognize this number. Add it in /profile → WhatsApp.",
+              });
+              continue;
+            }
+            const dl = await downloadWaMedia(msg.audio!.id as string);
+            if (!dl.ok) {
+              await db.insert(waActivity).values({
+                workspaceId: resolved.workspaceId,
+                userId: resolved.userId,
+                senderPhone: msg.from,
+                direction: "error",
+                payload: { stage: "wa_media_download", error: dl.error },
+              });
+              responses.push({
+                to: msg.from,
+                body: "Couldn't download that voice note — try resending.",
+              });
+              continue;
+            }
+            const tx = await transcribeVoice(dl.buffer, dl.filename);
+            if (!tx.ok || !tx.text.trim()) {
+              await db.insert(waActivity).values({
+                workspaceId: resolved.workspaceId,
+                userId: resolved.userId,
+                senderPhone: msg.from,
+                direction: "error",
+                payload: { stage: "transcribe", error: tx.ok ? "empty" : tx.error },
+              });
+              responses.push({
+                to: msg.from,
+                body: "I couldn't make out that voice note. Mind sending it again?",
+              });
+              continue;
+            }
+            const [vn] = await db
+              .insert(voiceNotes)
+              .values({
+                workspaceId: resolved.workspaceId,
+                transcript: tx.text,
+                sourcePhone: msg.from,
+                durationSecs: tx.durationSecs ?? null,
+                language: tx.language ?? null,
+                createdBy: resolved.userId,
+              })
+              .returning({ id: voiceNotes.id });
+            body = tx.text;
+            sourceVoiceNoteId = vn.id;
+          }
+
           if (useAgent) {
             const r = await agentHandle({
               senderPhone: msg.from,
-              body: msg.text.body,
+              body,
+              sourceVoiceNoteId,
             });
             responses.push({ to: msg.from, body: r.reply });
             continue;
@@ -143,7 +217,7 @@ export const POST = withErrorCapture(
           }
           const reply = await handleCommand({
             from: msg.from,
-            body: msg.text.body,
+            body,
             workspaceId: resolved.workspaceId,
             userId: resolved.userId,
           });

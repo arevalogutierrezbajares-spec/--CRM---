@@ -23,6 +23,7 @@ import {
   listTasksThisMonth,
   listTasksThisWeek,
   listTasksToday,
+  listOpenActionItems,
   meetingDaysThisMonth,
   monthStats,
   pipelineSnapshot,
@@ -30,6 +31,7 @@ import {
   startOfMonth,
   startOfWeek,
   topAccountsThisMonth,
+  type DashActionItem,
   type DashCounts,
   type DashMeeting,
   type DashProject,
@@ -143,6 +145,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
     tasks: DashTask[];
     meetings: DashMeeting[];
     projects: DashProject[];
+    actionItems: DashActionItem[];
   } | null = null;
   let weeklyData: {
     tasks: DashTask[];
@@ -160,15 +163,17 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
   } | null = null;
 
   if (view === "daily") {
-    const [tasks, meetings, projects] = await Promise.all([
+    const [tasks, meetings, projects, actionItems] = await Promise.all([
       safeRead<DashTask[]>(() => listTasksToday(user.workspaceId), []),
       safeRead<DashMeeting[]>(() => listMeetingsToday(user.workspaceId), []),
       safeRead<DashProject[]>(() => listActiveProjectsForDashboard(user.workspaceId, 6), []),
+      safeRead<DashActionItem[]>(() => listOpenActionItems(user.workspaceId, 12), []),
     ]);
     dailyData = {
       tasks: tasks.data,
       meetings: meetings.data,
       projects: projects.data,
+      actionItems: actionItems.data,
     };
   } else if (view === "weekly") {
     const [tasks, meetings, projects] = await Promise.all([
@@ -263,6 +268,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
           tasks={dailyData.tasks}
           meetings={dailyData.meetings}
           projects={dailyData.projects}
+          actionItems={dailyData.actionItems}
         />
       )}
 

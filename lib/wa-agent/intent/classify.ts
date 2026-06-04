@@ -7,6 +7,7 @@
 export type Intent =
   | "recap"
   | "note_write"
+  | "action_capture"
   | "contact_add"
   | "contact_find"
   | "todo_query"
@@ -62,6 +63,19 @@ const PATTERNS: Array<[RegExp, Intent]> = [
 
   // Contact find
   [/\b(find|look up|search( for)?|who is|pull up|get( me)? (info|details) (on|about))\b/i, "contact_find"],
+
+  // Action capture — DECLARING new tasks (must precede todo_query, which is
+  // QUERYING existing ones, and note_write). Voice notes default here too.
+  // Label form ("tasks:", "action items:") — colon terminates, no trailing \b.
+  [
+    /(^|[\n.;])\s*(action items?|tasks?|to-?dos?|to do)\s*:/i,
+    "action_capture",
+  ],
+  // Verb-phrase form.
+  [
+    /\b(i (need|have|gotta|got) to|i'?ll need to|make sure (to|i)|don'?t forget to|remind myself to|take (this|these) down|capture (this|these)|(here'?s|these are) (my |the )?(tasks?|action items?|to-?dos?)|things? (i need to|to do))\b/i,
+    "action_capture",
+  ],
 
   // Todo / action items / priorities / "what's next"
   [
@@ -139,6 +153,7 @@ const SPANISH_PATTERNS: Array<[RegExp, Intent]> = [
   [/^\s*(no|cancel(a|ar)?|para|olvida(lo)?|detén)\s*[.!]?\s*$/i, "confirmation"],
   [/\b(resumen|recuento|recap|cómo (fue|estuvo|salió)|qué pasó hoy|resúmeme)\b/i, "recap"],
   [/\b(pon(me)?|agrega|crea|añade) (un |una )?(nota|apunte)/i, "note_write"],
+  [/\b(necesito|tengo que|hay que|no (te |me )?olvides? de|anota (esto|estas tareas)|apunta (esto|estas tareas)|(tareas?|pendientes?|acciones?)\s*:)\b/i, "action_capture"],
   [/\b(mis (pendientes|tareas|to-?dos?)|qué (tengo|hay) (pendiente|por hacer)|lista de tareas|en qué (debo|tengo que) enfocarme|qué hago primero|mis prioridades|qué sigue)\b/i, "todo_query"],
   [/\b(ponme|pon|agrega|crea|añade) (un |una )?(recordatorio|aviso|alarma)/i, "reminder_set"],
   [/\b(mis recordatorios|ver recordatorios|qué recordatorios)\b/i, "reminder_list"],

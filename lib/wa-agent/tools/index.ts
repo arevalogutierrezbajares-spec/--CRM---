@@ -27,6 +27,8 @@ import { sendMessage } from "./send-message";
 import { logMeeting } from "./log-meeting";
 import { meetingBrief } from "./meeting-brief";
 import { assignContact } from "./assign-contact";
+import { attachLink } from "./attach-link";
+import { addActionItem } from "./add-action-item";
 
 export const TOOLS: Record<string, ToolEntry> = {
   find_contact: findContact,
@@ -50,6 +52,8 @@ export const TOOLS: Record<string, ToolEntry> = {
   log_meeting: logMeeting,
   meeting_brief: meetingBrief,
   assign_contact: assignContact,
+  attach_link: attachLink,
+  add_action_item: addActionItem,
 };
 
 export const TOOL_NAMES = Object.keys(TOOLS);

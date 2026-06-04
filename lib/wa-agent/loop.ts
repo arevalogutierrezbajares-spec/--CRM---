@@ -269,6 +269,8 @@ function systemPrompt(opts: {
 export async function handleMessage(opts: {
   senderPhone: string;
   body: string;
+  /** Set when this message is the transcript of an inbound voice note. */
+  sourceVoiceNoteId?: string | null;
 }): Promise<AgentResult> {
   if (!isAnthropicConfigured()) {
     return {
@@ -299,6 +301,7 @@ export async function handleMessage(opts: {
     senderKey: opts.senderPhone,
     body: opts.body,
     resolved,
+    sourceVoiceNoteId: opts.sourceVoiceNoteId ?? null,
   });
 }
 
@@ -363,6 +366,7 @@ async function handleResolvedMessage(opts: {
   senderKey: string;
   body: string;
   resolved: ResolvedSender;
+  sourceVoiceNoteId?: string | null;
 }): Promise<AgentResult> {
   const { senderKey, body, resolved } = opts;
 
@@ -389,6 +393,12 @@ async function handleResolvedMessage(opts: {
 
   // ── Intent classification & workflow gating ──────────────────────────────
   const classification = classifyIntent(body);
+  // Voice notes are the primary action-capture channel: if a transcript didn't
+  // match a stronger intent, default to capturing action items from it.
+  if (opts.sourceVoiceNoteId && classification.intent === "unknown") {
+    classification.intent = "action_capture";
+    classification.confidence = "low";
+  }
   const workflow = getWorkflow(classification.intent);
 
   // Confirmation handling: if user said "yes/no" and there's a pending intent,
@@ -453,6 +463,7 @@ async function handleResolvedMessage(opts: {
     userId: resolved.userId,
     ownerTimezone: resolved.timezone,
     now,
+    sourceVoiceNoteId: opts.sourceVoiceNoteId ?? null,
   };
 
   const toolCalls: string[] = [];

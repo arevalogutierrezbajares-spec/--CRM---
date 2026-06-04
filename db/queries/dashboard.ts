@@ -624,3 +624,66 @@ function ymdLocal(d: Date): string {
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
+
+/* ─── Action items (voice-captured tasks) ───────────────────────────────── */
+
+const { actionItems } = schema;
+
+export type DashActionItem = {
+  id: string;
+  title: string;
+  dueDate: string | null;
+  priority: "now" | "next" | "later" | "backlog" | null;
+  fromVoice: boolean;
+  createdAt: Date;
+  isOverdue: boolean;
+};
+
+/** Open action items for a workspace, soonest-due then newest first. */
+export async function listOpenActionItems(
+  workspaceId: string,
+  limit = 12,
+): Promise<DashActionItem[]> {
+  const today = new Date().toISOString().slice(0, 10);
+  const rows = await db
+    .select({
+      id: actionItems.id,
+      title: actionItems.title,
+      dueDate: actionItems.dueDate,
+      priority: actionItems.priority,
+      voiceNoteId: actionItems.voiceNoteId,
+      createdAt: actionItems.createdAt,
+    })
+    .from(actionItems)
+    .where(
+      and(
+        eq(actionItems.workspaceId, workspaceId),
+        eq(actionItems.status, "open"),
+      ),
+    )
+    .orderBy(sql`${actionItems.dueDate} asc nulls last`, desc(actionItems.createdAt))
+    .limit(limit);
+
+  return rows.map((r) => ({
+    id: r.id,
+    title: r.title,
+    dueDate: r.dueDate,
+    priority: r.priority,
+    fromVoice: r.voiceNoteId !== null,
+    createdAt: r.createdAt,
+    isOverdue: r.dueDate !== null && (r.dueDate as string) < today,
+  }));
+}
+
+export async function openActionItemCount(workspaceId: string): Promise<number> {
+  const [row] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(actionItems)
+    .where(
+      and(
+        eq(actionItems.workspaceId, workspaceId),
+        eq(actionItems.status, "open"),
+      ),
+    );
+  return row?.n ?? 0;
+}
