@@ -18,7 +18,7 @@ import { listTownHallFeed, type FeedItem } from "@/db/queries/town-hall-feed";
 import { getWorkspaceCountdown, type WorkspaceCountdown } from "@/db/queries/workspace-settings";
 import { listInitiativesForPicker, type InitiativePick } from "@/db/queries/item-initiatives";
 import { listPinnedProjects, listRecentProjects, type PinnedProject } from "@/db/queries/pins";
-import { listScorecard, listKpis, quarterOf, type ScorecardRow } from "@/db/queries/okrs";
+import { listScorecard, listKpis, quarterOf, type ScorecardRow, type KpiRow } from "@/db/queries/okrs";
 import { getDashboardLayout } from "@/db/queries/dashboard-layout";
 import { DEFAULT_WIDGETS, type DashWidget } from "@/lib/dashboard/layout";
 import { WeeklyView } from "@/components/dashboard/weekly/weekly-view";
@@ -146,6 +146,8 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
   // "Today" in the user's timezone — so overdue/due-today isn't a day off in the
   // evening for non-UTC users (e.g. Venezuela, UTC-4).
   const todayStr = todayInTz(user.timezone);
+  // One canonical clock for every time-derived widget on Home (KPI pace, countdown, day buckets).
+  const nowMs = new Date().getTime();
   // ?item=<type>:<id> deep-link (e.g. from a Town Hall #ref) → auto-open drawer.
   const initialItem = parseItemParam(sp.item);
 
@@ -192,7 +194,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
     safeRead<RefObject[]>(() => listWorkspaceDocs(user.workspaceId), []),
     safeRead<WorkspaceCountdown | null>(() => getWorkspaceCountdown(user.workspaceId), null),
     safeRead<InitiativePick[]>(() => listInitiativesForPicker(user.workspaceId), []),
-    safeRead<ScorecardRow[]>(() => listKpis(user.workspaceId), []),
+    safeRead<KpiRow[]>(() => listKpis(user.workspaceId, nowMs), []),
   ]);
 
   const members = membersRes.data;
@@ -306,12 +308,6 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
     blockedRes.data,
   );
 
-  const serverNow = new Date();
-  const nowMs = serverNow.getTime();
-  const hour = serverNow.getHours();
-  const timeWord = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
-  const greeting = `${timeWord}, ${user.displayName.split(/\s+/)[0] || user.displayName}`;
-
   const dbError =
     !countsRes.ok || !pipelineRes.ok || !relRes.ok || !eventDaysRes.ok;
 
@@ -355,9 +351,9 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
           blocked={blockedRes.data}
           scorecard={scorecardRes.data}
           nowMs={nowMs}
+          tz={user.timezone}
+          todayKey={todayStr}
           layout={dailyData.layout}
-          greeting={greeting}
-          briefing={briefing}
           workspaceId={user.workspaceId}
           countdown={countdownRes.data}
           feed={feedRes.data}

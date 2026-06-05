@@ -4,14 +4,15 @@ import { MeetingsCard } from "./meetings-card";
 import { ProjectsCard } from "./projects-card";
 import { ActionItemsCard } from "./action-items-card";
 import { AIAssistPanel } from "./ai-assist-panel";
-import { TodayBriefing } from "./today-briefing";
+import { QuoteBubble } from "./quote-bubble";
+import { QUOTES } from "@/lib/quotes";
 import { NeedsYouNow } from "./needs-you-now";
 import { Scorecard } from "./scorecard";
 import { KpiStrip } from "./kpi-strip";
 import { ActivityCenter } from "@/components/town-hall/activity-center";
 import { ItemDrawerProvider } from "../item-drawer";
 import type { BlockedProject } from "@/db/queries/this-week";
-import type { ScorecardRow } from "@/db/queries/okrs";
+import type { ScorecardRow, KpiRow } from "@/db/queries/okrs";
 import { PinnedProjects } from "../pinned-projects";
 import { CustomizableDashboard } from "../customizable-dashboard";
 import type { PinnedProject } from "@/db/queries/pins";
@@ -43,14 +44,14 @@ interface DailyViewProps {
   blocked: BlockedProject[];
   scorecard: ScorecardRow[];
   nowMs: number;
+  tz: string;
+  todayKey: string;
   layout: DashWidget[];
-  greeting: string;
-  briefing: string[];
   workspaceId: string;
   countdown: WorkspaceCountdown | null;
   feed: FeedItem[];
   initiatives: InitiativePick[];
-  kpis: ScorecardRow[];
+  kpis: KpiRow[];
   initialItem?: { entityType: "action_item" | "milestone" | "meeting"; id: string } | null;
 }
 
@@ -68,9 +69,9 @@ export function DailyView({
   blocked,
   scorecard,
   nowMs,
+  tz,
+  todayKey,
   layout,
-  greeting,
-  briefing,
   workspaceId,
   countdown,
   feed,
@@ -97,7 +98,8 @@ export function DailyView({
       members={members}
       initialItem={initialItem}
     >
-      <TodayBriefing greeting={greeting} hasUrgent={briefing.length > 0} />
+      {/* Motivational verse — tap to cycle (seed varies per load via nowMs) */}
+      <QuoteBubble initialIndex={nowMs % QUOTES.length} />
 
       {/* Top: exactly 3 — meetings today · tasks due · countdown */}
       <TopRow counts={counts} countdown={countdown} nowMs={nowMs} />
@@ -113,6 +115,8 @@ export function DailyView({
         objects={townHallObjects}
         docs={docs}
         initiatives={initiatives}
+        tz={tz}
+        todayKey={todayKey}
       />
 
       {/* The main body of work (stationary) */}

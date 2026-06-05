@@ -201,16 +201,43 @@ export async function listScorecard(
   return rows.map((r) => ({ ...toKrView({ ...r.kr, ownerName: r.ownerName }), objectiveTitle: r.objectiveTitle }));
 }
 
-/** Headline KPIs (key results flagged is_kpi) shown above Town Hall — across all quarters. */
-export async function listKpis(workspaceId: string): Promise<ScorecardRow[]> {
+/** UTC ms at the start of a "YYYY-QN" quarter, or null if unparseable. */
+function quarterStartMs(quarter: string): number | null {
+  const m = /^(\d{4})-Q([1-4])$/.exec(quarter);
+  if (!m) return null;
+  return Date.UTC(Number(m[1]), (Number(m[2]) - 1) * 3, 1);
+}
+
+/** Pace health: actual progress vs. the time elapsed toward the deadline ("on plan?"). */
+function paceHealthOf(progress: number, elapsed: number): KrHealth {
+  if (progress >= elapsed) return "green"; // on or ahead of pace
+  if (progress >= elapsed * 0.6) return "amber"; // behind but recoverable
+  return "red";
+}
+
+/** A KPI = a scorecard row + a pace-based R/A/G aligned to the plan's deadline. */
+export type KpiRow = ScorecardRow & { paceHealth: KrHealth; binary: boolean };
+
+/**
+ * Headline KPIs (key results flagged is_kpi) shown above Town Hall. paceHealth
+ * compares actual progress to the expected linear progress from the quarter start
+ * to the workspace "big milestone" deadline (the countdown date). Binary (target=1)
+ * KPIs aren't paced linearly — they're amber while pending before the deadline,
+ * green once done, red only if the deadline passed undone. `nowMs` is threaded from
+ * the page so every time-derived widget on Home shares one clock.
+ */
+export async function listKpis(workspaceId: string, nowMs: number = Date.now()): Promise<KpiRow[]> {
   const rows = await db
     .select({
       kr: schema.keyResults,
       ownerName: schema.users.displayName,
       objectiveTitle: schema.objectives.title,
+      objectiveQuarter: schema.objectives.quarter,
+      countdownDate: schema.workspaces.countdownDate,
     })
     .from(schema.keyResults)
     .innerJoin(schema.objectives, eq(schema.objectives.id, schema.keyResults.objectiveId))
+    .innerJoin(schema.workspaces, eq(schema.workspaces.id, schema.keyResults.workspaceId))
     .leftJoin(
       schema.workspaceMembers,
       and(
@@ -222,7 +249,24 @@ export async function listKpis(workspaceId: string): Promise<ScorecardRow[]> {
     .where(and(eq(schema.keyResults.workspaceId, workspaceId), eq(schema.keyResults.isKpi, true)))
     .orderBy(asc(schema.keyResults.sortOrder))
     .limit(8);
-  return rows.map((r) => ({ ...toKrView({ ...r.kr, ownerName: r.ownerName }), objectiveTitle: r.objectiveTitle }));
+
+  return rows.map((r) => {
+    const view = toKrView({ ...r.kr, ownerName: r.ownerName });
+    const binary = view.target === 1 && !view.unit;
+    let paceHealth: KrHealth = view.health;
+    const startMs = quarterStartMs(r.objectiveQuarter);
+    if (r.countdownDate) {
+      const deadlineMs = new Date(`${r.countdownDate}T00:00:00Z`).getTime();
+      if (binary) {
+        // "Done by the deadline" is all that matters — don't penalize for elapsed time.
+        paceHealth = view.progress >= 1 ? "green" : nowMs > deadlineMs ? "red" : "amber";
+      } else if (startMs != null && deadlineMs > startMs) {
+        const elapsed = Math.max(0, Math.min(1, (nowMs - startMs) / (deadlineMs - startMs)));
+        paceHealth = paceHealthOf(view.progress, elapsed);
+      }
+    }
+    return { ...view, objectiveTitle: r.objectiveTitle, paceHealth, binary };
+  });
 }
 
 /** All key results (title + objective + isKpi) for the "Top KPIs" settings picker. */
