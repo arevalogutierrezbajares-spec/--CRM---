@@ -6,6 +6,7 @@ import { createClient as createBrowserSupabase } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ArenaLoader } from "@/components/arena-loader";
 
 // ─── CONFIGURATION ────────────────────────────────────────────────────────────
 // Drop your Caney photo at /public/caney.jpg (or update IMAGE_SRC below).
@@ -287,6 +288,9 @@ function HolographicForm() {
   // signing-in with a password, or sending a setup/forgot link.
   const [status, setStatus] = useState<"idle" | "signing" | "sending" | "sent" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
+  // Once sign-in succeeds, hand off to the post-login loading interstitial,
+  // which plays the passage and then navigates into the CRM.
+  const [enteringTo, setEnteringTo] = useState<string | null>(null);
 
   function nextTarget() {
     const urlNext = new URLSearchParams(window.location.search).get("next");
@@ -306,8 +310,10 @@ function HolographicForm() {
       setError(result.error ?? "Could not sign in.");
       return;
     }
-    window.location.href = nextTarget();
+    setEnteringTo(nextTarget());
   }
+
+  if (enteringTo) return <ArenaLoader next={enteringTo} />;
 
   // First time / forgot password → email a magic link that lands on
   // /set-password (after which the user signs in with their password).
