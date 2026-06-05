@@ -16,6 +16,8 @@ import { getActiveSprint, type SprintWithStats } from "@/db/queries/work";
 import { AiTechSpendCard } from "@/components/dashboard/right/ai-tech-spend-card";
 import { getAnthropicSpendToday, type AnthropicSpend } from "@/lib/anthropic-budget";
 import { DailyView } from "@/components/dashboard/daily/daily-view";
+import { ItemDrawerProvider } from "@/components/dashboard/item-drawer";
+import { ActionItemsCard } from "@/components/dashboard/daily/action-items-card";
 import { listProjectsForPicker, listWorkspaceDocs } from "@/db/queries/items";
 import type { RefObject } from "@/components/town-hall/types";
 import { listWorkspaceMembers } from "@/db/queries/team";
@@ -344,6 +346,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
       projectTitle: t.projectTitle,
       status: t.status,
       isOverdue: t.isOverdue,
+      ownerName: null,
     })) ?? [],
     dailyData?.meetings ?? weeklyData?.meetings ?? monthlyData?.meetings ?? [],
     blockedRes.data,
@@ -352,7 +355,27 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
   const dbError =
     !countsRes.ok || !pipelineRes.ok || !relRes.ok || !eventDaysRes.ok;
 
+  // @mention sources for the right-rail Action items capture box.
+  const actionItemSources = {
+    people: members,
+    projects: pickerProjects.map((p) => ({
+      refType: "project" as const,
+      refId: p.id,
+      label: p.title,
+      href: `/projects/${p.id}`,
+    })),
+    docs: docsRes.data,
+  };
+
   return (
+    <ItemDrawerProvider
+      // Remount when the ?item= deep-link changes so it opens the new item.
+      // Lifted to wrap both columns so the right-rail Action items can open the drawer.
+      key={initialItem ? `${initialItem.entityType}:${initialItem.id}` : "none"}
+      projects={pickerProjects}
+      members={members}
+      initialItem={initialItem}
+    >
     <DashboardShell
       email={user.email}
       displayName={user.displayName}
@@ -368,6 +391,9 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
       rightColumn={
         <RightColumn>
           <MiniCalendar eventDays={eventDaysRes.data} />
+          {view === "daily" && dailyData && (
+            <ActionItemsCard items={dailyData.actionItems} sources={actionItemSources} />
+          )}
           <SprintWidget sprint={sprintRes.data} />
           <AiTechSpendCard ai={aiSpendRes.data} tech={techSpendRes.data} />
           <TreasuryWidget snapshot={treasuryRes.data} />
@@ -409,7 +435,6 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
           briefingBullets={briefing}
           dashboardLayout={layoutRes.data}
           townHallFeedLimit={DEFAULT_TOWN_HALL_FEED_LIMIT}
-          initialItem={initialItem}
         />
       )}
 
@@ -435,5 +460,6 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
         />
       )}
     </DashboardShell>
+    </ItemDrawerProvider>
   );
 }

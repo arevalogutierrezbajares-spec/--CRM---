@@ -4,13 +4,25 @@ export type WidgetSize = "compact" | "standard" | "wide" | "full";
 type LegacyWidgetWidth = "half" | "full";
 export type DashWidget = { id: string; hidden: boolean; size: WidgetSize };
 
-/** Canonical widgets + default order/size. New widgets append here. */
+/**
+ * Bump when the *default* arrangement changes structurally. A saved layout from
+ * an older version is discarded once (re-seeded to DEFAULT_WIDGETS) so everyone
+ * adopts the new baseline; after the user re-customizes it persists at this
+ * version. See readLayout().
+ *   v2 — Town Hall full-width up top, Tasks under Pinned, Action items moved to
+ *        the right rail (no longer a grid widget).
+ */
+export const LAYOUT_VERSION = 2;
+
+/** Canonical widgets + default order/size. New widgets append here.
+ *  NOTE: `action_items` intentionally lives in the right rail now, not the grid. */
 export const DEFAULT_WIDGETS: DashWidget[] = [
-  { id: "town_hall", hidden: false, size: "wide" },
-  { id: "action_items", hidden: false, size: "standard" },
-  { id: "tasks", hidden: false, size: "wide" },
-  { id: "pinned", hidden: false, size: "standard" },
+  { id: "town_hall", hidden: false, size: "full" },
+  // pinned (8-wide) + relationships (4-wide) fill the first grid row, so Tasks
+  // (8-wide) lands on the next row directly beneath Pinned.
+  { id: "pinned", hidden: false, size: "wide" },
   { id: "relationships", hidden: false, size: "standard" },
+  { id: "tasks", hidden: false, size: "wide" },
   { id: "ai", hidden: false, size: "wide" },
   { id: "scorecard", hidden: false, size: "full" },
 ];
@@ -18,7 +30,6 @@ export const DEFAULT_WIDGETS: DashWidget[] = [
 export const WIDGET_LABELS: Record<string, string> = {
   town_hall: "Town Hall",
   pinned: "Pinned projects",
-  action_items: "Action items",
   tasks: "Tasks",
   relationships: "Relationships",
   scorecard: "Scorecard",
@@ -62,4 +73,26 @@ export function resolveLayout(saved: unknown): DashWidget[] {
   }
   const appended = DEFAULT_WIDGETS.filter((d) => !seen.has(d.id));
   return [...valid, ...appended];
+}
+
+/** The shape we persist: a versioned wrapper around the widget array. */
+export type StoredLayout = { v: number; widgets: DashWidget[] };
+
+/** Pack a sanitized widget array into the versioned persistence shape. */
+export function packLayout(widgets: DashWidget[]): StoredLayout {
+  return { v: LAYOUT_VERSION, widgets: resolveLayout(widgets) };
+}
+
+/**
+ * Read a layout from storage. Only a wrapper saved at the *current*
+ * LAYOUT_VERSION is honored (merged with defaults); anything older — a legacy
+ * bare array, an out-of-date version, or null — is discarded and re-seeded to
+ * the current DEFAULT_WIDGETS so the user adopts the new baseline once.
+ */
+export function readLayout(stored: unknown): DashWidget[] {
+  if (stored && typeof stored === "object" && !Array.isArray(stored)) {
+    const obj = stored as { v?: unknown; widgets?: unknown };
+    if (obj.v === LAYOUT_VERSION) return resolveLayout(obj.widgets);
+  }
+  return DEFAULT_WIDGETS.map((w) => ({ ...w }));
 }

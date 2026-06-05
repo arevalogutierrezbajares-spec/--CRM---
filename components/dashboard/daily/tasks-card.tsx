@@ -135,6 +135,17 @@ export function TasksCard({ tasks, scope, sources }: TasksCardProps) {
                     <div className="text-tiny text-text-tertiary truncate">{t.projectTitle} · {shortDate(t.dueDate)}</div>
                   </Link>
                 )}
+                {t.ownerName && (
+                  <span
+                    title={`Owner: ${t.ownerName}`}
+                    className="hidden max-w-[96px] shrink-0 items-center gap-1 truncate rounded-full bg-surface px-2 py-0.5 text-tiny text-text-secondary sm:inline-flex"
+                  >
+                    <span aria-hidden className="grid h-3.5 w-3.5 shrink-0 place-items-center rounded-full bg-[var(--blue-text)] text-[8px] font-semibold text-white">
+                      {t.ownerName.trim().charAt(0).toUpperCase()}
+                    </span>
+                    <span className="truncate">{t.ownerName.split(/\s+/)[0]}</span>
+                  </span>
+                )}
                 <DashBadge variant={badge.variant}>{badge.label}</DashBadge>
               </li>
             );

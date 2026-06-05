@@ -45,7 +45,7 @@ export function CountdownCard({
     <Link
       href="/workspace"
       title="Edit this milestone in workspace settings"
-      className="group relative block overflow-hidden rounded-lg border px-3.5 py-3"
+      className="group relative block overflow-hidden rounded-lg border px-3 py-2"
       style={{ borderColor: "#232a33", background: "linear-gradient(180deg, #0c1016 0%, #0a0d12 100%)" }}
     >
       {/* Angel Falls — Venezuela's icon — looping behind the LED panel */}
@@ -82,11 +82,11 @@ export function CountdownCard({
         </div>
 
         {done ? (
-          <div className="mt-2 font-mono text-[20px] font-bold" style={{ color: NEON, textShadow: GLOW }}>
+          <div className="mt-1.5 font-mono text-[18px] font-bold" style={{ color: NEON, textShadow: GLOW }}>
             ● LAUNCHED
           </div>
         ) : (
-          <div className="mt-2 flex items-end gap-1.5">
+          <div className="mt-1.5 flex items-end gap-1.5">
             <Cell value={days} label="DAYS" />
             <Colon />
             <Cell value={pad(hours)} label="HRS" />
@@ -98,8 +98,8 @@ export function CountdownCard({
         )}
 
         {subpoints.length > 0 && (
-          <ul className="mt-2 space-y-0.5">
-            {subpoints.slice(0, 3).map((s, i) => (
+          <ul className="mt-1.5 space-y-0.5">
+            {subpoints.slice(0, 2).map((s, i) => (
               <li key={i} className="flex items-start gap-1.5 font-mono text-[10px]" style={{ color: "#6f8c7d" }}>
                 <span className="mt-1 h-1 w-1 shrink-0 rounded-full" style={{ background: NEON }} />
                 <span className="line-clamp-1">{s}</span>
@@ -116,12 +116,12 @@ function Cell({ value, label }: { value: string | number; label: string }) {
   return (
     <div className="flex flex-col items-center">
       <span
-        className="font-mono text-[24px] font-bold leading-none tabular-nums"
+        className="font-mono text-[20px] font-bold leading-none tabular-nums"
         style={{ color: NEON, textShadow: GLOW }}
       >
         {value}
       </span>
-      <span className="mt-1 font-mono text-[8px] tracking-[0.15em]" style={{ color: "#5b7a6a" }}>
+      <span className="mt-0.5 font-mono text-[8px] tracking-[0.15em]" style={{ color: "#5b7a6a" }}>
         {label}
       </span>
     </div>
@@ -130,7 +130,7 @@ function Cell({ value, label }: { value: string | number; label: string }) {
 
 function Colon() {
   return (
-    <span className="mb-2.5 animate-pulse font-mono text-[20px] font-bold leading-none" style={{ color: "#2f6b50" }}>
+    <span className="mb-2 animate-pulse font-mono text-[16px] font-bold leading-none" style={{ color: "#2f6b50" }}>
       :
     </span>
   );

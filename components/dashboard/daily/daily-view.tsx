@@ -1,12 +1,10 @@
 import { TopRow } from "./top-row";
 import { TasksCard } from "./tasks-card";
-import { ActionItemsCard } from "./action-items-card";
 import { AIAssistPanel } from "./ai-assist-panel";
 import { Scorecard } from "./scorecard";
 import { KpiStrip } from "./kpi-strip";
 import { ActivityCenter } from "@/components/town-hall/activity-center";
 import { RelationshipHealth } from "@/components/dashboard/right/relationship-health";
-import { ItemDrawerProvider } from "../item-drawer";
 import type { ScorecardRow, KpiRow } from "@/db/queries/okrs";
 import { PinnedProjects } from "../pinned-projects";
 import type { PinnedProject } from "@/db/queries/pins";
@@ -44,7 +42,6 @@ interface DailyViewProps {
   briefingBullets: string[];
   dashboardLayout: DashWidget[];
   townHallFeedLimit: number;
-  initialItem?: { entityType: "action_item" | "milestone" | "meeting"; id: string } | null;
 }
 
 export function DailyView({
@@ -70,7 +67,6 @@ export function DailyView({
   briefingBullets,
   dashboardLayout,
   townHallFeedLimit,
-  initialItem,
 }: DailyViewProps) {
   const townHallObjects: RefObject[] = pickerProjects.map((p) => ({
     refType: "project" as const,
@@ -102,10 +98,6 @@ export function DailyView({
       ),
     },
     {
-      id: "action_items",
-      node: <ActionItemsCard items={actionItems} sources={mentionSources} />,
-    },
-    {
       id: "tasks",
       node: <TasksCard tasks={tasks} scope="today" sources={mentionSources} />,
     },
@@ -128,17 +120,11 @@ export function DailyView({
   ];
 
   return (
-    <ItemDrawerProvider
-      // Remount when the ?item= deep-link changes so it opens the new item.
-      key={initialItem ? `${initialItem.entityType}:${initialItem.id}` : "none"}
-      projects={pickerProjects}
-      members={members}
-      initialItem={initialItem}
-    >
+    <>
       {/* Top row: meetings agenda · tasks-due agenda · countdown (Angel Falls) */}
       <TopRow meetings={meetings} tasks={tasks} countdown={countdown} nowMs={nowMs} tz={tz} />
 
-      {/* KPIs — slim, full-width strip */}
+      {/* KPIs — slim, full-width strip (inline-editable) */}
       <KpiStrip kpis={kpis} />
 
       <BriefingCard
@@ -151,6 +137,6 @@ export function DailyView({
       />
 
       <CustomizableDashboard widgets={widgets} savedLayout={dashboardLayout} />
-    </ItemDrawerProvider>
+    </>
   );
 }

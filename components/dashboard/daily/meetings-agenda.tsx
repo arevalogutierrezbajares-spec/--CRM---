@@ -25,17 +25,17 @@ export function MeetingsAgenda({ meetings, nowMs, tz }: { meetings: DashMeeting[
   const nextId = sorted.find((m) => m.scheduledAt.getTime() + ASSUMED_MIN * 60000 > nowMs)?.id ?? null;
 
   return (
-    <DashCard>
+    <DashCard className="p-2.5">
       <div className="flex items-center justify-between">
-        <SectionLabel icon={CalendarDays}>Meetings today</SectionLabel>
+        <SectionLabel icon={CalendarDays} className="mb-1.5">Meetings today</SectionLabel>
         {sorted.length > 0 && <span className="text-tiny text-text-tertiary tabular-nums">{sorted.length}</span>}
       </div>
 
       {sorted.length === 0 ? (
-        <p className="mt-2 text-[12px] text-text-secondary">Nothing on the calendar.</p>
+        <p className="text-[12px] text-text-secondary">Nothing on the calendar.</p>
       ) : (
-        <ol className="mt-1.5 space-y-1">
-          {sorted.slice(0, 5).map((m) => {
+        <ol className="max-h-[152px] space-y-0.5 overflow-y-auto pr-1">
+          {sorted.map((m) => {
             const startMs = m.scheduledAt.getTime();
             const mins = Math.round((startMs - nowMs) / 60000);
             const past = startMs + ASSUMED_MIN * 60000 <= nowMs;
@@ -44,9 +44,9 @@ export function MeetingsAgenda({ meetings, nowMs, tz }: { meetings: DashMeeting[
             return (
               <li
                 key={m.id}
-                className={`flex min-h-[40px] items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-surface ${isNext ? "bg-surface" : ""}`}
+                className={`flex min-h-[28px] items-center gap-2 rounded-md px-1.5 py-0.5 transition-colors hover:bg-surface ${isNext ? "bg-surface" : ""}`}
               >
-                <span className="w-[52px] shrink-0 text-right text-tiny tabular-nums text-text-tertiary">
+                <span className="w-[46px] shrink-0 text-right text-tiny tabular-nums text-text-tertiary">
                   {fmtTime(m.scheduledAt, tz)}
                 </span>
                 <span
@@ -56,9 +56,10 @@ export function MeetingsAgenda({ meetings, nowMs, tz }: { meetings: DashMeeting[
                 <button
                   type="button"
                   onClick={() => drawer?.openItem("meeting", m.id)}
-                  className="flex min-w-0 flex-1 items-center self-stretch rounded-sm text-left outline-none transition-transform active:scale-[0.96] focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+                  className="min-w-0 flex-1 truncate self-stretch rounded-sm text-left outline-none transition-transform active:scale-[0.96] focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+                  title={m.title}
                 >
-                  <span className={`block truncate text-[12.5px] ${past ? "text-text-tertiary line-through" : "text-text-primary"}`}>
+                  <span className={`text-[12.5px] ${past ? "text-text-tertiary line-through" : "text-text-primary"}`}>
                     {m.title}
                   </span>
                 </button>
@@ -70,7 +71,6 @@ export function MeetingsAgenda({ meetings, nowMs, tz }: { meetings: DashMeeting[
           })}
         </ol>
       )}
-      {sorted.length > 5 && <p className="mt-1 text-tiny text-text-tertiary">+{sorted.length - 5} more</p>}
     </DashCard>
   );
 }

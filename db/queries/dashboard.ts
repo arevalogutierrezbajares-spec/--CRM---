@@ -10,6 +10,7 @@ const {
   contacts,
   pipelineStages,
   touches,
+  users,
 } = schema;
 
 /* ─── Date helpers ──────────────────────────────────────────────────────── */
@@ -57,6 +58,8 @@ export type DashTask = {
   projectTitle: string;
   status: "pending" | "blocked";
   isOverdue: boolean;
+  /** Display name of the assigned member (assigneeUserId, else legacy assignedTo). */
+  ownerName: string | null;
 };
 
 async function listTasksDueBy(
@@ -72,9 +75,11 @@ async function listTasksDueBy(
       status: milestones.status,
       projectId: projects.id,
       projectTitle: projects.title,
+      ownerName: users.displayName,
     })
     .from(milestones)
     .innerJoin(projects, eq(projects.id, milestones.projectId))
+    .leftJoin(users, eq(users.id, sql`coalesce(${milestones.assigneeUserId}, ${milestones.assignedTo})`))
     .where(
       and(
         eq(projects.workspaceId, workspaceId),
@@ -93,6 +98,7 @@ async function listTasksDueBy(
     projectTitle: r.projectTitle,
     status: r.status as "pending" | "blocked",
     isOverdue: (r.dueDate as string) < today,
+    ownerName: r.ownerName ?? null,
   }));
 }
 
