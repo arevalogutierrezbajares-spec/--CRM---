@@ -43,12 +43,15 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   // Hydrate from localStorage on mount.
   useEffect(() => {
-    const stored = window.localStorage.getItem(STORAGE_KEY) as Theme | null;
-    const initial = stored ?? "system";
-    setThemeState(initial);
-    const r = resolveTheme(initial);
-    setResolved(r);
-    applyTheme(r);
+    const raf = requestAnimationFrame(() => {
+      const stored = window.localStorage.getItem(STORAGE_KEY) as Theme | null;
+      const initial = stored ?? "system";
+      setThemeState(initial);
+      const r = resolveTheme(initial);
+      setResolved(r);
+      applyTheme(r);
+    });
+    return () => cancelAnimationFrame(raf);
   }, []);
 
   // Listen to OS changes when theme=system.

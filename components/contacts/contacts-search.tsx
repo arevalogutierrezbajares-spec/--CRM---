@@ -15,7 +15,10 @@ export function ContactsSearch() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    setValue(sp.get("q") ?? "");
+    const raf = requestAnimationFrame(() => {
+      setValue(sp.get("q") ?? "");
+    });
+    return () => cancelAnimationFrame(raf);
   }, [sp]);
 
   useEffect(() => {

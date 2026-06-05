@@ -231,6 +231,11 @@ export function CaneyLanding() {
 
 // ─── Pixel shatter grid ───────────────────────────────────────────────────────
 
+function cellNoise(row: number, col: number, salt: number): number {
+  const x = Math.sin((row + 1) * 12.9898 + (col + 1) * 78.233 + salt * 37.719) * 43758.5453;
+  return x - Math.floor(x);
+}
+
 function ShatterGrid() {
   // Render a grid of cells over the hotspot area. Each shows the same
   // background image with an offset so it looks seamless before shattering.
@@ -245,11 +250,10 @@ function ShatterGrid() {
       const cellTopPct = top + (HOTSPOT.hPct / GRID_Y) * row;
       const cellWidthPct = HOTSPOT.wPct / GRID_X;
       const cellHeightPct = HOTSPOT.hPct / GRID_Y;
-      // Random shatter trajectory
-      const tx = (Math.random() - 0.5) * 600;
-      const ty = (Math.random() - 0.5) * 600 - 50;
-      const rot = (Math.random() - 0.5) * 720;
-      const delay = Math.random() * 180;
+      const tx = (cellNoise(row, col, 1) - 0.5) * 600;
+      const ty = (cellNoise(row, col, 2) - 0.5) * 600 - 50;
+      const rot = (cellNoise(row, col, 3) - 0.5) * 720;
+      const delay = cellNoise(row, col, 4) * 180;
       cells.push(
         <div
           key={`${row}-${col}`}
