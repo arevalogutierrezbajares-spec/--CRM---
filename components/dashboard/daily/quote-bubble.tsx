@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Heart } from "lucide-react";
-import { QUOTES } from "@/lib/quotes";
+import { HOME_BUBBLE_MESSAGES } from "@/lib/quotes";
 import { QUOTE_FAVS_KEY, QUOTE_PACE_KEY, QUOTE_FAVONLY_KEY, DEFAULT_QUOTE_PACE } from "@/lib/quote-prefs";
 
 function pickDifferent(pool: number[], current: number): number {
@@ -27,7 +27,9 @@ function quoteCacheKey(quote: { text: string; ref: string }) {
  * prefs hydrate in a rAF.
  */
 export function QuoteBubble({ initialIndex }: { initialIndex: number }) {
-  const [index, setIndex] = useState(((initialIndex % QUOTES.length) + QUOTES.length) % QUOTES.length);
+  const [index, setIndex] = useState(
+    ((initialIndex % HOME_BUBBLE_MESSAGES.length) + HOME_BUBBLE_MESSAGES.length) % HOME_BUBBLE_MESSAGES.length,
+  );
   const [favs, setFavs] = useState<Set<string>>(new Set());
   const [pace, setPace] = useState(DEFAULT_QUOTE_PACE);
   const [favOnly, setFavOnly] = useState(false);
@@ -54,7 +56,10 @@ export function QuoteBubble({ initialIndex }: { initialIndex: number }) {
         if (Number.isFinite(p) && p >= 3) setPace(p);
         setFavOnly(fo);
         if (fo && savedFavs.size > 0) {
-          setIndex((cur) => (savedFavs.has(QUOTES[cur].text) ? cur : QUOTES.findIndex((q) => savedFavs.has(q.text))));
+          const next = HOME_BUBBLE_MESSAGES.findIndex(
+            (quote) => quote.kind !== "demon-broadcast" && savedFavs.has(quote.text),
+          );
+          if (next >= 0) setIndex(next);
         }
       } catch {
         /* ignore */
@@ -75,9 +80,11 @@ export function QuoteBubble({ initialIndex }: { initialIndex: number }) {
   }, []);
 
   const eligible = useMemo(() => {
-    const all = QUOTES.map((_, i) => i);
+    const all = HOME_BUBBLE_MESSAGES.map((_, i) => i);
     if (!favOnly) return all;
-    const favIdx = all.filter((i) => favs.has(QUOTES[i].text));
+    const favIdx = all.filter(
+      (i) => HOME_BUBBLE_MESSAGES[i].kind !== "demon-broadcast" && favs.has(HOME_BUBBLE_MESSAGES[i].text),
+    );
     return favIdx.length > 0 ? favIdx : all;
   }, [favOnly, favs]);
 
@@ -86,10 +93,11 @@ export function QuoteBubble({ initialIndex }: { initialIndex: number }) {
     return () => clearInterval(id);
   }, [pace, eligible]);
 
-  const q = QUOTES[index];
-  const isFav = favs.has(q.text);
+  const q = HOME_BUBBLE_MESSAGES[index];
+  const isBroadcast = q.kind === "demon-broadcast";
+  const isFav = !isBroadcast && favs.has(q.text);
 
-  async function speakQuote(quote: (typeof QUOTES)[number]) {
+  async function speakQuote(quote: (typeof HOME_BUBBLE_MESSAGES)[number]) {
     const requestId = ++speakRequest.current;
     const key = quoteCacheKey(quote);
 
@@ -132,6 +140,7 @@ export function QuoteBubble({ initialIndex }: { initialIndex: number }) {
   }
 
   function toggleFav() {
+    if (isBroadcast) return;
     const next = new Set(favs);
     if (next.has(q.text)) next.delete(q.text);
     else next.add(q.text);
@@ -146,7 +155,7 @@ export function QuoteBubble({ initialIndex }: { initialIndex: number }) {
   function handleClick() {
     const next = pickDifferent(eligible, index);
     setIndex(next);
-    void speakQuote(QUOTES[next]);
+    void speakQuote(HOME_BUBBLE_MESSAGES[next]);
   }
 
   function handleMouseEnter() {
@@ -154,7 +163,7 @@ export function QuoteBubble({ initialIndex }: { initialIndex: number }) {
     if (lastHoveredIndex.current === index && now - lastHoverSpeakAt.current < 500) return;
     lastHoveredIndex.current = index;
     lastHoverSpeakAt.current = now;
-    void speakQuote(QUOTES[index]);
+    void speakQuote(HOME_BUBBLE_MESSAGES[index]);
   }
 
   function handleMouseLeave() {
@@ -188,8 +197,8 @@ export function QuoteBubble({ initialIndex }: { initialIndex: number }) {
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
           className="relative flex min-h-[62px] min-w-0 flex-1 flex-col justify-center rounded-[1.15rem] text-left"
-          aria-label="Speak or advance quote"
-          title={isSpeaking ? "Playing quote" : "Hover to hear this quote, click for next"}
+          aria-label="Speak or advance message"
+          title={isSpeaking ? "Playing message" : "Hover to hear this message, click for next"}
         >
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
@@ -213,16 +222,18 @@ export function QuoteBubble({ initialIndex }: { initialIndex: number }) {
           onPause={() => setIsSpeaking(false)}
         />
 
-        <button
-          type="button"
-          onClick={toggleFav}
-          aria-pressed={isFav}
-          aria-label={isFav ? "Remove from favorites" : "Add to favorites"}
-          title={isFav ? "Unfavorite" : "Favorite this quote"}
-          className="flex shrink-0 items-center self-center rounded-full p-1 text-text-tertiary transition-colors hover:text-[var(--red-text)]"
-        >
-          <Heart size={15} className={isFav ? "text-[var(--red-text)]" : ""} fill={isFav ? "currentColor" : "none"} />
-        </button>
+        {!isBroadcast && (
+          <button
+            type="button"
+            onClick={toggleFav}
+            aria-pressed={isFav}
+            aria-label={isFav ? "Remove from favorites" : "Add to favorites"}
+            title={isFav ? "Unfavorite" : "Favorite this quote"}
+            className="flex shrink-0 items-center self-center rounded-full p-1 text-text-tertiary transition-colors hover:text-[var(--red-text)]"
+          >
+            <Heart size={15} className={isFav ? "text-[var(--red-text)]" : ""} fill={isFav ? "currentColor" : "none"} />
+          </button>
+        )}
       </div>
     </div>
   );

@@ -6,7 +6,7 @@ import { GreetingTyping } from "@/components/dashboard/shell/greeting-typing";
 import { GreetingAudio } from "@/components/dashboard/shell/greeting-audio";
 import { greetingIdentity } from "@/lib/greeting";
 import { QuoteBubble } from "@/components/dashboard/daily/quote-bubble";
-import { QUOTES } from "@/lib/quotes";
+import { HOME_BUBBLE_MESSAGES } from "@/lib/quotes";
 import { MiniCalendar } from "@/components/dashboard/right/mini-calendar";
 import { PipelineSnapshot } from "@/components/dashboard/right/pipeline-snapshot";
 import { TreasuryWidget } from "@/components/dashboard/right/treasury-widget";
@@ -362,7 +362,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
             <GreetingTyping title={formalTitle(user.displayName, user.email)} period={periodInTz(user.timezone)} />
             <GreetingAudio slug={greetingIdentity(user.displayName, user.email).slug} period={periodInTz(user.timezone)} />
           </div>
-          <QuoteBubble initialIndex={nowMs % QUOTES.length} />
+          <QuoteBubble initialIndex={nowMs % HOME_BUBBLE_MESSAGES.length} />
         </div>
       }
       rightColumn={
