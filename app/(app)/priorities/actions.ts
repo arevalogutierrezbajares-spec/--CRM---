@@ -25,6 +25,7 @@ export async function createObjectiveAction(input: {
   title: string;
   quarter?: string;
   ownerId?: string | null;
+  ownerAll?: boolean;
   description?: string | null;
 }): Promise<Res> {
   const user = await requireUser();
@@ -36,6 +37,7 @@ export async function createObjectiveAction(input: {
     title: input.title.trim().slice(0, 200),
     quarter,
     ownerId: input.ownerId ?? null,
+    ownerAll: input.ownerAll ?? false,
     description: input.description ?? null,
   });
   if (!row) return { ok: false, error: "That owner isn't in your workspace." };
@@ -48,6 +50,7 @@ export async function updateObjectiveAction(input: {
   title?: string;
   description?: string | null;
   ownerId?: string | null;
+  ownerAll?: boolean;
   status?: ObjectiveStatus;
 }): Promise<Res> {
   const user = await requireUser();

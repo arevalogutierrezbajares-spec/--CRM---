@@ -1549,6 +1549,8 @@ export const objectives = pgTable("objectives", {
   title: text("title").notNull(),
   description: text("description"),
   ownerId: uuid("owner_id").references(() => users.id, { onDelete: "set null" }),
+  // When true the objective is owned by the whole team ("Everyone") and ownerId is null.
+  ownerAll: boolean("owner_all").notNull().default(false),
   quarter: text("quarter").notNull(), // e.g. "2026-Q2"
   status: objectiveStatus("status").notNull().default("on_track"),
   sortOrder: integer("sort_order").notNull().default(0),

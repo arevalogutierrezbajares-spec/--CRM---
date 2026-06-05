@@ -51,6 +51,9 @@ const STATUS_TONE: Record<ObjectiveStatus, string> = {
   done: "var(--blue-text)",
 };
 
+// Sentinel Select value for the "Everyone / whole team" owner option.
+const ALL_OWNER = "__all__";
+
 export function PrioritiesBoard({
   quarter,
   quarters,
@@ -113,7 +116,8 @@ export function PrioritiesBoard({
     const res = await createObjectiveAction({
       title: newTitle,
       quarter,
-      ownerId: newOwner || null,
+      ownerId: newOwner === ALL_OWNER ? null : newOwner || null,
+      ownerAll: newOwner === ALL_OWNER,
     });
     setAdding(false);
     if (res.ok) {
@@ -173,6 +177,7 @@ export function PrioritiesBoard({
             <SelectValue placeholder="Owner" />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem value={ALL_OWNER}>Everyone</SelectItem>
             {members.map((m) => (
               <SelectItem key={m.userId} value={m.userId}>{m.displayName}</SelectItem>
             ))}
@@ -225,9 +230,13 @@ function ObjectiveCard({
       else toast.error(res.error);
     });
   }
-  function setOwner(ownerId: string) {
+  function setOwner(value: string) {
+    const patch =
+      value === ALL_OWNER
+        ? { id: o.id, ownerAll: true }
+        : { id: o.id, ownerId: value || null, ownerAll: false };
     startTransition(async () => {
-      const res = await updateObjectiveAction({ id: o.id, ownerId: ownerId || null });
+      const res = await updateObjectiveAction(patch);
       if (res.ok) onChanged();
       else toast.error(res.error);
     });
@@ -268,11 +277,12 @@ function ObjectiveCard({
               ))}
             </SelectContent>
           </Select>
-          <Select value={o.ownerId ?? ""} onValueChange={setOwner}>
+          <Select value={o.ownerAll ? ALL_OWNER : o.ownerId ?? ""} onValueChange={setOwner}>
             <SelectTrigger className="h-7 w-[120px] text-tiny">
               <SelectValue placeholder="Owner" />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value={ALL_OWNER}>Everyone</SelectItem>
               {members.map((m) => (
                 <SelectItem key={m.userId} value={m.userId}>{m.displayName}</SelectItem>
               ))}

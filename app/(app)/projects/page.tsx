@@ -73,15 +73,19 @@ export default async function ProjectsPage(props: {
     },
   ];
 
-  // Split into Featured + the rest
+  // Split into Featured + the rest. Active sub-modules of a parent (e.g. CaneyCloud →
+  // CaneyRestaurant / Stays / WA Concierge / Academy) stay prominent; top-level
+  // non-featured ventures are shaded "back-burner".
   const featured = filtered.filter((p) => p.featured);
   const rest = filtered.filter((p) => !p.featured);
+  const modules = rest.filter((p) => p.parentProjectId);
+  const others = rest.filter((p) => !p.parentProjectId);
 
   const groups: Record<
     "active" | "waiting" | "done" | "lost",
     ProjectListItem[]
   > = { active: [], waiting: [], done: [], lost: [] };
-  for (const p of rest) groups[p.status].push(p);
+  for (const p of others) groups[p.status].push(p);
 
   return (
     <>
@@ -142,20 +146,32 @@ export default async function ProjectsPage(props: {
               </div>
             )}
 
-            {/* ── Rest, only labeled when status is NOT active ──────── */}
+            {/* ── Active sub-modules (children of a featured/active parent) ── */}
+            {modules.length > 0 && (
+              <section>
+                <h2 className="text-label text-text-secondary mb-3">
+                  Modules · {modules.length}
+                </h2>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {modules.map((p) => (
+                    <ProjectCard key={p.id} project={p} />
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* ── Other ventures (shaded / back-burner) ──────────────── */}
             {(["active", "waiting", "done", "lost"] as const).map((s) => {
               const items = groups[s];
               if (items.length === 0) return null;
               return (
                 <section key={s}>
-                  {s !== "active" && (
-                    <h2 className="text-label text-text-secondary mb-3">
-                      {s} · {items.length}
-                    </h2>
-                  )}
+                  <h2 className="text-label text-text-secondary mb-3">
+                    {s === "active" ? "Other ventures" : s} · {items.length}
+                  </h2>
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     {items.map((p) => (
-                      <ProjectCard key={p.id} project={p} />
+                      <ProjectCard key={p.id} project={p} variant="muted" />
                     ))}
                   </div>
                 </section>

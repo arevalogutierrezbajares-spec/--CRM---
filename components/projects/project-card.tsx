@@ -22,7 +22,7 @@ import type { ProjectListItem } from "@/db/queries/projects";
 
 interface ProjectCardProps {
   project: ProjectListItem;
-  variant?: "featured" | "default";
+  variant?: "featured" | "default" | "muted";
 }
 
 const STATUS_VARIANT: Record<
@@ -62,6 +62,7 @@ export function ProjectCard({ project: p, variant = "default" }: ProjectCardProp
   const [hovered, setHovered] = useState(false);
   const accent = p.coverColor ?? "var(--text-tertiary)";
   const isFeatured = variant === "featured";
+  const isMuted = variant === "muted";
 
   const objectives = (p.objectives ?? []) as string[];
   const totalLinks = Object.values(p.linkPreview ?? {}).reduce(
@@ -71,7 +72,11 @@ export function ProjectCard({ project: p, variant = "default" }: ProjectCardProp
 
   return (
     <div
-      className="relative"
+      className={cn(
+        "relative transition-opacity",
+        // Shaded "back-burner" ventures: dimmed + desaturated until hovered/focused.
+        isMuted && "opacity-55 saturate-[0.55] hover:opacity-100 hover:saturate-100 focus-within:opacity-100",
+      )}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >

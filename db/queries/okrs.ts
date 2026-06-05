@@ -41,6 +41,7 @@ export type ObjectiveView = {
   description: string | null;
   ownerId: string | null;
   ownerName: string | null;
+  ownerAll: boolean;
   quarter: string;
   status: ObjectiveStatus;
   keyResults: KeyResultView[];
@@ -153,7 +154,8 @@ export async function listObjectives(
       title: r.o.title,
       description: r.o.description,
       ownerId: r.o.ownerId,
-      ownerName: r.ownerName,
+      ownerName: r.o.ownerAll ? "Everyone" : r.ownerName,
+      ownerAll: r.o.ownerAll,
       quarter: r.o.quarter,
       status: r.o.status as ObjectiveStatus,
       keyResults: krs,
@@ -205,16 +207,20 @@ export async function createObjective(input: {
   title: string;
   quarter: string;
   ownerId?: string | null;
+  ownerAll?: boolean;
   description?: string | null;
 }): Promise<{ id: string } | null> {
-  if (!(await ownerInWorkspace(input.workspaceId, input.ownerId))) return null;
+  const ownerAll = input.ownerAll ?? false;
+  const ownerId = ownerAll ? null : (input.ownerId ?? null);
+  if (!(await ownerInWorkspace(input.workspaceId, ownerId))) return null;
   const [row] = await db
     .insert(schema.objectives)
     .values({
       workspaceId: input.workspaceId,
       title: input.title,
       quarter: input.quarter,
-      ownerId: input.ownerId ?? null,
+      ownerId,
+      ownerAll,
       description: input.description ?? null,
       createdBy: input.actorId,
     })
@@ -228,13 +234,19 @@ export async function updateObjective(input: {
   title?: string;
   description?: string | null;
   ownerId?: string | null;
+  ownerAll?: boolean;
   status?: ObjectiveStatus;
 }): Promise<boolean> {
-  if (input.ownerId !== undefined && !(await ownerInWorkspace(input.workspaceId, input.ownerId))) return false;
+  if (input.ownerId !== undefined && !input.ownerAll && !(await ownerInWorkspace(input.workspaceId, input.ownerId))) return false;
   const patch: Partial<typeof schema.objectives.$inferInsert> = {};
   if (input.title !== undefined) patch.title = input.title;
   if (input.description !== undefined) patch.description = input.description;
   if (input.ownerId !== undefined) patch.ownerId = input.ownerId;
+  // "Everyone" wins: setting owner_all clears the single owner; picking a member clears owner_all.
+  if (input.ownerAll !== undefined) {
+    patch.ownerAll = input.ownerAll;
+    if (input.ownerAll) patch.ownerId = null;
+  }
   if (input.status !== undefined) patch.status = input.status;
   if (Object.keys(patch).length === 0) return true;
   const res = await db
