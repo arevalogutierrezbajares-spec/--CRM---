@@ -34,6 +34,7 @@ export function QuoteBubble({ initialIndex }: { initialIndex: number }) {
   const [isSpeaking, setIsSpeaking] = useState(false);
 
   const lastHoveredIndex = useRef<number | null>(null);
+  const lastHoverSpeakAt = useRef(0);
   const speakRequest = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -149,8 +150,10 @@ export function QuoteBubble({ initialIndex }: { initialIndex: number }) {
   }
 
   function handleMouseEnter() {
-    if (lastHoveredIndex.current === index) return;
+    const now = Date.now();
+    if (lastHoveredIndex.current === index && now - lastHoverSpeakAt.current < 500) return;
     lastHoveredIndex.current = index;
+    lastHoverSpeakAt.current = now;
     void speakQuote(QUOTES[index]);
   }
 
