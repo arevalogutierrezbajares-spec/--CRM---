@@ -180,4 +180,20 @@ export const QUOTES: Quote[] = [
   { ref: "Sun Tzu", text: "Victorious warriors win first and then go to war; defeated warriors go to war first and then seek to win." },
   { ref: "Sun Tzu", text: "In the midst of chaos, there is also opportunity." },
   { ref: "Sun Tzu", text: "Let your plans be dark and impenetrable as night, and when you move, fall like a thunderbolt." },
+
+  // ── Venezuela — El Libertador y voces que forjaron la nación (en español) ──
+  { ref: "Simón Bolívar", text: "Si la naturaleza se opone, lucharemos contra ella y haremos que nos obedezca." },
+  { ref: "Simón Bolívar", text: "Un pueblo que ama la libertad, al fin será libre." },
+  { ref: "Simón Bolívar", text: "El éxito coronará nuestros esfuerzos, porque el destino de América se ha fijado irrevocablemente." },
+  { ref: "Simón Bolívar", text: "Moral y luces son nuestras primeras necesidades." },
+  { ref: "Simón Bolívar", text: "El sistema de gobierno más perfecto es aquel que produce mayor suma de felicidad posible, mayor suma de seguridad social y mayor suma de estabilidad política." },
+  { ref: "Simón Bolívar", text: "Las naciones marchan hacia su grandeza al mismo paso que camina su educación." },
+  { ref: "Simón Bolívar", text: "El que sirve una revolución ara en el mar." },
+  { ref: "Arturo Uslar Pietri", text: "Sembrar el petróleo." },
+  { ref: "José Antonio Abreu", text: "Si pones un violín en las manos de un niño, ese niño no tomará un arma." },
+  { ref: "José Antonio Abreu", text: "La música siembra valores en el alma del niño." },
+  { ref: "José Antonio Abreu", text: "La música debe ser reconocida como un agente de desarrollo social." },
+  { ref: "José Antonio Abreu", text: "Tocar y luchar." },
+  { ref: "Gustavo Dudamel", text: "El arte es un derecho universal." },
+  { ref: "Gustavo Dudamel", text: "Las únicas armas del pueblo son las herramientas para forjar su propio futuro: instrumentos musicales, pinceles, libros — las más altas expresiones del espíritu humano." },
 ];
