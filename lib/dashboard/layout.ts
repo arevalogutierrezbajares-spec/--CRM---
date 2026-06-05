@@ -11,19 +11,21 @@ export type DashWidget = { id: string; hidden: boolean; size: WidgetSize };
  * version. See readLayout().
  *   v2 — Town Hall full-width up top, Tasks under Pinned, Action items moved to
  *        the right rail (no longer a grid widget).
+ *   v3 — Tasks/AI/Scorecard full-width stacked (no leftover grid gaps); Pinned
+ *        pairs with Relationships on its row, Tasks sits full-width beneath.
  */
-export const LAYOUT_VERSION = 2;
+export const LAYOUT_VERSION = 3;
 
 /** Canonical widgets + default order/size. New widgets append here.
- *  NOTE: `action_items` intentionally lives in the right rail now, not the grid. */
+ *  NOTE: `action_items` intentionally lives in the right rail now, not the grid.
+ *  Sizes chosen so every row fills cleanly (no empty trailing cells):
+ *  Pinned(8)+Relationships(4) share a row; Tasks/AI/Scorecard each span full. */
 export const DEFAULT_WIDGETS: DashWidget[] = [
   { id: "town_hall", hidden: false, size: "full" },
-  // pinned (8-wide) + relationships (4-wide) fill the first grid row, so Tasks
-  // (8-wide) lands on the next row directly beneath Pinned.
   { id: "pinned", hidden: false, size: "wide" },
   { id: "relationships", hidden: false, size: "standard" },
-  { id: "tasks", hidden: false, size: "wide" },
-  { id: "ai", hidden: false, size: "wide" },
+  { id: "tasks", hidden: false, size: "full" },
+  { id: "ai", hidden: false, size: "full" },
   { id: "scorecard", hidden: false, size: "full" },
 ];
 

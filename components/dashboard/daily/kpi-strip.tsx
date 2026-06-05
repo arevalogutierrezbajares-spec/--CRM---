@@ -182,11 +182,11 @@ export function KpiStrip({ kpis }: { kpis: KpiRow[] }) {
                   <button
                     type="button"
                     onClick={() => startEdit(k, current)}
-                    title="Click to update this KPI"
-                    className="group flex shrink-0 items-center gap-1 rounded px-1 text-tiny tabular-nums text-text-secondary transition-colors hover:bg-surface hover:text-text-primary"
+                    title={`${value} — click to update`}
+                    className="group flex min-w-0 max-w-[58%] items-center gap-1 rounded px-1 text-tiny tabular-nums text-text-secondary transition-colors hover:bg-surface hover:text-text-primary"
                   >
-                    <span>{value}</span>
-                    <Pencil size={11} className="text-text-tertiary opacity-0 transition-opacity group-hover:opacity-100" />
+                    <span className="truncate">{value}</span>
+                    <Pencil size={11} className="shrink-0 text-text-tertiary opacity-0 transition-opacity group-hover:opacity-100" />
                   </button>
                 )}
 

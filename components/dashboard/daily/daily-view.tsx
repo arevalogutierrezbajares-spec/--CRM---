@@ -1,5 +1,6 @@
 import { TopRow } from "./top-row";
 import { TasksCard } from "./tasks-card";
+import { ActionItemsCard } from "./action-items-card";
 import { AIAssistPanel } from "./ai-assist-panel";
 import { Scorecard } from "./scorecard";
 import { KpiStrip } from "./kpi-strip";
@@ -135,6 +136,13 @@ export function DailyView({
         meetings={meetings}
         nowMs={nowMs}
       />
+
+      {/* Action items live in the right rail on desktop; the rail is hidden below
+          lg, so show them inline here on small screens (one visible copy per
+          breakpoint — the rail copy is lg+). */}
+      <div className="lg:hidden">
+        <ActionItemsCard items={actionItems} sources={mentionSources} />
+      </div>
 
       <CustomizableDashboard widgets={widgets} savedLayout={dashboardLayout} />
     </>
