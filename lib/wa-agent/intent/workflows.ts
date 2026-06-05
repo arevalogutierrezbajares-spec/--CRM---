@@ -21,7 +21,7 @@ export type Workflow = {
   /**
    * Override the default model for this intent.
    *  - "claude-haiku-4-5" — cheap + fast, for deterministic tool routing
-   *  - "claude-sonnet-4-6" — default, for ambiguous/creative work
+   *  - "claude-sonnet-4-6" — optional for ambiguous/creative work
    *  - "claude-opus-4-7" — overkill; reserved for milestone_done or research
    */
   model?: "claude-haiku-4-5" | "claude-sonnet-4-6" | "claude-opus-4-7";
@@ -44,7 +44,9 @@ export const WORKFLOWS: Partial<Record<Intent, Workflow>> = {
 
   action_capture: {
     allowedTools: ["add_action_item"],
-    model: "claude-sonnet-4-6",
+    // Cost-sensitive: high-volume task capture stays on Haiku with deterministic output
+    // rules and a one-pass action extraction loop.
+    model: "claude-haiku-4-5",
     supplement:
       "The user is dictating tasks (often a transcribed voice note). Identify EACH distinct action item and call add_action_item once per item. " +
       "Keep titles short and imperative. Resolve relative dates ('tomorrow', 'Friday') to an absolute YYYY-MM-DD in the user's timezone for due_date. " +
