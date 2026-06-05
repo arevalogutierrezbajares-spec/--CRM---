@@ -10,7 +10,7 @@
  *     don't collide.
  */
 
-import { and, eq, gte, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import {
   claudeWithTools,
@@ -27,9 +27,9 @@ import { classifyIntent } from "@/lib/wa-agent/intent/classify";
 import { getWorkflow } from "@/lib/wa-agent/intent/workflows";
 import { resolveMentions, mentionSupplementLine } from "@/lib/wa-agent/mention-resolver";
 
-const { waConversations, waActivity, users } = schema;
+const { waConversations, waActivity, users, workspaceMembers } = schema;
 
-const MAX_TURNS = 6;
+const MAX_TURNS = 5;
 const HISTORY_CAP = 20; // pairs, not individual messages
 const STATE_TTL_MS = 30 * 60 * 1000;
 
@@ -62,7 +62,27 @@ export type ResolvedSender = {
   displayName: string;
   timezone: string;
   persona: string | null;
+  workspaceRole: "owner" | "admin" | "member";
 };
+
+type WorkspaceRole = "owner" | "admin" | "member";
+
+async function resolveWorkspaceRole(
+  userId: string,
+  workspaceId: string,
+): Promise<WorkspaceRole | null> {
+  const [m] = await db
+    .select({ role: workspaceMembers.role })
+    .from(workspaceMembers)
+    .where(
+      and(
+        eq(workspaceMembers.userId, userId),
+        eq(workspaceMembers.workspaceId, workspaceId),
+      ),
+    )
+    .limit(1);
+  return m ? (m.role as WorkspaceRole) : null;
+}
 
 /**
  * Match an inbound WhatsApp number to a user row + their current workspace.
@@ -93,6 +113,8 @@ export async function resolveSender(
     (c) => c.whatsappPhone && normalizePhone(c.whatsappPhone) === normalized,
   );
   if (!u || !u.currentWorkspaceId) return null;
+  const role = await resolveWorkspaceRole(u.id, u.currentWorkspaceId);
+  if (!role) return null;
 
   return {
     userId: u.id,
@@ -100,6 +122,7 @@ export async function resolveSender(
     displayName: u.displayName,
     timezone: u.timezone,
     persona: u.whatsappPersona ?? null,
+    workspaceRole: role,
   };
 }
 
@@ -181,6 +204,7 @@ async function logActivity(opts: {
   payload: unknown;
   tokensIn?: number;
   tokensOut?: number;
+  costMillicents?: number;
 }) {
   await db.insert(waActivity).values({
     workspaceId: opts.workspaceId,
@@ -190,39 +214,8 @@ async function logActivity(opts: {
     payload: opts.payload,
     tokensIn: opts.tokensIn,
     tokensOut: opts.tokensOut,
+    costMillicents: opts.costMillicents,
   });
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Daily token budget — applied per-workspace.
-// ─────────────────────────────────────────────────────────────────────────────
-
-const DEFAULT_DAILY_TOKEN_CAP = 300_000;
-
-async function tokenSpendToday(workspaceId: string): Promise<number> {
-  const since = new Date();
-  since.setHours(0, 0, 0, 0);
-  const rows = await db
-    .select({
-      sumIn: sql<number>`coalesce(sum(${waActivity.tokensIn}), 0)`,
-      sumOut: sql<number>`coalesce(sum(${waActivity.tokensOut}), 0)`,
-    })
-    .from(waActivity)
-    .where(
-      and(
-        eq(waActivity.workspaceId, workspaceId),
-        gte(waActivity.createdAt, since),
-      ),
-    );
-  const row = rows[0] ?? { sumIn: 0, sumOut: 0 };
-  return Number(row.sumIn) + Number(row.sumOut);
-}
-
-function dailyCap(): number {
-  const raw = process.env.AGB_WA_DAILY_TOKEN_CAP;
-  if (!raw) return DEFAULT_DAILY_TOKEN_CAP;
-  const n = parseInt(raw, 10);
-  return Number.isFinite(n) && n > 0 ? n : DEFAULT_DAILY_TOKEN_CAP;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -314,6 +307,7 @@ export async function handleMessage(opts: {
 export async function handleMessageForUser(opts: {
   userId: string;
   body: string;
+  fullTools?: boolean;
 }): Promise<AgentResult> {
   if (!isAnthropicConfigured()) {
     return {
@@ -329,9 +323,17 @@ export async function handleMessageForUser(opts: {
       displayName: users.displayName,
       timezone: users.timezone,
       whatsappPersona: users.whatsappPersona,
+      role: workspaceMembers.role,
       currentWorkspaceId: users.currentWorkspaceId,
     })
     .from(users)
+    .innerJoin(
+      workspaceMembers,
+      and(
+        eq(workspaceMembers.userId, users.id),
+        eq(workspaceMembers.workspaceId, users.currentWorkspaceId),
+      ),
+    )
     .where(eq(users.id, opts.userId))
     .limit(1);
 
@@ -349,21 +351,23 @@ export async function handleMessageForUser(opts: {
     displayName: u.displayName,
     timezone: u.timezone,
     persona: u.whatsappPersona ?? null,
+    workspaceRole: u.role,
   };
 
   return handleResolvedMessage({
     senderKey: `web:${opts.userId}`,
     body: opts.body,
     resolved,
+    fullTools: opts.fullTools ?? false,
   });
 }
 
 /**
- * Town-Hall / NIGO entry: run the FULL agent for `userId` within an EXPLICIT
- * workspace (NIGO acts on behalf of the asker). `persona` overrides the user's
- * stored persona so the same agent + 27-tool loop wears the NIGO identity.
+ * Town-Hall / ÑIGO entry: run the FULL agent for `userId` within an EXPLICIT
+ * workspace (ÑIGO acts on behalf of the asker). `persona` overrides the user's
+ * stored persona so the same agent + 27-tool loop wears the ÑIGO identity.
  * Conversation state is shared with the web channel (senderKey web:userId), so
- * multi-turn confirmations ("@NIGO yes") flow across posts.
+ * multi-turn confirmations ("@ÑIGO yes") flow across posts.
  */
 export async function handleAgentMessage(opts: {
   userId: string;
@@ -380,8 +384,16 @@ export async function handleAgentMessage(opts: {
       displayName: users.displayName,
       timezone: users.timezone,
       whatsappPersona: users.whatsappPersona,
+      role: workspaceMembers.role,
     })
     .from(users)
+    .innerJoin(
+      workspaceMembers,
+      and(
+        eq(workspaceMembers.userId, users.id),
+        eq(workspaceMembers.workspaceId, opts.workspaceId),
+      ),
+    )
     .where(eq(users.id, opts.userId))
     .limit(1);
   if (!u) return { ok: false, reply: "I can't find your account.", error: "no-user" };
@@ -392,6 +404,7 @@ export async function handleAgentMessage(opts: {
     displayName: u.displayName,
     timezone: u.timezone,
     persona: opts.persona !== undefined ? opts.persona : u.whatsappPersona ?? null,
+    workspaceRole: u.role,
   };
   return handleResolvedMessage({ senderKey: `web:${opts.userId}`, body: opts.body, resolved, fullTools: true });
 }
@@ -405,28 +418,10 @@ async function handleResolvedMessage(opts: {
   body: string;
   resolved: ResolvedSender;
   sourceVoiceNoteId?: string | null;
-  /** NIGO/web: expose the FULL toolset regardless of the intent's token-diet allowlist. */
+  /** ÑIGO/web: expose the FULL toolset regardless of the intent's token-diet allowlist. */
   fullTools?: boolean;
 }): Promise<AgentResult> {
   const { senderKey, body, resolved } = opts;
-
-  // Daily token cap (per workspace).
-  const spent = await tokenSpendToday(resolved.workspaceId);
-  if (spent > dailyCap()) {
-    await logActivity({
-      workspaceId: resolved.workspaceId,
-      userId: resolved.userId,
-      senderPhone: senderKey,
-      direction: "reject",
-      payload: { reason: "daily-token-cap", spent, cap: dailyCap() },
-    });
-    return {
-      ok: false,
-      reply:
-        "Daily AI budget reached for this workspace. Try again tomorrow or use slash commands (/log /find /help).",
-      error: "daily-token-cap",
-    };
-  }
 
   const now = new Date();
   const state = await loadState(senderKey);
@@ -470,7 +465,7 @@ async function handleResolvedMessage(opts: {
   }
 
   // For requireConfirmation intents without an existing pendingIntent,
-  // inject supplement telling agent to preview only. NIGO (fullTools) skips the
+  // inject supplement telling agent to preview only. ÑIGO (fullTools) skips the
   // forced gate — its persona self-regulates previews — so chat stays responsive.
   const needsConfirmFirst =
     !opts.fullTools && !!workflow.requireConfirmation && !hasPendingIntent && !isConfirmYes;
@@ -502,6 +497,7 @@ async function handleResolvedMessage(opts: {
   const ctx: ToolContext = {
     workspaceId: resolved.workspaceId,
     userId: resolved.userId,
+    workspaceRole: resolved.workspaceRole,
     ownerTimezone: resolved.timezone,
     now,
     sourceVoiceNoteId: opts.sourceVoiceNoteId ?? null,
@@ -516,12 +512,12 @@ async function handleResolvedMessage(opts: {
   let requiredRetryDone = false;
 
   // ── Token diet: send only the tools this intent can use, and pick model ───
-  // NIGO (fullTools) gets the entire registry so it can do anything in chat.
+  // ÑIGO (fullTools) gets the entire registry so it can do anything in chat.
   const allowedNames = opts.fullTools ? null : workflow.allowedTools;
   const tools = allowedNames
     ? TOOL_DEFINITIONS.filter((t) => allowedNames.includes(t.name))
     : TOOL_DEFINITIONS;
-  const model = opts.fullTools ? "claude-sonnet-4-6" : workflow.model ?? "claude-sonnet-4-6";
+  const model = workflow.model ?? "claude-haiku-4-5";
 
   for (let turn = 0; turn < MAX_TURNS; turn++) {
     // On turn 0 we send the full supplement (workflow nudge + confirmation
@@ -545,22 +541,52 @@ async function handleResolvedMessage(opts: {
       messages: state.messages,
       tools,
       model,
-      maxTokens: 1024,
+      maxTokens: 768,
+      spend: {
+        workspaceId: resolved.workspaceId,
+        userId: resolved.userId,
+        senderPhone: senderKey,
+        direction: "out",
+        payload: {
+          route: "wa-agent:loop",
+          intent: classification.intent,
+          workflow: workflow.requiredTools?.length ? "gated" : "free",
+          turn,
+        },
+        trackUsage: true,
+      },
     });
 
     if (!result.ok) {
+      const isBudgetBlock = result.status === 429;
+      const blockedMessage =
+        "Daily AI budget reached for this workspace. Try again tomorrow or use slash commands (/log /find /help).";
+
       await logActivity({
         workspaceId: resolved.workspaceId,
         userId: resolved.userId,
         senderPhone: senderKey,
-        direction: "error",
-        payload: { stage: "claude", error: result.error },
+        direction: isBudgetBlock ? "reject" : "error",
+        payload: {
+          stage: "claude",
+          error: result.error,
+          route: "wa-agent:loop",
+          intent: classification.intent,
+          turn,
+        },
       });
-      return {
-        ok: false,
-        reply: "I'm having trouble right now. Try again in a minute.",
-        error: result.error,
-      };
+
+      return isBudgetBlock
+        ? {
+            ok: false,
+            reply: blockedMessage,
+            error: result.error,
+          }
+        : {
+            ok: false,
+            reply: "I'm having trouble right now. Try again in a minute.",
+            error: result.error,
+          };
     }
 
     totalIn += result.usage.input_tokens;
@@ -617,7 +643,7 @@ async function handleResolvedMessage(opts: {
     if (result.stopReason === "tool_use" && toolUses.length > 0) {
       const toolResults: ClaudeMessageContent[] = [];
       for (const call of toolUses) {
-        // ── Allowlist enforcement (skipped for NIGO/web — full toolset) ─────
+        // ── Allowlist enforcement (skipped for ÑIGO/web: full toolset) ─────
         const allowed = opts.fullTools ? null : workflow.allowedTools;
         if (allowed && !allowed.includes(call.name)) {
           await logActivity({
@@ -690,8 +716,6 @@ async function handleResolvedMessage(opts: {
       model,
       toolCount: tools.length,
     },
-    tokensIn: totalIn,
-    tokensOut: totalOut,
   });
 
   return {

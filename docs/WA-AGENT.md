@@ -29,10 +29,14 @@ AGB_WATCHDOG_NOTIFY_PHONE=
 
 # Brain
 ANTHROPIC_API_KEY=             # required for the agent loop
+ANTHROPIC_DEFAULT_MODEL=claude-haiku-4-5  # default; keep this unless a flow is failing
+ANTHROPIC_DAILY_BUDGET_USD=3              # hard daily spend limit (USD)
+ANTHROPIC_PRICE_PER_1M_USD=               # optional model price override JSON
 
 # Toggles
 AGB_WA_AGENT=1                 # turn on the LLM agent (else legacy /commands)
-AGB_WA_DAILY_TOKEN_CAP=300000  # default; raise/lower as desired
+ANTHROPIC_DAILY_TOKEN_CAP=300000  # optional hard cap on daily tracked tokens
+AGB_WA_DAILY_TOKEN_CAP=300000      # legacy alias for ANTHROPIC_DAILY_TOKEN_CAP
 AGB_WA_RATE_PER_MIN=30         # default
 AGB_WA_RATE_PER_DAY=200        # default
 
@@ -103,13 +107,13 @@ Free-form examples, all routed via the agent:
 - Auto-confirm destructive ops (mark done, advance stage). You'll always get a "Do that? yes/no" preview.
 - Process messages from numbers Meta doesn't sign correctly (`x-hub-signature-256` is verified).
 - Process more than `AGB_WA_RATE_PER_MIN` / `_PER_DAY` per sender — beyond that you get a rate-limit reply.
-- Burn through more than `AGB_WA_DAILY_TOKEN_CAP` Claude tokens per day — beyond that you get a budget reply and slash-commands take over.
+- Burn through more than `ANTHROPIC_DAILY_TOKEN_CAP` / `ANTHROPIC_DAILY_BUDGET_USD` (and legacy `AGB_WA_DAILY_TOKEN_CAP`) per day — beyond that you get a budget reply and slash-commands take over.
 
 ## Observability
 
 Every inbound + tool call + outbound is logged to the `wa_activity` table.
 Columns: `direction`, `payload` (JSONB), `tokens_in`, `tokens_out`,
-`cost_millicents`, `created_at`. Query it directly:
+`cost_millicents`, `created_at`. Query directly:
 
 ```sql
 select direction, payload->>'name' as tool, count(*)
@@ -123,16 +127,16 @@ Errors land in your existing `lib/instrument.ts` pipeline (Sentry if
 
 ## Cost reality check
 
-At Sonnet 4.6 default prices:
+At Haiku defaults:
 
-- ~$0.015 per typical inbound message (1500 input + 500 output tokens including system prompt + 9 tool defs + 10 turn history)
-- 50 messages/day = **$0.75/day = ~$22/month**
-- Daily token cap defaults to 300k → ~$2.50 hard ceiling per day
+- ~$0.00084 per typical inbound message (1200 input + 300 output tokens including system prompt + concise WA workflow context)
+- 3000 messages/day = **~$2.50/day**
+- Default `ANTHROPIC_DAILY_BUDGET_USD=3` gives a practical hard cap around this target for typical traffic.
 
-If you want it cheaper, lower `AGB_WA_DAILY_TOKEN_CAP`. If you want it
-smarter on complex queries, the agent loop's model is a string — flip
-`claude-sonnet-4-6` to `claude-opus-4-7` in `lib/whatsapp-agent.ts` (will be
-~5× the cost).
+If you want even tighter control, lower `ANTHROPIC_DAILY_TOKEN_CAP` or
+`ANTHROPIC_DAILY_BUDGET_USD`.
+For complex flows, flip workflow models to Sonnet only where needed in
+`lib/wa-agent/intent/workflows.ts`.
 
 ## Failure modes
 

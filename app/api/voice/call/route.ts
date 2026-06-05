@@ -80,10 +80,17 @@ export async function POST(req: NextRequest) {
   let items: CallItem[] = [];
 
   const res = await claudeWithTools({
-    model: "claude-sonnet-4-6",
+    model: "claude-haiku-4-5",
     system: SYSTEM,
     tools: [FILE_CALL_TOOL],
     maxTokens: 1500,
+    spend: {
+      workspaceId: user.workspaceId,
+      userId: user.id,
+      direction: "out",
+      payload: { route: "voice:call:file", transcriptChars: transcript.length },
+      trackUsage: true,
+    },
     messages: [
       {
         role: "user",
@@ -108,11 +115,18 @@ export async function POST(req: NextRequest) {
   } else {
     // Graceful fallback: plain brief, no structured tasks.
     const chat = await claudeChat({
-      model: "claude-sonnet-4-6",
+      model: "claude-haiku-4-5",
       system:
         "Summarize this call transcript as a short Markdown brief starting with '**TL;DR:**'. Only include sections with real content. Same language as the transcript.",
       prompt: transcript.slice(0, 24000),
       maxTokens: 800,
+      spend: {
+        workspaceId: user.workspaceId,
+        userId: user.id,
+        direction: "out",
+        payload: { route: "voice:call:fallback", transcriptChars: transcript.length },
+        trackUsage: true,
+      },
     });
     if (chat.ok) brief = chat.text;
   }

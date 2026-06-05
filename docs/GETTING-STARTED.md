@@ -50,6 +50,8 @@ the rest activate optional brain surfaces.
 | Var(s) | Surface that activates | Where to get |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | Re-intro generator, weekly briefing, post-meeting card, inbound triage, conversation memory | console.anthropic.com |
+| `ANTHROPIC_DAILY_BUDGET_USD` | Safety stop for AI surfaces (defaults to `3`) | set to 0 to disable |
+| `ANTHROPIC_DEFAULT_MODEL` | default LLM model for untyped workflows (`claude-haiku-4-5`) | keep default unless a flow is failing |
 | `OPENAI_API_KEY` | Voice memo capture, 30-sec contact-on-the-fly | platform.openai.com |
 | `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `AGB_BRIEFING_RECIPIENT` | Weekly briefing email | resend.com |
 | `WA_PHONE_NUMBER_ID`, `WA_ACCESS_TOKEN`, `WA_VERIFY_TOKEN` | WhatsApp bot + proactive watchdog ping | developers.facebook.com → WhatsApp Cloud API |
