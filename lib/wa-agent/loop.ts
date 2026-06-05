@@ -359,6 +359,44 @@ export async function handleMessageForUser(opts: {
 }
 
 /**
+ * Town-Hall / NIGO entry: run the FULL agent for `userId` within an EXPLICIT
+ * workspace (NIGO acts on behalf of the asker). `persona` overrides the user's
+ * stored persona so the same agent + 27-tool loop wears the NIGO identity.
+ * Conversation state is shared with the web channel (senderKey web:userId), so
+ * multi-turn confirmations ("@NIGO yes") flow across posts.
+ */
+export async function handleAgentMessage(opts: {
+  userId: string;
+  workspaceId: string;
+  body: string;
+  persona?: string | null;
+}): Promise<AgentResult> {
+  if (!isAnthropicConfigured()) {
+    return { ok: false, reply: "AI brain isn't configured. Set ANTHROPIC_API_KEY.", error: "ANTHROPIC_API_KEY missing" };
+  }
+  const [u] = await db
+    .select({
+      id: users.id,
+      displayName: users.displayName,
+      timezone: users.timezone,
+      whatsappPersona: users.whatsappPersona,
+    })
+    .from(users)
+    .where(eq(users.id, opts.userId))
+    .limit(1);
+  if (!u) return { ok: false, reply: "I can't find your account.", error: "no-user" };
+
+  const resolved: ResolvedSender = {
+    userId: u.id,
+    workspaceId: opts.workspaceId,
+    displayName: u.displayName,
+    timezone: u.timezone,
+    persona: opts.persona !== undefined ? opts.persona : u.whatsappPersona ?? null,
+  };
+  return handleResolvedMessage({ senderKey: `web:${opts.userId}`, body: opts.body, resolved, fullTools: true });
+}
+
+/**
  * Shared agent core. Both transports (WhatsApp + web) call this once the
  * sender has been resolved to a user+workspace.
  */
@@ -367,6 +405,8 @@ async function handleResolvedMessage(opts: {
   body: string;
   resolved: ResolvedSender;
   sourceVoiceNoteId?: string | null;
+  /** NIGO/web: expose the FULL toolset regardless of the intent's token-diet allowlist. */
+  fullTools?: boolean;
 }): Promise<AgentResult> {
   const { senderKey, body, resolved } = opts;
 
@@ -430,9 +470,10 @@ async function handleResolvedMessage(opts: {
   }
 
   // For requireConfirmation intents without an existing pendingIntent,
-  // inject supplement telling agent to preview only.
+  // inject supplement telling agent to preview only. NIGO (fullTools) skips the
+  // forced gate — its persona self-regulates previews — so chat stays responsive.
   const needsConfirmFirst =
-    !!workflow.requireConfirmation && !hasPendingIntent && !isConfirmYes;
+    !opts.fullTools && !!workflow.requireConfirmation && !hasPendingIntent && !isConfirmYes;
   const confirmationJustReceived = isConfirmYes && hasPendingIntent;
 
   // ── Mention pre-resolver (Phase 4) ───────────────────────────────────
@@ -443,7 +484,7 @@ async function handleResolvedMessage(opts: {
   const mentionMatches = await resolveMentions(resolved.workspaceId, body);
   const mentionHint = mentionSupplementLine(mentionMatches);
 
-  let turn0Supplement = workflow.supplement ?? "";
+  let turn0Supplement = opts.fullTools ? "" : workflow.supplement ?? "";
   if (needsConfirmFirst) {
     turn0Supplement +=
       "\nCONFIRMATION GATE: Describe exactly what you are about to do, then ask the user YES or NO to confirm. Do NOT call any write/destructive tools yet.";
@@ -475,11 +516,12 @@ async function handleResolvedMessage(opts: {
   let requiredRetryDone = false;
 
   // ── Token diet: send only the tools this intent can use, and pick model ───
-  const allowedNames = workflow.allowedTools;
+  // NIGO (fullTools) gets the entire registry so it can do anything in chat.
+  const allowedNames = opts.fullTools ? null : workflow.allowedTools;
   const tools = allowedNames
     ? TOOL_DEFINITIONS.filter((t) => allowedNames.includes(t.name))
     : TOOL_DEFINITIONS;
-  const model = workflow.model ?? "claude-sonnet-4-6";
+  const model = opts.fullTools ? "claude-sonnet-4-6" : workflow.model ?? "claude-sonnet-4-6";
 
   for (let turn = 0; turn < MAX_TURNS; turn++) {
     // On turn 0 we send the full supplement (workflow nudge + confirmation
@@ -551,7 +593,7 @@ async function handleResolvedMessage(opts: {
 
     if (result.stopReason === "end_turn") {
       // Before accepting the final reply, check required tools were called.
-      const required = workflow.requiredTools ?? [];
+      const required = opts.fullTools ? [] : workflow.requiredTools ?? [];
       if (required.length > 0 && !requiredToolMet && !requiredRetryDone) {
         // Inject a system nudge and give the agent one more turn.
         requiredRetryDone = true;
@@ -575,8 +617,8 @@ async function handleResolvedMessage(opts: {
     if (result.stopReason === "tool_use" && toolUses.length > 0) {
       const toolResults: ClaudeMessageContent[] = [];
       for (const call of toolUses) {
-        // ── Allowlist enforcement ──────────────────────────────────────────
-        const allowed = workflow.allowedTools;
+        // ── Allowlist enforcement (skipped for NIGO/web — full toolset) ─────
+        const allowed = opts.fullTools ? null : workflow.allowedTools;
         if (allowed && !allowed.includes(call.name)) {
           await logActivity({
             workspaceId: resolved.workspaceId,

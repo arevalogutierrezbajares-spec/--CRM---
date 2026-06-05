@@ -1,7 +1,6 @@
 import "server-only";
-import { claudeChat } from "@/lib/anthropic";
-import { listPosts, createPost } from "@/db/queries/town-hall";
-import { listKpis } from "@/db/queries/okrs";
+import { createPost } from "@/db/queries/town-hall";
+import { handleAgentMessage } from "@/lib/wa-agent/loop";
 
 /** NIGO — the AI teammate's system user id (seeded as a workspace member). */
 export const NIGO_USER_ID = "a1100000-0000-4000-8000-000000000001";
@@ -11,20 +10,13 @@ export function isNigoMentioned(mentionUserIds: string[]): boolean {
   return mentionUserIds.includes(NIGO_USER_ID);
 }
 
-const SYSTEM = `You are NIGO, the friendly AI teammate inside this team's "Town Hall" chat — an internal founder/chief-of-staff CRM for a Venezuela-focused venture group (CaneyCloud posada PMS, VAV tourism marketplace, a restaurant vertical, BD/capital pipeline).
-
-You are summoned with @NIGO. Reply like a sharp, concise teammate in a chat thread:
-- 1–3 short sentences. Warm but no fluff, no "Hi"/"Best regards", no markdown headings.
-- Always address the asker by their first name.
-- Use ONLY the provided context (recent messages + KPIs). Never invent numbers, names, or status.
-- If you genuinely don't know from the context, say so briefly.
-- You cannot take actions yet (create tasks, send messages). If asked to, say you can't act yet and suggest the fastest manual step (e.g. "drop it in Action items with the + above").`;
+const NIGO_PERSONA = `You are NIGO, the team's sharp AI teammate living in this CRM's Town Hall chat. Address people by first name; warm but concise (1–3 sentences, plain text). You have the FULL toolset — create/find contacts, add & edit tasks and action items, mark milestones done, log meetings & touches, schedule/cancel reminders, attach links, post status reports & daily recaps, look up projects/members. When asked to DO something, do it (preview destructive ops and ask for "yes" first). Never invent data; look things up with your tools.`;
 
 /**
- * NIGO reads recent Town Hall context + the current KPIs and posts a concise,
- * workspace-aware reply (a top-level message @mentioning the asker, so it's
- * visible in the activity feed). Best-effort — callers should not block the
- * original post on a NIGO failure.
+ * NIGO runs the full chief-of-staff agent (27 tools, conversation memory, token
+ * cap, confirmation flow) on behalf of the asker, then posts the reply as the
+ * NIGO system user (@mentioning the asker so it surfaces in the feed). Best-effort
+ * — callers must not block the human's post on a NIGO failure.
  */
 export async function runNigoReply(opts: {
   workspaceId: string;
@@ -33,45 +25,19 @@ export async function runNigoReply(opts: {
   question: string;
 }): Promise<void> {
   const firstName = opts.askerName.split(/\s+/)[0] || opts.askerName;
-
-  const [recent, kpis] = await Promise.all([
-    listPosts({ workspaceId: opts.workspaceId, limit: 10 }).catch(() => []),
-    listKpis(opts.workspaceId).catch(() => []),
-  ]);
-
-  const convo = recent
-    .filter((p) => !p.parentPostId)
-    .reverse()
-    .map((p) => `${p.authorName}: ${p.body}`)
-    .join("\n")
-    .slice(0, 2000);
-
-  const kpiLines = kpis
-    .map((k) => {
-      const val = k.binary
-        ? k.progress >= 1
-          ? "done"
-          : "pending"
-        : `${k.current}/${k.target}${k.unit ? ` ${k.unit}` : ""}`;
-      return `- ${k.title}: ${val} (${k.paceHealth})`;
-    })
-    .join("\n");
-
-  const prompt = `Recent Town Hall messages (oldest→newest):
-${convo || "(none yet)"}
-
-Current KPIs:
-${kpiLines || "(none set)"}
-
-${firstName} just asked you:
-"${opts.question}"
-
-Write NIGO's reply (address ${firstName} by name).`;
+  // Strip the @NIGO summon token — the agent shouldn't treat it as a contact mention.
+  const body = opts.question.replace(/@nigo\b/gi, "").trim() || "(no message)";
 
   let text = "";
   try {
-    const res = await claudeChat({ system: SYSTEM, prompt, maxTokens: 400 });
-    if (res.ok) text = res.text.trim();
+    const res = await handleAgentMessage({
+      userId: opts.askerId,
+      workspaceId: opts.workspaceId,
+      body,
+      persona: NIGO_PERSONA,
+    });
+    // Even a non-ok result carries a user-facing reply (e.g. daily budget reached).
+    if (res.reply && res.reply.trim()) text = res.reply.trim();
   } catch {
     /* fall through to fallback */
   }

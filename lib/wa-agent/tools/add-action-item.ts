@@ -26,9 +26,10 @@ export const addActionItem: ToolEntry = {
   definition: {
     name: "add_action_item",
     description:
-      "Record one action item / task for the user (e.g. extracted from a voice note). " +
-      "Call once per distinct task. Keep the title short and imperative " +
-      '("Call the bank", "Email Marcos the deck"). Items appear on the Home dashboard.',
+      "Create one action item / to-do for the user. Call this WHENEVER someone asks to add, " +
+      "create, or note a task or action item (or one is extracted from a voice note). Call once " +
+      'per distinct task. Keep the title short and imperative ("Call the bank", "Email Marcos the ' +
+      'deck"). Items appear on the Home dashboard. This is the right tool for "add an action item".',
     input_schema: {
       type: "object",
       properties: {
