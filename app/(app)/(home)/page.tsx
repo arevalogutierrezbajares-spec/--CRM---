@@ -334,7 +334,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
       email={user.email}
       displayName={user.displayName}
       header={
-        <div className="flex min-w-0 flex-col justify-center gap-1 py-1">
+        <div className="flex min-w-0 flex-col justify-center gap-2.5 py-1.5">
           <GreetingTyping title={formalTitle(user.displayName, user.email)} period={periodInTz(user.timezone)} />
           <QuoteBubble initialIndex={nowMs % QUOTES.length} />
         </div>

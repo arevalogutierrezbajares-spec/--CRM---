@@ -27,16 +27,16 @@ export function GreetingTyping({ title, period }: { title: string; period: Perio
   const done = n >= full.length;
 
   return (
-    <div className="hidden shrink-0 items-center gap-2 sm:flex">
+    <div className="hidden shrink-0 items-center gap-2.5 sm:flex">
       <motion.span
         initial={{ scale: 0, rotate: -30 }}
         animate={{ scale: 1, rotate: 0 }}
         transition={{ type: "spring", stiffness: 420, damping: 11 }}
         className="inline-flex shrink-0"
       >
-        <Icon size={16} style={{ color: COLOR[period] }} />
+        <Icon size={22} style={{ color: COLOR[period] }} />
       </motion.span>
-      <span className="truncate text-[14px] font-semibold tracking-tight text-text-primary">
+      <span className="truncate text-[21px] font-bold tracking-tight text-text-primary">
         {full.slice(0, n)}
         <span
           aria-hidden

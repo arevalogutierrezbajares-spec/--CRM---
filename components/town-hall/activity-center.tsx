@@ -344,7 +344,7 @@ export function ActivityCenter({
           objects={objects}
           docs={docs}
           onPosted={onPosted}
-          placeholder="Share an update… @mention people, #reference a project. ⌘↵ to post."
+          placeholder="Share an update… @mention people, @NIGO to ask the AI, #reference a project. ⌘↵ to post."
         />
       </div>
 
@@ -389,8 +389,8 @@ export function ActivityCenter({
         )}
       </div>
 
-      {/* Scrollable, compacted feed — kept short so pinned projects show below */}
-      <div className="mt-3 max-h-[40vh] space-y-3 overflow-y-auto pr-1">
+      {/* Scrollable, compacted feed */}
+      <div className="mt-3 max-h-[48vh] space-y-3 overflow-y-auto pr-1">
         {groups.length === 0 ? (
           <div className="py-6 text-center text-[12px] text-text-secondary">
             {filtersActive ? "No activity matches these filters." : "No activity yet — post an update above."}

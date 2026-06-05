@@ -4,10 +4,14 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { CalendarClock } from "lucide-react";
 
+const NEON = "#3ddc91";
+const GLOW = "0 0 8px rgba(61,220,145,0.55)";
+
 /**
- * Live D:H:M:S countdown to the workspace "big milestone". Seeds `now` from a
- * server prop and ticks via setInterval (timer-driven setState only — never in
- * the effect body — to satisfy react-hooks/set-state-in-effect + purity).
+ * Retro CRT-style live countdown to the workspace "big milestone": phosphor-green
+ * LED digits (D : H : M : S) on a dark panel with scanlines + blinking colons.
+ * `now` is seeded from a server prop and ticks via setInterval (timer-driven
+ * setState only — never in the effect body).
  */
 export function CountdownCard({
   targetDate,
@@ -20,7 +24,6 @@ export function CountdownCard({
   subpoints: string[];
   nowMs: number;
 }) {
-  // Deterministic from the prop (an explicit arg → not the forbidden argless new Date()).
   const targetMs = new Date(`${targetDate}T00:00:00`).getTime();
   const [now, setNow] = useState(nowMs);
 
@@ -41,34 +44,74 @@ export function CountdownCard({
   return (
     <Link
       href="/workspace"
-      className="group flex flex-col rounded-lg border bg-card px-3.5 py-3 transition-colors hover:border-[var(--blue-mid)]"
-      style={{ borderColor: "var(--border-default)" }}
       title="Edit this milestone in workspace settings"
+      className="group relative block overflow-hidden rounded-lg border px-3.5 py-3"
+      style={{ borderColor: "#232a33", background: "linear-gradient(180deg, #0c1016 0%, #0a0d12 100%)" }}
     >
-      <div className="flex items-center gap-1.5 text-label text-text-tertiary">
-        <CalendarClock size={12} /> {title || "Big milestone"}
-      </div>
-      {done ? (
-        <div className="mt-1 text-[22px] font-semibold tracking-tight text-green-mid">It&apos;s here 🎉</div>
-      ) : (
-        <div className="mt-1 flex items-baseline gap-1 tabular-nums">
-          <span className="text-[22px] font-semibold tracking-tight text-text-primary">{days}</span>
-          <span className="text-[12px] text-text-tertiary">d</span>
-          <span className="ml-1 text-[13px] font-medium text-text-secondary">
-            {pad(hours)}:{pad(mins)}:{pad(secs)}
-          </span>
+      {/* CRT scanlines */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 opacity-[0.07]"
+        style={{ backgroundImage: "repeating-linear-gradient(0deg, #fff 0px, #fff 1px, transparent 1px, transparent 3px)" }}
+      />
+
+      <div className="relative">
+        <div className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.18em]" style={{ color: "#7fd9b0" }}>
+          <CalendarClock size={11} />
+          <span className="truncate">{title || "Big milestone"}</span>
         </div>
-      )}
-      {subpoints.length > 0 && (
-        <ul className="mt-1 space-y-0.5">
-          {subpoints.slice(0, 3).map((s, i) => (
-            <li key={i} className="flex items-start gap-1 text-tiny text-text-tertiary">
-              <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-[var(--blue-mid)]" />
-              <span className="line-clamp-1">{s}</span>
-            </li>
-          ))}
-        </ul>
-      )}
+
+        {done ? (
+          <div className="mt-2 font-mono text-[20px] font-bold" style={{ color: NEON, textShadow: GLOW }}>
+            ● LAUNCHED
+          </div>
+        ) : (
+          <div className="mt-2 flex items-end gap-1.5">
+            <Cell value={days} label="DAYS" />
+            <Colon />
+            <Cell value={pad(hours)} label="HRS" />
+            <Colon />
+            <Cell value={pad(mins)} label="MIN" />
+            <Colon />
+            <Cell value={pad(secs)} label="SEC" />
+          </div>
+        )}
+
+        {subpoints.length > 0 && (
+          <ul className="mt-2 space-y-0.5">
+            {subpoints.slice(0, 3).map((s, i) => (
+              <li key={i} className="flex items-start gap-1.5 font-mono text-[10px]" style={{ color: "#6f8c7d" }}>
+                <span className="mt-1 h-1 w-1 shrink-0 rounded-full" style={{ background: NEON }} />
+                <span className="line-clamp-1">{s}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </Link>
+  );
+}
+
+function Cell({ value, label }: { value: string | number; label: string }) {
+  return (
+    <div className="flex flex-col items-center">
+      <span
+        className="font-mono text-[24px] font-bold leading-none tabular-nums"
+        style={{ color: NEON, textShadow: GLOW }}
+      >
+        {value}
+      </span>
+      <span className="mt-1 font-mono text-[8px] tracking-[0.15em]" style={{ color: "#5b7a6a" }}>
+        {label}
+      </span>
+    </div>
+  );
+}
+
+function Colon() {
+  return (
+    <span className="mb-2.5 animate-pulse font-mono text-[20px] font-bold leading-none" style={{ color: "#2f6b50" }}>
+      :
+    </span>
   );
 }

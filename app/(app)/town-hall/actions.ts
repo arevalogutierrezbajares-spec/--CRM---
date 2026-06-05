@@ -6,6 +6,7 @@ import { db, schema } from "@/db";
 import { inArray } from "drizzle-orm";
 import { requireUser } from "@/lib/current-user";
 import { listWorkspaceMembers } from "@/db/queries/team";
+import { isNigoMentioned, runNigoReply, NIGO_USER_ID } from "@/lib/nigo";
 import {
   createPost,
   listPosts,
@@ -134,7 +135,7 @@ export async function createPostAction(input: {
   // 4. WhatsApp out. Mentioned members get a DM; if alsoWhatsApp, the whole
   //    team gets it (their inbox is WhatsApp). Each recipient is messaged once.
   const link = `${process.env.NEXT_PUBLIC_SITE_URL ?? ""}/town-hall`;
-  const mentioned = new Set(mentionUserIds.filter((id) => id !== user.id));
+  const mentioned = new Set(mentionUserIds.filter((id) => id !== user.id && id !== NIGO_USER_ID));
   // Team-wide WhatsApp fan-out is a paid, opt-out-less blast — restrict it to
   // owners/admins. Members can still @mention specific teammates (above).
   const canBroadcast = user.workspaceRole === "owner" || user.workspaceRole === "admin";
@@ -161,7 +162,22 @@ export async function createPostAction(input: {
     );
   }
 
+  // NIGO agent — if @NIGO was summoned (and the author isn't NIGO), reply in-thread.
+  if (user.id !== NIGO_USER_ID && isNigoMentioned(mentionUserIds)) {
+    try {
+      await runNigoReply({
+        workspaceId: user.workspaceId,
+        askerId: user.id,
+        askerName: user.displayName,
+        question: body,
+      });
+    } catch {
+      /* a NIGO failure must never break the human's post */
+    }
+  }
+
   revalidatePath("/town-hall");
+  revalidatePath("/");
   return { ok: true, postId, notified: mentioned.size, waSent };
 }
 

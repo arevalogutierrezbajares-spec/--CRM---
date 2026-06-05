@@ -92,22 +92,9 @@ export function DailyView({
       {/* Top row: ordered meetings agenda · tasks due · countdown */}
       <TopRow counts={counts} meetings={meetings} countdown={countdown} nowMs={nowMs} tz={tz} />
 
-      {/* Body: LEFT (wide) work column · MIDDLE feed/insights column */}
-      <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
-        <div className="flex flex-col gap-2.5">
-          <BriefingCard
-            bullets={briefing}
-            actionItems={actionItems}
-            tasks={tasks}
-            blocked={blocked}
-            meetings={meetings}
-            nowMs={nowMs}
-          />
-          <ActionItemsCard items={actionItems} sources={mentionSources} />
-          <TasksCard tasks={tasks} scope="today" sources={mentionSources} />
-        </div>
-
-        <div className="flex flex-col gap-2.5">
+      {/* Body: LEFT (wide) = Town Hall + insights · RIGHT (thinner) = work */}
+      <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
+        <div className="flex min-w-0 flex-col gap-2.5">
           <KpiStrip kpis={kpis} />
           <ActivityCenter
             workspaceId={workspaceId}
@@ -123,6 +110,19 @@ export function DailyView({
           <PinnedProjects pinned={pinnedProjects} allProjects={pickerProjects} recent={recentProjects} />
           <AIAssistPanel scope="daily" />
           <Scorecard rows={scorecard} />
+        </div>
+
+        <div className="flex min-w-0 flex-col gap-2.5">
+          <BriefingCard
+            bullets={briefing}
+            actionItems={actionItems}
+            tasks={tasks}
+            blocked={blocked}
+            meetings={meetings}
+            nowMs={nowMs}
+          />
+          <ActionItemsCard items={actionItems} sources={mentionSources} />
+          <TasksCard tasks={tasks} scope="today" sources={mentionSources} />
         </div>
       </div>
     </ItemDrawerProvider>
