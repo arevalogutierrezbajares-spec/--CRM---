@@ -23,15 +23,15 @@ export function QuoteBubble({ initialIndex }: { initialIndex: number }) {
 
   return (
     <div className="relative hidden min-w-0 lg:block">
-      {/* thought-bubble tail: little circles trailing toward the greeting */}
+      {/* thought-bubble tail: little circles rising toward the greeting above */}
       <span
         aria-hidden
-        className="absolute -bottom-1.5 left-1.5 h-2 w-2 rounded-full border"
+        className="absolute -top-1.5 left-3 h-2 w-2 rounded-full border"
         style={{ background: "var(--bg-card)", borderColor: "var(--ai-border)" }}
       />
       <span
         aria-hidden
-        className="absolute -bottom-3 left-0 h-1 w-1 rounded-full border"
+        className="absolute -top-[18px] left-1 h-1 w-1 rounded-full border"
         style={{ background: "var(--bg-card)", borderColor: "var(--ai-border)" }}
       />
       <motion.button
@@ -40,7 +40,7 @@ export function QuoteBubble({ initialIndex }: { initialIndex: number }) {
         whileTap={{ scale: 0.97 }}
         title={`${q.text} — ${q.ref}  (tap for another)`}
         aria-label="Show another verse"
-        className="group relative flex min-w-0 max-w-[34vw] items-center gap-2 rounded-[1.15rem] border px-3 py-1.5"
+        className="group relative flex min-w-0 max-w-[46vw] items-center gap-2 rounded-[1.15rem] border px-3 py-1.5"
         style={{
           background:
             "linear-gradient(135deg, color-mix(in oklab, var(--purple-mid) 11%, var(--bg-card)) 0%, var(--bg-card) 75%)",
