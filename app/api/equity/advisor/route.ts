@@ -79,9 +79,20 @@ Deterministic baseline: ${JSON.stringify(fallback)}
 Return the JSON object now.`;
 
   const result = await claudeChat({
+    model: "claude-haiku-4-5",
     system,
     prompt,
     maxTokens: 1_200,
+    spend: {
+      workspaceId: user.workspaceId,
+      userId: user.id,
+      direction: "out",
+      trackUsage: true,
+      payload: {
+        route: "equity:advisor",
+        roleBandId: payload.roleBandId,
+      },
+    },
   });
 
   if (!result.ok) {

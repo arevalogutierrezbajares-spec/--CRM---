@@ -14,6 +14,7 @@ All Claude/Anthropic traffic goes through `lib/anthropic.ts` and is wrapped by t
 - `app/api/meetings/[id]/summarize/route.ts`
 - `app/api/voice/quick-contact/route.ts`
 - `app/api/voice/call/route.ts` (tool + fallback)
+- `app/api/equity/advisor/route.ts`
 - `app/(app)/brain/actions.ts`
 - `app/(app)/brain/conversation-memory.ts`
 - `app/(app)/brain/post-meeting-actions.ts`
