@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { BarChart3, ArrowRight } from "lucide-react";
-import { fmtVal, HEALTH_LABEL } from "@/components/priorities/priorities-board";
+import { fmtVal, HEALTH_LABEL } from "@/lib/priorities/format";
 import type { ScorecardRow } from "@/db/queries/okrs";
 
 const HEALTH: Record<string, string> = {

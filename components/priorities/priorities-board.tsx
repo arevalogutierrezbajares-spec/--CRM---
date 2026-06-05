@@ -26,6 +26,10 @@ import type {
   KeyResultView,
   ObjectiveStatus,
 } from "@/db/queries/okrs";
+import { fmtVal, HEALTH_LABEL } from "@/lib/priorities/format";
+
+// Re-exported for back-compat with existing importers.
+export { fmtVal, HEALTH_LABEL };
 
 type Member = { userId: string; displayName: string };
 
@@ -33,11 +37,6 @@ const HEALTH: Record<string, string> = {
   green: "var(--green-mid)",
   amber: "var(--amber-text)",
   red: "var(--red-text)",
-};
-export const HEALTH_LABEL: Record<string, string> = {
-  green: "on track",
-  amber: "at risk",
-  red: "off track",
 };
 const STATUS_LABEL: Record<ObjectiveStatus, string> = {
   on_track: "On track",
@@ -51,13 +50,6 @@ const STATUS_TONE: Record<ObjectiveStatus, string> = {
   off_track: "var(--red-text)",
   done: "var(--blue-text)",
 };
-
-export function fmtVal(v: number, unit: string | null): string {
-  const n = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(v);
-  if (unit === "$") return `$${n}`;
-  if (unit === "%") return `${n}%`;
-  return unit ? `${n} ${unit}` : n;
-}
 
 export function PrioritiesBoard({
   quarter,
