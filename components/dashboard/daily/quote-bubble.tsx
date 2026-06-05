@@ -20,7 +20,7 @@ function quoteCacheKey(quote: { text: string; ref: string }) {
 /**
  * A thought-bubble of motivational quotes in the top bar. The full quote + source
  * are always visible (wraps, fixed-height box, no cutoff). Auto-rotates every
- * `pace` seconds and single click speaks, double-click advances + speaks. ❤
+ * `pace` seconds, hover speaks, and single click advances to next.
  * favorites the current quote. Pace, the favorites-only mode, and the favorites
  * list are managed in app Settings — this just reads those prefs from
  * localStorage. initialIndex is server-seeded (no Math.random in render);
@@ -33,7 +33,7 @@ export function QuoteBubble({ initialIndex }: { initialIndex: number }) {
   const [favOnly, setFavOnly] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
 
-  const singleClickTimer = useRef<number | null>(null);
+  const lastHoveredIndex = useRef<number | null>(null);
   const speakRequest = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -61,10 +61,6 @@ export function QuoteBubble({ initialIndex }: { initialIndex: number }) {
     });
     return () => {
       cancelAnimationFrame(raf);
-      if (singleClickTimer.current !== null) {
-        clearTimeout(singleClickTimer.current);
-        singleClickTimer.current = null;
-      }
       abortRef.current?.abort();
       if (audio) {
         audio.pause();
@@ -92,18 +88,10 @@ export function QuoteBubble({ initialIndex }: { initialIndex: number }) {
   const q = QUOTES[index];
   const isFav = favs.has(q.text);
 
-  function clearSingleClickTimer() {
-    if (singleClickTimer.current !== null) {
-      clearTimeout(singleClickTimer.current);
-      singleClickTimer.current = null;
-    }
-  }
-
   async function speakQuote(quote: (typeof QUOTES)[number]) {
     const requestId = ++speakRequest.current;
     const key = quoteCacheKey(quote);
 
-    clearSingleClickTimer();
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -154,19 +142,20 @@ export function QuoteBubble({ initialIndex }: { initialIndex: number }) {
     }
   }
 
-  function handleSingleClick() {
-    clearSingleClickTimer();
-    singleClickTimer.current = window.setTimeout(() => {
-      void speakQuote(QUOTES[index]);
-      singleClickTimer.current = null;
-    }, 190);
-  }
-
-  function handleDoubleClick() {
-    clearSingleClickTimer();
+  function handleClick() {
     const next = pickDifferent(eligible, index);
     setIndex(next);
     void speakQuote(QUOTES[next]);
+  }
+
+  function handleMouseEnter() {
+    if (lastHoveredIndex.current === index) return;
+    lastHoveredIndex.current = index;
+    void speakQuote(QUOTES[index]);
+  }
+
+  function handleMouseLeave() {
+    lastHoveredIndex.current = null;
   }
 
   return (
@@ -192,11 +181,12 @@ export function QuoteBubble({ initialIndex }: { initialIndex: number }) {
       >
         <button
           type="button"
-          onClick={handleSingleClick}
-          onDoubleClick={handleDoubleClick}
+          onClick={handleClick}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
           className="relative flex min-h-[62px] min-w-0 flex-1 flex-col justify-center rounded-[1.15rem] text-left"
           aria-label="Speak or advance quote"
-          title={isSpeaking ? "Speaking current quote" : "Tap to hear this quote, double tap for next"}
+          title={isSpeaking ? "Playing quote" : "Hover to hear this quote, click for next"}
         >
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
