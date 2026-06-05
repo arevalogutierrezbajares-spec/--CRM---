@@ -15,6 +15,7 @@ import {
   Target,
   ListTodo,
   Megaphone,
+  ChevronRight,
 } from "lucide-react";
 import { DashCard } from "@/components/dashboard/shared/dash-card";
 import { SectionLabel } from "@/components/dashboard/shared/section-label";
@@ -28,7 +29,6 @@ import {
 import { Composer } from "./composer";
 import { PostBody } from "./post-body";
 import { PostReactions } from "./post-reactions";
-import { formatRelative } from "@/lib/utils";
 import type { MemberOption, RefObject } from "./types";
 import type { FeedItem } from "@/db/queries/town-hall-feed";
 import type { ActivityEntity, ActivityEvent } from "@/db/queries/activity";
@@ -64,6 +64,19 @@ function actorId(i: FeedItem): string | null {
 function actorName(i: FeedItem): string | null {
   return i.kind === "post" ? i.post.authorName : i.activity.actorName;
 }
+/** Relative time from a server-snapshot `nowMs` (deterministic SSR↔client). */
+function rel(at: Date, nowMs: number): string {
+  const s = Math.max(0, Math.round((nowMs - at.getTime()) / 1000));
+  if (s < 60) return "just now";
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  if (d < 7) return `${d}d ago`;
+  return `${Math.floor(d / 7)}w ago`;
+}
+
 function feedType(i: FeedItem): FeedType {
   if (i.kind === "post") return "message";
   const a = i.activity;
@@ -155,7 +168,7 @@ function InitiativeBadges({ initiatives }: { initiatives: InitiativePick[] }) {
   );
 }
 
-function CompactActivity({ a }: { a: ActivityEvent }) {
+function CompactActivity({ a, nowMs }: { a: ActivityEvent; nowMs: number }) {
   const Icon = a.done ? CheckCircle2 : ENTITY_ICON[a.entity] ?? FileText;
   const body = (
     <span>
@@ -174,8 +187,85 @@ function CompactActivity({ a }: { a: ActivityEvent }) {
         ) : (
           body
         )}
-        <span className="ml-1.5 text-tiny text-text-tertiary">{formatRelative(a.at)}</span>
+        <span className="ml-1.5 text-tiny text-text-tertiary">{rel(a.at, nowMs)}</span>
       </div>
+    </div>
+  );
+}
+
+/** A run of consecutive items within an actor block — either one post, or a
+ *  group of same-verb activities that can collapse into a one-line summary. */
+type Run = { key: string; isPost: boolean; items: FeedItem[] };
+function buildRuns(items: FeedItem[]): Run[] {
+  const out: Run[] = [];
+  let cur: Run | null = null;
+  for (const it of items) {
+    const k = it.kind === "post" ? `post:${it.post.id}` : it.activity.verb;
+    if (!cur || it.kind === "post" || cur.isPost || cur.key !== k) {
+      cur = { key: k, isPost: it.kind === "post", items: [] };
+      out.push(cur);
+    }
+    cur.items.push(it);
+  }
+  return out;
+}
+
+const ENTITY_NOUN: Partial<Record<ActivityEntity, [one: string, many: string]>> = {
+  meeting: ["meeting", "meetings"],
+  milestone: ["task", "tasks"],
+  action_item: ["item", "items"],
+  doc: ["doc", "docs"],
+  file: ["file", "files"],
+  link: ["link", "links"],
+  note: ["note", "notes"],
+  contact: ["contact", "contacts"],
+  project: ["project", "projects"],
+  initiative: ["initiative", "initiatives"],
+  touch: ["touch", "touches"],
+};
+function runVerb(a: ActivityEvent): string {
+  if (a.done) return "completed";
+  switch (a.entity) {
+    case "meeting": return "scheduled";
+    case "project": return "created";
+    case "initiative": return "started";
+    case "contact": return "added";
+    case "touch": return "logged";
+    case "milestone":
+    case "action_item": return "added";
+    default: return "added"; // docs/files/links/notes
+  }
+}
+/** "scheduled 3 meetings", "completed 2 tasks". */
+function summarize(items: ActivityEvent[]): string {
+  const a = items[0];
+  const noun = ENTITY_NOUN[a.entity] ?? ["item", "items"];
+  return `${runVerb(a)} ${items.length} ${noun[1]}`;
+}
+
+function ActivityRun({ items, nowMs }: { items: ActivityEvent[]; nowMs: number }) {
+  const [open, setOpen] = useState(false);
+  const first = items[0];
+  const Icon = first.done ? CheckCircle2 : ENTITY_ICON[first.entity] ?? FileText;
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center gap-1.5 text-[12.5px] leading-snug text-text-secondary hover:text-text-primary"
+        aria-expanded={open}
+      >
+        <Icon size={13} className={`shrink-0 ${first.done ? "text-green-mid" : "text-text-tertiary"}`} />
+        <span>{summarize(items)}</span>
+        <ChevronRight size={12} className={`shrink-0 transition-transform ${open ? "rotate-90" : ""}`} />
+      </button>
+      {open && (
+        <div className="ml-[7px] mt-0.5 space-y-0.5 border-l pl-2.5" style={{ borderColor: "var(--border-default)" }}>
+          {items.map((a) => (
+            <CompactActivity key={a.id} a={a} nowMs={nowMs} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -189,6 +279,7 @@ export function ActivityCenter({
   initiatives,
   tz,
   todayKey,
+  nowMs,
 }: {
   workspaceId: string;
   initialFeed: FeedItem[];
@@ -198,6 +289,7 @@ export function ActivityCenter({
   initiatives: InitiativePick[];
   tz: string;
   todayKey: string;
+  nowMs: number;
 }) {
   const router = useRouter();
   const [type, setType] = useState<FeedType>("all");
@@ -297,8 +389,8 @@ export function ActivityCenter({
         )}
       </div>
 
-      {/* Scrollable, compacted feed */}
-      <div className="mt-3 max-h-[56vh] space-y-3 overflow-y-auto pr-1">
+      {/* Scrollable, compacted feed — kept short so pinned projects show below */}
+      <div className="mt-3 max-h-[40vh] space-y-3 overflow-y-auto pr-1">
         {groups.length === 0 ? (
           <div className="py-6 text-center text-[12px] text-text-secondary">
             {filtersActive ? "No activity matches these filters." : "No activity yet — post an update above."}
@@ -316,19 +408,33 @@ export function ActivityCenter({
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline gap-2">
                     <span className="text-[12.5px] font-medium text-text-primary">{g.actorName ?? "Someone"}</span>
-                    <span className="text-tiny text-text-tertiary">{formatRelative(g.items[0].at)}</span>
+                    <span className="text-tiny text-text-tertiary">{rel(g.items[0].at, nowMs)}</span>
                   </div>
                   <div className="mt-0.5 space-y-1">
-                    {g.items.map((it) =>
-                      it.kind === "post" ? (
-                        <div key={`post:${it.post.id}`}>
-                          <div className="text-[12.5px] text-text-secondary">
-                            <PostBody post={it.post} />
-                          </div>
-                          <PostReactions postId={it.post.id} reactions={it.post.reactions} onChanged={() => router.refresh()} />
+                    {buildRuns(g.items).map((run) =>
+                      run.isPost ? (
+                        <div key={`post:${run.items[0].kind === "post" ? run.items[0].post.id : run.key}`}>
+                          {run.items[0].kind === "post" && (
+                            <>
+                              <div className="text-[12.5px] text-text-secondary">
+                                <PostBody post={run.items[0].post} />
+                              </div>
+                              <PostReactions
+                                postId={run.items[0].post.id}
+                                reactions={run.items[0].post.reactions}
+                                onChanged={() => router.refresh()}
+                              />
+                            </>
+                          )}
                         </div>
+                      ) : run.items.length === 1 && run.items[0].kind === "activity" ? (
+                        <CompactActivity key={run.items[0].activity.id} a={run.items[0].activity} nowMs={nowMs} />
                       ) : (
-                        <CompactActivity key={it.activity.id} a={it.activity} />
+                        <ActivityRun
+                          key={run.key + ":" + (run.items[0].kind === "activity" ? run.items[0].activity.id : "")}
+                          items={run.items.flatMap((i) => (i.kind === "activity" ? [i.activity] : []))}
+                          nowMs={nowMs}
+                        />
                       ),
                     )}
                   </div>

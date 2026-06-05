@@ -1,12 +1,8 @@
 import { TopRow } from "./top-row";
 import { TasksCard } from "./tasks-card";
-import { MeetingsCard } from "./meetings-card";
-import { ProjectsCard } from "./projects-card";
 import { ActionItemsCard } from "./action-items-card";
 import { AIAssistPanel } from "./ai-assist-panel";
-import { QuoteBubble } from "./quote-bubble";
-import { QUOTES } from "@/lib/quotes";
-import { NeedsYouNow } from "./needs-you-now";
+import { BriefingCard } from "./briefing-card";
 import { Scorecard } from "./scorecard";
 import { KpiStrip } from "./kpi-strip";
 import { ActivityCenter } from "@/components/town-hall/activity-center";
@@ -14,11 +10,9 @@ import { ItemDrawerProvider } from "../item-drawer";
 import type { BlockedProject } from "@/db/queries/this-week";
 import type { ScorecardRow, KpiRow } from "@/db/queries/okrs";
 import { PinnedProjects } from "../pinned-projects";
-import { CustomizableDashboard } from "../customizable-dashboard";
 import type { PinnedProject } from "@/db/queries/pins";
 import type { MentionSources } from "@/components/ui/mention-input";
 import type { RefObject } from "@/components/town-hall/types";
-import type { DashWidget } from "@/lib/dashboard/layout";
 import type { WorkspaceCountdown } from "@/db/queries/workspace-settings";
 import type { FeedItem } from "@/db/queries/town-hall-feed";
 import type { InitiativePick } from "@/db/queries/item-initiatives";
@@ -26,7 +20,6 @@ import type {
   DashActionItem,
   DashCounts,
   DashMeeting,
-  DashProject,
   DashTask,
 } from "@/db/queries/dashboard";
 
@@ -34,7 +27,6 @@ interface DailyViewProps {
   counts: DashCounts;
   tasks: DashTask[];
   meetings: DashMeeting[];
-  projects: DashProject[];
   actionItems: DashActionItem[];
   pickerProjects: { id: string; title: string }[];
   members: { userId: string; displayName: string }[];
@@ -43,10 +35,10 @@ interface DailyViewProps {
   recentProjects: { id: string; title: string }[];
   blocked: BlockedProject[];
   scorecard: ScorecardRow[];
+  briefing: string[];
   nowMs: number;
   tz: string;
   todayKey: string;
-  layout: DashWidget[];
   workspaceId: string;
   countdown: WorkspaceCountdown | null;
   feed: FeedItem[];
@@ -59,7 +51,6 @@ export function DailyView({
   counts,
   tasks,
   meetings,
-  projects,
   actionItems,
   pickerProjects,
   members,
@@ -68,10 +59,10 @@ export function DailyView({
   recentProjects,
   blocked,
   scorecard,
+  briefing,
   nowMs,
   tz,
   todayKey,
-  layout,
   workspaceId,
   countdown,
   feed,
@@ -98,43 +89,42 @@ export function DailyView({
       members={members}
       initialItem={initialItem}
     >
-      {/* Motivational verse — tap to cycle (seed varies per load via nowMs) */}
-      <QuoteBubble initialIndex={nowMs % QUOTES.length} />
+      {/* Top row: ordered meetings agenda · tasks due · countdown */}
+      <TopRow counts={counts} meetings={meetings} countdown={countdown} nowMs={nowMs} tz={tz} />
 
-      {/* Top: exactly 3 — meetings today · tasks due · countdown */}
-      <TopRow counts={counts} countdown={countdown} nowMs={nowMs} />
+      {/* Body: LEFT (wide) work column · MIDDLE feed/insights column */}
+      <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+        <div className="flex flex-col gap-2.5">
+          <BriefingCard
+            bullets={briefing}
+            actionItems={actionItems}
+            tasks={tasks}
+            blocked={blocked}
+            meetings={meetings}
+            nowMs={nowMs}
+          />
+          <ActionItemsCard items={actionItems} sources={mentionSources} />
+          <TasksCard tasks={tasks} scope="today" sources={mentionSources} />
+        </div>
 
-      {/* KPIs above Town Hall (the starred Priorities key results) */}
-      <KpiStrip kpis={kpis} />
-
-      {/* Town Hall — front & center: the activity log */}
-      <ActivityCenter
-        workspaceId={workspaceId}
-        initialFeed={feed}
-        members={members}
-        objects={townHallObjects}
-        docs={docs}
-        initiatives={initiatives}
-        tz={tz}
-        todayKey={todayKey}
-      />
-
-      {/* The main body of work (stationary) */}
-      <NeedsYouNow actionItems={actionItems} tasks={tasks} blocked={blocked} meetings={meetings} nowMs={nowMs} />
-      <CustomizableDashboard
-        savedLayout={layout}
-        widgets={[
-          { id: "pinned", node: <PinnedProjects pinned={pinnedProjects} allProjects={pickerProjects} recent={recentProjects} /> },
-          { id: "action_items", node: <ActionItemsCard items={actionItems} sources={mentionSources} /> },
-          { id: "tasks", node: <TasksCard tasks={tasks} scope="today" sources={mentionSources} /> },
-          { id: "meetings", node: <MeetingsCard meetings={meetings} scope="today" /> },
-          { id: "projects", node: <ProjectsCard projects={projects} /> },
-          { id: "ai", node: <AIAssistPanel scope="daily" /> },
-        ]}
-      />
-
-      {/* Scorecard last */}
-      <Scorecard rows={scorecard} />
+        <div className="flex flex-col gap-2.5">
+          <KpiStrip kpis={kpis} />
+          <ActivityCenter
+            workspaceId={workspaceId}
+            initialFeed={feed}
+            members={members}
+            objects={townHallObjects}
+            docs={docs}
+            initiatives={initiatives}
+            tz={tz}
+            todayKey={todayKey}
+            nowMs={nowMs}
+          />
+          <PinnedProjects pinned={pinnedProjects} allProjects={pickerProjects} recent={recentProjects} />
+          <AIAssistPanel scope="daily" />
+          <Scorecard rows={scorecard} />
+        </div>
+      </div>
     </ItemDrawerProvider>
   );
 }

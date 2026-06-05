@@ -2,15 +2,13 @@
 
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Quote as QuoteIcon, Sparkles } from "lucide-react";
 import { QUOTES } from "@/lib/quotes";
 
 /**
- * A friendly speech-bubble of scripture. Tap it to pop a fresh verse (random,
- * never the same twice in a row) with a soft blur-in transition. The reference
- * sits low-key under the text. initialIndex is seeded server-side so there's no
- * Math.random() during client render (react-hooks/purity); new picks happen in
- * the click handler. Honors prefers-reduced-motion via the app MotionConfig.
+ * A thought-bubble of scripture for the top bar (right of the greeting). Tap to
+ * pop a fresh verse (random, never twice in a row) with a blur-in transition; the
+ * reference sits low-key beside it, full text on hover. initialIndex is seeded
+ * server-side (no Math.random in render); new picks happen in the click handler.
  */
 export function QuoteBubble({ initialIndex }: { initialIndex: number }) {
   const [index, setIndex] = useState(((initialIndex % QUOTES.length) + QUOTES.length) % QUOTES.length);
@@ -24,49 +22,45 @@ export function QuoteBubble({ initialIndex }: { initialIndex: number }) {
   }
 
   return (
-    <motion.button
-      type="button"
-      onClick={next}
-      initial={{ opacity: 0, y: -6, scale: 0.98 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ type: "spring", stiffness: 240, damping: 22 }}
-      whileTap={{ scale: 0.985 }}
-      aria-label="Show another verse"
-      className="group relative block w-full overflow-hidden rounded-2xl border px-5 py-4 text-left"
-      style={{
-        background:
-          "linear-gradient(135deg, color-mix(in oklab, var(--purple-mid) 12%, var(--bg-card)) 0%, var(--bg-card) 72%)",
-        borderColor: "var(--ai-border)",
-      }}
-    >
-      {/* watermark */}
-      <QuoteIcon
+    <div className="relative hidden min-w-0 lg:block">
+      {/* thought-bubble tail: little circles trailing toward the greeting */}
+      <span
         aria-hidden
-        size={88}
-        className="pointer-events-none absolute -right-3 -top-4 opacity-[0.06]"
-        style={{ color: "var(--purple-mid)" }}
+        className="absolute -bottom-1.5 left-1.5 h-2 w-2 rounded-full border"
+        style={{ background: "var(--bg-card)", borderColor: "var(--ai-border)" }}
       />
-
-      <AnimatePresence mode="wait" initial={false}>
-        <motion.div
-          key={index}
-          initial={{ opacity: 0, y: 8, filter: "blur(5px)" }}
-          animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-          exit={{ opacity: 0, y: -8, filter: "blur(5px)" }}
-          transition={{ duration: 0.28, ease: "easeOut" }}
-          className="relative"
-        >
-          <p className="text-pretty text-[14.5px] font-medium leading-snug text-text-primary">
-            “{q.text}”
-          </p>
-          <div className="mt-2 flex items-center justify-between gap-3">
-            <span className="font-mono text-tiny tracking-wide text-text-tertiary">{q.ref}</span>
-            <span className="flex items-center gap-1 text-tiny text-text-tertiary opacity-0 transition-opacity group-hover:opacity-100 [@media(hover:none)]:opacity-100">
-              tap for another <Sparkles size={11} />
-            </span>
-          </div>
-        </motion.div>
-      </AnimatePresence>
-    </motion.button>
+      <span
+        aria-hidden
+        className="absolute -bottom-3 left-0 h-1 w-1 rounded-full border"
+        style={{ background: "var(--bg-card)", borderColor: "var(--ai-border)" }}
+      />
+      <motion.button
+        type="button"
+        onClick={next}
+        whileTap={{ scale: 0.97 }}
+        title={`${q.text} — ${q.ref}  (tap for another)`}
+        aria-label="Show another verse"
+        className="group relative flex min-w-0 max-w-[34vw] items-center gap-2 rounded-[1.15rem] border px-3 py-1.5"
+        style={{
+          background:
+            "linear-gradient(135deg, color-mix(in oklab, var(--purple-mid) 11%, var(--bg-card)) 0%, var(--bg-card) 75%)",
+          borderColor: "var(--ai-border)",
+        }}
+      >
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.span
+            key={index}
+            initial={{ opacity: 0, y: 4, filter: "blur(3px)" }}
+            animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+            exit={{ opacity: 0, y: -4, filter: "blur(3px)" }}
+            transition={{ duration: 0.24, ease: "easeOut" }}
+            className="flex min-w-0 items-baseline gap-2"
+          >
+            <span className="truncate text-[12px] italic leading-tight text-text-secondary">“{q.text}”</span>
+            <span className="shrink-0 font-mono text-[10px] text-text-tertiary">{q.ref}</span>
+          </motion.span>
+        </AnimatePresence>
+      </motion.button>
+    </div>
   );
 }

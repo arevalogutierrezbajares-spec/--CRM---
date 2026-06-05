@@ -2,6 +2,9 @@ import { requireUser } from "@/lib/current-user";
 import { todayInTz } from "@/lib/date/today";
 import { DashboardShell } from "@/components/dashboard/shell/dashboard-shell";
 import { RightColumn } from "@/components/dashboard/shell/right-column";
+import { GreetingTyping } from "@/components/dashboard/shell/greeting-typing";
+import { QuoteBubble } from "@/components/dashboard/daily/quote-bubble";
+import { QUOTES } from "@/lib/quotes";
 import { MiniCalendar } from "@/components/dashboard/right/mini-calendar";
 import { PipelineSnapshot } from "@/components/dashboard/right/pipeline-snapshot";
 import { RelationshipHealth } from "@/components/dashboard/right/relationship-health";
@@ -19,8 +22,6 @@ import { getWorkspaceCountdown, type WorkspaceCountdown } from "@/db/queries/wor
 import { listInitiativesForPicker, type InitiativePick } from "@/db/queries/item-initiatives";
 import { listPinnedProjects, listRecentProjects, type PinnedProject } from "@/db/queries/pins";
 import { listScorecard, listKpis, quarterOf, type ScorecardRow, type KpiRow } from "@/db/queries/okrs";
-import { getDashboardLayout } from "@/db/queries/dashboard-layout";
-import { DEFAULT_WIDGETS, type DashWidget } from "@/lib/dashboard/layout";
 import { WeeklyView } from "@/components/dashboard/weekly/weekly-view";
 import { MonthlyView } from "@/components/dashboard/monthly/monthly-view";
 import { DbBanner } from "@/components/db-banner";
@@ -133,6 +134,29 @@ function parseItemParam(raw: string | string[] | undefined): InitialItem {
   return null;
 }
 
+/** A fun, formal title per teammate; falls back to first name. */
+function formalTitle(displayName: string, email: string): string {
+  const key = `${email.split("@")[0] ?? ""} ${displayName}`.toLowerCase();
+  if (key.includes("tg.2000") || key.includes("tomas")) return "Top G";
+  if (key.includes("charles")) return "Sir Charles";
+  if (key.includes("jose") || key.includes("joe") || key.includes("ernesto")) return "Mr. Joe";
+  if (key.includes("arevalo") || key.includes("agb")) return "Don AGB";
+  return displayName.split(/\s+/)[0] || displayName;
+}
+
+/** Time-of-day period in the user's IANA timezone. */
+function periodInTz(tz: string): "morning" | "afternoon" | "evening" {
+  let h = 12;
+  try {
+    h = Number(new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "numeric", hour12: false }).format(new Date()));
+  } catch {
+    /* default noon */
+  }
+  if (h < 12) return "morning";
+  if (h < 18) return "afternoon";
+  return "evening";
+}
+
 export default async function HomePage(props: { searchParams: SearchParams }) {
   const user = await requireUser();
   const sp = await props.searchParams;
@@ -205,13 +229,11 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
   let dailyData: {
     tasks: DashTask[];
     meetings: DashMeeting[];
-    projects: DashProject[];
     actionItems: DashActionItem[];
     pickerProjects: { id: string; title: string }[];
     members: { userId: string; displayName: string }[];
     pinnedProjects: PinnedProject[];
     recentProjects: { id: string; title: string }[];
-    layout: DashWidget[];
   } | null = null;
   let weeklyData: {
     tasks: DashTask[];
@@ -229,25 +251,21 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
   } | null = null;
 
   if (view === "daily") {
-    const [tasks, meetings, projects, actionItems, pinnedProjects, recentProjects, layoutRes] = await Promise.all([
+    const [tasks, meetings, actionItems, pinnedProjects, recentProjects] = await Promise.all([
       safeRead<DashTask[]>(() => listTasksToday(user.workspaceId, todayStr), []),
       safeRead<DashMeeting[]>(() => listMeetingsToday(user.workspaceId), []),
-      safeRead<DashProject[]>(() => listActiveProjectsForDashboard(user.workspaceId, 6, todayStr), []),
       safeRead<DashActionItem[]>(() => listOpenActionItems(user.workspaceId, 12, todayStr), []),
       safeRead<PinnedProject[]>(() => listPinnedProjects(user.workspaceId, user.id, todayStr), []),
       safeRead<{ id: string; title: string }[]>(() => listRecentProjects(user.workspaceId, user.id, 8), []),
-      safeRead<DashWidget[]>(() => getDashboardLayout(user.id), DEFAULT_WIDGETS),
     ]);
     dailyData = {
       tasks: tasks.data,
       meetings: meetings.data,
-      projects: projects.data,
       actionItems: actionItems.data,
       pickerProjects,
       members,
       pinnedProjects: pinnedProjects.data,
       recentProjects: recentProjects.data,
-      layout: layoutRes.data,
     };
   } else if (view === "weekly") {
     const [tasks, meetings, projects] = await Promise.all([
@@ -315,6 +333,12 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
     <DashboardShell
       email={user.email}
       displayName={user.displayName}
+      header={
+        <>
+          <GreetingTyping title={formalTitle(user.displayName, user.email)} period={periodInTz(user.timezone)} />
+          <QuoteBubble initialIndex={nowMs % QUOTES.length} />
+        </>
+      }
       rightColumn={
         <RightColumn>
           <MiniCalendar eventDays={eventDaysRes.data} />
@@ -341,7 +365,6 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
           counts={countsRes.data}
           tasks={dailyData.tasks}
           meetings={dailyData.meetings}
-          projects={dailyData.projects}
           actionItems={dailyData.actionItems}
           pickerProjects={dailyData.pickerProjects}
           members={dailyData.members}
@@ -350,10 +373,10 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
           docs={docsRes.data}
           blocked={blockedRes.data}
           scorecard={scorecardRes.data}
+          briefing={briefing}
           nowMs={nowMs}
           tz={user.timezone}
           todayKey={todayStr}
-          layout={dailyData.layout}
           workspaceId={user.workspaceId}
           countdown={countdownRes.data}
           feed={feedRes.data}

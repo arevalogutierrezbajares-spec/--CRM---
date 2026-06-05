@@ -1,17 +1,22 @@
 import { MetricCard } from "../shared/metric-card";
 import { CountdownCard } from "./countdown-card";
-import type { DashCounts } from "@/db/queries/dashboard";
+import { MeetingsAgenda } from "./meetings-agenda";
+import type { DashCounts, DashMeeting } from "@/db/queries/dashboard";
 import type { WorkspaceCountdown } from "@/db/queries/workspace-settings";
 
-/** The 3-up top row: Meetings today · Tasks due · live countdown to the big milestone. */
+/** The top row: ordered meetings agenda · tasks due · live countdown to the milestone. */
 export function TopRow({
   counts,
+  meetings,
   countdown,
   nowMs,
+  tz,
 }: {
   counts: DashCounts;
+  meetings: DashMeeting[];
   countdown: WorkspaceCountdown | null;
   nowMs: number;
+  tz: string;
 }) {
   const tasksDelta =
     counts.tasksTodayOverdue > 0
@@ -21,18 +26,9 @@ export function TopRow({
         : "nothing due";
   const tasksTone: "neutral" | "bad" = counts.tasksTodayOverdue > 0 ? "bad" : "neutral";
 
-  const meetingsDelta =
-    counts.nextMeetingMinutes !== null
-      ? counts.nextMeetingMinutes < 60
-        ? `Next in ${counts.nextMeetingMinutes}m`
-        : `Next in ${Math.round(counts.nextMeetingMinutes / 60)}h`
-      : counts.meetingsToday > 0
-        ? "all wrapped"
-        : "none today";
-
   return (
-    <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
-      <MetricCard value={counts.meetingsToday} label="Meetings today" delta={meetingsDelta} href="/meetings" />
+    <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-[1.6fr_1fr_1fr]">
+      <MeetingsAgenda meetings={meetings} nowMs={nowMs} tz={tz} />
       <MetricCard value={counts.tasksToday} label="Tasks due" delta={tasksDelta} deltaTone={tasksTone} href="/work" />
       {countdown && countdown.date ? (
         <CountdownCard
