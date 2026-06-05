@@ -68,6 +68,14 @@ export async function generateReintro(contactId: string): Promise<ReintroResult>
       .filter(Boolean)
       .join("\n\n"),
     maxTokens: 400,
+    model: "claude-haiku-4-5",
+    spend: {
+      workspaceId: user.workspaceId,
+      userId: user.id,
+      direction: "out",
+      payload: { route: "brain:actions", contactId },
+      trackUsage: true,
+    },
   });
 
   if (!claude.ok) {

@@ -49,7 +49,7 @@ export type ComposerPayload = {
  */
 export function extractMentionHandles(body: string): string[] {
   const out: string[] = [];
-  const re = /(^|[^a-zA-Z0-9_])@([a-zA-Z0-9._-]{1,64})/g;
+  const re = /(^|[^\p{L}\p{N}_])@([\p{L}\p{N}._-]{1,64})/gu;
   let m: RegExpExecArray | null;
   while ((m = re.exec(body)) !== null) {
     out.push(m[2].toLowerCase());

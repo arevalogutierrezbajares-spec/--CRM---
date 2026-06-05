@@ -13,6 +13,7 @@ import {
   getUnreadCountAction,
   markNotificationsReadAction,
 } from "@/app/(app)/town-hall/actions";
+import { JarvisVoiceCue } from "@/components/jarvis/voice-cue";
 import type { NotificationView } from "@/db/queries/town-hall";
 
 function relativeTime(d: Date | string): string {
@@ -46,12 +47,22 @@ export function NotificationBell() {
   const [count, setCount] = useState(0);
   const [items, setItems] = useState<NotificationView[]>([]);
   const [open, setOpen] = useState(false);
+  const [voiceSignal, setVoiceSignal] = useState(0);
   const mounted = useRef(true);
+  const initialCountLoaded = useRef(false);
+  const lastUnreadCount = useRef(0);
 
   const refreshCount = useCallback(async () => {
     try {
       const n = await getUnreadCountAction();
-      if (mounted.current) setCount(n);
+      if (mounted.current) {
+        setCount(n);
+        if (initialCountLoaded.current && n > lastUnreadCount.current) {
+          setVoiceSignal((signal) => signal + 1);
+        }
+        lastUnreadCount.current = n;
+        initialCountLoaded.current = true;
+      }
     } catch {
       // DB not wired / signed out — leave badge at 0.
     }
@@ -89,101 +100,109 @@ export function NotificationBell() {
   /** Mark one notification read (on click-through) + reflect it locally. */
   const markOne = useCallback((id: string) => {
     setItems((prev) => prev.map((n) => (n.id === id && !n.readAt ? { ...n, readAt: new Date() } : n)));
-    setCount((c) => Math.max(0, c - 1));
+    setCount((c) => {
+      const next = Math.max(0, c - 1);
+      lastUnreadCount.current = next;
+      return next;
+    });
     void markNotificationsReadAction([id]).catch(() => {});
   }, []);
 
   const markAll = useCallback(() => {
     setItems((prev) => prev.map((n) => (n.readAt ? n : { ...n, readAt: new Date() })));
+    lastUnreadCount.current = 0;
     setCount(0);
     void markNotificationsReadAction().catch(() => {});
   }, []);
 
   return (
-    <Popover open={open} onOpenChange={onOpenChange}>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          aria-label="Notifications"
-          className="relative grid h-9 w-9 place-items-center rounded-md text-text-secondary transition-colors hover:bg-surface hover:text-text-primary"
-        >
-          <Bell className="h-[18px] w-[18px]" />
-          {count > 0 && (
-            <span
-              className="absolute right-1 top-1 grid min-w-[16px] place-items-center rounded-full px-1 text-[10px] font-semibold leading-none text-white"
-              style={{ background: "var(--destructive)", height: 16 }}
-            >
-              {count > 9 ? "9+" : count}
-            </span>
-          )}
-        </button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-80 p-0">
-        <div
-          className="flex items-center justify-between border-b px-3 py-2"
-          style={{ borderColor: "var(--border)" }}
-        >
-          <span className="text-[13px] font-medium">Notifications</span>
-          <div className="flex items-center gap-3">
-            {items.some((n) => !n.readAt) && (
-              <button type="button" onClick={markAll} className="text-tiny text-text-tertiary hover:text-text-secondary">
-                Mark all read
-              </button>
+    <>
+      <JarvisVoiceCue slug="notification-unread-sir" playSignal={voiceSignal} />
+      <Popover open={open} onOpenChange={onOpenChange}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            aria-label="Notifications"
+            className="relative grid h-9 w-9 place-items-center rounded-md text-text-secondary transition-colors hover:bg-surface hover:text-text-primary"
+          >
+            <Bell className="h-[18px] w-[18px]" />
+            {count > 0 && (
+              <span
+                className="absolute right-1 top-1 grid min-w-[16px] place-items-center rounded-full px-1 text-[10px] font-semibold leading-none text-white"
+                style={{ background: "var(--destructive)", height: 16 }}
+              >
+                {count > 9 ? "9+" : count}
+              </span>
             )}
-            <Link
-              href="/inbox"
-              className="text-tiny hover:underline"
-              style={{ color: "var(--blue-text)" }}
-              onClick={() => setOpen(false)}
-            >
-              Open Inbox →
-            </Link>
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="end" className="w-80 p-0">
+          <div
+            className="flex items-center justify-between border-b px-3 py-2"
+            style={{ borderColor: "var(--border)" }}
+          >
+            <span className="text-[13px] font-medium">Notifications</span>
+            <div className="flex items-center gap-3">
+              {items.some((n) => !n.readAt) && (
+                <button type="button" onClick={markAll} className="text-tiny text-text-tertiary hover:text-text-secondary">
+                  Mark all read
+                </button>
+              )}
+              <Link
+                href="/inbox"
+                className="text-tiny hover:underline"
+                style={{ color: "var(--blue-text)" }}
+                onClick={() => setOpen(false)}
+              >
+                Open Inbox →
+              </Link>
+            </div>
           </div>
-        </div>
-        <div className="max-h-80 overflow-auto">
-          {items.length === 0 ? (
-            <p className="px-3 py-6 text-center text-[13px] text-text-tertiary">
-              No notifications yet.
-            </p>
-          ) : (
-            <ul>
-              {items.map((n) => (
-                <li
-                  key={n.id}
-                  className="border-b px-3 py-2 last:border-b-0"
-                  style={{
-                    borderColor: "var(--border)",
-                    background: n.readAt ? undefined : "var(--surface)",
-                  }}
-                >
-                  <Link
-                    href={n.href}
-                    onClick={() => {
-                      markOne(n.id);
-                      setOpen(false);
+          <div className="max-h-80 overflow-auto">
+            {items.length === 0 ? (
+              <p className="px-3 py-6 text-center text-[13px] text-text-tertiary">
+                No notifications yet.
+              </p>
+            ) : (
+              <ul>
+                {items.map((n) => (
+                  <li
+                    key={n.id}
+                    className="border-b px-3 py-2 last:border-b-0"
+                    style={{
+                      borderColor: "var(--border)",
+                      background: n.readAt ? undefined : "var(--surface)",
                     }}
-                    className="block"
                   >
-                    <div className="flex items-baseline justify-between gap-2">
-                      <span className="text-[13px] font-medium text-text-primary">
-                        {headline(n)}
-                      </span>
-                      <span className="shrink-0 text-tiny text-text-tertiary">
-                        {relativeTime(n.createdAt)}
-                      </span>
-                    </div>
-                    {(n.title || n.body) && (
-                      <p className="mt-0.5 line-clamp-2 text-tiny text-text-secondary">
-                        {n.title ? `“${n.title}”` : n.body}
-                      </p>
-                    )}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </PopoverContent>
-    </Popover>
+                    <Link
+                      href={n.href}
+                      onClick={() => {
+                        markOne(n.id);
+                        setOpen(false);
+                      }}
+                      className="block"
+                    >
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="text-[13px] font-medium text-text-primary">
+                          {headline(n)}
+                        </span>
+                        <span className="shrink-0 text-tiny text-text-tertiary">
+                          {relativeTime(n.createdAt)}
+                        </span>
+                      </div>
+                      {(n.title || n.body) && (
+                        <p className="mt-0.5 line-clamp-2 text-tiny text-text-secondary">
+                          {n.title ? `“${n.title}”` : n.body}
+                        </p>
+                      )}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </PopoverContent>
+      </Popover>
+    </>
   );
 }

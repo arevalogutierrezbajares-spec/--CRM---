@@ -3,6 +3,8 @@ import { requireUser } from "@/lib/current-user";
 import { TopBar } from "@/components/layout/top-bar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChangePasswordCard } from "@/components/settings/change-password-card";
+import { DemoTourCard } from "@/components/settings/demo-tour-card";
+import { DemonModeCard } from "@/components/settings/demon-mode-card";
 import { QuoteSettingsCard } from "@/components/settings/quote-settings-card";
 
 export default async function SettingsPage() {
@@ -36,6 +38,8 @@ export default async function SettingsPage() {
             </CardContent>
           </Card>
           <QuoteSettingsCard />
+          <DemoTourCard />
+          <DemonModeCard />
           <ChangePasswordCard />
         </div>
       </main>

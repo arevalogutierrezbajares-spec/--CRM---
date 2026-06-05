@@ -344,7 +344,7 @@ export function ActivityCenter({
           objects={objects}
           docs={docs}
           onPosted={onPosted}
-          placeholder="Share an update… @mention people, @NIGO to ask the AI, #reference a project. ⌘↵ to post."
+          placeholder="Share an update… @mention people, @ÑIGO to ask the AI, #reference a project. ⌘↵ to post."
         />
       </div>
 

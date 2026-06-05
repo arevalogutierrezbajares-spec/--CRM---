@@ -137,7 +137,7 @@ function parseItemParam(raw: string | string[] | undefined): InitialItem {
 
 /**
  * The on-screen greeting title. Delegates to greetingIdentity() so the *displayed*
- * nickname always matches what the JARVIS voice *says* (single source of truth).
+ * nickname always matches what the ÑIGO voice says (single source of truth).
  * Unknown teammates fall back to their first name on screen (the voice uses the
  * generic "Founder" clip).
  */

@@ -48,6 +48,13 @@ export async function postMeetingDraft(meetingId: string): Promise<PostMeetingRe
       .filter(Boolean)
       .join("\n\n"),
     maxTokens: 800,
+    spend: {
+      workspaceId: user.workspaceId,
+      userId: user.id,
+      direction: "out",
+      payload: { route: "brain:post-meeting", meetingId },
+      trackUsage: true,
+    },
   });
 
   if (!claude.ok) {

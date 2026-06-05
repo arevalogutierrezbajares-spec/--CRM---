@@ -16,6 +16,7 @@
     "db:seed-demo": "tsx scripts/seed-demo.ts",
     "obsidian:sync": "tsx scripts/obsidian-sync.ts",
     "greetings:gen": "tsx scripts/gen-greetings.ts",
+    "demo-tour:gen": "tsx scripts/gen-demo-tour.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:db": "bash scripts/test-db.sh",

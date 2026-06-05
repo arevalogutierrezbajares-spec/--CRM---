@@ -6,7 +6,8 @@ import { db, schema } from "@/db";
 import { inArray } from "drizzle-orm";
 import { requireUser } from "@/lib/current-user";
 import { listWorkspaceMembers } from "@/db/queries/team";
-import { isNigoMentioned, runNigoReply, NIGO_USER_ID } from "@/lib/nigo";
+import { isNigoMentioned, runNigoReply } from "@/lib/nigo";
+import { NIGO_USER_ID } from "@/lib/nigo-brand";
 import {
   createPost,
   listPosts,
@@ -98,6 +99,10 @@ export async function createPostAction(input: {
   const handleToId = new Map(
     members.map((m) => [handleFromName(m.displayName), m.userId]),
   );
+  if (memberById.has(NIGO_USER_ID)) {
+    handleToId.set("nigo", NIGO_USER_ID);
+    handleToId.set("ñigo", NIGO_USER_ID);
+  }
   for (const handle of extractMentionHandles(body)) {
     const id = handleToId.get(handle);
     if (id) resolved.add(id);
@@ -162,7 +167,7 @@ export async function createPostAction(input: {
     );
   }
 
-  // NIGO agent — if @NIGO was summoned (and the author isn't NIGO), reply in-thread.
+  // ÑIGO agent: if summoned, reply in-thread.
   if (user.id !== NIGO_USER_ID && isNigoMentioned(mentionUserIds)) {
     try {
       await runNigoReply({
@@ -172,7 +177,7 @@ export async function createPostAction(input: {
         question: body,
       });
     } catch {
-      /* a NIGO failure must never break the human's post */
+      /* a ÑIGO failure must never break the human's post */
     }
   }
 
@@ -297,6 +302,8 @@ export async function extractActionItemsAction(
     notes,
     memberNames: members.map((m) => m.displayName),
     projectTitles: projects.map((p) => p.title),
+    workspaceId: user.workspaceId,
+    userId: user.id,
   });
   if (!result.ok) return { ok: false, error: result.error };
 

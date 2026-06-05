@@ -19,6 +19,10 @@ export async function triageInbound(opts: {
   from: string;
   subject?: string;
   body: string;
+  workspaceId?: string | null;
+  userId?: string | null;
+  senderPhone?: string | null;
+  trackUsage?: boolean;
 }): Promise<TriageVerdict> {
   if (!isAnthropicConfigured()) {
     return {
@@ -52,6 +56,18 @@ export async function triageInbound(opts: {
       .filter(Boolean)
       .join("\n"),
     maxTokens: 300,
+    spend: {
+      workspaceId: opts.workspaceId,
+      userId: opts.userId,
+      senderPhone: opts.senderPhone,
+      direction: "in",
+      payload: {
+        route: "inbound:triage",
+        from: opts.from,
+        subject: opts.subject ?? null,
+      },
+      trackUsage: opts.trackUsage ?? true,
+    },
   });
 
   if (!res.ok) {

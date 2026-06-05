@@ -2,6 +2,7 @@ import "server-only";
 import { and, desc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db, schema } from "@/db";
+import { nigoDisplayName } from "@/lib/nigo-brand";
 
 const { posts, postMentions, postRefs, postReactions, notifications, users, workspaceMembers } = schema;
 // Second alias of users so a notification can join BOTH the post author and the
@@ -101,7 +102,7 @@ export async function listPosts(opts: {
   for (const m of mentionRows) {
     (mentionsBy.get(m.postId) ?? mentionsBy.set(m.postId, []).get(m.postId)!).push({
       userId: m.userId,
-      displayName: m.displayName,
+      displayName: nigoDisplayName(m.userId, m.displayName),
     });
   }
   const refsBy = new Map<string, PostRefView[]>();
@@ -129,7 +130,7 @@ export async function listPosts(opts: {
     kind: r.kind,
     createdAt: r.createdAt,
     authorId: r.authorId,
-    authorName: r.authorName,
+    authorName: nigoDisplayName(r.authorId, r.authorName),
     parentPostId: r.parentPostId ?? null,
     mentions: mentionsBy.get(r.id) ?? [],
     refs: refsBy.get(r.id) ?? [],
@@ -342,7 +343,9 @@ export async function listNotifications(opts: {
       title: notifications.title,
       snoozedUntil: notifications.snoozedUntil,
       body: posts.body,
+      postAuthorId: posts.authorId,
       postAuthor: users.displayName,
+      actorId: notifications.actorId,
       actorName: actorUsers.displayName,
     })
     .from(notifications)
@@ -360,7 +363,12 @@ export async function listNotifications(opts: {
     readAt: r.readAt,
     createdAt: r.createdAt,
     body: r.body,
-    authorName: r.actorName ?? r.postAuthor,
+    authorName:
+      r.actorName && r.actorId
+        ? nigoDisplayName(r.actorId, r.actorName)
+        : r.postAuthor && r.postAuthorId
+          ? nigoDisplayName(r.postAuthorId, r.postAuthor)
+          : null,
     entityType: r.entityType,
     entityId: r.entityId,
     title: r.title,

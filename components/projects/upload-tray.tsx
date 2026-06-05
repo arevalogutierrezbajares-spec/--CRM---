@@ -18,6 +18,7 @@ import {
 } from "@/lib/project-files/upload-client";
 import { ACCEPT_ATTR } from "@/lib/project-files/allowed-types";
 import { formatBytes } from "@/lib/project-files/limits";
+import { DEMO_TOUR_FILE_UPLOADED_EVENT } from "@/lib/demo-tour";
 import type { LinkCategory } from "@/lib/project-links/detect-category";
 
 const CATEGORY_OPTIONS: { value: LinkCategory; label: string }[] = [
@@ -112,6 +113,7 @@ export function UploadTray({
         }
       }
       if (okCount > 0) toast.success(`Uploaded ${okCount} file${okCount > 1 ? "s" : ""}`);
+      if (okCount > 0) window.dispatchEvent(new CustomEvent(DEMO_TOUR_FILE_UPLOADED_EVENT));
       // Clear successfully-uploaded rows; keep failures visible.
       setItems((prev) => prev.filter((it) => it.status !== "done"));
     });

@@ -80,7 +80,9 @@ export const GET = withErrorCapture("/api/cron/weekly-briefing", async (req: Nex
       system:
         "You are a chief-of-staff writing a weekly briefing email for a busy founder. Output exactly 5 markdown bullets, each starting with **One word**. Be direct, no fluff, no preamble.",
       prompt: `Write the Monday briefing. Here are the facts in JSON:\n\n${facts}\n\nIf a list is empty, fold it into another bullet rather than saying "none." End with the single most important next step.`,
+      model: "claude-haiku-4-5",
       maxTokens: 600,
+      spend: { workspaceId, direction: "out", payload: { route: "cron:weekly-briefing" }, trackUsage: true },
     });
     briefingText = claude.ok
       ? claude.text

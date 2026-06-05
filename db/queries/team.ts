@@ -2,6 +2,7 @@ import "server-only";
 import { and, asc, eq, ilike, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import * as schema from "@/db/schema";
+import { nigoDisplayName } from "@/lib/nigo-brand";
 
 /** WhatsApp phone numbers for the given users, fenced to workspace membership. */
 export async function getMemberPhones(
@@ -48,7 +49,7 @@ export async function listWorkspaceMembers(workspaceId: string): Promise<TeamMem
 
   return rows.map((r) => ({
     userId: r.userId,
-    displayName: r.displayName,
+    displayName: nigoDisplayName(r.userId, r.displayName),
     email: r.email,
     role: r.role,
     lastSeenAt: r.lastSeenAt ?? null,
@@ -65,11 +66,15 @@ export async function findMembers(opts: {
   const conds = [eq(schema.workspaceMembers.workspaceId, opts.workspaceId)];
   const q = opts.query?.trim();
   if (q) conds.push(ilike(schema.users.displayName, `%${q}%`));
-  return db
+  const rows = await db
     .select({ userId: schema.users.id, displayName: schema.users.displayName })
     .from(schema.workspaceMembers)
     .innerJoin(schema.users, eq(schema.users.id, schema.workspaceMembers.userId))
     .where(and(...conds))
     .orderBy(asc(schema.users.displayName))
     .limit(opts.limit ?? 10);
+  return rows.map((r) => ({
+    userId: r.userId,
+    displayName: nigoDisplayName(r.userId, r.displayName),
+  }));
 }

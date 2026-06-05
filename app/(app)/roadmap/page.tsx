@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/current-user";
 import { TopBar } from "@/components/layout/top-bar";
 import { DbBanner } from "@/components/db-banner";
 import { WorkNav } from "@/components/work/work-nav";
+import { StrategySpine } from "@/components/work/strategy-spine";
 import { InitiativeStatusBadge } from "@/components/work/priority-badge";
 import { ThemeChips } from "@/components/work/theme-chips";
 import { safeRead } from "@/lib/db-status";
@@ -94,6 +95,12 @@ export default async function RoadmapPage() {
         </header>
 
         <WorkNav />
+
+        <StrategySpine
+          active="roadmap"
+          initiativeCount={initsRes.data.length}
+          sprintCount={sprintsRes.data.length}
+        />
 
         {!initsRes.ok && (
           <DbBanner error={(initsRes as { error?: string }).error ?? ""} />

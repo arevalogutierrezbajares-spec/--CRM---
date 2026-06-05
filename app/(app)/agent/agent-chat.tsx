@@ -5,6 +5,7 @@ import { Loader2, Mic, RotateCcw, Send, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { requestAgentTurn, clearAgentConversation } from "@/app/actions/agent";
+import { DEMO_TOUR_AGENT_REPLIED_EVENT } from "@/lib/demo-tour";
 
 type Message = {
   id: string;
@@ -63,6 +64,7 @@ export function AgentChat({ userDisplayName }: { userDisplayName: string }) {
             tokensIn: result.tokensIn,
             tokensOut: result.tokensOut,
           });
+          window.dispatchEvent(new CustomEvent(DEMO_TOUR_AGENT_REPLIED_EVENT));
         } else {
           append({
             role: "agent",

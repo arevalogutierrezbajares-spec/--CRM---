@@ -32,6 +32,7 @@ import {
   type ProjectLinkWithAuthor,
   type ProjectLinkView,
 } from "@/db/queries/projects";
+import { listContacts } from "@/db/queries/contacts";
 import { listAttachedPaths } from "@/lib/project-files/storage";
 import { recordProjectVisit } from "@/db/queries/pins";
 import { listTouchesForProject } from "@/db/queries/touches";
@@ -126,7 +127,7 @@ export default async function ProjectDetailPage(props: {
     );
   }
 
-  const [touchesRes, linksRes, researchRes] = await Promise.all([
+  const [touchesRes, linksRes, researchRes, shareContactsRes] = await Promise.all([
     safeRead(
       () =>
         listTouchesForProject({
@@ -149,10 +150,11 @@ export default async function ProjectDetailPage(props: {
           workspaceId: user.workspaceId,
           projectId: displayed.id,
           kind: "research",
-          limit: 8,
-        }),
+        limit: 8,
+      }),
       [],
     ),
+    safeRead(() => listContacts({ workspaceId: user.workspaceId }), []),
   ]);
 
   // Flag links whose target is actually reachable so the board can grey out
@@ -429,6 +431,12 @@ export default async function ProjectDetailPage(props: {
           links={linksView}
           currentUserId={user.id}
           currentUserRole={user.workspaceRole}
+          shareContacts={shareContactsRes.data.map((contact) => ({
+            id: contact.id,
+            name: contact.name,
+            organization: contact.organization,
+            relationshipType: contact.relationshipType,
+          }))}
         />
 
         <div className="grid gap-4 lg:grid-cols-[1fr_300px]">

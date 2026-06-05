@@ -1,5 +1,4 @@
-import Link from "next/link";
-import { Plus, Target } from "lucide-react";
+import { Target } from "lucide-react";
 import { requireUser } from "@/lib/current-user";
 import { TopBar } from "@/components/layout/top-bar";
 import { Button } from "@/components/ui/button";
@@ -10,6 +9,7 @@ import { ProgressBar } from "@/components/dashboard/shared/progress-bar";
 import { WorkNav } from "@/components/work/work-nav";
 import { SprintColumn } from "@/components/work/sprint-column";
 import { SprintStatusBadge } from "@/components/work/priority-badge";
+import { StrategySpine } from "@/components/work/strategy-spine";
 import { safeRead } from "@/lib/db-status";
 import {
   getActiveSprint,
@@ -72,6 +72,10 @@ export default async function SprintPage() {
   }
 
   const otherSprints = allRes.data.filter((s) => s.id !== active?.id);
+  const defaultStartDate = new Date().toISOString().slice(0, 10);
+  const defaultEnd = new Date(`${defaultStartDate}T00:00:00Z`);
+  defaultEnd.setUTCDate(defaultEnd.getUTCDate() + 14);
+  const defaultEndDate = defaultEnd.toISOString().slice(0, 10);
 
   return (
     <>
@@ -85,6 +89,13 @@ export default async function SprintPage() {
         </header>
 
         <WorkNav />
+
+        <StrategySpine
+          active="sprint"
+          sprintCount={allRes.data.length}
+          taskCount={tasksRes.data.length}
+          activeSprintName={active?.name ?? null}
+        />
 
         {!activeRes.ok && (
           <DbBanner error={(activeRes as { error?: string }).error ?? ""} />
@@ -137,7 +148,7 @@ export default async function SprintPage() {
               No active sprint
             </h2>
             <p className="text-[12px] text-text-secondary mt-1">
-              Start one to focus this week's tasks.
+              Start one to focus this week&apos;s tasks.
             </p>
             <form action={createSprint} className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 items-end">
               <label className="block space-y-1">
@@ -155,7 +166,7 @@ export default async function SprintPage() {
                   name="startDate"
                   type="date"
                   required
-                  defaultValue={new Date().toISOString().slice(0, 10)}
+                  defaultValue={defaultStartDate}
                   className="w-full rounded-md border bg-card px-3 py-1.5 text-[13px]"
                 />
               </label>
@@ -165,7 +176,7 @@ export default async function SprintPage() {
                   name="endDate"
                   type="date"
                   required
-                  defaultValue={new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10)}
+                  defaultValue={defaultEndDate}
                   className="w-full rounded-md border bg-card px-3 py-1.5 text-[13px]"
                 />
               </label>

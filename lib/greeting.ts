@@ -1,7 +1,7 @@
 /**
- * JARVIS greeting identities — the single source of truth for *who gets greeted
+ * ÑIGO greeting identities: the single source of truth for who gets greeted
  * how*. Drives two things:
- *   1. The spoken nickname the British/JARVIS voice says ("Good morning, Sir Charles").
+ *   1. The spoken nickname the British/ÑIGO voice says ("Good morning, Sir Charles").
  *   2. The audio file slug → /greetings/{slug}-{period}.mp3.
  *
  * The generation script (scripts/gen-greetings.ts) reads GREETING_IDENTITIES ×
@@ -22,7 +22,7 @@ export type GreetingIdentity = {
 
 export const GREETING_PERIODS: GreetingPeriod[] = ["morning", "afternoon", "evening"];
 
-/** Every identity the JARVIS voice can greet. `founder` is the generic fallback. */
+/** Every identity the ÑIGO voice can greet. `founder` is the generic fallback. */
 export const GREETING_IDENTITIES: GreetingIdentity[] = [
   { slug: "charles", spokenTitle: "Sir Charles" },
   { slug: "joe", spokenTitle: "Master Joe" },
@@ -32,7 +32,7 @@ export const GREETING_IDENTITIES: GreetingIdentity[] = [
 ];
 
 /**
- * Map a signed-in teammate to their JARVIS greeting identity. Mirrors the
+ * Map a signed-in teammate to their ÑIGO greeting identity. Mirrors the
  * `formalTitle()` matcher on the home page, but resolves the *spoken* nickname
  * + the audio slug. Falls back to the generic "Founder" clip.
  */

@@ -189,6 +189,49 @@ export const workspaceRole = pgEnum("workspace_role", [
   "member",
 ]);
 
+export const partnerKind = pgEnum("partner_kind", [
+  "creative",
+  "equity_capital",
+  "non_equity_capital",
+  "strategic",
+  "operating",
+  "advisor",
+  "client",
+  "other",
+]);
+
+export const partnerRoomStatus = pgEnum("partner_room_status", [
+  "draft",
+  "active",
+  "paused",
+  "revoked",
+]);
+
+export const partnerShareChannel = pgEnum("partner_share_channel", [
+  "email",
+  "whatsapp",
+  "signal",
+  "link",
+  "meeting",
+  "manual",
+]);
+
+export const partnerAccessEventType = pgEnum("partner_access_event_type", [
+  "room_created",
+  "room_invited",
+  "room_updated",
+  "room_status_changed",
+  "access_link_generated",
+  "share_created",
+  "share_sent",
+  "viewed",
+  "downloaded",
+  "commented",
+  "question",
+  "revoked",
+  "expired",
+]);
+
 // ─────────────────────────────────────────────────────────────────────────────
 // USERS (mirrors auth.users) — `whatsapp_phone` enables inbound bot routing.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -501,6 +544,138 @@ export const projectDocContents = pgTable("project_doc_contents", {
   text: text("text").notNull().default(""),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   updatedBy: uuid("updated_by").references(() => users.id),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PARTNER ACCESS — curated partner rooms + share ledger. Rooms are the future
+// external surface; shares are useful immediately as an internal audit trail.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const partnerRooms = pgTable("partner_rooms", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  primaryContactId: uuid("primary_contact_id").references(() => contacts.id, {
+    onDelete: "set null",
+  }),
+  name: text("name").notNull(),
+  partnerKind: partnerKind("partner_kind").notNull().default("strategic"),
+  status: partnerRoomStatus("status").notNull().default("draft"),
+  summary: text("summary"),
+  welcomeMessage: text("welcome_message"),
+  publicAccessTokenHash: text("public_access_token_hash").unique(),
+  publicAccessTokenCreatedAt: timestamp("public_access_token_created_at", {
+    withTimezone: true,
+  }),
+  publicAccessLastViewedAt: timestamp("public_access_last_viewed_at", {
+    withTimezone: true,
+  }),
+  createdBy: uuid("created_by")
+    .notNull()
+    .references(() => users.id),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  lastActivityAt: timestamp("last_activity_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const partnerRoomMembers = pgTable(
+  "partner_room_members",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    roomId: uuid("room_id")
+      .notNull()
+      .references(() => partnerRooms.id, { onDelete: "cascade" }),
+    contactId: uuid("contact_id").references(() => contacts.id, {
+      onDelete: "set null",
+    }),
+    email: text("email").notNull(),
+    displayName: text("display_name"),
+    roleLabel: text("role_label"),
+    invitedAt: timestamp("invited_at", { withTimezone: true }),
+    lastViewedAt: timestamp("last_viewed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    uniqRoomEmail: uniqueIndex("partner_room_members_room_email_uniq").on(
+      t.roomId,
+      t.email,
+    ),
+  }),
+);
+
+export const partnerShares = pgTable("partner_shares", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  roomId: uuid("room_id").references(() => partnerRooms.id, {
+    onDelete: "set null",
+  }),
+  contactId: uuid("contact_id").references(() => contacts.id, {
+    onDelete: "set null",
+  }),
+  projectId: uuid("project_id").references(() => projects.id, {
+    onDelete: "set null",
+  }),
+  projectLinkId: uuid("project_link_id").references(() => projectLinks.id, {
+    onDelete: "set null",
+  }),
+  labelSnapshot: text("label_snapshot").notNull(),
+  kindSnapshot: text("kind_snapshot").notNull(),
+  categorySnapshot: text("category_snapshot"),
+  urlSnapshot: text("url_snapshot"),
+  permissions: jsonb("permissions")
+    .$type<Array<"view" | "download" | "comment" | "upload">>()
+    .notNull()
+    .default(["view"]),
+  channel: partnerShareChannel("channel").notNull().default("manual"),
+  message: text("message"),
+  sharedBy: uuid("shared_by")
+    .notNull()
+    .references(() => users.id),
+  sharedAt: timestamp("shared_at", { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  viewedAt: timestamp("viewed_at", { withTimezone: true }),
+  downloadedAt: timestamp("downloaded_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const partnerAccessEvents = pgTable("partner_access_events", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  roomId: uuid("room_id").references(() => partnerRooms.id, {
+    onDelete: "set null",
+  }),
+  shareId: uuid("share_id").references(() => partnerShares.id, {
+    onDelete: "set null",
+  }),
+  contactId: uuid("contact_id").references(() => contacts.id, {
+    onDelete: "set null",
+  }),
+  actorUserId: uuid("actor_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  eventType: partnerAccessEventType("event_type").notNull(),
+  metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
 });
 
 // FR-PMO: per-user pinned projects for quick access on the Home dashboard.

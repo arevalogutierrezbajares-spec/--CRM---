@@ -8,7 +8,7 @@ import { greetingAudioSrc, type GreetingPeriod, type GreetingSlug } from "@/lib/
 const SESSION_KEY = "agb_greeted_v1";
 
 /**
- * JARVIS voice greeting. On the first dashboard load of a browser session it
+ * ÑIGO voice greeting. On the first dashboard load of a browser session it
  * auto-plays "Good {period}, {nickname}" in the founder's voice clip. If the
  * browser blocks autoplay (no prior user gesture), the speaker chip pulses amber
  * as a tap-to-play affordance. The chip is always present for manual replay.

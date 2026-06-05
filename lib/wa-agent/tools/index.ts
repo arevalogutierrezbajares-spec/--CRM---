@@ -33,6 +33,13 @@ import { editActionItem } from "./edit-action-item";
 import { editTask } from "./edit-task";
 import { findMember } from "./find-member";
 import { postToTownHall } from "./post-to-townhall";
+import { createTask } from "./create-task";
+import { createInitiative } from "./create-initiative";
+import { editInitiative } from "./edit-initiative";
+import { findInitiative } from "./find-initiative";
+import { findSprint } from "./find-sprint";
+import { createSprint } from "./create-sprint";
+import { editSprint } from "./edit-sprint";
 
 export const TOOLS: Record<string, ToolEntry> = {
   find_contact: findContact,
@@ -59,7 +66,14 @@ export const TOOLS: Record<string, ToolEntry> = {
   attach_link: attachLink,
   add_action_item: addActionItem,
   edit_action_item: editActionItem,
+  create_task: createTask,
   edit_task: editTask,
+  create_initiative: createInitiative,
+  edit_initiative: editInitiative,
+  find_initiative: findInitiative,
+  create_sprint: createSprint,
+  edit_sprint: editSprint,
+  find_sprint: findSprint,
   find_member: findMember,
   post_to_townhall: postToTownHall,
 };

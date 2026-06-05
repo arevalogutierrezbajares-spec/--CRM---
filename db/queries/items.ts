@@ -137,7 +137,7 @@ async function contactOrNull(workspaceId: string, contactId?: string | null): Pr
   return r ? contactId : null;
 }
 
-async function initiativeOrNull(workspaceId: string, initiativeId?: string | null): Promise<string | null> {
+export async function initiativeOrNull(workspaceId: string, initiativeId?: string | null): Promise<string | null> {
   if (!initiativeId) return null;
   const [r] = await db
     .select({ id: schema.initiatives.id })
@@ -145,6 +145,16 @@ async function initiativeOrNull(workspaceId: string, initiativeId?: string | nul
     .where(and(eq(schema.initiatives.id, initiativeId), eq(schema.initiatives.workspaceId, workspaceId)))
     .limit(1);
   return r ? initiativeId : null;
+}
+
+export async function sprintOrNull(workspaceId: string, sprintId?: string | null): Promise<string | null> {
+  if (!sprintId) return null;
+  const [r] = await db
+    .select({ id: schema.sprints.id })
+    .from(schema.sprints)
+    .where(and(eq(schema.sprints.id, sprintId), eq(schema.sprints.workspaceId, workspaceId)))
+    .limit(1);
+  return r ? sprintId : null;
 }
 
 async function projectOrNull(workspaceId: string, projectId?: string | null): Promise<string | null> {
@@ -226,6 +236,7 @@ export async function createTask(input: {
   priority?: WorkPriority | null;
   assigneeUserId?: string | null;
   initiativeId?: string | null;
+  sprintId?: string | null;
 }): Promise<{ id: string }> {
   // A task must belong to a project in THIS workspace.
   if (!(await projectExistsInWorkspace(input.workspaceId, input.projectId))) {
@@ -241,6 +252,7 @@ export async function createTask(input: {
       priority: input.priority ?? null,
       assigneeUserId: await memberOrNull(input.workspaceId, input.assigneeUserId),
       initiativeId: await initiativeOrNull(input.workspaceId, input.initiativeId),
+      sprintId: await sprintOrNull(input.workspaceId, input.sprintId),
       createdBy: input.actorId,
     })
     .returning({ id: schema.milestones.id });
@@ -257,6 +269,7 @@ export async function updateTask(input: {
   projectId?: string;
   assigneeUserId?: string | null;
   initiativeId?: string | null;
+  sprintId?: string | null;
 }): Promise<{ id: string; title: string } | null> {
   const patch: Partial<typeof schema.milestones.$inferInsert> = {};
   if (input.title !== undefined) patch.title = input.title;
@@ -270,6 +283,7 @@ export async function updateTask(input: {
   }
   if (input.assigneeUserId !== undefined) patch.assigneeUserId = await memberOrNull(input.workspaceId, input.assigneeUserId);
   if (input.initiativeId !== undefined) patch.initiativeId = await initiativeOrNull(input.workspaceId, input.initiativeId);
+  if (input.sprintId !== undefined) patch.sprintId = await sprintOrNull(input.workspaceId, input.sprintId);
   if (input.status !== undefined) {
     patch.status = input.status;
     patch.completedAt = input.status === "done" ? new Date() : null;

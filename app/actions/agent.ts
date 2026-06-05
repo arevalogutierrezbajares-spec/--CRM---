@@ -35,7 +35,11 @@ export async function requestAgentTurn(text: string): Promise<AgentTurnResult> {
   }
 
   const user = await requireUser();
-  const result = await handleMessageForUser({ userId: user.id, body });
+  const result = await handleMessageForUser({
+    userId: user.id,
+    body,
+    fullTools: user.workspaceRole === "owner" || user.workspaceRole === "admin",
+  });
 
   if (result.ok) {
     return {

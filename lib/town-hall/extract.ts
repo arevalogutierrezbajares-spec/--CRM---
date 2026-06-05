@@ -24,6 +24,10 @@ export async function extractActionItems(opts: {
   notes: string;
   memberNames: string[];
   projectTitles: string[];
+  workspaceId?: string | null;
+  userId?: string | null;
+  senderPhone?: string | null;
+  trackUsage?: boolean;
 }): Promise<ExtractResult> {
   if (!isAnthropicConfigured()) {
     return { ok: false, error: "ANTHROPIC_API_KEY not set" };
@@ -54,6 +58,14 @@ export async function extractActionItems(opts: {
       opts.notes.slice(0, 8000),
     ].join("\n"),
     maxTokens: 1500,
+    spend: {
+      workspaceId: opts.workspaceId,
+      userId: opts.userId,
+      senderPhone: opts.senderPhone,
+      direction: "out",
+      payload: { route: "town-hall:extract-actions" },
+      trackUsage: opts.trackUsage ?? true,
+    },
   });
 
   if (!res.ok) return { ok: false, error: res.error };

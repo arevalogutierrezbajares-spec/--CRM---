@@ -86,6 +86,10 @@ export const POST = withErrorCapture("/api/postmark/inbound", async (req: NextRe
       from: fromEmail,
       subject: payload.Subject,
       body: payload.StrippedTextReply ?? payload.TextBody ?? "",
+      workspaceId,
+      userId: owner.id,
+      senderPhone: fromEmail,
+      trackUsage: true,
     });
     // Append the triage decision to a JSONL log so the user can review and
     // selectively promote senders into contacts later.

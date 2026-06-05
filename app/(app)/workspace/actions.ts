@@ -7,6 +7,7 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "@/db";
 import { requireUser } from "@/lib/current-user";
+import { nigoDisplayName } from "@/lib/nigo-brand";
 import { sendEmail, isResendConfigured } from "@/lib/resend";
 
 const { workspaces, workspaceMembers, workspaceInvites, users } = schema;
@@ -91,7 +92,10 @@ export async function getWorkspaceView(): Promise<WorkspaceView> {
   return {
     workspace: ws,
     myRole: user.workspaceRole,
-    members: memberRows,
+    members: memberRows.map((m) => ({
+      ...m,
+      displayName: nigoDisplayName(m.userId, m.displayName),
+    })),
     invites: inviteRows,
   };
 }

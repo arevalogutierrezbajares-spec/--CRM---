@@ -85,6 +85,10 @@ export const editTask: ToolEntry = {
           type: "string",
           description: "Attach to this initiative. Empty string detaches.",
         },
+        sprint_id: {
+          type: "string",
+          description: "Attach to this sprint. Empty string detaches.",
+        },
       },
     },
   },
@@ -183,6 +187,15 @@ export const editTask: ToolEntry = {
           : safeStr(input.initiative_id);
       changed.push(
         input.initiative_id.trim() === "" ? "detached initiative" : "initiative",
+      );
+    }
+    if (typeof input.sprint_id === "string") {
+      patch.sprintId =
+        input.sprint_id.trim() === ""
+          ? null
+          : safeStr(input.sprint_id);
+      changed.push(
+        input.sprint_id.trim() === "" ? "detached sprint" : "sprint",
       );
     }
 

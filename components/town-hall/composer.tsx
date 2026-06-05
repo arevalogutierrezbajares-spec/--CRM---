@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { MentionInput, type MentionSources, type PickedEntity } from "@/components/ui/mention-input";
 import { personInBody, refInBody } from "@/lib/nlp/mention-tokens";
 import { createPostAction } from "@/app/(app)/town-hall/actions";
+import { DEMO_TOUR_TOWN_HALL_POSTED_EVENT } from "@/lib/demo-tour";
 import type { MemberOption, RefObject } from "./types";
 
 /**
@@ -82,6 +83,7 @@ export function Composer({
           `Posted · notified ${res.notified}${res.waSent > 0 ? ` · ${res.waSent} WhatsApp DM${res.waSent > 1 ? "s" : ""}` : ""}`,
         );
       }
+      window.dispatchEvent(new CustomEvent(DEMO_TOUR_TOWN_HALL_POSTED_EVENT));
       onPosted();
     } finally {
       setSubmitting(false);

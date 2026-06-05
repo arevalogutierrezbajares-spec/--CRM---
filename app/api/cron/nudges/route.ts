@@ -89,6 +89,13 @@ export const GET = withErrorCapture(
           .map((c, i) => `${i + 1}. ${c.line}`)
           .join("\n")}`,
         maxTokens: 350,
+        spend: {
+          workspaceId: owner.workspaceId,
+          userId: owner.id,
+          direction: "out",
+          payload: { route: "cron:nudges" },
+          trackUsage: true,
+        },
       });
       message = claude.ok
         ? claude.text.trim()

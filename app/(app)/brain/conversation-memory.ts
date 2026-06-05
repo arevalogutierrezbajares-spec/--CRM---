@@ -59,6 +59,14 @@ export async function conversationSummary(contactId: string) {
       )
       .join("\n"),
     maxTokens: 400,
+    model: "claude-haiku-4-5",
+    spend: {
+      workspaceId: user.workspaceId,
+      userId: user.id,
+      direction: "out",
+      payload: { route: "brain:conversation-memory", contactId },
+      trackUsage: true,
+    },
   });
   if (!claude.ok) {
     return { ok: false as const, error: claude.error };

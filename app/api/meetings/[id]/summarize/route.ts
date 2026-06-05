@@ -11,7 +11,9 @@ const bodySchema = z.object({
 
 type Params = Promise<{ id: string }>;
 
-export async function POST(req: NextRequest, _props: { params: Params }) {
+type RouteContext = { params: Params };
+
+export async function POST(req: NextRequest, context: RouteContext) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -26,6 +28,7 @@ export async function POST(req: NextRequest, _props: { params: Params }) {
   }
 
   const { transcript, agenda, attendeeNames } = parsed.data;
+  const { id: meetingId } = await context.params;
 
   const systemPrompt = `You are a chief-of-staff assistant. Your job is to turn a raw meeting transcript into clean, structured meeting minutes.
 
@@ -46,9 +49,17 @@ Be concise. Use the agenda context when provided to organize topics. Attribute a
     .join("\n\n");
 
   const result = await claudeChat({
+    model: "claude-haiku-4-5",
     system: systemPrompt,
     prompt: userMessage,
     maxTokens: 2048,
+    spend: {
+      workspaceId: user.workspaceId,
+      userId: user.id,
+      direction: "out",
+      payload: { route: "meetings:summarize", meetingId },
+      trackUsage: true,
+    },
   });
 
   if (!result.ok) {

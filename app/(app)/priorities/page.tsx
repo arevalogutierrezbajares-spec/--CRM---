@@ -11,6 +11,7 @@ import {
   type ObjectiveView,
 } from "@/db/queries/okrs";
 import { PrioritiesBoard } from "@/components/priorities/priorities-board";
+import { StrategySpine } from "@/components/work/strategy-spine";
 
 type SearchParams = Promise<{ q?: string }>;
 
@@ -35,6 +36,9 @@ export default async function PrioritiesPage(props: { searchParams: SearchParams
       <TopBar email={user.email} displayName={user.displayName} title="Priorities" />
       <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6">
         {!objectivesRes.ok && <DbBanner error={objectivesRes.error} />}
+        <div className="mb-5">
+          <StrategySpine active="priorities" objectiveCount={objectivesRes.data.length} />
+        </div>
         <PrioritiesBoard
           quarter={quarter}
           quarters={quartersRes.data}

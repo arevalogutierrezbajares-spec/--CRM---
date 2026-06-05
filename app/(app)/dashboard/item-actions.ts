@@ -137,6 +137,7 @@ export async function updateTaskAction(opts: {
   projectId?: string;
   assigneeUserId?: string | null;
   initiativeId?: string | null;
+  sprintId?: string | null;
 }): Promise<Result> {
   const user = await requireUser();
   const ok = await updateTask({ workspaceId: user.workspaceId, ...opts });

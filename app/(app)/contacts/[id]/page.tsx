@@ -17,6 +17,8 @@ import { findWarmPath } from "@/db/queries/warm-path";
 import { ReciprocityCard } from "@/components/reciprocity/reciprocity-card";
 import { reciprocityFor } from "@/db/queries/reciprocity";
 import { getContact } from "@/db/queries/contacts";
+import { listPartnerAccessForContact } from "@/db/queries/partner-access";
+import { PartnerAccessPanel } from "@/components/partner-access/partner-access-panel";
 import { listTouchesForContact } from "@/db/queries/touches";
 import { listMeetingsForContact } from "@/db/queries/meetings";
 import { safeRead, isDbConfigured } from "@/lib/db-status";
@@ -29,7 +31,7 @@ export default async function ContactDetailPage(props: { params: Params }) {
   const user = await requireUser();
   const { id } = await props.params;
 
-  const [contactRes, touchesRes, warmPathRes, reciprocityRes, meetingsRes] = await Promise.all([
+  const [contactRes, touchesRes, warmPathRes, reciprocityRes, meetingsRes, accessRes] = await Promise.all([
     safeRead(() => getContact({ id, workspaceId: user.workspaceId }), null),
     safeRead(() => listTouchesForContact({ contactId: id, workspaceId: user.workspaceId }), []),
     safeRead(
@@ -47,6 +49,10 @@ export default async function ContactDetailPage(props: { params: Params }) {
       },
     ),
     safeRead(() => listMeetingsForContact({ contactId: id, workspaceId: user.workspaceId }), []),
+    safeRead(() => listPartnerAccessForContact({ contactId: id, workspaceId: user.workspaceId }), {
+      rooms: [],
+      shares: [],
+    }),
   ]);
 
   if (contactRes.ok && !contactRes.data) notFound();
@@ -201,6 +207,7 @@ export default async function ContactDetailPage(props: { params: Params }) {
               <aside className="space-y-6">
                 <WarmPath path={warmPathRes.data} />
                 <ReciprocityCard data={reciprocityRes.data} />
+                <PartnerAccessPanel access={accessRes.data} />
                 <Card>
                   <CardHeader>
                     <CardTitle>Channels</CardTitle>

@@ -1,7 +1,7 @@
--- NIGO — the AI teammate. A system user + workspace member so @NIGO resolves in
--- the composer and NIGO can author replies in Town Hall.
+-- ÑIGO — the AI teammate. A system user + workspace member so @ÑIGO resolves in
+-- the composer and ÑIGO can author replies in Town Hall.
 insert into users (id, email, display_name, timezone)
-  values ('a1100000-0000-4000-8000-000000000001', 'nigo@agb.local', 'NIGO', 'America/New_York')
+  values ('a1100000-0000-4000-8000-000000000001', 'nigo@agb.local', 'ÑIGO', 'America/New_York')
   on conflict (id) do nothing;
 
 insert into workspace_members (workspace_id, user_id, role)
