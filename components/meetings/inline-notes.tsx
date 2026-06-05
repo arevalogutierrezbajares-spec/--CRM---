@@ -32,8 +32,10 @@ export function InlineNotes({
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestValueRef = useRef(value);
 
-  // Keep ref in sync so the flush callback always sees the latest value
-  latestValueRef.current = value;
+  // Keep ref in sync so the flush callback always sees the latest value.
+  useEffect(() => {
+    latestValueRef.current = value;
+  }, [value]);
 
   const save = useCallback(
     async (text: string) => {
@@ -200,9 +202,14 @@ function RelativeTime({ date }: { date: Date }) {
   const [label, setLabel] = useState(() => formatAgo(date));
 
   useEffect(() => {
-    setLabel(formatAgo(date));
+    const raf = requestAnimationFrame(() => {
+      setLabel(formatAgo(date));
+    });
     const id = setInterval(() => setLabel(formatAgo(date)), 15_000);
-    return () => clearInterval(id);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearInterval(id);
+    };
   }, [date]);
 
   return <>{label}</>;

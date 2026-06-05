@@ -43,12 +43,15 @@ export function SavedViews({ namespace }: { namespace: string }) {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    try {
-      const raw = window.localStorage.getItem(key);
-      setViews(raw ? (JSON.parse(raw) as View[]) : []);
-    } catch {
-      setViews([]);
-    }
+    const raf = requestAnimationFrame(() => {
+      try {
+        const raw = window.localStorage.getItem(key);
+        setViews(raw ? (JSON.parse(raw) as View[]) : []);
+      } catch {
+        setViews([]);
+      }
+    });
+    return () => cancelAnimationFrame(raf);
   }, [key]);
 
   function persist(next: View[]) {

@@ -43,7 +43,10 @@ export function AIAssistPanel({ scope }: AIAssistPanelProps) {
   );
 
   useEffect(() => {
-    fetchActions(false);
+    const raf = requestAnimationFrame(() => {
+      void fetchActions(false);
+    });
+    return () => cancelAnimationFrame(raf);
   }, [fetchActions]);
 
   const visible = (actions ?? []).filter((a) => !dismissedIds.has(a.id));

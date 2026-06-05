@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { TopBar } from "@/components/layout/top-bar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ export default async function AcceptInvitePage(props: {
   const user = await requireUser();
   const sp = await props.searchParams;
   const token = sp.token ?? "";
+  const now = new Date();
 
   // Pre-fetch invite details so we can show the workspace name + inviter and
   // catch obvious problems (expired / wrong email) before the user clicks.
@@ -50,7 +51,7 @@ export default async function AcceptInvitePage(props: {
         inviterName: row.inviterName ?? "A workspace owner",
         role: row.role,
         forEmail: row.email,
-        expired: row.expiresAt.getTime() < Date.now(),
+        expired: row.expiresAt < now,
         alreadyAccepted: !!row.acceptedAt,
         wrongEmail: row.email.toLowerCase() !== user.email.toLowerCase(),
       };

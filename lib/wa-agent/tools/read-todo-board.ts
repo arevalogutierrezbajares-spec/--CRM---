@@ -163,7 +163,7 @@ export const readTodoBoard: ToolEntry = {
     }
 
     // ── 5. Action items from recent meeting minutes (last 14 days) ───────
-    let meetingActionItems: Array<{
+    const meetingActionItems: Array<{
       meetingTitle: string;
       meetingDate: Date;
       items: string[];

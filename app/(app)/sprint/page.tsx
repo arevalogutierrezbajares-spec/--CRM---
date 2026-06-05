@@ -1,5 +1,4 @@
-import Link from "next/link";
-import { Plus, Target } from "lucide-react";
+import { Target } from "lucide-react";
 import { requireUser } from "@/lib/current-user";
 import { TopBar } from "@/components/layout/top-bar";
 import { Button } from "@/components/ui/button";
@@ -33,6 +32,9 @@ function shortDate(iso: string | null): string {
 
 export default async function SprintPage() {
   const user = await requireUser();
+  const sprintStartDate = new Date();
+  const sprintEndDate = new Date();
+  sprintEndDate.setDate(sprintEndDate.getDate() + 14);
   const [activeRes, allRes] = await Promise.all([
     safeRead<SprintWithStats | null>(
       () => getActiveSprint(user.workspaceId),
@@ -137,7 +139,7 @@ export default async function SprintPage() {
               No active sprint
             </h2>
             <p className="text-[12px] text-text-secondary mt-1">
-              Start one to focus this week's tasks.
+              Start one to focus this week&apos;s tasks.
             </p>
             <form action={createSprint} className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 items-end">
               <label className="block space-y-1">
@@ -155,7 +157,7 @@ export default async function SprintPage() {
                   name="startDate"
                   type="date"
                   required
-                  defaultValue={new Date().toISOString().slice(0, 10)}
+                  defaultValue={sprintStartDate.toISOString().slice(0, 10)}
                   className="w-full rounded-md border bg-card px-3 py-1.5 text-[13px]"
                 />
               </label>
@@ -165,7 +167,7 @@ export default async function SprintPage() {
                   name="endDate"
                   type="date"
                   required
-                  defaultValue={new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10)}
+                  defaultValue={sprintEndDate.toISOString().slice(0, 10)}
                   className="w-full rounded-md border bg-card px-3 py-1.5 text-[13px]"
                 />
               </label>
