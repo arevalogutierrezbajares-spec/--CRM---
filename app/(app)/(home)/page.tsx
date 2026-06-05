@@ -3,6 +3,8 @@ import { todayInTz } from "@/lib/date/today";
 import { DashboardShell } from "@/components/dashboard/shell/dashboard-shell";
 import { RightColumn } from "@/components/dashboard/shell/right-column";
 import { GreetingTyping } from "@/components/dashboard/shell/greeting-typing";
+import { GreetingAudio } from "@/components/dashboard/shell/greeting-audio";
+import { greetingIdentity } from "@/lib/greeting";
 import { QuoteBubble } from "@/components/dashboard/daily/quote-bubble";
 import { QUOTES } from "@/lib/quotes";
 import { MiniCalendar } from "@/components/dashboard/right/mini-calendar";
@@ -133,14 +135,16 @@ function parseItemParam(raw: string | string[] | undefined): InitialItem {
   return null;
 }
 
-/** A fun, formal title per teammate; falls back to first name. */
+/**
+ * The on-screen greeting title. Delegates to greetingIdentity() so the *displayed*
+ * nickname always matches what the JARVIS voice *says* (single source of truth).
+ * Unknown teammates fall back to their first name on screen (the voice uses the
+ * generic "Founder" clip).
+ */
 function formalTitle(displayName: string, email: string): string {
-  const key = `${email.split("@")[0] ?? ""} ${displayName}`.toLowerCase();
-  if (key.includes("tg.2000") || key.includes("tomas")) return "Top G";
-  if (key.includes("charles")) return "Sir Charles";
-  if (key.includes("jose") || key.includes("joe") || key.includes("ernesto")) return "Mr. Joe";
-  if (key.includes("arevalo") || key.includes("agb")) return "Don AGB";
-  return displayName.split(/\s+/)[0] || displayName;
+  const { slug, spokenTitle } = greetingIdentity(displayName, email);
+  if (slug === "founder") return displayName.split(/\s+/)[0] || displayName;
+  return spokenTitle;
 }
 
 /** Time-of-day period in the user's IANA timezone. */
@@ -334,7 +338,10 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
       displayName={user.displayName}
       header={
         <div className="flex min-w-0 flex-col justify-center gap-2.5 py-1.5">
-          <GreetingTyping title={formalTitle(user.displayName, user.email)} period={periodInTz(user.timezone)} />
+          <div className="flex min-w-0 items-center gap-2">
+            <GreetingTyping title={formalTitle(user.displayName, user.email)} period={periodInTz(user.timezone)} />
+            <GreetingAudio slug={greetingIdentity(user.displayName, user.email).slug} period={periodInTz(user.timezone)} />
+          </div>
           <QuoteBubble initialIndex={nowMs % QUOTES.length} />
         </div>
       }
