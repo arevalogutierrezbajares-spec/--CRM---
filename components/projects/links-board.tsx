@@ -17,6 +17,7 @@ import {
   Plus,
   Pencil,
   Trash2,
+  Share2,
   ChevronUp,
   ChevronDown,
   FileText,
@@ -46,6 +47,11 @@ import { AddLinkModal, type LinkModalInitial } from "./add-link-modal";
 import { EditFileModal, type FileEditInitial } from "./edit-file-modal";
 import { FilePreviewModal, type PreviewFile } from "./file-preview-modal";
 import { UploadTray } from "./upload-tray";
+import {
+  ShareLinkModal,
+  type ShareContactOption,
+  type ShareableProjectLink,
+} from "@/components/partner-access/share-link-modal";
 
 const CATEGORIES: LinkCategory[] = [
   "business",
@@ -110,11 +116,13 @@ export function LinksBoard({
   links,
   currentUserId,
   currentUserRole,
+  shareContacts = [],
 }: {
   projectId: string;
   links: ProjectLinkView[];
   currentUserId: string;
   currentUserRole: "owner" | "admin" | "member";
+  shareContacts?: ShareContactOption[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -130,6 +138,8 @@ export function LinksBoard({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [sharingLink, setSharingLink] = useState<ShareableProjectLink | null>(null);
+  const [shareOpen, setShareOpen] = useState(false);
 
   const isPrivileged = currentUserRole === "owner" || currentUserRole === "admin";
   const canEditRow = (l: ProjectLinkWithAuthor) =>
@@ -196,6 +206,15 @@ export function LinksBoard({
         toast.error(res.error);
       }
     });
+  }
+
+  function openShare(l: ProjectLinkView) {
+    setSharingLink({
+      id: l.id,
+      label: l.label,
+      kind: l.kind,
+    });
+    setShareOpen(true);
   }
 
   function openDoc(l: ProjectLinkView) {
@@ -309,6 +328,7 @@ export function LinksBoard({
                   onEdit={() => openEdit(l)}
                   onDelete={() => remove(l)}
                   onPreview={() => preview(l)}
+                  onShare={() => openShare(l)}
                   onOpenDoc={() => openDoc(l)}
                   onMoveUp={() => move(category, i, -1)}
                   onMoveDown={() => move(category, i, 1)}
@@ -399,6 +419,18 @@ export function LinksBoard({
             };
           })()}
         />
+
+        <ShareLinkModal
+          key={sharingLink?.id ?? "partner-share"}
+          projectId={projectId}
+          link={sharingLink}
+          contacts={shareContacts}
+          open={shareOpen}
+          onOpenChange={(nextOpen) => {
+            setShareOpen(nextOpen);
+            if (!nextOpen) setSharingLink(null);
+          }}
+        />
       </div>
     </UploadTray>
   );
@@ -415,6 +447,7 @@ function LinkRow({
   onEdit,
   onDelete,
   onPreview,
+  onShare,
   onOpenDoc,
   onMoveUp,
   onMoveDown,
@@ -429,6 +462,7 @@ function LinkRow({
   onEdit: () => void;
   onDelete: () => void;
   onPreview: () => void;
+  onShare: () => void;
   onOpenDoc: () => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
@@ -568,6 +602,15 @@ function LinkRow({
             className="rounded p-0.5 text-text-tertiary hover:text-text-primary disabled:opacity-30"
           >
             <ChevronDown size={12} />
+          </button>
+          <button
+            type="button"
+            onClick={onShare}
+            disabled={disabled}
+            aria-label={`Share ${l.label}`}
+            className="rounded p-0.5 text-text-tertiary hover:text-text-primary"
+          >
+            <Share2 size={12} />
           </button>
           <button
             type="button"
