@@ -15,6 +15,7 @@
     "db:seed": "tsx db/seed.ts",
     "db:seed-demo": "tsx scripts/seed-demo.ts",
     "obsidian:sync": "tsx scripts/obsidian-sync.ts",
+    "greetings:gen": "tsx scripts/gen-greetings.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:db": "bash scripts/test-db.sh",
