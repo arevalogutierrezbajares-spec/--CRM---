@@ -11,6 +11,7 @@ export type ToolResult =
 export type ToolContext = {
   workspaceId: string;
   userId: string;
+  workspaceRole: "owner" | "admin" | "member";
   ownerTimezone: string;
   now: Date;
   /**

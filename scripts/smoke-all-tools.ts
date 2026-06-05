@@ -30,6 +30,7 @@ const SMOKE_MEETING_IDS: string[] = [];
 const ctx: ToolContext = {
   workspaceId: WS,
   userId: TOMAS,
+  workspaceRole: "owner",
   ownerTimezone: "America/New_York",
   now: new Date(),
 };

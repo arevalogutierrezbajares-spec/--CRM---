@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Heart } from "lucide-react";
-import { HOME_BUBBLE_MESSAGES } from "@/lib/quotes";
-import { QUOTE_FAVS_KEY, QUOTE_PACE_KEY, QUOTE_FAVONLY_KEY, DEFAULT_QUOTE_PACE } from "@/lib/quote-prefs";
+import { DEMON_BROADCAST_MESSAGES, QUOTES, type Quote } from "@/lib/quotes";
+import { DEFAULT_QUOTE_PACE, NIGO_DEMON_MODE_KEY, QUOTE_FAVONLY_KEY, QUOTE_FAVS_KEY, QUOTE_PACE_KEY } from "@/lib/quote-prefs";
 
 function pickDifferent(pool: number[], current: number): number {
   if (pool.length <= 1) return pool[0] ?? current;
@@ -13,7 +13,7 @@ function pickDifferent(pool: number[], current: number): number {
   return n;
 }
 
-function quoteCacheKey(quote: { text: string; ref: string }) {
+function quoteCacheKey(quote: Pick<Quote, "text" | "ref">) {
   return `${quote.ref}\u0000${quote.text}`;
 }
 
@@ -27,12 +27,11 @@ function quoteCacheKey(quote: { text: string; ref: string }) {
  * prefs hydrate in a rAF.
  */
 export function QuoteBubble({ initialIndex }: { initialIndex: number }) {
-  const [index, setIndex] = useState(
-    ((initialIndex % HOME_BUBBLE_MESSAGES.length) + HOME_BUBBLE_MESSAGES.length) % HOME_BUBBLE_MESSAGES.length,
-  );
+  const [index, setIndex] = useState(((initialIndex % QUOTES.length) + QUOTES.length) % QUOTES.length);
   const [favs, setFavs] = useState<Set<string>>(new Set());
   const [pace, setPace] = useState(DEFAULT_QUOTE_PACE);
   const [favOnly, setFavOnly] = useState(false);
+  const [demonMode, setDemonMode] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
 
   const lastHoveredIndex = useRef<number | null>(null);
@@ -41,6 +40,11 @@ export function QuoteBubble({ initialIndex }: { initialIndex: number }) {
   const abortRef = useRef<AbortController | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const speechCache = useRef(new Map<string, string>());
+
+  const messages = useMemo<Quote[]>(
+    () => (demonMode ? [...QUOTES, ...DEMON_BROADCAST_MESSAGES] : QUOTES),
+    [demonMode],
+  );
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -52,11 +56,14 @@ export function QuoteBubble({ initialIndex }: { initialIndex: number }) {
         const savedFavs: Set<string> = f ? new Set(JSON.parse(f)) : new Set();
         const p = Number(localStorage.getItem(QUOTE_PACE_KEY));
         const fo = localStorage.getItem(QUOTE_FAVONLY_KEY) === "1";
+        const dm = localStorage.getItem(NIGO_DEMON_MODE_KEY) === "1";
+        const hydratedMessages = dm ? [...QUOTES, ...DEMON_BROADCAST_MESSAGES] : QUOTES;
         setFavs(savedFavs);
         if (Number.isFinite(p) && p >= 3) setPace(p);
         setFavOnly(fo);
+        setDemonMode(dm);
         if (fo && savedFavs.size > 0) {
-          const next = HOME_BUBBLE_MESSAGES.findIndex(
+          const next = hydratedMessages.findIndex(
             (quote) => quote.kind !== "demon-broadcast" && savedFavs.has(quote.text),
           );
           if (next >= 0) setIndex(next);
@@ -80,24 +87,25 @@ export function QuoteBubble({ initialIndex }: { initialIndex: number }) {
   }, []);
 
   const eligible = useMemo(() => {
-    const all = HOME_BUBBLE_MESSAGES.map((_, i) => i);
+    const all = messages.map((_, i) => i);
     if (!favOnly) return all;
     const favIdx = all.filter(
-      (i) => HOME_BUBBLE_MESSAGES[i].kind !== "demon-broadcast" && favs.has(HOME_BUBBLE_MESSAGES[i].text),
+      (i) => messages[i].kind !== "demon-broadcast" && favs.has(messages[i].text),
     );
     return favIdx.length > 0 ? favIdx : all;
-  }, [favOnly, favs]);
+  }, [favOnly, favs, messages]);
 
   useEffect(() => {
     const id = setInterval(() => setIndex((cur) => pickDifferent(eligible, cur)), Math.max(3, pace) * 1000);
     return () => clearInterval(id);
   }, [pace, eligible]);
 
-  const q = HOME_BUBBLE_MESSAGES[index];
+  const currentIndex = ((index % messages.length) + messages.length) % messages.length;
+  const q = messages[currentIndex] ?? QUOTES[0];
   const isBroadcast = q.kind === "demon-broadcast";
   const isFav = !isBroadcast && favs.has(q.text);
 
-  async function speakQuote(quote: (typeof HOME_BUBBLE_MESSAGES)[number]) {
+  async function speakQuote(quote: Quote) {
     const requestId = ++speakRequest.current;
     const key = quoteCacheKey(quote);
 
@@ -153,17 +161,17 @@ export function QuoteBubble({ initialIndex }: { initialIndex: number }) {
   }
 
   function handleClick() {
-    const next = pickDifferent(eligible, index);
+    const next = pickDifferent(eligible, currentIndex);
     setIndex(next);
-    void speakQuote(HOME_BUBBLE_MESSAGES[next]);
+    void speakQuote(messages[next]);
   }
 
   function handleMouseEnter() {
     const now = Date.now();
-    if (lastHoveredIndex.current === index && now - lastHoverSpeakAt.current < 500) return;
-    lastHoveredIndex.current = index;
+    if (lastHoveredIndex.current === currentIndex && now - lastHoverSpeakAt.current < 500) return;
+    lastHoveredIndex.current = currentIndex;
     lastHoverSpeakAt.current = now;
-    void speakQuote(HOME_BUBBLE_MESSAGES[index]);
+    void speakQuote(q);
   }
 
   function handleMouseLeave() {
@@ -202,7 +210,7 @@ export function QuoteBubble({ initialIndex }: { initialIndex: number }) {
         >
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
-              key={index}
+              key={currentIndex}
               initial={{ opacity: 0, y: 4, filter: "blur(3px)" }}
               animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
               exit={{ opacity: 0, y: -4, filter: "blur(3px)" }}
