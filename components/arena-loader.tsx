@@ -140,11 +140,12 @@ export function ArenaLoader({ next }: { next: string }) {
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_45%,rgba(0,0,0,0.65)_100%)]" />
       <div className="pointer-events-none absolute inset-0 opacity-[0.5] mix-blend-overlay [background-image:repeating-linear-gradient(0deg,rgba(255,255,255,0.02)_0,rgba(255,255,255,0.02)_1px,transparent_1px,transparent_3px)]" />
 
-      {/* Skip — top right */}
+      {/* Skip — top right. z-30 keeps it above the full-screen quote layer
+          (which is z-10 and paints later in the DOM), so the click always lands. */}
       <button
         type="button"
         onClick={enter}
-        className="absolute right-5 top-5 z-10 rounded-full border border-white/15 bg-white/[0.04] px-4 py-2 font-mono text-[11px] uppercase tracking-[0.3em] text-white/55 backdrop-blur-sm transition-colors duration-200 hover:border-white/30 hover:text-white/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9A24B]/60"
+        className="absolute right-5 top-5 z-30 rounded-full border border-white/15 bg-white/[0.04] px-4 py-2 font-mono text-[11px] uppercase tracking-[0.3em] text-white/55 backdrop-blur-sm transition-colors duration-200 hover:border-white/30 hover:text-white/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C9A24B]/60"
         aria-label="Skip the intro and enter the workspace"
       >
         Skip <span aria-hidden className="ml-1">&#9656;</span>
@@ -159,8 +160,10 @@ export function ArenaLoader({ next }: { next: string }) {
         <span className="text-[#C9A24B]/40">TIGR</span>
       </div>
 
-      {/* Quote */}
-      <div className="relative z-10 flex h-full w-full items-center justify-center px-6">
+      {/* Quote — purely decorative (aria-hidden text + sr-only copy), so it must
+          not eat pointer events; otherwise this full-screen layer would cover
+          the Skip button. */}
+      <div className="pointer-events-none relative z-10 flex h-full w-full items-center justify-center px-6">
         <figure className="w-[min(72ch,92vw)]">
           {/* Animated, typed copy — hidden from AT (full text provided below) */}
           <blockquote

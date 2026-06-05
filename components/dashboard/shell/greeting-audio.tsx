@@ -8,15 +8,17 @@ import { greetingAudioSrc, type GreetingPeriod, type GreetingSlug } from "@/lib/
 /** Bumping the suffix re-greets everyone (e.g. after a voice refresh). */
 const SESSION_KEY = "agb_greeted_v1";
 const LAST_AUTO_KEY = "agb_greeted_last_auto_ms_v1";
-const HOME_LEFT_KEY = "agb_home_left_ms_v1";
-const HOME_RETURN_REPLAY_THROTTLE_MS = 5 * 60 * 1000;
+// The clips are pre-rendered static files (no ElevenLabs at runtime), so we
+// re-greet freely on every Home load. This throttle is only an anti-double-fire
+// guard (React's dev double-mount + refresh-spam), NOT an annoyance limiter.
+const HOME_REGREET_THROTTLE_MS = 5_000;
 
 /**
- * ÑIGO voice greeting. On the first dashboard load of a browser session it
- * auto-plays "Good {period}, {nickname}" in the founder's voice clip. If the
- * browser blocks autoplay (no prior user gesture), the speaker chip pulses amber
- * as a tap-to-play affordance. Returning to Home can replay the greeting after a
- * short throttle; the chip is always present for manual replay.
+ * ÑIGO voice greeting. Auto-plays "Good {period}, {nickname}" from a pre-rendered
+ * static clip on the first dashboard load of a browser session, and again on any
+ * later Home load — returning to "/" or refreshing the page. If the browser
+ * blocks autoplay (no prior user gesture), the speaker chip pulses amber as a
+ * tap-to-play affordance; the chip is always present for manual replay.
  *
  * setState only fires inside async callbacks (play promise, error/ended events,
  * click) — never synchronously in the effect body → satisfies set-state-in-effect.
@@ -30,35 +32,26 @@ export function GreetingAudio({ slug, period }: { slug: GreetingSlug; period: Gr
   const [playing, setPlaying] = useState(false);
 
   useEffect(() => {
-    if (typeof window === "undefined") return undefined;
-    const markHomeLeft = () => {
-      try {
-        sessionStorage.setItem(HOME_LEFT_KEY, String(Date.now()));
-      } catch {
-        /* ignore */
-      }
-    };
+    if (typeof window === "undefined") return;
     let greeted = false;
     let lastAutoMs = 0;
-    let leftHomeMs = 0;
     try {
       greeted = sessionStorage.getItem(SESSION_KEY) === "1";
       lastAutoMs = Number(sessionStorage.getItem(LAST_AUTO_KEY) ?? "0");
-      leftHomeMs = Number(sessionStorage.getItem(HOME_LEFT_KEY) ?? "0");
     } catch {
       /* sessionStorage unavailable (private mode) — just skip auto-greet */
     }
     const el = ref.current;
-    if (!el) return markHomeLeft;
+    if (!el) return;
     const now = Date.now();
+    const sinceLastAuto = lastAutoMs > 0 ? now - lastAutoMs : Infinity;
+    // Greet on the first dashboard load of the session, and again on every later
+    // Home load — returning to "/" or refreshing. Static clips are free, so the
+    // only gate is the short anti-double-fire throttle.
     const shouldPlayFirstGreeting = !greeted;
-    const shouldReplayOnHomeReturn =
-      pathname === "/" &&
-      greeted &&
-      leftHomeMs > 0 &&
-      (lastAutoMs === 0 || now - lastAutoMs > HOME_RETURN_REPLAY_THROTTLE_MS);
+    const shouldReplayOnHome = pathname === "/" && greeted && sinceLastAuto > HOME_REGREET_THROTTLE_MS;
 
-    if (!shouldPlayFirstGreeting && !shouldReplayOnHomeReturn) return markHomeLeft;
+    if (!shouldPlayFirstGreeting && !shouldReplayOnHome) return;
 
     el.currentTime = 0;
     el
@@ -72,10 +65,9 @@ export function GreetingAudio({ slug, period }: { slug: GreetingSlug; period: Gr
         }
       })
       .catch(() => {
-        // Autoplay policy blocked it → invite a tap.
+        // Autoplay policy blocked it → invite a tap (amber pulse).
         setNeedsTap(true);
       });
-    return markHomeLeft;
   }, [pathname, src]);
 
   function replay() {
