@@ -48,6 +48,26 @@ export function CountdownCard({
       className="group relative block overflow-hidden rounded-lg border px-3.5 py-3"
       style={{ borderColor: "#232a33", background: "linear-gradient(180deg, #0c1016 0%, #0a0d12 100%)" }}
     >
+      {/* Angel Falls — Venezuela's icon — looping behind the LED panel */}
+      <video
+        aria-hidden
+        autoPlay
+        loop
+        muted
+        playsInline
+        preload="metadata"
+        poster="/videos/angel-falls.jpg"
+        className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-65"
+      >
+        <source src="/videos/angel-falls.webm" type="video/webm" />
+        <source src="/videos/angel-falls.mp4" type="video/mp4" />
+      </video>
+      {/* Darkening overlay so the phosphor digits stay readable over the video */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{ background: "linear-gradient(180deg, rgba(8,11,16,0.5) 0%, rgba(8,11,16,0.82) 100%)" }}
+      />
       {/* CRT scanlines */}
       <div
         aria-hidden

@@ -7,7 +7,6 @@ import { QuoteBubble } from "@/components/dashboard/daily/quote-bubble";
 import { QUOTES } from "@/lib/quotes";
 import { MiniCalendar } from "@/components/dashboard/right/mini-calendar";
 import { PipelineSnapshot } from "@/components/dashboard/right/pipeline-snapshot";
-import { RelationshipHealth } from "@/components/dashboard/right/relationship-health";
 import { AIBriefing } from "@/components/dashboard/right/ai-briefing";
 import { TreasuryWidget } from "@/components/dashboard/right/treasury-widget";
 import { SprintWidget } from "@/components/dashboard/right/sprint-widget";
@@ -346,7 +345,6 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
           <TreasuryWidget snapshot={treasuryRes.data} />
           <AIBriefing bullets={briefing} />
           <PipelineSnapshot stages={pipelineRes.data} />
-          <RelationshipHealth rows={relRes.data} />
         </RightColumn>
       }
     >
@@ -362,7 +360,6 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
 
       {view === "daily" && dailyData && (
         <DailyView
-          counts={countsRes.data}
           tasks={dailyData.tasks}
           meetings={dailyData.meetings}
           actionItems={dailyData.actionItems}
@@ -371,9 +368,8 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
           pinnedProjects={dailyData.pinnedProjects}
           recentProjects={dailyData.recentProjects}
           docs={docsRes.data}
-          blocked={blockedRes.data}
+          relationship={relRes.data}
           scorecard={scorecardRes.data}
-          briefing={briefing}
           nowMs={nowMs}
           tz={user.timezone}
           todayKey={todayStr}

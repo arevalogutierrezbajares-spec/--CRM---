@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/current-user";
 import { TopBar } from "@/components/layout/top-bar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChangePasswordCard } from "@/components/settings/change-password-card";
+import { QuoteSettingsCard } from "@/components/settings/quote-settings-card";
 
 export default async function SettingsPage() {
   const user = await requireUser();
@@ -34,6 +35,7 @@ export default async function SettingsPage() {
               </Link>
             </CardContent>
           </Card>
+          <QuoteSettingsCard />
           <ChangePasswordCard />
         </div>
       </main>

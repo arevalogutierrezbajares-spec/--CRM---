@@ -2,12 +2,11 @@ import { TopRow } from "./top-row";
 import { TasksCard } from "./tasks-card";
 import { ActionItemsCard } from "./action-items-card";
 import { AIAssistPanel } from "./ai-assist-panel";
-import { BriefingCard } from "./briefing-card";
 import { Scorecard } from "./scorecard";
 import { KpiStrip } from "./kpi-strip";
 import { ActivityCenter } from "@/components/town-hall/activity-center";
+import { RelationshipHealth } from "@/components/dashboard/right/relationship-health";
 import { ItemDrawerProvider } from "../item-drawer";
-import type { BlockedProject } from "@/db/queries/this-week";
 import type { ScorecardRow, KpiRow } from "@/db/queries/okrs";
 import { PinnedProjects } from "../pinned-projects";
 import type { PinnedProject } from "@/db/queries/pins";
@@ -16,15 +15,9 @@ import type { RefObject } from "@/components/town-hall/types";
 import type { WorkspaceCountdown } from "@/db/queries/workspace-settings";
 import type { FeedItem } from "@/db/queries/town-hall-feed";
 import type { InitiativePick } from "@/db/queries/item-initiatives";
-import type {
-  DashActionItem,
-  DashCounts,
-  DashMeeting,
-  DashTask,
-} from "@/db/queries/dashboard";
+import type { DashActionItem, DashMeeting, DashTask, RelationshipRow } from "@/db/queries/dashboard";
 
 interface DailyViewProps {
-  counts: DashCounts;
   tasks: DashTask[];
   meetings: DashMeeting[];
   actionItems: DashActionItem[];
@@ -33,9 +26,8 @@ interface DailyViewProps {
   docs: RefObject[];
   pinnedProjects: PinnedProject[];
   recentProjects: { id: string; title: string }[];
-  blocked: BlockedProject[];
+  relationship: RelationshipRow[];
   scorecard: ScorecardRow[];
-  briefing: string[];
   nowMs: number;
   tz: string;
   todayKey: string;
@@ -48,7 +40,6 @@ interface DailyViewProps {
 }
 
 export function DailyView({
-  counts,
   tasks,
   meetings,
   actionItems,
@@ -57,9 +48,8 @@ export function DailyView({
   docs,
   pinnedProjects,
   recentProjects,
-  blocked,
+  relationship,
   scorecard,
-  briefing,
   nowMs,
   tz,
   todayKey,
@@ -89,13 +79,19 @@ export function DailyView({
       members={members}
       initialItem={initialItem}
     >
-      {/* Top row: ordered meetings agenda · tasks due · countdown */}
-      <TopRow counts={counts} meetings={meetings} countdown={countdown} nowMs={nowMs} tz={tz} />
+      {/* Top row: meetings agenda · tasks-due agenda · countdown (Angel Falls) */}
+      <TopRow meetings={meetings} tasks={tasks} countdown={countdown} nowMs={nowMs} tz={tz} />
 
-      {/* Body: LEFT (wide) = Town Hall + insights · RIGHT (thinner) = work */}
-      <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
+      {/* KPIs — slim, full-width strip */}
+      <KpiStrip kpis={kpis} />
+
+      {/* Trio — Work · Town Hall (wide) · Relationship — bottoms aligned */}
+      <div className="grid grid-cols-1 items-stretch gap-2.5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)_minmax(0,1fr)]">
         <div className="flex min-w-0 flex-col gap-2.5">
-          <KpiStrip kpis={kpis} />
+          <ActionItemsCard items={actionItems} sources={mentionSources} />
+          <TasksCard tasks={tasks} scope="today" sources={mentionSources} />
+        </div>
+        <div className="min-w-0">
           <ActivityCenter
             workspaceId={workspaceId}
             initialFeed={feed}
@@ -107,24 +103,20 @@ export function DailyView({
             todayKey={todayKey}
             nowMs={nowMs}
           />
-          <PinnedProjects pinned={pinnedProjects} allProjects={pickerProjects} recent={recentProjects} />
-          <AIAssistPanel scope="daily" />
-          <Scorecard rows={scorecard} />
         </div>
-
-        <div className="flex min-w-0 flex-col gap-2.5">
-          <BriefingCard
-            bullets={briefing}
-            actionItems={actionItems}
-            tasks={tasks}
-            blocked={blocked}
-            meetings={meetings}
-            nowMs={nowMs}
-          />
-          <ActionItemsCard items={actionItems} sources={mentionSources} />
-          <TasksCard tasks={tasks} scope="today" sources={mentionSources} />
+        <div className="min-w-0">
+          <RelationshipHealth rows={relationship} />
         </div>
       </div>
+
+      {/* Pinned projects + AI assist — 50 / 50 */}
+      <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-2">
+        <PinnedProjects pinned={pinnedProjects} allProjects={pickerProjects} recent={recentProjects} />
+        <AIAssistPanel scope="daily" />
+      </div>
+
+      {/* Scorecard — full width, skinny */}
+      <Scorecard rows={scorecard} />
     </ItemDrawerProvider>
   );
 }

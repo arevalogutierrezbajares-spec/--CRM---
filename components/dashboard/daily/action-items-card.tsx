@@ -48,7 +48,7 @@ export function ActionItemsCard({ items, sources }: { items: DashActionItem[]; s
   // checkbox (by id — the removed row lingers during its exit animation, so we
   // target the surviving element explicitly). Lets you Space → Space → Space.
   function focusNextAfter(itemId: string) {
-    const visible = optimistic.slice(0, 8);
+    const visible = optimistic;
     const idx = visible.findIndex((x) => x.id === itemId);
     const nextId = visible[idx + 1]?.id ?? visible[idx - 1]?.id ?? null;
     if (!nextId) return;
@@ -142,9 +142,9 @@ export function ActionItemsCard({ items, sources }: { items: DashActionItem[]; s
           <p className="text-[12px] text-text-secondary">No open action items.</p>
         </div>
       ) : (
-        <ul ref={listRef} className="space-y-1.5">
+        <ul ref={listRef} className="max-h-[340px] space-y-1.5 overflow-y-auto pr-0.5">
           <AnimatePresence initial={false}>
-            {optimistic.slice(0, 8).map((item) => {
+            {optimistic.map((item) => {
               const badge = item.isOverdue
                 ? { label: "Overdue", variant: "red" as BadgeVariant }
                 : item.priority
@@ -177,9 +177,9 @@ export function ActionItemsCard({ items, sources }: { items: DashActionItem[]; s
                     onClick={() => drawer?.openItem("action_item", item.id)}
                     className="min-w-0 flex-1 text-left"
                   >
-                    <div className="flex items-center gap-1 text-[12.5px] text-text-primary">
-                      <span className="truncate">{item.title}</span>
-                      {item.fromVoice && <Mic size={10} className="shrink-0 text-text-tertiary" aria-label="From voice note" />}
+                    <div className="flex items-start gap-1 text-[12.5px] leading-snug text-text-primary">
+                      <span className="break-words">{item.title}</span>
+                      {item.fromVoice && <Mic size={10} className="mt-0.5 shrink-0 text-text-tertiary" aria-label="From voice note" />}
                     </div>
                     {item.dueDate && <div className="text-tiny text-text-tertiary">due {shortDate(item.dueDate)}</div>}
                   </button>
@@ -219,8 +219,6 @@ export function ActionItemsCard({ items, sources }: { items: DashActionItem[]; s
         )}
       </div>
       <CaptureChips picks={picks} text={newTitle} />
-
-      {optimistic.length > 8 && <p className="mt-1 text-tiny text-text-tertiary">+{optimistic.length - 8} more</p>}
     </DashCard>
   );
 }
