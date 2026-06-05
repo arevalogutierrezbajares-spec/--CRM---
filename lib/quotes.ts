@@ -1,6 +1,6 @@
-/** A quote for the Home bubble. `ref` is the attribution (scripture reference or
- *  author) shown low-key under the text. */
-export type Quote = { ref: string; text: string };
+/** A quote or broadcast line for the Home bubble. `ref` is the attribution or source
+ * label shown low-key under the text. */
+export type Quote = { ref: string; text: string; kind?: "quote" | "demon-broadcast" };
 
 export const QUOTES: Quote[] = [
   { ref: "Philippians 4:13", text: "I can do all things through Christ who strengthens me." },
@@ -197,3 +197,15 @@ export const QUOTES: Quote[] = [
   { ref: "Gustavo Dudamel", text: "El arte es un derecho universal." },
   { ref: "Gustavo Dudamel", text: "Las únicas armas del pueblo son las herramientas para forjar su propio futuro: instrumentos musicales, pinceles, libros — las más altas expresiones del espíritu humano." },
 ];
+
+export const DEMON_BROADCAST_MESSAGES: Quote[] = [
+  { ref: "Demon mode broadcast (mGkrbzJZCoE · 0:00-0:16)", text: "Perfect, Wally. Great job. We are on a run.", kind: "demon-broadcast" },
+  { ref: "Demon mode broadcast (mGkrbzJZCoE · 0:40-1:05)", text: "That was the smoothest operation of my life.", kind: "demon-broadcast" },
+  { ref: "Demon mode broadcast (SWk_g7EWZjQ · 0:14-0:16)", text: "To whom it may concern to you.", kind: "demon-broadcast" },
+  { ref: "Demon mode broadcast (SWk_g7EWZjQ · 0:36-0:50)", text: "Cheers, boys. We took it. We are the time zone. Yes.", kind: "demon-broadcast" },
+  { ref: "Demon mode broadcast (SWk_g7EWZjQ · 1:00-1:10)", text: "You are the best. Thanks to your capacity, your talent, and the old team.", kind: "demon-broadcast" },
+  { ref: "Demon mode broadcast (SWk_g7EWZjQ · 1:31-1:40)", text: "I need to wait until everybody crosses the line. It's looking good.", kind: "demon-broadcast" },
+  { ref: "Demon mode broadcast (SWk_g7EWZjQ · 1:42-1:60)", text: "Hamilton is second, Button is third, and Ferrari's back.", kind: "demon-broadcast" },
+];
+
+export const HOME_BUBBLE_MESSAGES = [...QUOTES, ...DEMON_BROADCAST_MESSAGES];
