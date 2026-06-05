@@ -1,0 +1,123 @@
+project,id,label,category,created_at
+AGB-CRM,5c19f338-8668-459f-8a37-803076d47947,Daily PMO standup template (GigaPaul),ops,2026-05-27 09:12:24.434+00
+AGB-CRM,f8841830-6996-4340-811b-ed90a2f9d099,Dashboard spec (CLAUDE.md DASHBOARD_SPEC),tech,2026-05-27 09:12:23.658+00
+AGB-CRM,ff30973c-08da-4915-9955-ce3822fc9c48,Drizzle schema (db/schema.ts),tech,2026-05-27 09:12:23.276+00
+AGB-CRM,7181d053-d1e5-4c90-bb5a-96665dfd26ae,Enterprise AI Tool: GigaChad Test Manager,tech,2026-05-27 09:12:23.847+00
+AGB-CRM,b8fc952c-4797-4c41-8790-1d492bc90c37,Enterprise AI Tool: GigaPaul PMO Agent,tech,2026-05-27 09:12:24.048+00
+AGB-CRM,0c9681e1-81a2-4bfd-a125-3d121a232e2a,GigaChad ↔ GigaPaul coordination protocol,ops,2026-05-27 09:12:24.24+00
+AGB-CRM,0a662994-7f8f-4228-a79b-00abc8db96da,Local: /Users/tomas/AGB-CRM,tech,2026-05-27 09:12:22.894+00
+AGB-CRM,e9691d1c-90b3-46fd-a6e9-5173c0e7458b,Migrations (db/migrations/ 0001–0006),tech,2026-05-27 09:12:23.47+00
+AGB-CRM,bf861cce-b53d-41bc-a1b7-fa92a6fe5939,Roadmap (this app's /roadmap),ops,2026-05-27 09:12:24.626+00
+AGB-CRM,a508001d-bc88-4a9a-b8f8-67babed2381f,Supabase project (uktrhbvdamzfzbnhuwhn),tech,2026-05-27 09:12:23.087+00
+AGB-CRM,96d5a5c4-e161-4c15-8e07-adcba120b42b,Use-case doc (chief of staff workflow),business,2026-05-27 09:12:22.508+00
+CaneyCloud,1bcd658a-986a-47fa-a7fd-e57c56d1232c,5 feature-deep 60s promo videos,marketing,2026-05-27 09:12:10.522+00
+CaneyCloud,31626502-d7ed-488c-8007-d3d97f3e453c,Alembic migration chain (single head 076),tech,2026-05-27 09:12:11.694+00
+CaneyCloud,3f447a3b-7e90-44b8-a932-745c4863d94e,Brand assets (caneycloud-launch repo),marketing,2026-05-27 09:12:10.126+00
+CaneyCloud,83138248-0be8-45d3-b844-319e99e62e71,Cloud Run staging deploys (backend),tech,2026-05-27 09:12:11.304+00
+CaneyCloud,11cf50e9-b857-4fca-ab4f-f2825b2e2f2e,Co-owned with JEAV — operator-side,ops,2026-05-27 09:12:11.893+00
+CaneyCloud,d11af706-eebe-4d82-9f00-73b2fa73885a,Customer pipeline (posadas + restaurants + chains),business,2026-05-27 09:12:09.55+00
+CaneyCloud,8d36f36f-9ef1-470a-84f9-ea693ffdb030,GigaChad test orchestrator (quality gates),ops,2026-05-27 09:12:12.276+00
+CaneyCloud,4ee42b5e-6841-4544-b3cf-be6ae0fde356,GigaPaul PMO board (cross-project sprint state),ops,2026-05-27 09:12:12.088+00
+CaneyCloud,f370c8b4-ab39-4cbd-a080-f100dee5325f,Local: /Users/tomas/--TOURISM--,tech,2026-05-27 09:12:10.91+00
+CaneyCloud,eb59bb26-507d-4d79-a0c3-f154e1e20a8b,Overlord task board (16 sections),tech,2026-05-27 09:12:11.11+00
+CaneyCloud,04a02791-ebd5-4c0d-a5f7-b1e6e2b82db7,"Partner agreements (OTAs, payment processors)",business,2026-05-27 09:12:09.745+00
+CaneyCloud,91e72b9d-0e11-456d-9410-3adf53f2dd06,Pricing & packaging (per-property SaaS),business,2026-05-27 09:12:09.362+00
+CaneyCloud,c5ba9901-6411-465c-974a-0eb939c3f245,Product deck (CaneyCloud-Deck.pdf),marketing,2026-05-27 09:12:10.324+00
+CaneyCloud,b32d9e1c-48b0-4029-bc8b-c62d24da4def,Supabase project uktrhbvdamzfzbnhuwhn,tech,2026-05-27 09:12:11.497+00
+Cosecha,220c8da4-4b8e-444e-a716-4d4a69d995c2,apps/api — Hono on Node.js,tech,2026-05-27 09:12:35.003+00
+Cosecha,131b0c1a-4698-491b-85e0-5dad161805e7,apps/dashboard — Next.js 15 + Supabase Auth,tech,2026-05-27 09:12:35.197+00
+Cosecha,70d1fced-d3a1-47f2-899b-544788c5a74f,Brand identity (TBD),marketing,2026-05-27 09:12:34.04+00
+Cosecha,79f42672-6221-481a-99e4-6e453cea80a3,"Buyer relationships (restaurants, markets)",business,2026-05-27 09:12:33.661+00
+Cosecha,3c9c08c2-4840-4069-8cc3-017edb58184d,CLAUDE.md (full architecture spec),tech,2026-05-27 09:12:34.62+00
+Cosecha,f78da925-2d11-40d1-8d91-d1205fa14ac7,GitHub Actions CI pipeline,ops,2026-05-27 09:12:36.168+00
+Cosecha,9b9ce8ba-47da-4523-ae8e-d8af9c9d50a3,Grower pipeline (field-agent enrollment),business,2026-05-27 09:12:33.468+00
+Cosecha,536bdfc2-02d9-412f-9203-8f898e710c2e,Landing page (TBD — no consumer web yet),marketing,2026-05-27 09:12:34.234+00
+Cosecha,4c797ace-cd88-424e-af8b-7180244ea646,Local: /Users/tomas/vz-farmers-marketplace,tech,2026-05-27 09:12:34.431+00
+Cosecha,e094a176-21bd-4123-8381-be0216027e6d,packages/payments — Pago Móvil + USDC escrow,tech,2026-05-27 09:12:35.585+00
+Cosecha,01822d0a-5ddc-46b7-bd4d-e899705573a1,packages/whatsapp — WA Business Cloud API v21,tech,2026-05-27 09:12:35.395+00
+Cosecha,b23570e1-c0fb-4f7f-9325-17dac2c95bfe,"Product thesis (B2B2C produce, WA-native)",business,2026-05-27 09:12:33.274+00
+Cosecha,c7bb5736-a5f1-4e5b-bd6a-512a7e645d67,Production-readiness gates added (latest commit),ops,2026-05-27 09:12:35.976+00
+Cosecha,a84fc0d6-f866-4614-bcd9-cb0cb8948ff6,Turborepo + pnpm workspaces (5 packages),tech,2026-05-27 09:12:34.809+00
+Cosecha,b01dc442-aa3b-4bf4-a8e9-5024bc52a03c,USDC + Pago Móvil settlement model,business,2026-05-27 09:12:33.849+00
+Cosecha,ef5f1d49-3cdb-428e-856d-05802163dd0b,Vercel deploy + cron jobs (vercel.json),ops,2026-05-27 09:12:36.358+00
+Cosecha,5568bda3-2b65-4c42-9cf7-b01737e30d97,"Vitest suite (248 tests, 20 files)",tech,2026-05-27 09:12:35.782+00
+FormaVZ EdTech,43fe7e65-684a-4912-b778-bc8d83df520f,_research/ + _tasks/ folders,tech,2026-05-27 09:12:31.923+00
+FormaVZ EdTech,8905b3fe-bfeb-42d7-88b5-f3a902fdeba8,Brand identity (Spanish-first),marketing,2026-05-27 09:12:30.953+00
+FormaVZ EdTech,a51390e4-933e-48f9-9fa3-3b52d6ae3d9c,Clean-room discipline (Source-Discipline footer),tech,2026-05-27 09:12:31.536+00
+FormaVZ EdTech,9f81d73c-10f2-464e-a5e3-cd3823f36e82,Course catalog plan (5 courses MVP),business,2026-05-27 09:12:30.76+00
+FormaVZ EdTech,ada421ee-9d88-4fdc-9e99-a75975b2d17c,Local: /Users/tomas/formavz,tech,2026-05-27 09:12:31.342+00
+FormaVZ EdTech,7cd91b1c-65b3-41fd-b617-0e43a216b489,Market thesis (Spanish-first learners),business,2026-05-27 09:12:30.569+00
+FormaVZ EdTech,10dc6d15-edd5-44d2-9537-d487707915c7,"Test suite (191 tests, localhost-bootable)",tech,2026-05-27 09:12:31.728+00
+MIRO Intelligence,13c8c3e6-86e5-4074-a9ee-2b747a745cde,agents/distribution/,tech,2026-05-27 09:12:39.825+00
+MIRO Intelligence,be8bec3b-b316-4980-afb5-1c8bb43fc0dd,agents/enrichment/ + agents/geocoder/,tech,2026-05-27 09:12:39.448+00
+MIRO Intelligence,02854a0e-de72-4cba-a09c-32dd2f297eb6,agents/scoring/ + agents/monitoring/,tech,2026-05-27 09:12:39.636+00
+MIRO Intelligence,cfc65758-dfbf-4a68-bb22-0e72ea65ff16,agents/scrapers/ (Playwright + selectolax),tech,2026-05-27 09:12:39.253+00
+MIRO Intelligence,a730d460-25a0-4b6e-941c-7526496080ea,Client pipeline (energy / mining / diplomatic prospects),business,2026-05-27 09:12:37.908+00
+MIRO Intelligence,a73c10ee-8874-4a37-8557-d3613500fbcc,Data sources + licensing (scraping ethics),business,2026-05-27 09:12:38.1+00
+MIRO Intelligence,25d1a900-5901-43e7-bbf8-e8a90efdd8ac,Editorial cadence (weekly Alerta-style),ops,2026-05-27 09:12:40.418+00
+MIRO Intelligence,6ad8f718-7044-4ef5-b630-06f8243fe7e4,frontend/ — Next.js + Mapbox dashboard,tech,2026-05-27 09:12:40.017+00
+MIRO Intelligence,4dfc10db-3803-4cb9-a05c-2ad0691ccd57,Local: /Users/tomas/vz-land-intel,tech,2026-05-27 09:12:38.872+00
+MIRO Intelligence,77734a24-0078-4639-accd-cf10fae8cc03,Positioning vs RUTA intel,marketing,2026-05-27 09:12:38.481+00
+MIRO Intelligence,bd5c6389-b72a-41a1-8163-69158dd71842,PostGIS migrations,tech,2026-05-27 09:12:40.216+00
+MIRO Intelligence,0c905436-5304-4488-a1cf-1734c5212c0f,Product tiers + pricing (vs RUTA's Alerta/Diario/Campo/Embebido),business,2026-05-27 09:12:37.715+00
+MIRO Intelligence,a77da258-8a78-4178-879b-278a4dabaa54,Python 3.12 backend (psycopg + geoalchemy2),tech,2026-05-27 09:12:39.062+00
+MIRO Intelligence,91f35a6e-ba1c-4ef9-bcd4-83582e64bafb,Sample land-intel report (TBD),marketing,2026-05-27 09:12:38.293+00
+Restaurants,a4e4baff-5fcc-4a4d-9060-dd94ceb0c883,.impeccable critique probe scripts (T1 + T8),tech,2026-05-27 09:12:18.106+00
+Restaurants,f62e1938-89d3-4376-af9f-9f49fafc4bb6,docs/OPS-SUITE-WAVE5-PRODUCTIONIZATION.md,tech,2026-05-27 09:12:17.723+00
+Restaurants,4b2264bf-80f9-41e2-887c-62b58ec447a8,Local: /Users/tomas/caneycloud-restaurant,tech,2026-05-27 09:12:17.527+00
+Restaurants,d3607571-32f5-4053-b706-f49e19ce5727,Market thesis (Beli + Resy + Toast for LATAM),business,2026-05-27 09:12:16.764+00
+Restaurants,8a838164-942f-4650-a491-61b225ccbe88,Pilot restaurant pipeline,business,2026-05-27 09:12:16.954+00
+Restaurants,a4c5be88-17d2-4179-b95d-7f22abd1c5af,Pitch deck (TBD),marketing,2026-05-27 09:12:17.144+00
+Restaurants,bb10b638-5348-4b21-949a-37b95a92c093,Test suite (3119 passed / 2 xfailed),tech,2026-05-27 09:12:17.913+00
+RUTA — Secure Transport Venezuela,f537b21a-e8ab-4963-aea6-66c751f12782,Anthropic itinerary builder API (Claude sonnet-4-5),tech,2026-05-27 09:12:28.262+00
+RUTA — Secure Transport Venezuela,7796788e-5c24-459f-b1c0-449b5617fc95,Capability brief PDF,marketing,2026-05-27 09:12:27.501+00
+RUTA — Secure Transport Venezuela,25a72be3-b7fc-4f6e-84fa-623f8b013da7,"Client pipeline (energy, mining, diplomatic, corporate)",business,2026-05-27 09:12:26.349+00
+RUTA — Secure Transport Venezuela,a8a37d6e-74d2-4113-8a86-d3e2dcc709b2,Intel product cards (Alerta / Diario / Campo / Embebido),marketing,2026-05-27 09:12:27.688+00
+RUTA — Secure Transport Venezuela,acf4f85e-54d3-4642-aa66-ee94f6cbd158,Landing mockups (Downloads/ruta-landing-mockup*.html),marketing,2026-05-27 09:12:27.309+00
+RUTA — Secure Transport Venezuela,d42e1dd2-91c8-4504-918d-b0f9ad88dfd5,Local: /Users/tomas/caneycloud-launch (RUTA_Transport.git working tree),tech,2026-05-27 09:12:28.074+00
+RUTA — Secure Transport Venezuela,f44cc8a7-710f-4127-94f6-7c9a2d51bee7,OFAC compliance + KYC SOP,ops,2026-05-27 09:12:28.838+00
+RUTA — Secure Transport Venezuela,45e74ed4-9519-47c9-b41a-d6d16585a76f,OFAC compliance memo,business,2026-05-27 09:12:26.546+00
+RUTA — Secure Transport Venezuela,49b547a7-c6c7-4a1f-ac66-53e8131ecd56,Platform docs: /Users/tomas/vz-docs/RUTA-Platform,ops,2026-05-27 09:12:29.22+00
+RUTA — Secure Transport Venezuela,0192927e-fa38-4dde-8874-a57229001f35,Resend email integration,tech,2026-05-27 09:12:28.644+00
+RUTA — Secure Transport Venezuela,e1eff801-0f16-40e8-96aa-35baac33261a,"Risk map (25 VZ states, geoBoundaries CC BY 3.0)",tech,2026-05-27 09:12:28.452+00
+RUTA — Secure Transport Venezuela,bceb9c99-a2e0-4f94-85a8-911826ab70de,RUTA Functional Requirements (Downloads/),business,2026-05-27 09:12:26.931+00
+RUTA — Secure Transport Venezuela,99fc896d-da12-489b-8c15-4730b9d76ec6,RUTA Pitch Deck (Downloads/RUTA_Pitch_Deck.pptx),business,2026-05-27 09:12:26.735+00
+RUTA — Secure Transport Venezuela,c39d07b7-227c-443d-99bf-f40e111ba68b,Service tier spec (City / Extended / Expeditions),business,2026-05-27 09:12:26.158+00
+RUTA — Secure Transport Venezuela,bbc7486a-1f1d-4cde-ba4a-d26f0479264c,Wiki: /Users/tomas/wiki/RUTA-Whitepaper.md,ops,2026-05-27 09:12:29.027+00
+Stays,fdece02d-d895-4cdf-ae8d-5e56cf3aeec7,Demo video — Booking flow,marketing,2026-05-27 09:12:13.834+00
+Stays,1907a598-402a-4323-b16d-2d92535ca39f,Demo video — Calendar flow,marketing,2026-05-27 09:12:14.022+00
+Stays,13474dd0-2266-4ec5-ba99-33aace73b59e,OTA channel partnerships,business,2026-05-27 09:12:13.636+00
+Stays,04ee53ba-164b-4cf0-b4fc-acaa9ad028a6,Posada onboarding pipeline,business,2026-05-27 09:12:13.438+00
+Stays,7e496f17-8942-4072-96a8-4894f981d71c,Refresh-token rotation race fixed (b6d73df7),ops,2026-05-27 09:12:15.377+00
+Stays,c08d26b1-7e82-4074-a827-21989a795cb3,Section-accounting TASKS.md,tech,2026-05-27 09:12:14.99+00
+Stays,c60c234e-a14b-4c32-8709-1458eabb22b7,Section-calendar TASKS.md,tech,2026-05-27 09:12:15.184+00
+Stays,2e7902f2-f298-4a0e-963b-47a2b9ea7918,Section-reservations TASKS.md,tech,2026-05-27 09:12:14.799+00
+Stays,98765125-d121-4a96-8eb2-beb37c6f563f,TOURISM/APP/backend (FastAPI + SQLAlchemy),tech,2026-05-27 09:12:14.216+00
+Stays,55c76919-db87-485a-a544-6e875b353271,TOURISM/APP/backend/alembic/versions/,tech,2026-05-27 09:12:14.603+00
+Stays,d79ec070-8448-447b-a8c3-2671073395b5,TOURISM/APP/frontend (Next.js),tech,2026-05-27 09:12:14.408+00
+VAV — Vamos a Venezuela,df31c8ce-13b4-450c-a794-1a03d944b548,Bespoke Journeys product brief,business,2026-05-27 09:12:04.18+00
+VAV — Vamos a Venezuela,7c54240b-677a-4911-8e01-f3a4358a45b6,BMAD planning artifacts (_bmad-output/),tech,2026-05-27 09:12:07.449+00
+VAV — Vamos a Venezuela,d4cb472f-ab86-4672-ac8f-9034b0e1f406,Creator ecosystem (Mija Wave 6 shipped),business,2026-05-27 09:12:04.95+00
+VAV — Vamos a Venezuela,ea6db2ce-1201-45dd-845c-ccecae0ab161,Docs/ADR-Infrastructure-Platform.md,tech,2026-05-27 09:12:06.5+00
+VAV — Vamos a Venezuela,5148fc86-bb7e-422b-8f51-3cb5768ccc9e,Docs/CONTENT-AUDIT-LAUNCH.md,tech,2026-05-27 09:12:07.068+00
+VAV — Vamos a Venezuela,0fb871bf-62cf-4b73-b98f-a2658d532427,Docs/Data-Model-Audit.md,tech,2026-05-27 09:12:06.688+00
+VAV — Vamos a Venezuela,4ba9c6b2-6ee5-4ac6-be40-0281df4c49d1,Docs/E2E-Test-Plan-20260505.md,tech,2026-05-27 09:12:06.876+00
+VAV — Vamos a Venezuela,151aae85-9b4e-4b9b-830b-15e4a3801551,Docs/GigaQuad-Overview.md,tech,2026-05-27 09:12:07.259+00
+VAV — Vamos a Venezuela,618d6eb7-a983-4aba-87f1-7245a5252a49,Future vision: Mija AI concierge (BMAD VZ Explorer),business,2026-05-27 09:12:04.759+00
+VAV — Vamos a Venezuela,5f867983-c478-480f-8b2c-cfbbbfb91a9f,Local: /Users/tomas/VZ_Tourism_Project,tech,2026-05-27 09:12:06.109+00
+VAV — Vamos a Venezuela,5d3bf1b3-b39d-45ea-8359-c5a45dd4f18e,Next.js 16.2.6 + Supabase,tech,2026-05-27 09:12:06.3+00
+VAV — Vamos a Venezuela,bf7f0cab-fcb6-4c96-83a9-07c7d958e35c,Overlord task board (TOURISM repo),ops,2026-05-27 09:12:07.834+00
+VAV — Vamos a Venezuela,f29997cb-ec33-4a46-b44d-0dfe06fb80c0,PostHog + Vercel Analytics (not yet wired),ops,2026-05-27 09:12:07.64+00
+VAV — Vamos a Venezuela,0d44a925-1019-44f4-aabe-cc487bd40369,Production-readiness scorecard (6/10),business,2026-05-27 09:12:04.569+00
+VAV — Vamos a Venezuela,115bf032-d796-487d-b123-5aced6142430,Provider acquisition playbook (WS-A→D),marketing,2026-05-27 09:12:05.717+00
+VAV — Vamos a Venezuela,866e5a86-51da-4787-868f-78af26302ad2,Provider economics model,business,2026-05-27 09:12:04.373+00
+VAV — Vamos a Venezuela,2bb497c1-bdc9-447b-9a3c-8c9ee3fee3aa,Vamos wordmark (public/vamos-wordmark.png),marketing,2026-05-27 09:12:05.524+00
+WA Concierge,1201a2ea-a52b-46ec-9037-85f2e85a44ec,Anthropic + tool definitions per persona,tech,2026-05-27 09:12:20.785+00
+WA Concierge,ea30b34a-f0a6-4fcf-9d1a-ba96dd747326,CI/CD pipeline (GitHub Actions),tech,2026-05-27 09:12:20.973+00
+WA Concierge,04c71596-3b65-442c-a1cc-448f053c0940,Customer use cases (posadas + restaurants + tourism),business,2026-05-27 09:12:19.454+00
+WA Concierge,399d2357-f440-4fa5-89c0-25bf5faa61ef,Demo video — WhatsApp concierge flow,marketing,2026-05-27 09:12:19.84+00
+WA Concierge,21962982-401f-4546-93c8-a373cd8a3431,Local: /Users/tomas/whatsapp-concierge,tech,2026-05-27 09:12:20.217+00
+WA Concierge,6a9b299a-ce58-4b6b-a019-d1b2b5b50ae6,Pricing per guest interaction,business,2026-05-27 09:12:19.647+00
+WA Concierge,740b53d5-e38f-4943-a75a-5393975725e9,Production conversations on VAV (live),ops,2026-05-27 09:12:21.168+00
+WA Concierge,357d0844-b8e4-4287-9e22-39eb7860319f,Standalone fork: /Users/tomas/whatsapp-concierge-standalone,tech,2026-05-27 09:12:20.407+00
+WA Concierge,7e74f3e0-1add-40f4-901b-7132288c4f78,WhatsApp Business Cloud API v21.0,tech,2026-05-27 09:12:20.596+00
