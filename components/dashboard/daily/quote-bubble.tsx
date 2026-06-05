@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Heart } from "lucide-react";
 import { QUOTES } from "@/lib/quotes";
@@ -13,21 +13,37 @@ function pickDifferent(pool: number[], current: number): number {
   return n;
 }
 
+function quoteCacheKey(quote: { text: string; ref: string }) {
+  return `${quote.ref}\u0000${quote.text}`;
+}
+
 /**
  * A thought-bubble of motivational quotes in the top bar. The full quote + source
  * are always visible (wraps, fixed-height box, no cutoff). Auto-rotates every
- * `pace` seconds and tap-to-advance; ❤ favorites the current quote. Pace, the
- * favorites-only mode, and the favorites list are managed in app Settings — this
- * just reads those prefs from localStorage. initialIndex is server-seeded (no
- * Math.random in render); prefs hydrate in a rAF.
+ * `pace` seconds, hover speaks, and single click advances to next.
+ * favorites the current quote. Pace, the favorites-only mode, and the favorites
+ * list are managed in app Settings — this just reads those prefs from
+ * localStorage. initialIndex is server-seeded (no Math.random in render);
+ * prefs hydrate in a rAF.
  */
 export function QuoteBubble({ initialIndex }: { initialIndex: number }) {
   const [index, setIndex] = useState(((initialIndex % QUOTES.length) + QUOTES.length) % QUOTES.length);
   const [favs, setFavs] = useState<Set<string>>(new Set());
   const [pace, setPace] = useState(DEFAULT_QUOTE_PACE);
   const [favOnly, setFavOnly] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+
+  const lastHoveredIndex = useRef<number | null>(null);
+  const lastHoverSpeakAt = useRef(0);
+  const speakRequest = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const speechCache = useRef(new Map<string, string>());
 
   useEffect(() => {
+    const audio = audioRef.current;
+    const cached = speechCache.current;
+
     const raf = requestAnimationFrame(() => {
       try {
         const f = localStorage.getItem(QUOTE_FAVS_KEY);
@@ -44,7 +60,18 @@ export function QuoteBubble({ initialIndex }: { initialIndex: number }) {
         /* ignore */
       }
     });
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      cancelAnimationFrame(raf);
+      abortRef.current?.abort();
+      if (audio) {
+        audio.pause();
+        audio.currentTime = 0;
+      }
+      for (const url of cached.values()) {
+        URL.revokeObjectURL(url);
+      }
+      cached.clear();
+    };
   }, []);
 
   const eligible = useMemo(() => {
@@ -62,6 +89,48 @@ export function QuoteBubble({ initialIndex }: { initialIndex: number }) {
   const q = QUOTES[index];
   const isFav = favs.has(q.text);
 
+  async function speakQuote(quote: (typeof QUOTES)[number]) {
+    const requestId = ++speakRequest.current;
+    const key = quoteCacheKey(quote);
+
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    try {
+      let src = speechCache.current.get(key);
+      if (!src) {
+        const response = await fetch("/api/voice/quote", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: quote.text, ref: quote.ref }),
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          const detail = await response.text().catch(() => "");
+          throw new Error(detail || "Speech generation failed.");
+        }
+
+        const blob = await response.blob();
+        src = URL.createObjectURL(blob);
+        speechCache.current.set(key, src);
+      }
+
+      if (requestId !== speakRequest.current) return;
+
+      const audio = audioRef.current;
+      if (!audio) return;
+      audio.pause();
+      audio.currentTime = 0;
+      audio.src = src;
+      await audio.play();
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      setIsSpeaking(false);
+    }
+  }
+
   function toggleFav() {
     const next = new Set(favs);
     if (next.has(q.text)) next.delete(q.text);
@@ -73,24 +142,55 @@ export function QuoteBubble({ initialIndex }: { initialIndex: number }) {
       /* ignore */
     }
   }
-  function advance() {
-    setIndex((cur) => pickDifferent(eligible, cur));
+
+  function handleClick() {
+    const next = pickDifferent(eligible, index);
+    setIndex(next);
+    void speakQuote(QUOTES[next]);
+  }
+
+  function handleMouseEnter() {
+    const now = Date.now();
+    if (lastHoveredIndex.current === index && now - lastHoverSpeakAt.current < 500) return;
+    lastHoveredIndex.current = index;
+    lastHoverSpeakAt.current = now;
+    void speakQuote(QUOTES[index]);
+  }
+
+  function handleMouseLeave() {
+    lastHoveredIndex.current = null;
   }
 
   return (
     <div className="relative hidden min-w-0 lg:block">
-      {/* thought-bubble tail: little circles rising toward the greeting above */}
-      <span aria-hidden className="absolute -top-1.5 left-3 h-2 w-2 rounded-full border" style={{ background: "var(--bg-card)", borderColor: "var(--ai-border)" }} />
-      <span aria-hidden className="absolute -top-[18px] left-1 h-1 w-1 rounded-full border" style={{ background: "var(--bg-card)", borderColor: "var(--ai-border)" }} />
+      <span
+        aria-hidden
+        className="absolute -top-1.5 left-3 h-2 w-2 rounded-full border"
+        style={{ background: "var(--bg-card)", borderColor: "var(--ai-border)" }}
+      />
+      <span
+        aria-hidden
+        className="absolute -top-[18px] left-1 h-1 w-1 rounded-full border"
+        style={{ background: "var(--bg-card)", borderColor: "var(--ai-border)" }}
+      />
 
       <div
         className="relative flex w-[min(56vw,640px)] items-stretch gap-2 rounded-[1.15rem] border px-3.5 py-2"
         style={{
-          background: "linear-gradient(135deg, color-mix(in oklab, var(--purple-mid) 11%, var(--bg-card)) 0%, var(--bg-card) 75%)",
+          background:
+            "linear-gradient(135deg, color-mix(in oklab, var(--purple-mid) 11%, var(--bg-card)) 0%, var(--bg-card) 75%)",
           borderColor: "var(--ai-border)",
         }}
       >
-        <button type="button" onClick={advance} className="flex min-h-[62px] min-w-0 flex-1 flex-col justify-center text-left" aria-label="Next quote" title="Tap for another">
+        <button
+          type="button"
+          onClick={handleClick}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+          className="relative flex min-h-[62px] min-w-0 flex-1 flex-col justify-center rounded-[1.15rem] text-left"
+          aria-label="Speak or advance quote"
+          title={isSpeaking ? "Playing quote" : "Hover to hear this quote, click for next"}
+        >
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={index}
@@ -104,6 +204,14 @@ export function QuoteBubble({ initialIndex }: { initialIndex: number }) {
             </motion.div>
           </AnimatePresence>
         </button>
+
+        <audio
+          ref={audioRef}
+          preload="none"
+          onPlay={() => setIsSpeaking(true)}
+          onEnded={() => setIsSpeaking(false)}
+          onPause={() => setIsSpeaking(false)}
+        />
 
         <button
           type="button"
