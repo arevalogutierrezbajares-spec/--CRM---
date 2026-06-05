@@ -1,7 +1,9 @@
 import "server-only";
 import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db";
 import * as schema from "@/db/schema";
+import { initiativesByItems, type InitiativePick } from "./item-initiatives";
 
 export type ActivityEntity =
   | "doc"
@@ -25,6 +27,10 @@ export type ActivityEvent = {
   label: string;
   href: string | null;
   at: Date;
+  /** Initiatives this task/action falls under (empty for non-task events). */
+  initiatives: InitiativePick[];
+  /** True for "marked complete" events (vs creation). */
+  done?: boolean;
 };
 
 const PER_SOURCE = 20;
@@ -46,8 +52,9 @@ export async function listWorkspaceActivity(
   limit = 60,
 ): Promise<ActivityEvent[]> {
   const u = schema.users;
+  const asg = alias(schema.users, "asg"); // assignee = who completed
 
-  const [audits, projects, contacts, meetings, touches, milestones, actionItems, initiatives] =
+  const [audits, projects, contacts, meetings, touches, milestones, actionItems, initiatives, doneMilestones, doneActions] =
     await Promise.all([
       // Doc / file / link create·edit·delete — from the audit log.
       db
@@ -174,7 +181,61 @@ export async function listWorkspaceActivity(
         .where(and(eq(schema.initiatives.workspaceId, workspaceId), isNotNull(schema.initiatives.createdBy)))
         .orderBy(desc(schema.initiatives.createdAt))
         .limit(PER_SOURCE),
+
+      // Completed tasks — attributed to the assignee (who completed it), fallback creator.
+      db
+        .select({
+          id: schema.milestones.id,
+          assigneeId: schema.milestones.assigneeUserId,
+          assigneeName: asg.displayName,
+          creatorId: schema.milestones.createdBy,
+          creatorName: u.displayName,
+          label: schema.milestones.title,
+          projectId: schema.milestones.projectId,
+          at: schema.milestones.completedAt,
+        })
+        .from(schema.milestones)
+        .leftJoin(u, eq(u.id, schema.milestones.createdBy))
+        .leftJoin(asg, eq(asg.id, schema.milestones.assigneeUserId))
+        .where(
+          and(
+            eq(schema.milestones.workspaceId, workspaceId),
+            eq(schema.milestones.status, "done"),
+            isNotNull(schema.milestones.completedAt),
+          ),
+        )
+        .orderBy(desc(schema.milestones.completedAt))
+        .limit(PER_SOURCE),
+
+      // Completed action items.
+      db
+        .select({
+          id: schema.actionItems.id,
+          assigneeId: schema.actionItems.assigneeUserId,
+          assigneeName: asg.displayName,
+          creatorId: schema.actionItems.createdBy,
+          creatorName: u.displayName,
+          label: schema.actionItems.title,
+          at: schema.actionItems.completedAt,
+        })
+        .from(schema.actionItems)
+        .leftJoin(u, eq(u.id, schema.actionItems.createdBy))
+        .leftJoin(asg, eq(asg.id, schema.actionItems.assigneeUserId))
+        .where(
+          and(
+            eq(schema.actionItems.workspaceId, workspaceId),
+            eq(schema.actionItems.status, "done"),
+            isNotNull(schema.actionItems.completedAt),
+          ),
+        )
+        .orderBy(desc(schema.actionItems.completedAt))
+        .limit(PER_SOURCE),
     ]);
+
+  // Initiatives per task/action (for badges), batched over every milestone+action id we touched.
+  const msIds = Array.from(new Set([...milestones.map((m) => m.id), ...doneMilestones.map((m) => m.id)]));
+  const aiIds = Array.from(new Set([...actionItems.map((a) => a.id), ...doneActions.map((a) => a.id)]));
+  const { byMilestone, byActionItem } = await initiativesByItems(workspaceId, msIds, aiIds);
 
   const events: ActivityEvent[] = [];
 
@@ -204,17 +265,18 @@ export async function listWorkspaceActivity(
       label: a.label ?? "an item",
       href,
       at: a.at,
+      initiatives: [],
     });
   }
 
   for (const p of projects)
-    events.push({ id: `project:${p.id}`, actorId: p.actorId, actorName: p.actorName, verb: "created project", entity: "project", label: p.label, href: `/projects/${p.id}`, at: p.at });
+    events.push({ id: `project:${p.id}`, actorId: p.actorId, actorName: p.actorName, verb: "created project", entity: "project", label: p.label, href: `/projects/${p.id}`, at: p.at, initiatives: [] });
 
   for (const c of contacts)
-    events.push({ id: `contact:${c.id}`, actorId: c.actorId, actorName: c.actorName, verb: "added contact", entity: "contact", label: c.label, href: `/contacts/${c.id}`, at: c.at });
+    events.push({ id: `contact:${c.id}`, actorId: c.actorId, actorName: c.actorName, verb: "added contact", entity: "contact", label: c.label, href: `/contacts/${c.id}`, at: c.at, initiatives: [] });
 
   for (const m of meetings)
-    events.push({ id: `meeting:${m.id}`, actorId: m.actorId, actorName: m.actorName, verb: "scheduled meeting", entity: "meeting", label: m.label, href: `/meetings/${m.id}`, at: m.at });
+    events.push({ id: `meeting:${m.id}`, actorId: m.actorId, actorName: m.actorName, verb: "scheduled meeting", entity: "meeting", label: m.label, href: `/meetings/${m.id}`, at: m.at, initiatives: [] });
 
   for (const t of touches)
     events.push({
@@ -226,16 +288,46 @@ export async function listWorkspaceActivity(
       label: snippet(t.body),
       href: t.projectId ? `/projects/${t.projectId}` : t.contactId ? `/contacts/${t.contactId}` : null,
       at: t.at,
+      initiatives: [],
     });
 
   for (const m of milestones)
-    events.push({ id: `milestone:${m.id}`, actorId: m.actorId, actorName: m.actorName, verb: "added milestone", entity: "milestone", label: m.label, href: m.projectId ? `/projects/${m.projectId}` : "/work", at: m.at });
+    events.push({ id: `milestone:${m.id}`, actorId: m.actorId, actorName: m.actorName, verb: "added task", entity: "milestone", label: m.label, href: m.projectId ? `/projects/${m.projectId}` : "/work", at: m.at, initiatives: byMilestone.get(m.id) ?? [] });
 
   for (const a of actionItems)
-    events.push({ id: `action:${a.id}`, actorId: a.actorId, actorName: a.actorName, verb: "added action item", entity: "action_item", label: a.label, href: "/action-items", at: a.at });
+    events.push({ id: `action:${a.id}`, actorId: a.actorId, actorName: a.actorName, verb: "added action item", entity: "action_item", label: a.label, href: "/action-items", at: a.at, initiatives: byActionItem.get(a.id) ?? [] });
 
   for (const i of initiatives)
-    events.push({ id: `initiative:${i.id}`, actorId: i.actorId, actorName: i.actorName, verb: "started initiative", entity: "initiative", label: i.label, href: `/initiatives/${i.id}`, at: i.at });
+    events.push({ id: `initiative:${i.id}`, actorId: i.actorId, actorName: i.actorName, verb: "started initiative", entity: "initiative", label: i.label, href: `/initiatives/${i.id}`, at: i.at, initiatives: [] });
+
+  // Completion events ("marked complete") — the heart of the activity log.
+  for (const m of doneMilestones)
+    events.push({
+      id: `milestone_done:${m.id}`,
+      actorId: m.assigneeId ?? m.creatorId,
+      actorName: m.assigneeName ?? m.creatorName,
+      verb: "completed task",
+      entity: "milestone",
+      label: m.label,
+      href: m.projectId ? `/projects/${m.projectId}` : "/work",
+      at: m.at as Date,
+      initiatives: byMilestone.get(m.id) ?? [],
+      done: true,
+    });
+
+  for (const a of doneActions)
+    events.push({
+      id: `action_done:${a.id}`,
+      actorId: a.assigneeId ?? a.creatorId,
+      actorName: a.assigneeName ?? a.creatorName,
+      verb: "completed",
+      entity: "action_item",
+      label: a.label,
+      href: "/action-items",
+      at: a.at as Date,
+      initiatives: byActionItem.get(a.id) ?? [],
+      done: true,
+    });
 
   return events
     .filter((e) => e.at instanceof Date)

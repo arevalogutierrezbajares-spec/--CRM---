@@ -36,7 +36,14 @@ export type WorkspaceInviteRow = {
 };
 
 export type WorkspaceView = {
-  workspace: { id: string; name: string; createdBy: string };
+  workspace: {
+    id: string;
+    name: string;
+    createdBy: string;
+    countdownTitle: string | null;
+    countdownDate: string | null;
+    countdownSubpoints: string[];
+  };
   myRole: "owner" | "admin" | "member";
   members: WorkspaceMemberRow[];
   invites: WorkspaceInviteRow[];
@@ -87,6 +94,28 @@ export async function getWorkspaceView(): Promise<WorkspaceView> {
     members: memberRows,
     invites: inviteRows,
   };
+}
+
+export async function setCountdownConfig(formData: FormData) {
+  const user = await requireUser();
+  if (user.workspaceRole !== "owner" && user.workspaceRole !== "admin") {
+    return { ok: false as const, error: "Not authorized" };
+  }
+  const title = String(formData.get("countdown_title") ?? "").trim().slice(0, 120) || null;
+  const dateRaw = String(formData.get("countdown_date") ?? "").trim();
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(dateRaw) ? dateRaw : null;
+  const subpoints = String(formData.get("countdown_subpoints") ?? "")
+    .split("\n")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 6);
+  await db
+    .update(workspaces)
+    .set({ countdownTitle: title, countdownDate: date, countdownSubpoints: subpoints })
+    .where(eq(workspaces.id, user.workspaceId));
+  revalidatePath("/workspace");
+  revalidatePath("/");
+  return { ok: true as const };
 }
 
 export async function renameWorkspace(formData: FormData) {

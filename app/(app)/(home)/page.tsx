@@ -14,8 +14,9 @@ import { DailyView } from "@/components/dashboard/daily/daily-view";
 import { listProjectsForPicker, listWorkspaceDocs } from "@/db/queries/items";
 import type { RefObject } from "@/components/town-hall/types";
 import { listWorkspaceMembers } from "@/db/queries/team";
-import { listPosts, type PostView } from "@/db/queries/town-hall";
-import { TownHallPanel } from "@/components/town-hall/town-hall-panel";
+import { listTownHallFeed, type FeedItem } from "@/db/queries/town-hall-feed";
+import { getWorkspaceCountdown, type WorkspaceCountdown } from "@/db/queries/workspace-settings";
+import { listInitiativesForPicker, type InitiativePick } from "@/db/queries/item-initiatives";
 import { listPinnedProjects, listRecentProjects, type PinnedProject } from "@/db/queries/pins";
 import { listScorecard, quarterOf, type ScorecardRow } from "@/db/queries/okrs";
 import { getDashboardLayout } from "@/db/queries/dashboard-layout";
@@ -158,11 +159,13 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
     blockedRes,
     treasuryRes,
     sprintRes,
-    townHallPostsRes,
+    feedRes,
     membersRes,
     projectListRes,
     scorecardRes,
     docsRes,
+    countdownRes,
+    initiativesRes,
   ] = await Promise.all([
     safeRead<DashCounts>(() => dashboardCounts(user.workspaceId, todayStr), EMPTY_COUNTS),
     safeRead<PipelineStageBar[]>(() => pipelineSnapshot(user.workspaceId), []),
@@ -177,7 +180,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
       () => getActiveSprint(user.workspaceId),
       null,
     ),
-    safeRead<PostView[]>(() => listPosts({ workspaceId: user.workspaceId, viewerId: user.id, limit: 40 }), []),
+    safeRead<FeedItem[]>(() => listTownHallFeed({ workspaceId: user.workspaceId, viewerId: user.id }), []),
     // Loaded once, reused by the drawer pickers + Town Hall (no duplicate queries).
     safeRead<{ userId: string; displayName: string }[]>(
       () => listWorkspaceMembers(user.workspaceId).then((ms) => ms.map((m) => ({ userId: m.userId, displayName: m.displayName }))),
@@ -186,17 +189,12 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
     safeRead<{ id: string; title: string }[]>(() => listProjectsForPicker(user.workspaceId), []),
     safeRead<ScorecardRow[]>(() => listScorecard(user.workspaceId, quarterOf(new Date(todayStr))), []),
     safeRead<RefObject[]>(() => listWorkspaceDocs(user.workspaceId), []),
+    safeRead<WorkspaceCountdown | null>(() => getWorkspaceCountdown(user.workspaceId), null),
+    safeRead<InitiativePick[]>(() => listInitiativesForPicker(user.workspaceId), []),
   ]);
 
   const members = membersRes.data;
   const pickerProjects = projectListRes.data;
-  // Town Hall #-referenceable objects (projects today).
-  const townHallObjects = pickerProjects.map((p) => ({
-    refType: "project" as const,
-    refId: p.id,
-    label: p.title,
-    href: `/projects/${p.id}`,
-  }));
 
   /* ── View-specific data fetched conditionally ──────────────────────── */
 
@@ -321,13 +319,6 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
       displayName={user.displayName}
       rightColumn={
         <RightColumn>
-          <TownHallPanel
-            workspaceId={user.workspaceId}
-            initialPosts={townHallPostsRes.data}
-            members={members}
-            objects={townHallObjects}
-            docs={docsRes.data}
-          />
           <MiniCalendar eventDays={eventDaysRes.data} />
           <SprintWidget sprint={sprintRes.data} />
           <TreasuryWidget snapshot={treasuryRes.data} />
@@ -365,6 +356,10 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
           layout={dailyData.layout}
           greeting={greeting}
           briefing={briefing}
+          workspaceId={user.workspaceId}
+          countdown={countdownRes.data}
+          feed={feedRes.data}
+          initiatives={initiativesRes.data}
           initialItem={initialItem}
         />
       )}

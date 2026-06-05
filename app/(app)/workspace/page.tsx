@@ -9,11 +9,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { DbBanner } from "@/components/db-banner";
 import { safeRead } from "@/lib/db-status";
 import {
   getWorkspaceView,
   renameWorkspace,
+  setCountdownConfig,
   inviteMember,
   revokeInvite,
   removeMember,
@@ -80,6 +82,62 @@ export default async function WorkspacePage(props: {
                     Save
                   </Button>
                 </form>
+              </CardContent>
+            </Card>
+
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle>Big milestone / Countdown</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <form
+                  action={async (fd) => {
+                    "use server";
+                    await setCountdownConfig(fd);
+                  }}
+                  className="space-y-3"
+                >
+                  <div className="space-y-1.5">
+                    <Label htmlFor="cd-title">Title</Label>
+                    <Input
+                      id="cd-title"
+                      name="countdown_title"
+                      defaultValue={view.workspace.countdownTitle ?? ""}
+                      placeholder="Launch — Jul 4"
+                      disabled={view.myRole !== "owner" && view.myRole !== "admin"}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="cd-date">Target date</Label>
+                    <Input
+                      id="cd-date"
+                      name="countdown_date"
+                      type="date"
+                      defaultValue={view.workspace.countdownDate ?? ""}
+                      disabled={view.myRole !== "owner" && view.myRole !== "admin"}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="cd-subs">Sub-points (one per line)</Label>
+                    <Textarea
+                      id="cd-subs"
+                      name="countdown_subpoints"
+                      rows={3}
+                      defaultValue={(view.workspace.countdownSubpoints ?? []).join("\n")}
+                      placeholder={"VAV ready\nCaneyCloud: 10 beta clients testing"}
+                      disabled={view.myRole !== "owner" && view.myRole !== "admin"}
+                    />
+                  </div>
+                  <Button
+                    type="submit"
+                    disabled={view.myRole !== "owner" && view.myRole !== "admin"}
+                  >
+                    Save
+                  </Button>
+                </form>
+                <p className="mt-2 text-xs text-[var(--muted-foreground)]">
+                  Shown as the live countdown clock at the top of Home.
+                </p>
               </CardContent>
             </Card>
 

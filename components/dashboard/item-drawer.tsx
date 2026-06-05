@@ -53,6 +53,7 @@ import {
   remindMeAction,
 } from "@/app/(app)/dashboard/item-actions";
 import type { ItemDetail, ItemEntityType } from "@/db/queries/items";
+import { InitiativeMultiSelect } from "@/components/dashboard/initiative-multiselect";
 
 type Project = { id: string; title: string };
 type Member = { userId: string; displayName: string };
@@ -365,6 +366,11 @@ function DrawerForm({
             </Select>
           </Field>
         </div>
+      )}
+
+      {/* Initiatives — a task/action can fall under 1+ initiatives */}
+      {(isAction || isTask) && (
+        <InitiativeMultiSelect entityType={isTask ? "milestone" : "action_item"} id={detail.id} />
       )}
 
       {/* Re-notify / remind */}

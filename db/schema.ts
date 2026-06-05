@@ -231,6 +231,10 @@ export const workspaces = pgTable("workspaces", {
   createdBy: uuid("created_by")
     .notNull()
     .references(() => users.id),
+  // Home countdown: one workspace-wide "big milestone" the Home clock counts down to.
+  countdownTitle: text("countdown_title"),
+  countdownDate: date("countdown_date"),
+  countdownSubpoints: jsonb("countdown_subpoints").$type<string[]>().notNull().default([]),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -1233,6 +1237,39 @@ export const milestoneThemes = pgTable(
   },
   (t) => ({
     pk: primaryKey({ columns: [t.milestoneId, t.themeId] }),
+  }),
+);
+
+// A task (milestone) can fall under 1+ initiatives. (milestones.initiativeId stays
+// as the convenience "primary"; this join is the source of truth for "all initiatives".)
+export const milestoneInitiatives = pgTable(
+  "milestone_initiatives",
+  {
+    milestoneId: uuid("milestone_id")
+      .notNull()
+      .references(() => milestones.id, { onDelete: "cascade" }),
+    initiativeId: uuid("initiative_id")
+      .notNull()
+      .references(() => initiatives.id, { onDelete: "cascade" }),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.milestoneId, t.initiativeId] }),
+  }),
+);
+
+// An action item can fall under 1+ initiatives.
+export const actionItemInitiatives = pgTable(
+  "action_item_initiatives",
+  {
+    actionItemId: uuid("action_item_id")
+      .notNull()
+      .references(() => actionItems.id, { onDelete: "cascade" }),
+    initiativeId: uuid("initiative_id")
+      .notNull()
+      .references(() => initiatives.id, { onDelete: "cascade" }),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.actionItemId, t.initiativeId] }),
   }),
 );
 

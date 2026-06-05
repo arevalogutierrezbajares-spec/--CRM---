@@ -1,4 +1,4 @@
-import { MetricsRow } from "./metrics-row";
+import { TopRow } from "./top-row";
 import { TasksCard } from "./tasks-card";
 import { MeetingsCard } from "./meetings-card";
 import { ProjectsCard } from "./projects-card";
@@ -7,6 +7,7 @@ import { AIAssistPanel } from "./ai-assist-panel";
 import { TodayBriefing } from "./today-briefing";
 import { NeedsYouNow } from "./needs-you-now";
 import { Scorecard } from "./scorecard";
+import { ActivityCenter } from "@/components/town-hall/activity-center";
 import { ItemDrawerProvider } from "../item-drawer";
 import type { BlockedProject } from "@/db/queries/this-week";
 import type { ScorecardRow } from "@/db/queries/okrs";
@@ -16,6 +17,9 @@ import type { PinnedProject } from "@/db/queries/pins";
 import type { MentionSources } from "@/components/ui/mention-input";
 import type { RefObject } from "@/components/town-hall/types";
 import type { DashWidget } from "@/lib/dashboard/layout";
+import type { WorkspaceCountdown } from "@/db/queries/workspace-settings";
+import type { FeedItem } from "@/db/queries/town-hall-feed";
+import type { InitiativePick } from "@/db/queries/item-initiatives";
 import type {
   DashActionItem,
   DashCounts,
@@ -41,6 +45,10 @@ interface DailyViewProps {
   layout: DashWidget[];
   greeting: string;
   briefing: string[];
+  workspaceId: string;
+  countdown: WorkspaceCountdown | null;
+  feed: FeedItem[];
+  initiatives: InitiativePick[];
   initialItem?: { entityType: "action_item" | "milestone" | "meeting"; id: string } | null;
 }
 
@@ -61,16 +69,21 @@ export function DailyView({
   layout,
   greeting,
   briefing,
+  workspaceId,
+  countdown,
+  feed,
+  initiatives,
   initialItem,
 }: DailyViewProps) {
+  const townHallObjects: RefObject[] = pickerProjects.map((p) => ({
+    refType: "project" as const,
+    refId: p.id,
+    label: p.title,
+    href: `/projects/${p.id}`,
+  }));
   const mentionSources: MentionSources = {
     people: members,
-    projects: pickerProjects.map((p) => ({
-      refType: "project" as const,
-      refId: p.id,
-      label: p.title,
-      href: `/projects/${p.id}`,
-    })),
+    projects: townHallObjects,
     docs,
   };
   return (
@@ -82,9 +95,22 @@ export function DailyView({
       initialItem={initialItem}
     >
       <TodayBriefing greeting={greeting} hasUrgent={briefing.length > 0} />
+
+      {/* Top: exactly 3 — meetings today · tasks due · countdown */}
+      <TopRow counts={counts} countdown={countdown} nowMs={nowMs} />
+
+      {/* Town Hall — front & center: the activity log */}
+      <ActivityCenter
+        workspaceId={workspaceId}
+        initialFeed={feed}
+        members={members}
+        objects={townHallObjects}
+        docs={docs}
+        initiatives={initiatives}
+      />
+
+      {/* The main body of work (stationary) */}
       <NeedsYouNow actionItems={actionItems} tasks={tasks} blocked={blocked} meetings={meetings} nowMs={nowMs} />
-      <MetricsRow counts={counts} />
-      <Scorecard rows={scorecard} />
       <CustomizableDashboard
         savedLayout={layout}
         widgets={[
@@ -96,6 +122,9 @@ export function DailyView({
           { id: "ai", node: <AIAssistPanel scope="daily" /> },
         ]}
       />
+
+      {/* Scorecard last */}
+      <Scorecard rows={scorecard} />
     </ItemDrawerProvider>
   );
 }
