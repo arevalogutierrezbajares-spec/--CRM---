@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Heart } from "lucide-react";
 import { DEMON_BROADCAST_MESSAGES, QUOTES, type Quote } from "@/lib/quotes";
@@ -20,7 +20,8 @@ function quoteCacheKey(quote: Pick<Quote, "text" | "ref">) {
 /**
  * A thought-bubble of motivational quotes in the top bar. The full quote + source
  * are always visible (wraps, fixed-height box, no cutoff). Auto-rotates every
- * `pace` seconds, hover speaks, and single click advances to next.
+ * `pace` seconds, hover speaks, single click speaks current, and double-click
+ * advances to the next message.
  * favorites the current quote. Pace, the favorites-only mode, and the favorites
  * list are managed in app Settings — this just reads those prefs from
  * localStorage. initialIndex is server-seeded (no Math.random in render);
@@ -40,6 +41,8 @@ export function QuoteBubble({ initialIndex }: { initialIndex: number }) {
   const abortRef = useRef<AbortController | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const speechCache = useRef(new Map<string, string>());
+  const clickTimer = useRef<number | null>(null);
+  const CLICK_TO_ADVANCE_DELAY_MS = 180;
 
   const messages = useMemo<Quote[]>(
     () => (demonMode ? [...QUOTES, ...DEMON_BROADCAST_MESSAGES] : QUOTES),
@@ -83,6 +86,10 @@ export function QuoteBubble({ initialIndex }: { initialIndex: number }) {
         URL.revokeObjectURL(url);
       }
       cached.clear();
+      if (clickTimer.current) {
+        clearTimeout(clickTimer.current);
+        clickTimer.current = null;
+      }
     };
   }, []);
 
@@ -147,7 +154,8 @@ export function QuoteBubble({ initialIndex }: { initialIndex: number }) {
     }
   }
 
-  function toggleFav() {
+  function toggleFav(event: MouseEvent) {
+    event.stopPropagation();
     if (isBroadcast) return;
     const next = new Set(favs);
     if (next.has(q.text)) next.delete(q.text);
@@ -161,6 +169,20 @@ export function QuoteBubble({ initialIndex }: { initialIndex: number }) {
   }
 
   function handleClick() {
+    if (clickTimer.current) {
+      clearTimeout(clickTimer.current);
+    }
+    clickTimer.current = window.setTimeout(() => {
+      clickTimer.current = null;
+      void speakQuote(q);
+    }, CLICK_TO_ADVANCE_DELAY_MS);
+  }
+
+  function handleDoubleClick() {
+    if (clickTimer.current) {
+      clearTimeout(clickTimer.current);
+      clickTimer.current = null;
+    }
     const next = pickDifferent(eligible, currentIndex);
     setIndex(next);
     void speakQuote(messages[next]);
@@ -202,11 +224,14 @@ export function QuoteBubble({ initialIndex }: { initialIndex: number }) {
         <button
           type="button"
           onClick={handleClick}
+          onDoubleClick={handleDoubleClick}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
           className="relative flex min-h-[62px] min-w-0 flex-1 flex-col justify-center rounded-[1.15rem] text-left"
-          aria-label="Speak or advance message"
-          title={isSpeaking ? "Playing message" : "Hover to hear this message, click for next"}
+          aria-label="Replay message or double-click for next"
+          title={
+            isSpeaking ? "Playing message" : "Hover to hear this message, click to replay, double-click for next"
+          }
         >
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
