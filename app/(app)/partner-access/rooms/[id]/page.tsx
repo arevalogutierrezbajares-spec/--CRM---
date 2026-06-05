@@ -1,0 +1,404 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import {
+  Activity,
+  ChevronLeft,
+  DoorOpen,
+  ExternalLink,
+  FileText,
+  ShieldCheck,
+  UsersRound,
+} from "lucide-react";
+import { TopBar } from "@/components/layout/top-bar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DbBanner } from "@/components/db-banner";
+import { SectionLabel } from "@/components/dashboard/shared/section-label";
+import { RoomAccessLinkActions } from "@/components/partner-access/room-access-link-actions";
+import { RoomDetailsForm } from "@/components/partner-access/room-details-form";
+import { RoomStatusActions } from "@/components/partner-access/room-status-actions";
+import { ShareLedgerActions } from "@/components/partner-access/share-ledger-actions";
+import { getPartnerAccessRoom } from "@/db/queries/partner-access";
+import { requireUser } from "@/lib/current-user";
+import { safeRead } from "@/lib/db-status";
+import {
+  partnerKindLabel,
+  partnerRoomStatusLabel,
+  partnerShareChannelLabel,
+  type PartnerKind,
+  type PartnerRoomStatus,
+} from "@/lib/partner-access";
+import { formatDate, formatRelative } from "@/lib/utils";
+
+type Params = Promise<{ id: string }>;
+
+function statusVariant(status: string) {
+  if (status === "active") return "success";
+  if (status === "paused" || status === "draft") return "warning";
+  if (status === "revoked") return "danger";
+  return "outline";
+}
+
+function shareStatus(share: {
+  revokedAt: Date | null;
+  downloadedAt: Date | null;
+  viewedAt: Date | null;
+}) {
+  if (share.revokedAt) return { label: "revoked", variant: "danger" as const };
+  if (share.downloadedAt) return { label: "downloaded", variant: "success" as const };
+  if (share.viewedAt) return { label: "viewed", variant: "success" as const };
+  return { label: "sent", variant: "outline" as const };
+}
+
+function eventLabel(value: string) {
+  return value
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+export default async function PartnerAccessRoomPage(props: { params: Params }) {
+  const user = await requireUser();
+  const { id } = await props.params;
+  const roomRes = await safeRead(
+    () => getPartnerAccessRoom({ workspaceId: user.workspaceId, roomId: id }),
+    null,
+  );
+
+  if (roomRes.ok && !roomRes.data) notFound();
+
+  const detail = roomRes.data;
+  if (!detail) {
+    const error = roomRes.ok ? "Room not found" : roomRes.error;
+    return (
+      <>
+        <TopBar email={user.email} displayName={user.displayName} />
+        <main className="mx-auto w-full max-w-7xl flex-1 px-6 py-6">
+          <DbBanner error={error} />
+        </main>
+      </>
+    );
+  }
+
+  const { room } = detail;
+  const activeShares = detail.shares.filter((share) => !share.revokedAt);
+  const viewedShares = detail.shares.filter((share) => share.viewedAt);
+  const downloadedShares = detail.shares.filter((share) => share.downloadedAt);
+
+  return (
+    <>
+      <TopBar email={user.email} displayName={user.displayName} />
+      <main className="mx-auto w-full max-w-7xl flex-1 px-6 py-6 space-y-4">
+        <Link
+          href="/partner-access"
+          className="inline-flex items-center gap-1 text-[13px] text-text-secondary hover:text-text-primary"
+        >
+          <ChevronLeft className="h-4 w-4" />
+          Partner Access
+        </Link>
+
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant={statusVariant(room.status)}>
+                {partnerRoomStatusLabel(room.status)}
+              </Badge>
+              <Badge variant="outline">{partnerKindLabel(room.partnerKind)}</Badge>
+            </div>
+            <h1 className="mt-2 truncate text-2xl font-semibold tracking-tight">
+              {room.name}
+            </h1>
+            <p className="mt-1 max-w-2xl text-sm text-[var(--muted-foreground)]">
+              {detail.contact.id ? (
+                <>
+                  Gateway for{" "}
+                  <Link
+                    href={`/contacts/${detail.contact.id}`}
+                    className="font-medium text-[var(--foreground)] hover:underline"
+                  >
+                    {detail.contact.name ?? "contact"}
+                  </Link>
+                  {detail.contact.organization
+                    ? ` at ${detail.contact.organization}`
+                    : ""}
+                  .
+                </>
+              ) : (
+                "Gateway contact has been removed."
+              )}{" "}
+              Created by {detail.createdByName ?? "AGB"}.
+            </p>
+          </div>
+          <Button type="button" variant="outline" size="sm" disabled>
+            <ExternalLink className="h-4 w-4" />
+            Token URL managed below
+          </Button>
+        </div>
+
+        {!roomRes.ok && <DbBanner error={roomRes.error} />}
+
+        <div className="grid gap-3 md:grid-cols-5">
+          <Summary label="Active shares" value={activeShares.length} />
+          <Summary label="Viewed" value={viewedShares.length} />
+          <Summary label="Downloaded" value={downloadedShares.length} />
+          <Summary label="Members" value={detail.members.length} />
+          <Summary label="Last activity" value={formatRelative(room.lastActivityAt ?? room.updatedAt)} />
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-[1fr_380px]">
+          <div className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-4 w-4" />
+                  Shared Materials
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {detail.shares.length === 0 ? (
+                  <EmptyState
+                    title="No materials"
+                    body="Share a project file, doc, or link to place it in this room."
+                  />
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[760px] text-left text-sm">
+                      <thead className="border-b border-[var(--border)] text-xs uppercase tracking-wide text-[var(--muted-foreground)]">
+                        <tr>
+                          <th className="py-2 pr-4 font-medium">Asset</th>
+                          <th className="py-2 pr-4 font-medium">Project</th>
+                          <th className="py-2 pr-4 font-medium">Permissions</th>
+                          <th className="py-2 pr-4 font-medium">Status</th>
+                          <th className="py-2 pr-4 font-medium">Shared</th>
+                          <th className="py-2 font-medium">Controls</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[var(--border)]">
+                        {detail.shares.map((share) => {
+                          const status = shareStatus(share);
+                          return (
+                            <tr key={share.id} className="align-top">
+                              <td className="py-3 pr-4">
+                                <div className="max-w-[280px] truncate font-medium">
+                                  {share.liveLabel ?? share.labelSnapshot}
+                                </div>
+                                <div className="text-xs text-[var(--muted-foreground)]">
+                                  {share.kindSnapshot}
+                                  {share.categorySnapshot
+                                    ? ` · ${share.categorySnapshot}`
+                                    : ""}
+                                </div>
+                              </td>
+                              <td className="py-3 pr-4">
+                                {share.projectId ? (
+                                  <Link
+                                    href={`/projects/${share.projectId}`}
+                                    className="font-medium hover:underline"
+                                  >
+                                    {share.projectTitle ?? "Project"}
+                                  </Link>
+                                ) : (
+                                  <span className="text-[var(--muted-foreground)]">
+                                    Project removed
+                                  </span>
+                                )}
+                                <div className="text-xs text-[var(--muted-foreground)]">
+                                  {partnerShareChannelLabel(share.channel)}
+                                </div>
+                              </td>
+                              <td className="py-3 pr-4">
+                                <div className="flex flex-wrap gap-1">
+                                  {share.permissions.map((permission) => (
+                                    <span
+                                      key={permission}
+                                      className="inline-flex items-center gap-1 rounded bg-[var(--secondary)] px-1.5 py-0.5 text-[10px] text-[var(--secondary-foreground)]"
+                                    >
+                                      <ShieldCheck className="h-2.5 w-2.5" />
+                                      {permission}
+                                    </span>
+                                  ))}
+                                </div>
+                              </td>
+                              <td className="py-3 pr-4">
+                                <Badge variant={status.variant}>
+                                  {status.label}
+                                </Badge>
+                              </td>
+                              <td className="py-3 pr-4 text-[var(--muted-foreground)]">
+                                {formatRelative(share.sharedAt)}
+                              </td>
+                              <td className="py-3">
+                                <ShareLedgerActions
+                                  shareId={share.id}
+                                  viewed={Boolean(share.viewedAt)}
+                                  downloaded={Boolean(share.downloadedAt)}
+                                  revoked={Boolean(share.revokedAt)}
+                                />
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Activity className="h-4 w-4" />
+                  Activity
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {detail.events.length === 0 ? (
+                  <EmptyState
+                    title="No activity"
+                    body="Room updates, public views, downloads, and revocations will appear here."
+                  />
+                ) : (
+                  <ul className="space-y-3">
+                    {detail.events.map((event) => (
+                      <li
+                        key={event.id}
+                        className="rounded-md border border-[var(--border)] p-3"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="font-medium">
+                            {eventLabel(event.eventType)}
+                          </div>
+                          <div className="text-xs text-[var(--muted-foreground)]">
+                            {formatRelative(event.createdAt)}
+                          </div>
+                        </div>
+                        <div className="mt-1 text-xs text-[var(--muted-foreground)]">
+                          {event.shareLabel ?? "Room"} ·{" "}
+                          {event.actorName ?? "Partner access"}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <aside className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <DoorOpen className="h-4 w-4" />
+                  Room Controls
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <RoomStatusActions
+                  roomId={room.id}
+                  status={room.status as PartnerRoomStatus}
+                />
+                <RoomAccessLinkActions
+                  roomId={room.id}
+                  status={room.status as PartnerRoomStatus}
+                  hasAccessToken={Boolean(room.publicAccessTokenHash)}
+                  tokenCreatedAt={
+                    room.publicAccessTokenCreatedAt?.toISOString() ?? null
+                  }
+                  lastViewedAt={
+                    room.publicAccessLastViewedAt?.toISOString() ?? null
+                  }
+                />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <UsersRound className="h-4 w-4" />
+                  Room Details
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <RoomDetailsForm
+                  room={{
+                    id: room.id,
+                    name: room.name,
+                    partnerKind: room.partnerKind as PartnerKind,
+                    summary: room.summary,
+                    welcomeMessage: room.welcomeMessage,
+                    expiresAt: room.expiresAt?.toISOString() ?? null,
+                  }}
+                />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Room Profile</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                <ProfileRow label="Created" value={formatDate(room.createdAt)} />
+                <ProfileRow label="Expires" value={formatDate(room.expiresAt)} />
+                <ProfileRow
+                  label="Partner type"
+                  value={partnerKindLabel(room.partnerKind)}
+                />
+                <ProfileRow
+                  label="Status"
+                  value={partnerRoomStatusLabel(room.status)}
+                />
+              </CardContent>
+            </Card>
+          </aside>
+        </div>
+      </main>
+    </>
+  );
+}
+
+function Summary({
+  label,
+  value,
+}: {
+  label: string;
+  value: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-3">
+      <div className="text-xs uppercase tracking-wide text-[var(--muted-foreground)]">
+        {label}
+      </div>
+      <div className="mt-2 truncate text-xl font-semibold tabular-nums">
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function EmptyState({ title, body }: { title: string; body: string }) {
+  return (
+    <div className="rounded-md border border-dashed border-[var(--border)] p-5">
+      <SectionLabel>{title}</SectionLabel>
+      <p className="mt-2 max-w-prose text-sm text-[var(--muted-foreground)]">
+        {body}
+      </p>
+    </div>
+  );
+}
+
+function ProfileRow({
+  label,
+  value,
+}: {
+  label: string;
+  value: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] py-2 last:border-0">
+      <span className="text-[var(--muted-foreground)]">{label}</span>
+      <span className="truncate text-right font-medium">{value}</span>
+    </div>
+  );
+}
