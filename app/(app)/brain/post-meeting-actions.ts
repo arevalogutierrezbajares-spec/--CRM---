@@ -37,6 +37,7 @@ export async function postMeetingDraft(meetingId: string): Promise<PostMeetingRe
   }
 
   const claude = await claudeChat({
+    model: "claude-haiku-4-5",
     system:
       "You are a chief-of-staff cleaning up post-meeting notes. Output structured minutes followed by a list of action items in the form '[ ] thing to do'. Be concise.",
     prompt: [
@@ -48,6 +49,13 @@ export async function postMeetingDraft(meetingId: string): Promise<PostMeetingRe
       .filter(Boolean)
       .join("\n\n"),
     maxTokens: 800,
+    spend: {
+      workspaceId: user.workspaceId,
+      userId: user.id,
+      direction: "out",
+      trackUsage: true,
+      payload: { route: "brain:post-meeting-draft", meetingId },
+    },
   });
 
   if (!claude.ok) {

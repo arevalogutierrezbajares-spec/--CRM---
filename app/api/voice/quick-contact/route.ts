@@ -76,6 +76,13 @@ export async function POST(req: NextRequest) {
         ].join("\n"),
       prompt: transcript.slice(0, 2000),
       maxTokens: 300,
+      spend: {
+        workspaceId: user.workspaceId,
+        userId: user.id,
+        direction: "out",
+        trackUsage: true,
+        payload: { route: "voice:quick-contact" },
+      },
     });
     if (claude.ok) {
       try {

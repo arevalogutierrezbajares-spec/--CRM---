@@ -1,4 +1,8 @@
-import { claudeChat, isAnthropicConfigured } from "@/lib/anthropic";
+import {
+  claudeChat,
+  isAnthropicConfigured,
+  type AnthropicSpendContext,
+} from "@/lib/anthropic";
 
 export type ExtractedActionItem = {
   title: string;
@@ -24,6 +28,7 @@ export async function extractActionItems(opts: {
   notes: string;
   memberNames: string[];
   projectTitles: string[];
+  spend?: AnthropicSpendContext;
 }): Promise<ExtractResult> {
   if (!isAnthropicConfigured()) {
     return { ok: false, error: "ANTHROPIC_API_KEY not set" };
@@ -54,6 +59,19 @@ export async function extractActionItems(opts: {
       opts.notes.slice(0, 8000),
     ].join("\n"),
     maxTokens: 1500,
+    spend: opts.spend
+      ? {
+          ...opts.spend,
+          direction: "out",
+          trackUsage: opts.spend.trackUsage ?? true,
+          payload: {
+            ...(typeof opts.spend.payload === "object" && opts.spend.payload !== null
+              ? opts.spend.payload
+              : {}),
+            route: "town-hall:extract-action-items",
+          },
+        }
+      : undefined,
   });
 
   if (!res.ok) return { ok: false, error: res.error };

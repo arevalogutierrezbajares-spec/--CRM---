@@ -36,7 +36,7 @@ export const GET = withErrorCapture("/api/cron/weekly-briefing", async (req: Nex
   }
 
   const [u] = await db
-    .select({ workspaceId: schema.users.currentWorkspaceId })
+    .select({ id: schema.users.id, workspaceId: schema.users.currentWorkspaceId })
     .from(schema.users)
     .where(eq(schema.users.id, ownerId))
     .limit(1);
@@ -77,10 +77,18 @@ export const GET = withErrorCapture("/api/cron/weekly-briefing", async (req: Nex
   let briefingText: string;
   if (isAnthropicConfigured()) {
     const claude = await claudeChat({
+      model: "claude-haiku-4-5",
       system:
         "You are a chief-of-staff writing a weekly briefing email for a busy founder. Output exactly 5 markdown bullets, each starting with **One word**. Be direct, no fluff, no preamble.",
       prompt: `Write the Monday briefing. Here are the facts in JSON:\n\n${facts}\n\nIf a list is empty, fold it into another bullet rather than saying "none." End with the single most important next step.`,
       maxTokens: 600,
+      spend: {
+        workspaceId,
+        userId: u.id,
+        direction: "out",
+        trackUsage: true,
+        payload: { route: "cron:weekly-briefing", ownerId },
+      },
     });
     briefingText = claude.ok
       ? claude.text

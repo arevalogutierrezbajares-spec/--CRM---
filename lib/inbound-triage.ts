@@ -1,4 +1,8 @@
-import { claudeChat, isAnthropicConfigured } from "@/lib/anthropic";
+import {
+  claudeChat,
+  isAnthropicConfigured,
+  type AnthropicSpendContext,
+} from "@/lib/anthropic";
 
 export type TriageVerdict = {
   category: "spam" | "new-contact" | "project-relevant" | "personal" | "unknown";
@@ -19,6 +23,7 @@ export async function triageInbound(opts: {
   from: string;
   subject?: string;
   body: string;
+  spend?: AnthropicSpendContext;
 }): Promise<TriageVerdict> {
   if (!isAnthropicConfigured()) {
     return {
@@ -52,6 +57,19 @@ export async function triageInbound(opts: {
       .filter(Boolean)
       .join("\n"),
     maxTokens: 300,
+    spend: opts.spend
+      ? {
+          ...opts.spend,
+          direction: "in",
+          trackUsage: opts.spend.trackUsage ?? true,
+          payload: {
+            ...(typeof opts.spend.payload === "object" && opts.spend.payload !== null
+              ? opts.spend.payload
+              : {}),
+            route: "postmark:triage",
+          },
+        }
+      : undefined,
   });
 
   if (!res.ok) {

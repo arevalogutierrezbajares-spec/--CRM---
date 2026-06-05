@@ -50,6 +50,7 @@ export async function conversationSummary(contactId: string) {
   }
 
   const claude = await claudeChat({
+    model: "claude-haiku-4-5",
     system:
       "You write a 3-bullet 'what should I remember about this person' summary from a list of touches. Bullets must be terse, specific, and avoid platitudes.",
     prompt: recent
@@ -59,6 +60,13 @@ export async function conversationSummary(contactId: string) {
       )
       .join("\n"),
     maxTokens: 400,
+    spend: {
+      workspaceId: user.workspaceId,
+      userId: user.id,
+      direction: "out",
+      trackUsage: true,
+      payload: { route: "brain:conversation-memory", contactId },
+    },
   });
   if (!claude.ok) {
     return { ok: false as const, error: claude.error };

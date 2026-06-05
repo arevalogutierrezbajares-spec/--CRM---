@@ -180,9 +180,17 @@ Rank by urgency. Return at most 6 items. Use:
   const userPrompt = `Activity data (JSON):\n${JSON.stringify(context, null, 2)}\n\nReturn the JSON array now.`;
 
   const result = await claudeChat({
+    model: "claude-haiku-4-5",
     system: systemPrompt,
-    prompt: userPrompt,
-    maxTokens: 1500,
+    prompt: userPrompt.slice(0, 8000),
+    maxTokens: 800,
+    spend: {
+      workspaceId: user.workspaceId,
+      userId: user.id,
+      direction: "out",
+      trackUsage: true,
+      payload: { route: "ai-actions", scope },
+    },
   });
 
   if (!result.ok) {

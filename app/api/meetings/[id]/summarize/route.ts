@@ -40,15 +40,26 @@ Be concise. Use the agenda context when provided to organize topics. Attribute a
   const userMessage = [
     agenda ? `AGENDA:\n${agenda}` : null,
     attendeeNames?.length ? `ATTENDEES: ${attendeeNames.join(", ")}` : null,
-    `TRANSCRIPT:\n${transcript}`,
+    `TRANSCRIPT:\n${transcript.slice(0, 20000)}`,
   ]
     .filter(Boolean)
     .join("\n\n");
 
   const result = await claudeChat({
+    model: "claude-haiku-4-5",
     system: systemPrompt,
     prompt: userMessage,
-    maxTokens: 2048,
+    maxTokens: 1200,
+    spend: {
+      workspaceId: user.workspaceId,
+      userId: user.id,
+      direction: "out",
+      trackUsage: true,
+      payload: {
+        route: "meetings:summarize",
+        agendaLength: agenda ? agenda.length : 0,
+      },
+    },
   });
 
   if (!result.ok) {

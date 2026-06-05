@@ -297,6 +297,13 @@ export async function extractActionItemsAction(
     notes,
     memberNames: members.map((m) => m.displayName),
     projectTitles: projects.map((p) => p.title),
+    spend: {
+      workspaceId: user.workspaceId,
+      userId: user.id,
+      direction: "out",
+      trackUsage: true,
+      payload: { route: "town-hall:extract-action-items", actionBy: user.id },
+    },
   });
   if (!result.ok) return { ok: false, error: result.error };
 

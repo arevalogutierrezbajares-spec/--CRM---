@@ -55,6 +55,7 @@ export async function generateReintro(contactId: string): Promise<ReintroResult>
     .join("\n");
 
   const claude = await claudeChat({
+    model: "claude-haiku-4-5",
     system:
       "You are drafting a warm, short, low-pressure re-intro message from the user to a contact they haven't touched recently. Output the message body only — no salutation explainer, no preamble. 2-4 sentences. Reference one specific thing from the recent touches if possible.",
     prompt: [
@@ -68,6 +69,16 @@ export async function generateReintro(contactId: string): Promise<ReintroResult>
       .filter(Boolean)
       .join("\n\n"),
     maxTokens: 400,
+    spend: {
+      workspaceId: user.workspaceId,
+      userId: user.id,
+      direction: "out",
+      trackUsage: true,
+      payload: {
+        route: "brain:reintro",
+        contactId,
+      },
+    },
   });
 
   if (!claude.ok) {
