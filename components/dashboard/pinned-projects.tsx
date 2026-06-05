@@ -84,7 +84,7 @@ export function PinnedProjects({
         <SectionLabel icon={Pin}>Pinned projects</SectionLabel>
         {pinnable.length > 0 && (
           <Select onValueChange={(v) => toggle(v)}>
-            <SelectTrigger className="h-7 w-[150px] text-tiny">
+            <SelectTrigger className="h-[40px] w-[164px] text-tiny">
               <span className="flex items-center gap-1 text-text-tertiary">
                 <Plus size={12} /> Pin a project
               </span>
@@ -108,11 +108,11 @@ export function PinnedProjects({
             const isOpen = open === p.id;
             return (
               <div key={p.id} className="rounded-md border border-[var(--border)]">
-                <div className="flex items-center gap-1.5 px-2 py-1.5">
+                <div className="flex min-h-12 items-center gap-1.5 px-2 py-1.5">
                   <button
                     type="button"
                     onClick={() => setOpen(isOpen ? null : p.id)}
-                    className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+                    className="flex min-w-0 flex-1 items-center gap-1.5 self-stretch rounded-sm text-left outline-none transition-transform active:scale-[0.96] focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
                   >
                     <ChevronRight
                       size={13}
@@ -149,7 +149,7 @@ export function PinnedProjects({
                   </button>
                   <Link
                     href={`/projects/${p.id}`}
-                    className="shrink-0 rounded px-1 text-tiny text-[var(--blue-text)] hover:underline"
+                    className="grid min-h-[40px] shrink-0 place-items-center rounded-md px-2 text-tiny text-[var(--blue-text)] transition-colors hover:bg-surface hover:underline"
                   >
                     open
                   </Link>
@@ -158,14 +158,14 @@ export function PinnedProjects({
                     onClick={() => toggle(p.id)}
                     disabled={pending}
                     aria-label={`Unpin ${p.title}`}
-                    className="shrink-0 rounded p-0.5 text-text-tertiary hover:text-[var(--destructive)]"
+                    className="grid h-[40px] w-[40px] shrink-0 place-items-center rounded-md text-text-tertiary transition-colors hover:bg-surface hover:text-[var(--destructive)]"
                   >
                     <PinOff size={12} />
                   </button>
                 </div>
 
                 {isOpen && (
-                  <div className="space-y-2 border-t border-[var(--border)] px-3 py-2">
+                  <div className="space-y-2 border-t border-[var(--border)] px-3 py-2.5">
                     {/* Docs / folders */}
                     <div>
                       <div className="mb-1 flex items-center gap-1 text-tiny text-text-tertiary">
@@ -176,18 +176,18 @@ export function PinnedProjects({
                           No docs yet — add some →
                         </Link>
                       ) : (
-                        <ul className="space-y-0.5">
+                        <ul className="space-y-1">
                           {p.docs.map((d) => (
-                            <li key={d.id} className="flex items-center gap-1.5 text-[12px]">
+                            <li key={d.id} className="flex min-h-[40px] items-center gap-1.5 rounded px-1 text-[12px] transition-colors hover:bg-surface">
                               {d.kind === "link" ? <LinkIcon size={11} className="text-text-tertiary" /> : <FileText size={11} className="text-text-tertiary" />}
                               {d.kind === "link" && d.url ? (
-                                <a href={d.url} target="_blank" rel="noopener noreferrer" className="truncate text-[var(--blue-text)] hover:underline">{d.label}</a>
+                                <a href={d.url} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1 truncate rounded-sm text-[var(--blue-text)] outline-none hover:underline focus-visible:ring-2 focus-visible:ring-[var(--ring)]">{d.label}</a>
                               ) : d.kind === "file" ? (
-                                <button type="button" onClick={() => preview(d)} className="truncate text-left text-text-primary hover:text-[var(--blue-text)]">
+                                <button type="button" onClick={() => preview(d)} className="min-w-0 flex-1 truncate rounded-sm text-left text-text-primary outline-none hover:text-[var(--blue-text)] focus-visible:ring-2 focus-visible:ring-[var(--ring)]">
                                   {d.label}
                                 </button>
                               ) : (
-                                <Link href={`/projects/${p.id}/docs/${d.id}`} className="truncate text-text-primary hover:underline">{d.label}</Link>
+                                <Link href={`/projects/${p.id}/docs/${d.id}`} className="min-w-0 flex-1 truncate rounded-sm text-text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-[var(--ring)]">{d.label}</Link>
                               )}
                             </li>
                           ))}
@@ -201,13 +201,13 @@ export function PinnedProjects({
                         <div className="mb-1 flex items-center gap-1 text-tiny text-text-tertiary">
                           <ListChecks size={11} /> Open tasks
                         </div>
-                        <ul className="space-y-0.5">
+                        <ul className="space-y-1">
                           {p.tasks.map((t) => (
                             <li key={t.id}>
                               <button
                                 type="button"
                                 onClick={() => drawer?.openItem("milestone", t.id)}
-                                className="w-full truncate text-left text-[12px] text-text-primary hover:text-[var(--blue-text)]"
+                                className="min-h-[40px] w-full truncate rounded px-1 text-left text-[12px] text-text-primary outline-none transition-colors hover:bg-surface hover:text-[var(--blue-text)] focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
                               >
                                 {t.title}
                               </button>
@@ -223,13 +223,13 @@ export function PinnedProjects({
                         <div className="mb-1 flex items-center gap-1 text-tiny text-text-tertiary">
                           <ListTodo size={11} /> Action items
                         </div>
-                        <ul className="space-y-0.5">
+                        <ul className="space-y-1">
                           {p.actionItems.map((a) => (
                             <li key={a.id}>
                               <button
                                 type="button"
                                 onClick={() => drawer?.openItem("action_item", a.id)}
-                                className="w-full truncate text-left text-[12px] text-text-primary hover:text-[var(--blue-text)]"
+                                className="min-h-[40px] w-full truncate rounded px-1 text-left text-[12px] text-text-primary outline-none transition-colors hover:bg-surface hover:text-[var(--blue-text)] focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
                               >
                                 {a.title}
                               </button>
@@ -254,8 +254,8 @@ export function PinnedProjects({
               .filter((r) => !pinnedIds.has(r.id))
               .slice(0, 6)
               .map((r) => (
-                <div key={r.id} className="group flex items-center rounded-full bg-surface pr-0.5">
-                  <Link href={`/projects/${r.id}`} className="max-w-[140px] truncate rounded-full px-2 py-0.5 text-tiny text-text-secondary hover:text-text-primary">
+                <div key={r.id} className="group flex min-h-[40px] items-center rounded-full bg-surface pr-0.5">
+                  <Link href={`/projects/${r.id}`} className="max-w-[140px] truncate rounded-full px-2.5 py-1.5 text-tiny text-text-secondary hover:text-text-primary">
                     {r.title}
                   </Link>
                   <button
@@ -263,7 +263,7 @@ export function PinnedProjects({
                     onClick={() => toggle(r.id)}
                     aria-label={`Pin ${r.title}`}
                     title="Pin"
-                    className="rounded-full p-0.5 text-text-tertiary opacity-0 transition-opacity hover:text-[var(--blue-text)] focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
+                    className="grid h-[40px] w-[40px] place-items-center rounded-full text-text-tertiary opacity-0 transition-opacity hover:text-[var(--blue-text)] focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
                   >
                     <Pin size={11} />
                   </button>

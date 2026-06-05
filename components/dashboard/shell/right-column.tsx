@@ -6,7 +6,7 @@ interface RightColumnProps {
 
 export function RightColumn({ children }: RightColumnProps) {
   return (
-    <aside className="hidden lg:flex w-[280px] shrink-0 flex-col gap-2.5">
+    <aside className="row-span-1 hidden min-h-0 w-full shrink-0 flex-col gap-2.5 lg:flex lg:sticky lg:top-16 lg:max-h-[calc(100svh-5rem)] lg:overflow-y-auto lg:overflow-x-hidden lg:pr-1">
       {children}
     </aside>
   );

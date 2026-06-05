@@ -250,7 +250,7 @@ export function LiveCallRecorder() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="grid gap-3 sm:flex sm:flex-wrap sm:items-center">
         {recording ? (
           <Button type="button" variant="destructive" onClick={stop}>
             <Square className="h-4 w-4" /> Stop & file ({elapsed}s)
@@ -276,7 +276,7 @@ export function LiveCallRecorder() {
           value={lang}
           onChange={(e) => setLang(e.target.value as Lang)}
           disabled={recording || busy}
-          className="h-9 rounded-md border border-[var(--border)] bg-[var(--background)] px-2 text-sm"
+          className="min-h-[44px] rounded-md border border-[var(--border)] bg-[var(--background)] px-3 text-sm disabled:opacity-50 sm:h-9 sm:min-h-0 sm:px-2"
           aria-label="Transcription language"
         >
           <option value="es">Spanish</option>
@@ -289,7 +289,7 @@ export function LiveCallRecorder() {
           onChange={(e) => setContactName(e.target.value)}
           disabled={recording || busy}
           placeholder="Attach to contact (optional)"
-          className="h-9 min-w-[200px] flex-1 rounded-md border border-[var(--border)] bg-[var(--background)] px-3 text-sm"
+          className="min-h-[44px] min-w-0 flex-1 rounded-md border border-[var(--border)] bg-[var(--background)] px-3 text-sm disabled:opacity-50 sm:h-9 sm:min-h-0 sm:min-w-[200px]"
         />
       </div>
 

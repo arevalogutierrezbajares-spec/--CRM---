@@ -86,8 +86,8 @@ export function MeetingForm({
       }}
       className="space-y-6"
     >
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-1.5 sm:col-span-2">
+      <div className="space-y-4">
+        <div className="space-y-1.5">
           <Label htmlFor="title">Title</Label>
           <Input
             id="title"
@@ -98,91 +98,8 @@ export function MeetingForm({
             placeholder="e.g. Marta — onboarding kickoff"
           />
         </div>
+
         <div className="space-y-1.5">
-          <Label htmlFor="scheduledAt">When</Label>
-          <Input
-            id="scheduledAt"
-            name="scheduledAt"
-            type="datetime-local"
-            required
-            defaultValue={initial?.scheduledAt ?? ""}
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="endedAt">Ended</Label>
-          <Input
-            id="endedAt"
-            name="endedAt"
-            type="datetime-local"
-            defaultValue={initial?.endedAt ?? ""}
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="type">Type</Label>
-          <Select value={type} onValueChange={(v) => setType(v as MeetingType)}>
-            <SelectTrigger id="type">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="one_on_one">1:1</SelectItem>
-              <SelectItem value="group">Group</SelectItem>
-              <SelectItem value="event">Event</SelectItem>
-              <SelectItem value="call">Call</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="location">Location</Label>
-          <Input
-            id="location"
-            name="location"
-            defaultValue={initial?.location ?? ""}
-            placeholder="Caracas · Zoom · WhatsApp"
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="metAtTag">Met-at tag</Label>
-          <Input
-            id="metAtTag"
-            name="metAtTag"
-            defaultValue={initial?.metAtTag ?? ""}
-            placeholder="IDB-dinner-2026"
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="linkedProjectId">Linked project</Label>
-          <Select
-            value={linkedProjectId || "_none"}
-            onValueChange={(v) =>
-              setLinkedProjectId(v === "_none" ? "" : v)
-            }
-          >
-            <SelectTrigger id="linkedProjectId">
-              <SelectValue placeholder="Optional…" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="_none">None</SelectItem>
-              {projects.map((p) => (
-                <SelectItem key={p.id} value={p.id}>
-                  {p.title}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <p className="text-xs text-[var(--muted-foreground)]">
-            Action items in minutes become milestones on this project.
-          </p>
-        </div>
-        <div className="space-y-1.5 sm:col-span-2">
-          <Label htmlFor="agenda">Agenda</Label>
-          <Textarea
-            id="agenda"
-            name="agenda"
-            defaultValue={initial?.agenda ?? ""}
-            placeholder="What you want to cover."
-          />
-        </div>
-        <div className="space-y-1.5 sm:col-span-2">
           <Label htmlFor="minutes">Minutes</Label>
           <Textarea
             id="minutes"
@@ -209,11 +126,11 @@ Use [ ] action items to spawn milestones:
                   key={c.id}
                   type="button"
                   onClick={() => toggleAttendee(c.id)}
-                  className="focus:outline-none"
+                  className="min-h-[44px] rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
                 >
                   <Badge
                     variant={active ? "default" : "outline"}
-                    className="cursor-pointer transition-opacity hover:opacity-80"
+                    className="min-h-[36px] cursor-pointer px-3 transition-opacity hover:opacity-80"
                   >
                     {c.name}
                   </Badge>
@@ -226,6 +143,103 @@ Use [ ] action items to spawn milestones:
           </p>
         </section>
       )}
+
+      <details
+        className="group rounded-lg border border-[var(--border)] bg-[var(--muted)]/10"
+      >
+        <summary className="flex min-h-[44px] cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-sm font-medium [&::-webkit-details-marker]:hidden">
+          <span>Details</span>
+          <span className="text-xs text-[var(--muted-foreground)] transition-transform group-open:rotate-180">
+            v
+          </span>
+        </summary>
+        <div className="grid gap-4 border-t border-[var(--border)] p-3 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="scheduledAt">When</Label>
+            <Input
+              id="scheduledAt"
+              name="scheduledAt"
+              type="datetime-local"
+              required
+              defaultValue={initial?.scheduledAt ?? ""}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="endedAt">Ended</Label>
+            <Input
+              id="endedAt"
+              name="endedAt"
+              type="datetime-local"
+              defaultValue={initial?.endedAt ?? ""}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="type">Type</Label>
+            <Select value={type} onValueChange={(v) => setType(v as MeetingType)}>
+              <SelectTrigger id="type">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="one_on_one">1:1</SelectItem>
+                <SelectItem value="group">Group</SelectItem>
+                <SelectItem value="event">Event</SelectItem>
+                <SelectItem value="call">Call</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="location">Location</Label>
+            <Input
+              id="location"
+              name="location"
+              defaultValue={initial?.location ?? ""}
+              placeholder="Caracas · Zoom · WhatsApp"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="linkedProjectId">Linked project</Label>
+            <Select
+              value={linkedProjectId || "_none"}
+              onValueChange={(v) =>
+                setLinkedProjectId(v === "_none" ? "" : v)
+              }
+            >
+              <SelectTrigger id="linkedProjectId">
+                <SelectValue placeholder="Optional…" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_none">None</SelectItem>
+                {projects.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.title}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-[var(--muted-foreground)]">
+              Action items in minutes become milestones on this project.
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="metAtTag">Met-at tag</Label>
+            <Input
+              id="metAtTag"
+              name="metAtTag"
+              defaultValue={initial?.metAtTag ?? ""}
+              placeholder="IDB-dinner-2026"
+            />
+          </div>
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label htmlFor="agenda">Agenda</Label>
+            <Textarea
+              id="agenda"
+              name="agenda"
+              defaultValue={initial?.agenda ?? ""}
+              placeholder="What you want to cover."
+            />
+          </div>
+        </div>
+      </details>
 
       {error && (
         <div className="rounded-md border border-[var(--destructive)]/40 bg-[var(--destructive)]/10 px-3 py-2 text-sm text-[var(--destructive)]">

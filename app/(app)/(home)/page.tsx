@@ -9,20 +9,23 @@ import { QuoteBubble } from "@/components/dashboard/daily/quote-bubble";
 import { QUOTES } from "@/lib/quotes";
 import { MiniCalendar } from "@/components/dashboard/right/mini-calendar";
 import { PipelineSnapshot } from "@/components/dashboard/right/pipeline-snapshot";
-import { AIBriefing } from "@/components/dashboard/right/ai-briefing";
 import { TreasuryWidget } from "@/components/dashboard/right/treasury-widget";
 import { SprintWidget } from "@/components/dashboard/right/sprint-widget";
-import { treasurySnapshot, type TreasurySnapshot } from "@/db/queries/treasury";
+import { treasurySnapshot, techSpendSummary, type TechSpendSummary, type TreasurySnapshot } from "@/db/queries/treasury";
 import { getActiveSprint, type SprintWithStats } from "@/db/queries/work";
+import { AiTechSpendCard } from "@/components/dashboard/right/ai-tech-spend-card";
+import { getAnthropicSpendToday, type AnthropicSpend } from "@/lib/anthropic-budget";
 import { DailyView } from "@/components/dashboard/daily/daily-view";
 import { listProjectsForPicker, listWorkspaceDocs } from "@/db/queries/items";
 import type { RefObject } from "@/components/town-hall/types";
 import { listWorkspaceMembers } from "@/db/queries/team";
-import { listTownHallFeed, type FeedItem } from "@/db/queries/town-hall-feed";
+import { DEFAULT_TOWN_HALL_FEED_LIMIT, listTownHallFeed, type FeedItem } from "@/db/queries/town-hall-feed";
 import { getWorkspaceCountdown, type WorkspaceCountdown } from "@/db/queries/workspace-settings";
 import { listInitiativesForPicker, type InitiativePick } from "@/db/queries/item-initiatives";
 import { listPinnedProjects, listRecentProjects, type PinnedProject } from "@/db/queries/pins";
 import { listScorecard, listKpis, quarterOf, type ScorecardRow, type KpiRow } from "@/db/queries/okrs";
+import { getDashboardLayout } from "@/db/queries/dashboard-layout";
+import { DEFAULT_WIDGETS, type DashWidget } from "@/lib/dashboard/layout";
 import { WeeklyView } from "@/components/dashboard/weekly/weekly-view";
 import { MonthlyView } from "@/components/dashboard/monthly/monthly-view";
 import { DbBanner } from "@/components/db-banner";
@@ -53,6 +56,7 @@ import {
   type RelationshipRow,
   type TopAccount,
 } from "@/db/queries/dashboard";
+import { listBlockedProjects, type BlockedProject, type DueItem } from "@/db/queries/this-week";
 
 const EMPTY_TREASURY_SNAPSHOT: TreasurySnapshot = {
   cashUsdCents: 0,
@@ -65,11 +69,11 @@ const EMPTY_TREASURY_SNAPSHOT: TreasurySnapshot = {
   runwayMonths: null,
   accountCount: 0,
 };
-import {
-  listBlockedProjects,
-  type BlockedProject,
-  type DueItem,
-} from "@/db/queries/this-week";
+const EMPTY_AI_SPEND: AnthropicSpend = {
+  tokensIn: 0,
+  tokensOut: 0,
+  costMillicents: 0,
+};
 
 type SearchParams = Promise<{ view?: string; item?: string }>;
 
@@ -137,7 +141,7 @@ function parseItemParam(raw: string | string[] | undefined): InitialItem {
 
 /**
  * The on-screen greeting title. Delegates to greetingIdentity() so the *displayed*
- * nickname always matches what the JARVIS voice *says* (single source of truth).
+ * nickname always matches what the NIGO voice *says* (single source of truth).
  * Unknown teammates fall back to their first name on screen (the voice uses the
  * generic "Founder" clip).
  */
@@ -196,6 +200,9 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
     countdownRes,
     initiativesRes,
     kpisRes,
+    aiSpendRes,
+    techSpendRes,
+    layoutRes,
   ] = await Promise.all([
     safeRead<DashCounts>(() => dashboardCounts(user.workspaceId, todayStr), EMPTY_COUNTS),
     safeRead<PipelineStageBar[]>(() => pipelineSnapshot(user.workspaceId), []),
@@ -210,7 +217,10 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
       () => getActiveSprint(user.workspaceId),
       null,
     ),
-    safeRead<FeedItem[]>(() => listTownHallFeed({ workspaceId: user.workspaceId, viewerId: user.id }), []),
+    safeRead<FeedItem[]>(
+      () => listTownHallFeed({ workspaceId: user.workspaceId, viewerId: user.id, limit: DEFAULT_TOWN_HALL_FEED_LIMIT }),
+      [],
+    ),
     // Loaded once, reused by the drawer pickers + Town Hall (no duplicate queries).
     safeRead<{ userId: string; displayName: string }[]>(
       () => listWorkspaceMembers(user.workspaceId).then((ms) => ms.map((m) => ({ userId: m.userId, displayName: m.displayName }))),
@@ -222,6 +232,16 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
     safeRead<WorkspaceCountdown | null>(() => getWorkspaceCountdown(user.workspaceId), null),
     safeRead<InitiativePick[]>(() => listInitiativesForPicker(user.workspaceId), []),
     safeRead<KpiRow[]>(() => listKpis(user.workspaceId, nowMs), []),
+    safeRead<AnthropicSpend>(() => getAnthropicSpendToday(user.workspaceId), EMPTY_AI_SPEND),
+    safeRead<TechSpendSummary>(
+      () => techSpendSummary(user.workspaceId),
+      {
+        todayUsdCents: 0,
+        monthToDateUsdCents: 0,
+        categoryCount: 0,
+      },
+    ),
+    safeRead<DashWidget[]>(() => getDashboardLayout(user.id), DEFAULT_WIDGETS.map((w) => ({ ...w }))),
   ]);
 
   const members = membersRes.data;
@@ -349,8 +369,8 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
         <RightColumn>
           <MiniCalendar eventDays={eventDaysRes.data} />
           <SprintWidget sprint={sprintRes.data} />
+          <AiTechSpendCard ai={aiSpendRes.data} tech={techSpendRes.data} />
           <TreasuryWidget snapshot={treasuryRes.data} />
-          <AIBriefing bullets={briefing} />
           <PipelineSnapshot stages={pipelineRes.data} />
         </RightColumn>
       }
@@ -385,6 +405,10 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
           feed={feedRes.data}
           initiatives={initiativesRes.data}
           kpis={kpisRes.data}
+          blocked={blockedRes.data}
+          briefingBullets={briefing}
+          dashboardLayout={layoutRes.data}
+          townHallFeedLimit={DEFAULT_TOWN_HALL_FEED_LIMIT}
           initialItem={initialItem}
         />
       )}

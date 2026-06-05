@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lt, or, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 
 const {
@@ -496,6 +496,68 @@ export type TechVendorRow = {
   prevMonthUsdCents: number;
   txnCount: number;
 };
+
+export type TechSpendSummary = {
+  todayUsdCents: number;
+  monthToDateUsdCents: number;
+  categoryCount: number;
+};
+
+export async function techSpendSummary(
+  workspaceId: string,
+): Promise<TechSpendSummary> {
+  const today = new Date().toISOString().slice(0, 10);
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
+  const monthStartISO = monthStart.toISOString().slice(0, 10);
+
+  const categories = await db
+    .select({ id: finCategories.id, name: finCategories.name })
+    .from(finCategories)
+    .where(
+      and(
+        eq(finCategories.workspaceId, workspaceId),
+        or(eq(finCategories.name, "AI & Compute"), eq(finCategories.name, "Tech & SaaS")),
+      ),
+    );
+
+  const categoryIds = categories.map((c) => c.id);
+  if (categoryIds.length === 0) {
+    return { todayUsdCents: 0, monthToDateUsdCents: 0, categoryCount: 0 };
+  }
+
+  const [todayRows, monthRows] = await Promise.all([
+    db
+      .select({ usd: sql<number>`COALESCE(SUM(${finTransactions.usdAmountCents}), 0)` })
+      .from(finTransactions)
+      .where(
+        and(
+          eq(finTransactions.workspaceId, workspaceId),
+          inArray(finTransactions.categoryId, categoryIds),
+          eq(finTransactions.postedDate, today),
+          sql`${finTransactions.usdAmountCents} < 0`,
+        ),
+      ),
+    db
+      .select({ usd: sql<number>`COALESCE(SUM(${finTransactions.usdAmountCents}), 0)` })
+      .from(finTransactions)
+      .where(
+        and(
+          eq(finTransactions.workspaceId, workspaceId),
+          inArray(finTransactions.categoryId, categoryIds),
+          gte(finTransactions.postedDate, monthStartISO),
+          sql`${finTransactions.usdAmountCents} < 0`,
+        ),
+      ),
+  ]);
+
+  return {
+    todayUsdCents: Math.abs(Number(todayRows[0]?.usd) || 0),
+    monthToDateUsdCents: Math.abs(Number(monthRows[0]?.usd) || 0),
+    categoryCount: categories.length,
+  };
+}
 
 export async function techStackTable(
   workspaceId: string,

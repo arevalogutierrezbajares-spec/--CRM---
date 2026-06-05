@@ -62,9 +62,9 @@ export function NeedsYouNow({
         <span className="text-tiny text-text-tertiary">· {total}</span>
       </div>
 
-      <div className="flex flex-wrap gap-x-5 gap-y-1.5 text-[12.5px]">
+      <div className="flex flex-wrap gap-2 text-[12.5px]">
         {soonMeeting && (
-          <Link href={`/meetings/${soonMeeting.id}`} className="flex items-center gap-1.5 text-text-secondary hover:text-text-primary">
+          <Link href={`/meetings/${soonMeeting.id}`} className="flex min-h-9 items-center gap-1.5 rounded-md px-2 text-text-secondary transition-colors hover:bg-red-bg hover:text-text-primary">
             <CalendarClock size={13} className="text-[var(--amber-text)]" />
             {(() => {
               const m = minsUntil(soonMeeting.scheduledAt, nowMs);
@@ -73,19 +73,19 @@ export function NeedsYouNow({
           </Link>
         )}
         {overdueAi.map((a) => (
-          <button key={a.id} type="button" aria-label={`Overdue action item: ${a.title}`} onClick={() => drawer?.openItem("action_item", a.id)} className="flex items-center gap-1.5 text-left text-text-secondary hover:text-text-primary">
+          <button key={a.id} type="button" aria-label={`Overdue action item: ${a.title}`} onClick={() => drawer?.openItem("action_item", a.id)} className="flex min-h-9 items-center gap-1.5 rounded-md px-2 text-left text-text-secondary transition-colors hover:bg-red-bg hover:text-text-primary">
             <ListTodo size={13} className="text-[var(--red-text)]" />
             <span className="max-w-[220px] truncate">{a.title}</span>
           </button>
         ))}
         {overdueTasks.map((t) => (
-          <button key={t.id} type="button" aria-label={`Overdue task: ${t.title}`} onClick={() => drawer?.openItem("milestone", t.id)} className="flex items-center gap-1.5 text-left text-text-secondary hover:text-text-primary">
+          <button key={t.id} type="button" aria-label={`Overdue task: ${t.title}`} onClick={() => drawer?.openItem("milestone", t.id)} className="flex min-h-9 items-center gap-1.5 rounded-md px-2 text-left text-text-secondary transition-colors hover:bg-red-bg hover:text-text-primary">
             <ListChecks size={13} className="text-[var(--red-text)]" />
             <span className="max-w-[220px] truncate">{t.title}</span>
           </button>
         ))}
         {blockedShown.map((b) => (
-          <Link key={b.id} href={`/projects/${b.id}`} className="flex items-center gap-1.5 text-text-secondary hover:text-text-primary">
+          <Link key={b.id} href={`/projects/${b.id}`} className="flex min-h-9 items-center gap-1.5 rounded-md px-2 text-text-secondary transition-colors hover:bg-red-bg hover:text-text-primary">
             <Ban size={13} className="text-[var(--amber-text)]" />
             <span className="max-w-[220px] truncate">{b.title} blocked</span>
           </Link>

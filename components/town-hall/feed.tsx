@@ -46,6 +46,7 @@ export function Feed({
   objects,
   docs = [],
   subscribe = true,
+  openExtract = false,
 }: {
   workspaceId: string;
   initialPosts: PostView[];
@@ -54,6 +55,7 @@ export function Feed({
   docs?: RefObject[];
   /** When false, don't open a Realtime channel (the embedding panel owns it). */
   subscribe?: boolean;
+  openExtract?: boolean;
 }) {
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
@@ -115,7 +117,7 @@ export function Feed({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-end">
-        <ExtractNotesDialog />
+        <ExtractNotesDialog initialOpen={openExtract} />
       </div>
 
       <Composer members={members} objects={objects} docs={docs} onPosted={handlePosted} />

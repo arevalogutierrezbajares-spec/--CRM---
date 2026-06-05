@@ -218,7 +218,7 @@ export function LiveMeeting({
   return (
     <div className="space-y-4">
       {/* Live header bar */}
-      <div className="flex items-center justify-between rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3">
+      <div className="flex flex-col gap-3 rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <span className="relative flex h-2.5 w-2.5">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
@@ -235,7 +235,7 @@ export function LiveMeeting({
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="grid gap-2 sm:flex sm:items-center">
           <Button
             type="button"
             variant="outline"
@@ -297,7 +297,7 @@ export function LiveMeeting({
                     <button
                       type="button"
                       onClick={() => toggleItem(i)}
-                      className="flex w-full items-start gap-2.5 rounded px-1 py-1 text-left text-sm transition-colors hover:bg-[var(--muted)]/40"
+                      className="flex min-h-[44px] w-full items-start gap-2.5 rounded px-2 py-2 text-left text-sm transition-colors hover:bg-[var(--muted)]/40 sm:min-h-0 sm:px-1 sm:py-1"
                     >
                       {checkedItems.has(i) ? (
                         <CheckSquare className="mt-0.5 h-4 w-4 shrink-0 text-green-500" />
@@ -397,7 +397,7 @@ export function LiveMeeting({
                       type="button"
                       size="sm"
                       variant="outline"
-                      className="h-7 gap-1 px-2 text-xs"
+                      className="gap-1 px-2 text-xs sm:h-7"
                       onClick={handleSummarize}
                     >
                       <Sparkles className="h-3 w-3" />

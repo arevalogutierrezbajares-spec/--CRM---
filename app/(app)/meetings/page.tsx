@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Mic, Plus, Sparkles } from "lucide-react";
 import { requireUser } from "@/lib/current-user";
 import { TopBar } from "@/components/layout/top-bar";
 import { Button } from "@/components/ui/button";
@@ -39,14 +39,26 @@ export default async function MeetingsPage() {
         {!res.ok && <DbBanner error={res.error} />}
 
         {res.data.length === 0 ? (
-          <Card className="grid place-items-center px-6 py-10 text-center">
-            <div className="space-y-3">
+          <Card className="grid place-items-center px-4 py-8 text-center sm:px-6 sm:py-10">
+            <div className="w-full max-w-md space-y-4">
               <p className="text-sm font-medium">No meetings yet.</p>
-              <Button asChild size="sm">
-                <Link href="/meetings/new">
-                  <Plus className="h-4 w-4" /> New meeting
-                </Link>
-              </Button>
+              <div className="grid gap-2 sm:grid-cols-3">
+                <Button asChild size="sm">
+                  <Link href="/meetings/new">
+                    <Plus className="h-4 w-4" /> New meeting
+                  </Link>
+                </Button>
+                <Button asChild size="sm" variant="outline">
+                  <Link href="/town-hall?extract=1">
+                    <Sparkles className="h-4 w-4" /> Paste notes
+                  </Link>
+                </Button>
+                <Button asChild size="sm" variant="outline">
+                  <Link href="/record">
+                    <Mic className="h-4 w-4" /> Record call
+                  </Link>
+                </Button>
+              </div>
             </div>
           </Card>
         ) : (

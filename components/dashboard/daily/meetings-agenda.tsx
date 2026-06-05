@@ -34,7 +34,7 @@ export function MeetingsAgenda({ meetings, nowMs, tz }: { meetings: DashMeeting[
       {sorted.length === 0 ? (
         <p className="mt-2 text-[12px] text-text-secondary">Nothing on the calendar.</p>
       ) : (
-        <ol className="mt-1.5 space-y-0.5">
+        <ol className="mt-1.5 space-y-1">
           {sorted.slice(0, 5).map((m) => {
             const startMs = m.scheduledAt.getTime();
             const mins = Math.round((startMs - nowMs) / 60000);
@@ -44,7 +44,7 @@ export function MeetingsAgenda({ meetings, nowMs, tz }: { meetings: DashMeeting[
             return (
               <li
                 key={m.id}
-                className={`flex items-center gap-2 rounded px-1.5 py-1 ${isNext ? "bg-surface" : ""}`}
+                className={`flex min-h-[40px] items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-surface ${isNext ? "bg-surface" : ""}`}
               >
                 <span className="w-[52px] shrink-0 text-right text-tiny tabular-nums text-text-tertiary">
                   {fmtTime(m.scheduledAt, tz)}
@@ -56,7 +56,7 @@ export function MeetingsAgenda({ meetings, nowMs, tz }: { meetings: DashMeeting[
                 <button
                   type="button"
                   onClick={() => drawer?.openItem("meeting", m.id)}
-                  className="min-w-0 flex-1 text-left"
+                  className="flex min-w-0 flex-1 items-center self-stretch rounded-sm text-left outline-none transition-transform active:scale-[0.96] focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
                 >
                   <span className={`block truncate text-[12.5px] ${past ? "text-text-tertiary line-through" : "text-text-primary"}`}>
                     {m.title}

@@ -107,7 +107,7 @@ export function InlineNotes({
           type="button"
           variant="ghost"
           size="sm"
-          className="h-6 gap-1 px-2 text-xs text-[var(--muted-foreground)]"
+          className="gap-1 px-2 text-xs text-[var(--muted-foreground)] sm:h-6"
           onClick={() => setPreview((p) => !p)}
         >
           {preview ? (

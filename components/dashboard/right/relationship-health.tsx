@@ -38,16 +38,16 @@ export function RelationshipHealth({ rows }: RelationshipHealthProps) {
       {rows.length === 0 ? (
         <p className="text-[12px] py-3 text-text-secondary">No contacts yet.</p>
       ) : (
-        <ul className="space-y-1.5">
+        <ul className="space-y-1">
           {rows.map((r) => {
             const meta = BAND_BADGE[r.band];
             return (
-              <li key={r.contactId} className="flex items-center gap-2">
+              <li key={r.contactId} className="flex min-h-[40px] items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-surface">
                 <Link
                   href={`/contacts/${r.contactId}`}
-                  className="text-[12px] text-text-primary truncate flex-1 hover:underline"
+                  className="flex min-w-0 flex-1 items-center self-stretch rounded-sm text-[12.5px] text-text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
                 >
-                  {r.name}
+                  <span className="truncate">{r.name}</span>
                 </Link>
                 <div className="h-1 w-12 rounded-full bg-surface overflow-hidden shrink-0">
                   <div

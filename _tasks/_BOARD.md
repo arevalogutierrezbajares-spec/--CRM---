@@ -41,9 +41,9 @@ Test count: 197 → **202** (5 new todo_query priority phrasings). All passing.
 | Phase 5 — Network Graph | 2 | 0 | 0 | 0 | 2 | 0 |
 | Phase 6 — SHOULDs | 7 | 0 | 0 | 0 | 7 | 0 |
 | Phase 7 — COULDs / v1.5 | 1 | 0 | 0 | 0 | 1 | 0 |
-| **Wave D — WA Media** | **3** | **3** | **0** | **0** | **0** | **0** |
+| **Wave D — WA Media** | **4** | **4** | **0** | **0** | **0** | **0** |
 | **Wave E — Domain Launch** | **3** | **3** | **0** | **0** | **0** | **0** |
-| **TOTAL** | **56** | **8** | **0** | **0** | **48** | **0** |
+| **TOTAL** | **57** | **9** | **0** | **0** | **48** | **0** |
 
 (*Phase 2 row count is 9 because AGB-108 group-by is delivered as part of the
 grid framework alongside AGB-100..107. The 2 remaining `open` items are
@@ -265,12 +265,13 @@ bench). Three items left to close the media loop:
 | [AGB-WA-001](TASK-AGB-WA-001-webhook-media-dispatcher.md) | Wire media dispatcher into webhook | Agent | P0 | 5 | open |
 | [AGB-WA-002](TASK-AGB-WA-002-media-storage-setup.md) | Create agb-media bucket + env vars | **You** | P0 | 1 | open |
 | [AGB-WA-003](TASK-AGB-WA-003-activity-admin-page.md) | /wa-activity admin page (cost tracking) | Agent | P1 | 3 | open |
+| [AGB-WA-004](TASK-AGB-WA-004-ai-tech-spend-dashboard.md) | Show AI + tech spend on dashboard + treasury link | You | P1 | 3 | open |
 
 **Do AGB-WA-002 first** (5 minutes, your action) — it unblocks AGB-WA-001.
 Then claim AGB-WA-001 + AGB-WA-003 in the same agent session.
 
 **Done in-session (no separate task ID needed):**
-- ✅ Outbound silent-send failure observability (was planned as AGB-WA-004 — done inline in commit `9db8e9d`)
+- ✅ Outbound silent-send failure observability (done inline in commit `9db8e9d`)
 - ✅ Bot persona consistency (Tomas/TG instead of nickname jumble)
 - ✅ "focus / priorities" intent classification
 - ✅ Token diet (Sonnet at the limit went from ~7,800 → ~2,800 tokens/msg)

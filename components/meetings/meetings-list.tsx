@@ -110,13 +110,13 @@ export function MeetingsList({ meetings }: MeetingsListProps) {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search meetings…"
-            className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] py-2 pl-9 pr-9 text-sm placeholder:text-[var(--muted-foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
+            className="min-h-[44px] w-full rounded-md border border-[var(--border)] bg-[var(--background)] py-2 pl-9 pr-9 text-sm placeholder:text-[var(--muted-foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] sm:min-h-0"
           />
           {search && (
             <button
               type="button"
               onClick={() => setSearch("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+              className="absolute right-1 top-1/2 flex h-[40px] w-[40px] -translate-y-1/2 items-center justify-center rounded-md text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -127,7 +127,7 @@ export function MeetingsList({ meetings }: MeetingsListProps) {
           <select
             value={contactFilter}
             onChange={(e) => setContactFilter(e.target.value)}
-            className="rounded-md border border-[var(--border)] bg-[var(--background)] py-2 pl-3 pr-8 text-sm text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
+            className="min-h-[44px] rounded-md border border-[var(--border)] bg-[var(--background)] py-2 pl-3 pr-8 text-sm text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] sm:min-h-0"
           >
             <option value="">All contacts</option>
             {allNames.map((n) => (
@@ -142,7 +142,7 @@ export function MeetingsList({ meetings }: MeetingsListProps) {
           <button
             type="button"
             onClick={() => { setSearch(""); setContactFilter(""); }}
-            className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+            className="min-h-[44px] rounded-md px-2 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] sm:min-h-0"
           >
             Clear
           </button>
@@ -190,12 +190,12 @@ function MeetingRow({
   const showGoLive = group === "today";
 
   return (
-    <li className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-[var(--muted)]/30 transition-colors">
+    <li className="flex min-h-[56px] items-center justify-between gap-3 px-4 py-3 hover:bg-[var(--muted)]/30 transition-colors">
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 flex-wrap">
           <Link
             href={`/meetings/${m.id}`}
-            className="text-sm font-medium hover:underline"
+            className="inline-flex min-h-[40px] items-center rounded-sm text-sm font-medium hover:underline sm:min-h-0"
           >
             {m.title}
           </Link>
@@ -222,7 +222,7 @@ function MeetingRow({
           {TYPE_LABEL[m.type] ?? m.type}
         </Badge>
         {showGoLive && (
-          <Button asChild size="sm" variant="outline" className="h-7 gap-1 px-2 text-xs text-red-600 border-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 dark:border-red-800 dark:text-red-400">
+          <Button asChild size="sm" variant="outline" className="gap-1 px-2 text-xs text-red-600 border-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 dark:border-red-800 dark:text-red-400 sm:h-7">
             <Link href={`/meetings/${m.id}?live=1`}>
               <Radio className="h-3 w-3" /> Go Live
             </Link>

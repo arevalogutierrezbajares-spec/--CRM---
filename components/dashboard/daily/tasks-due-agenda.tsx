@@ -33,9 +33,9 @@ export function TasksDueAgenda({ tasks, tz }: { tasks: DashTask[]; tz: string })
       {sorted.length === 0 ? (
         <p className="mt-2 text-[12px] text-text-secondary">Nothing due.</p>
       ) : (
-        <ol className="mt-1.5 space-y-0.5">
+        <ol className="mt-1.5 space-y-1">
           {sorted.slice(0, 5).map((t) => (
-            <li key={t.id} className="flex items-center gap-2 rounded px-1.5 py-1 hover:bg-surface">
+            <li key={t.id} className="flex min-h-[40px] items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-surface">
               <span className={`w-[52px] shrink-0 text-right text-tiny tabular-nums ${t.isOverdue ? "text-[var(--red-text)]" : "text-text-tertiary"}`}>
                 {fmtDue(t.dueDate, tz)}
               </span>
@@ -43,7 +43,11 @@ export function TasksDueAgenda({ tasks, tz }: { tasks: DashTask[]; tz: string })
                 aria-hidden
                 className={`h-1.5 w-1.5 shrink-0 rounded-full ${t.isOverdue ? "bg-[var(--red-text)]" : t.status === "blocked" ? "bg-[var(--amber-text)]" : "bg-[var(--blue-text)]"}`}
               />
-              <button type="button" onClick={() => drawer?.openItem("milestone", t.id)} className="min-w-0 flex-1 text-left">
+              <button
+                type="button"
+                onClick={() => drawer?.openItem("milestone", t.id)}
+                className="flex min-w-0 flex-1 flex-col justify-center self-stretch rounded-sm text-left outline-none transition-transform active:scale-[0.96] focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+              >
                 <span className="block truncate text-[12.5px] text-text-primary">{t.title}</span>
                 <span className="block truncate text-tiny text-text-tertiary">{t.projectTitle}</span>
               </button>

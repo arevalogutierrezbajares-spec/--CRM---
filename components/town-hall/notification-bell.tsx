@@ -105,7 +105,7 @@ export function NotificationBell() {
         <button
           type="button"
           aria-label="Notifications"
-          className="relative grid h-9 w-9 place-items-center rounded-md text-text-secondary transition-colors hover:bg-surface hover:text-text-primary"
+          className="relative grid h-[40px] w-[40px] place-items-center rounded-md text-text-secondary transition-colors hover:bg-surface hover:text-text-primary"
         >
           <Bell className="h-[18px] w-[18px]" />
           {count > 0 && (

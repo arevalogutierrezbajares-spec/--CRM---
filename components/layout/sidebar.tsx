@@ -24,10 +24,11 @@ function NavRow({ item, pathname, rail }: { item: NavLeaf; pathname: string; rai
     <Link
       href={item.href}
       aria-current={active ? "page" : undefined}
+      aria-label={rail ? item.label : undefined}
       title={rail ? item.label : undefined}
       className={cn(
         "flex items-center rounded-md text-[13px] transition-colors",
-        rail ? "justify-center px-0 py-2" : "gap-2 px-2.5 py-1.5",
+        rail ? "h-10 justify-center px-0 py-0" : "min-h-10 gap-2 px-2.5 py-1.5",
         active
           ? "bg-surface font-medium text-text-primary"
           : "text-text-secondary hover:bg-surface hover:text-text-primary",
@@ -192,9 +193,10 @@ export function Sidebar({
           onClick={toggleRail}
           title={rail ? "Expand sidebar" : "Collapse sidebar"}
           aria-label={rail ? "Expand sidebar" : "Collapse sidebar"}
+          aria-pressed={rail}
           className={cn(
-            "mt-1 flex items-center rounded-md text-tiny text-text-tertiary transition-colors hover:bg-surface hover:text-text-secondary",
-            rail ? "justify-center px-0 py-2" : "gap-2 px-2.5 py-1.5",
+            "mt-1 flex w-full items-center rounded-md text-tiny text-text-tertiary transition-colors hover:bg-surface hover:text-text-secondary active:scale-[0.96]",
+            rail ? "h-10 justify-center px-0 py-0" : "min-h-10 gap-2 px-2.5 py-1.5",
           )}
         >
           {rail ? <ChevronsRight size={18} className="shrink-0" /> : <ChevronsLeft size={16} className="shrink-0" />}

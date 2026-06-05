@@ -8,8 +8,11 @@ import { listProjectsForPicker } from "@/db/queries/items";
 import { Feed } from "@/components/town-hall/feed";
 import type { MemberOption, RefObject } from "@/components/town-hall/types";
 
-export default async function TownHallPage() {
+type SearchParams = Promise<{ extract?: string }>;
+
+export default async function TownHallPage(props: { searchParams: SearchParams }) {
   const user = await requireUser();
+  const sp = await props.searchParams;
 
   const [postsRes, membersRes, projectsRes] = await Promise.all([
     safeRead<PostView[]>(
@@ -59,6 +62,7 @@ export default async function TownHallPage() {
           initialPosts={postsRes.data}
           members={members}
           objects={objects}
+          openExtract={sp.extract === "1"}
         />
       </main>
     </>

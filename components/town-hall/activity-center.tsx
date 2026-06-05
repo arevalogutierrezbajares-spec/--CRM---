@@ -177,11 +177,11 @@ function CompactActivity({ a, nowMs }: { a: ActivityEvent; nowMs: number }) {
     </span>
   );
   return (
-    <div className="flex items-start gap-1.5 text-[12.5px] leading-snug">
+    <div className="flex min-h-[40px] items-start gap-1.5 rounded-md px-1.5 py-1 text-[12.5px] leading-snug transition-colors hover:bg-surface/60">
       <Icon size={13} className={`mt-0.5 shrink-0 ${a.done ? "text-green-mid" : "text-text-tertiary"}`} />
       <div className="min-w-0 flex-1">
         {a.href ? (
-          <Link href={a.href} className="hover:underline">
+          <Link href={a.href} className="rounded-sm outline-none hover:underline focus-visible:ring-2 focus-visible:ring-[var(--ring)]">
             {body}
           </Link>
         ) : (
@@ -252,7 +252,7 @@ function ActivityRun({ items, nowMs }: { items: ActivityEvent[]; nowMs: number }
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-1.5 text-[12.5px] leading-snug text-text-secondary hover:text-text-primary"
+        className="flex min-h-[40px] items-center gap-1.5 rounded-md px-1.5 text-[12.5px] leading-snug text-text-secondary transition-colors hover:bg-surface/60 hover:text-text-primary"
         aria-expanded={open}
       >
         <Icon size={13} className={`shrink-0 ${first.done ? "text-green-mid" : "text-text-tertiary"}`} />
@@ -260,7 +260,7 @@ function ActivityRun({ items, nowMs }: { items: ActivityEvent[]; nowMs: number }
         <ChevronRight size={12} className={`shrink-0 transition-transform ${open ? "rotate-90" : ""}`} />
       </button>
       {open && (
-        <div className="ml-[7px] mt-0.5 space-y-0.5 border-l pl-2.5" style={{ borderColor: "var(--border-default)" }}>
+        <div className="ml-[7px] mt-1 space-y-0.5 border-l pl-2.5" style={{ borderColor: "var(--border-default)" }}>
           {items.map((a) => (
             <CompactActivity key={a.id} a={a} nowMs={nowMs} />
           ))}
@@ -273,6 +273,7 @@ function ActivityRun({ items, nowMs }: { items: ActivityEvent[]; nowMs: number }
 export function ActivityCenter({
   workspaceId,
   initialFeed,
+  feedLimit,
   members,
   objects,
   docs,
@@ -283,6 +284,7 @@ export function ActivityCenter({
 }: {
   workspaceId: string;
   initialFeed: FeedItem[];
+  feedLimit: number;
   members: MemberOption[];
   objects: RefObject[];
   docs: RefObject[];
@@ -330,12 +332,22 @@ export function ActivityCenter({
 
   const groups = useMemo(() => groupFeed(filtered, todayKey, tz), [filtered, todayKey, tz]);
   const filtersActive = type !== "all" || person !== "all" || initiative !== "all";
+  const countLabel = filtersActive
+    ? `${filtered.length}/${initialFeed.length} shown`
+    : initialFeed.length >= feedLimit
+      ? `Latest ${feedLimit} items`
+      : `${initialFeed.length} items`;
 
   return (
     <DashCard>
       <div className="flex items-center justify-between">
         <SectionLabel icon={Megaphone}>Town Hall</SectionLabel>
-        <span className="text-tiny text-text-tertiary tabular-nums">{filtered.length} events</span>
+        <span
+          className="text-tiny text-text-tertiary tabular-nums"
+          title={`Town Hall loads the latest ${feedLimit} feed items, then filters what is shown here.`}
+        >
+          {countLabel}
+        </span>
       </div>
 
       <div className="mt-2">
@@ -349,9 +361,9 @@ export function ActivityCenter({
       </div>
 
       {/* Filters: type · person · initiative */}
-      <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+      <div className="mt-2.5 flex flex-wrap items-center gap-2">
         <Select value={type} onValueChange={(v) => setType(v as FeedType)}>
-          <SelectTrigger className="h-7 w-[120px] text-tiny"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="h-[40px] w-[132px] text-tiny"><SelectValue /></SelectTrigger>
           <SelectContent>
             {TYPE_OPTIONS.map((o) => (
               <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
@@ -359,7 +371,7 @@ export function ActivityCenter({
           </SelectContent>
         </Select>
         <Select value={person} onValueChange={setPerson}>
-          <SelectTrigger className="h-7 w-[120px] text-tiny"><SelectValue placeholder="Anyone" /></SelectTrigger>
+          <SelectTrigger className="h-[40px] w-[132px] text-tiny"><SelectValue placeholder="Anyone" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Anyone</SelectItem>
             {members.map((m) => (
@@ -369,7 +381,7 @@ export function ActivityCenter({
         </Select>
         {initiatives.length > 0 && (
           <Select value={initiative} onValueChange={setInitiative}>
-            <SelectTrigger className="h-7 w-[150px] text-tiny"><SelectValue placeholder="All initiatives" /></SelectTrigger>
+            <SelectTrigger className="h-[40px] w-[168px] text-tiny"><SelectValue placeholder="All initiatives" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All initiatives</SelectItem>
               {initiatives.map((i) => (
@@ -382,7 +394,7 @@ export function ActivityCenter({
           <button
             type="button"
             onClick={() => { setType("all"); setPerson("all"); setInitiative("all"); }}
-            className="text-tiny text-text-tertiary underline hover:text-text-secondary"
+            className="min-h-[40px] rounded-md px-2 text-tiny text-text-tertiary underline transition-colors hover:bg-surface hover:text-text-secondary"
           >
             Clear
           </button>
@@ -403,7 +415,7 @@ export function ActivityCenter({
                 <span className="h-px flex-1 bg-[var(--border-default)]" />
               </div>
             ) : (
-              <div key={g.id} className="flex gap-2">
+              <div key={g.id} className="flex gap-2 rounded-md py-1">
                 <Initial name={g.actorName} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline gap-2">

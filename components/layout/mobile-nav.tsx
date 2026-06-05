@@ -45,7 +45,7 @@ export function MobileNav() {
         type="button"
         variant="ghost"
         size="icon"
-        className="md:hidden"
+        className="h-[40px] w-[40px] md:hidden"
         aria-label="Open navigation"
         aria-expanded={open}
         aria-controls="mobile-nav-drawer"
@@ -75,7 +75,7 @@ export function MobileNav() {
         aria-label="Navigation"
         inert={!open || undefined}
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col border-r border-[var(--border)] bg-[var(--card)] shadow-xl transition-transform md:hidden",
+          "fixed left-0 top-0 z-50 flex h-dvh min-h-dvh w-72 max-w-[85vw] flex-col border-r border-[var(--border)] bg-[var(--card)] shadow-xl transition-transform md:hidden",
           open ? "translate-x-0" : "-translate-x-full",
         )}
       >
@@ -95,6 +95,7 @@ export function MobileNav() {
             type="button"
             variant="ghost"
             size="icon"
+            className="h-[40px] w-[40px]"
             aria-label="Close navigation"
             onClick={() => setOpen(false)}
           >
@@ -117,7 +118,7 @@ export function MobileNav() {
                 href={item.href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "flex items-center gap-3 rounded-md px-3 py-3 text-sm transition-colors",
+                  "flex min-h-[40px] items-center gap-3 rounded-md px-3 py-3 text-sm transition-colors",
                   active
                     ? "bg-[var(--accent)] font-medium text-[var(--accent-foreground)]"
                     : "text-[var(--muted-foreground)] hover:bg-[var(--accent)]/60 hover:text-[var(--foreground)]",

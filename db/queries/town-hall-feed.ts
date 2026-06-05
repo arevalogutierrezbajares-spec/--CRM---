@@ -2,6 +2,8 @@ import "server-only";
 import { listPosts, type PostView } from "./town-hall";
 import { listWorkspaceActivity, type ActivityEvent } from "./activity";
 
+export const DEFAULT_TOWN_HALL_FEED_LIMIT = 60;
+
 /** One row in the Town Hall activity log: a person's post, or a workspace activity event. */
 export type FeedItem =
   | { kind: "post"; at: Date; post: PostView }
@@ -17,10 +19,11 @@ export async function listTownHallFeed(opts: {
   viewerId: string;
   limit?: number;
 }): Promise<FeedItem[]> {
-  const limit = opts.limit ?? 60;
+  const limit = opts.limit ?? DEFAULT_TOWN_HALL_FEED_LIMIT;
+  const sourceLimit = Math.max(limit, DEFAULT_TOWN_HALL_FEED_LIMIT);
   const [posts, activity] = await Promise.all([
-    listPosts({ workspaceId: opts.workspaceId, viewerId: opts.viewerId, limit: 40 }),
-    listWorkspaceActivity(opts.workspaceId, 60),
+    listPosts({ workspaceId: opts.workspaceId, viewerId: opts.viewerId, limit: Math.max(40, Math.ceil(sourceLimit * 0.75)) }),
+    listWorkspaceActivity(opts.workspaceId, sourceLimit),
   ]);
 
   const items: FeedItem[] = [];

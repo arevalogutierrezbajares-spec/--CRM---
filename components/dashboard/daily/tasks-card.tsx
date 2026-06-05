@@ -108,25 +108,29 @@ export function TasksCard({ tasks, scope, sources }: TasksCardProps) {
           <p className="text-[12px] text-text-secondary">Nothing due {scope === "today" ? "today" : `this ${scope}`}.</p>
         </div>
       ) : (
-        <ul className="space-y-1.5">
+        <ul className="space-y-1">
           {tasks.slice(0, 8).map((t) => {
             const badge = bucketBadge(t);
             return (
-              <li key={t.id} className="flex items-start gap-2 group rounded px-1 py-1 hover:bg-surface transition-colors">
+              <li key={t.id} className="group flex min-h-[44px] items-center gap-2 rounded-md px-2 py-1.5 transition-colors hover:bg-surface">
                 {/* Status dot (decorative) — tasks are completed from the detail drawer, not here. */}
                 <span
                   aria-hidden
-                  className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${
+                  className={`h-2.5 w-2.5 shrink-0 rounded-full ${
                     t.isOverdue ? "bg-[var(--red-text)]" : t.status === "blocked" ? "bg-[var(--amber-text)]" : "bg-[var(--blue-text)]"
                   }`}
                 />
                 {drawer ? (
-                  <button type="button" onClick={() => drawer.openItem("milestone", t.id)} className="min-w-0 flex-1 text-left">
+                  <button
+                    type="button"
+                    onClick={() => drawer.openItem("milestone", t.id)}
+                    className="flex min-w-0 flex-1 flex-col justify-center self-stretch rounded-sm text-left outline-none transition-transform active:scale-[0.96] focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+                  >
                     <div className="block text-[12.5px] text-text-primary truncate">{t.title}</div>
                     <div className="text-tiny text-text-tertiary truncate">{t.projectTitle} · {shortDate(t.dueDate)}</div>
                   </button>
                 ) : (
-                  <Link href={`/projects/${t.projectId}`} className="min-w-0 flex-1">
+                  <Link href={`/projects/${t.projectId}`} className="flex min-w-0 flex-1 flex-col justify-center self-stretch rounded-sm outline-none transition-transform active:scale-[0.96] focus-visible:ring-2 focus-visible:ring-[var(--ring)]">
                     <div className="block text-[12.5px] text-text-primary truncate hover:underline">{t.title}</div>
                     <div className="text-tiny text-text-tertiary truncate">{t.projectTitle} · {shortDate(t.dueDate)}</div>
                   </Link>
@@ -139,7 +143,7 @@ export function TasksCard({ tasks, scope, sources }: TasksCardProps) {
       )}
 
       {projects.length > 0 && (
-        <div className="mt-2 flex items-center gap-1.5">
+        <div className="mt-3 flex flex-wrap items-center gap-2 sm:flex-nowrap">
           <Plus size={13} className="shrink-0 text-text-tertiary" />
           <MentionInput
             value={newTitle}
@@ -149,11 +153,11 @@ export function TasksCard({ tasks, scope, sources }: TasksCardProps) {
             sources={effectiveSources}
             aria-label="Add a task"
             placeholder="Add a task… @assign  #project  @doc"
-            className="flex-1"
-            inputClassName="h-7 w-full border-0 bg-transparent px-0 text-[12.5px] outline-none placeholder:text-text-tertiary"
+            className="min-w-[220px] flex-1"
+            inputClassName="h-[40px] w-full border-0 bg-transparent px-0 text-[12.5px] outline-none placeholder:text-text-tertiary"
           />
           <Select value={projectId} onValueChange={setProjectId}>
-            <SelectTrigger className="h-7 w-28 text-tiny"><SelectValue placeholder="Project" /></SelectTrigger>
+            <SelectTrigger className="h-[40px] w-full text-tiny sm:w-36"><SelectValue placeholder="Project" /></SelectTrigger>
             <SelectContent>
               {projects.map((p) => (
                 <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>
@@ -161,7 +165,7 @@ export function TasksCard({ tasks, scope, sources }: TasksCardProps) {
             </SelectContent>
           </Select>
           {newTitle.trim() && (
-            <Button type="button" size="sm" variant="ghost" onClick={quickAdd} loading={pending}>Add</Button>
+            <Button type="button" size="sm" variant="ghost" onClick={quickAdd} loading={pending} className="h-[40px]">Add</Button>
           )}
         </div>
       )}

@@ -31,7 +31,21 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { saveDashboardLayoutAction } from "@/app/(app)/dashboard/layout-actions";
-import { WIDGET_LABELS, DEFAULT_WIDGETS, type DashWidget } from "@/lib/dashboard/layout";
+import { WIDGET_LABELS, DEFAULT_WIDGETS, type DashWidget, type WidgetSize } from "@/lib/dashboard/layout";
+
+const WIDGET_SIZES: WidgetSize[] = ["compact", "standard", "wide", "full"];
+const SIZE_LABEL: Record<WidgetSize, string> = {
+  compact: "Compact",
+  standard: "Standard",
+  wide: "Wide",
+  full: "Full",
+};
+const SIZE_CLASS: Record<WidgetSize, string> = {
+  compact: "lg:col-span-1 xl:col-span-3",
+  standard: "lg:col-span-1 xl:col-span-4",
+  wide: "lg:col-span-2 xl:col-span-8",
+  full: "lg:col-span-2 xl:col-span-12",
+};
 
 export function CustomizableDashboard({
   widgets,
@@ -62,9 +76,13 @@ export function CustomizableDashboard({
   function toggleHide(id: string) {
     setLayout((prev) => prev.map((w) => (w.id === id ? { ...w, hidden: !w.hidden } : w)));
   }
-  function toggleWidth(id: string) {
+  function cycleSize(id: string) {
     setLayout((prev) =>
-      prev.map((w) => (w.id === id ? { ...w, width: w.width === "full" ? "half" : "full" } : w)),
+      prev.map((w) => {
+        if (w.id !== id) return w;
+        const next = WIDGET_SIZES[(WIDGET_SIZES.indexOf(w.size) + 1) % WIDGET_SIZES.length];
+        return { ...w, size: next };
+      }),
     );
   }
   function done() {
@@ -86,16 +104,16 @@ export function CustomizableDashboard({
       <div className="flex items-center justify-end gap-2">
         {editing ? (
           <>
-            <span className="mr-auto text-tiny text-text-tertiary">Drag to reorder · hide · resize.</span>
-            <Button type="button" size="sm" variant="ghost" onClick={() => setLayout(DEFAULT_WIDGETS.map((w) => ({ ...w })))} className="text-text-tertiary">
+            <span className="mr-auto text-tiny font-medium uppercase tracking-wide text-text-tertiary">Dashboard layout</span>
+            <Button type="button" size="sm" variant="ghost" onClick={() => setLayout(DEFAULT_WIDGETS.map((w) => ({ ...w })))} className="h-[40px] text-text-tertiary">
               Reset
             </Button>
-            <Button type="button" size="sm" onClick={done} loading={saving}>
+            <Button type="button" size="sm" onClick={done} loading={saving} className="h-[40px]">
               <Check size={14} /> Done
             </Button>
           </>
         ) : (
-          <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(true)} className="text-text-tertiary">
+          <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(true)} className="h-[40px] text-text-tertiary">
             <SlidersHorizontal size={13} /> Customize
           </Button>
         )}
@@ -111,7 +129,7 @@ export function CustomizableDashboard({
                   w={w}
                   node={nodeById.get(w.id)}
                   onHide={() => toggleHide(w.id)}
-                  onWidth={() => toggleWidth(w.id)}
+                  onSize={() => cycleSize(w.id)}
                 />
               ))}
             </div>
@@ -125,7 +143,7 @@ export function CustomizableDashboard({
           </button>
         </div>
       ) : (
-        <div className="grid gap-2.5 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-2 xl:grid-cols-12">
           {shown.map((w, i) => {
             const node = nodeById.get(w.id);
             if (!node) return null;
@@ -136,7 +154,7 @@ export function CustomizableDashboard({
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3, delay: Math.min(i, 6) * 0.05, ease: "easeOut" }}
-                className={w.width === "full" ? "lg:col-span-2" : "lg:col-span-1"}
+                className={`${SIZE_CLASS[w.size]} min-w-0 h-full [&>*]:h-full`}
               >
                 {node}
               </motion.div>
@@ -152,12 +170,12 @@ function SortableRow({
   w,
   node,
   onHide,
-  onWidth,
+  onSize,
 }: {
   w: DashWidget;
   node: React.ReactNode;
   onHide: () => void;
-  onWidth: () => void;
+  onSize: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: w.id });
   const style = { transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 10 : undefined };
@@ -168,7 +186,7 @@ function SortableRow({
         <button
           type="button"
           aria-label="Drag to reorder"
-          className="cursor-grab rounded p-1 text-text-tertiary hover:text-text-primary active:cursor-grabbing"
+          className="grid h-[40px] w-[40px] cursor-grab place-items-center rounded-md text-text-tertiary transition-colors hover:bg-surface hover:text-text-primary active:cursor-grabbing active:scale-[0.96]"
           {...attributes}
           {...listeners}
         >
@@ -177,11 +195,12 @@ function SortableRow({
         <span className="mr-auto truncate text-tiny font-medium text-text-secondary">
           {WIDGET_LABELS[w.id] ?? w.id}
         </span>
-        <EditBtn label={w.width === "full" ? "Make half width" : "Make full width"} onClick={onWidth}>
-          {w.width === "full" ? <Square size={12} /> : <RectangleHorizontal size={12} />}
+        <span className="rounded-full bg-surface px-2 py-1 text-tiny text-text-tertiary">{SIZE_LABEL[w.size]}</span>
+        <EditBtn label={`Resize from ${SIZE_LABEL[w.size]}`} onClick={onSize}>
+          {w.size === "compact" || w.size === "standard" ? <RectangleHorizontal size={13} /> : <Square size={13} />}
         </EditBtn>
         <EditBtn label={w.hidden ? "Show" : "Hide"} onClick={onHide}>
-          {w.hidden ? <EyeOff size={12} /> : <Eye size={12} />}
+          {w.hidden ? <EyeOff size={13} /> : <Eye size={13} />}
         </EditBtn>
       </div>
       <div className={w.hidden ? "opacity-40" : ""}>{node}</div>
@@ -196,7 +215,7 @@ function EditBtn({ label, onClick, children }: { label: string; onClick: () => v
       aria-label={label}
       title={label}
       onClick={onClick}
-      className="rounded p-1 text-text-tertiary hover:bg-surface hover:text-text-primary"
+      className="grid h-[40px] w-[40px] place-items-center rounded-md text-text-tertiary transition-colors hover:bg-surface hover:text-text-primary active:scale-[0.96]"
     >
       {children}
     </button>

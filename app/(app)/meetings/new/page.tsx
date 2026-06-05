@@ -10,6 +10,11 @@ import { listProjects } from "@/db/queries/projects";
 import { safeRead } from "@/lib/db-status";
 import { createMeeting } from "../actions";
 
+function toLocalInput(date: Date) {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 export default async function NewMeetingPage() {
   const user = await requireUser();
 
@@ -35,7 +40,7 @@ export default async function NewMeetingPage() {
       <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-8">
         <Link
           href="/meetings"
-          className="inline-flex items-center gap-1 text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+          className="inline-flex min-h-[44px] items-center gap-1 rounded-md text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)] sm:min-h-0"
         >
           <ChevronLeft className="h-4 w-4" /> Back to meetings
         </Link>
@@ -54,6 +59,7 @@ export default async function NewMeetingPage() {
         <Card>
           <CardContent className="pt-6">
             <MeetingForm
+              initial={{ scheduledAt: toLocalInput(new Date()) }}
               contacts={contactsRes.data.map((c) => ({
                 id: c.id,
                 name: c.name,

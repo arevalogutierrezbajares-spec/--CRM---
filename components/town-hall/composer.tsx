@@ -108,7 +108,7 @@ export function Composer({
           type="button"
           onClick={() => setAlsoWA((v) => !v)}
           title="Also send this to everyone's WhatsApp"
-          className={`flex items-center gap-1 rounded-full border px-2 py-0.5 text-tiny transition-colors ${
+          className={`flex min-h-[40px] items-center gap-1 rounded-full border px-3 py-1 text-tiny transition-colors ${
             alsoWA
               ? "border-[var(--green-mid)] text-[var(--green-text)]"
               : "border-[var(--border)] text-text-tertiary hover:text-text-secondary"
@@ -116,7 +116,7 @@ export function Composer({
         >
           <MessageCircle size={12} /> WhatsApp
         </button>
-        <Button size="sm" onClick={() => void submit()} loading={submitting} disabled={!text.trim()}>
+        <Button size="sm" onClick={() => void submit()} loading={submitting} disabled={!text.trim()} className="h-[40px]">
           <Send className="h-3.5 w-3.5" /> {parentPostId ? "Reply" : "Post"}
         </Button>
       </div>

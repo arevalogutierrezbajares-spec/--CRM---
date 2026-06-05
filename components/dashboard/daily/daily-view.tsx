@@ -10,12 +10,16 @@ import { ItemDrawerProvider } from "../item-drawer";
 import type { ScorecardRow, KpiRow } from "@/db/queries/okrs";
 import { PinnedProjects } from "../pinned-projects";
 import type { PinnedProject } from "@/db/queries/pins";
+import { BriefingCard } from "./briefing-card";
+import { CustomizableDashboard } from "../customizable-dashboard";
 import type { MentionSources } from "@/components/ui/mention-input";
 import type { RefObject } from "@/components/town-hall/types";
 import type { WorkspaceCountdown } from "@/db/queries/workspace-settings";
 import type { FeedItem } from "@/db/queries/town-hall-feed";
 import type { InitiativePick } from "@/db/queries/item-initiatives";
 import type { DashActionItem, DashMeeting, DashTask, RelationshipRow } from "@/db/queries/dashboard";
+import type { BlockedProject } from "@/db/queries/this-week";
+import type { DashWidget } from "@/lib/dashboard/layout";
 
 interface DailyViewProps {
   tasks: DashTask[];
@@ -36,6 +40,10 @@ interface DailyViewProps {
   feed: FeedItem[];
   initiatives: InitiativePick[];
   kpis: KpiRow[];
+  blocked: BlockedProject[];
+  briefingBullets: string[];
+  dashboardLayout: DashWidget[];
+  townHallFeedLimit: number;
   initialItem?: { entityType: "action_item" | "milestone" | "meeting"; id: string } | null;
 }
 
@@ -58,6 +66,10 @@ export function DailyView({
   feed,
   initiatives,
   kpis,
+  blocked,
+  briefingBullets,
+  dashboardLayout,
+  townHallFeedLimit,
   initialItem,
 }: DailyViewProps) {
   const townHallObjects: RefObject[] = pickerProjects.map((p) => ({
@@ -71,6 +83,50 @@ export function DailyView({
     projects: townHallObjects,
     docs,
   };
+  const widgets = [
+    {
+      id: "town_hall",
+      node: (
+        <ActivityCenter
+          workspaceId={workspaceId}
+          initialFeed={feed}
+          feedLimit={townHallFeedLimit}
+          members={members}
+          objects={townHallObjects}
+          docs={docs}
+          initiatives={initiatives}
+          tz={tz}
+          todayKey={todayKey}
+          nowMs={nowMs}
+        />
+      ),
+    },
+    {
+      id: "action_items",
+      node: <ActionItemsCard items={actionItems} sources={mentionSources} />,
+    },
+    {
+      id: "tasks",
+      node: <TasksCard tasks={tasks} scope="today" sources={mentionSources} />,
+    },
+    {
+      id: "pinned",
+      node: <PinnedProjects pinned={pinnedProjects} allProjects={pickerProjects} recent={recentProjects} />,
+    },
+    {
+      id: "relationships",
+      node: <RelationshipHealth rows={relationship} />,
+    },
+    {
+      id: "ai",
+      node: <AIAssistPanel scope="daily" />,
+    },
+    {
+      id: "scorecard",
+      node: <Scorecard rows={scorecard} />,
+    },
+  ];
+
   return (
     <ItemDrawerProvider
       // Remount when the ?item= deep-link changes so it opens the new item.
@@ -85,38 +141,16 @@ export function DailyView({
       {/* KPIs — slim, full-width strip */}
       <KpiStrip kpis={kpis} />
 
-      {/* Trio — Work · Town Hall (wide) · Relationship — bottoms aligned */}
-      <div className="grid grid-cols-1 items-stretch gap-2.5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)_minmax(0,1fr)]">
-        <div className="flex min-w-0 flex-col gap-2.5">
-          <ActionItemsCard items={actionItems} sources={mentionSources} />
-          <TasksCard tasks={tasks} scope="today" sources={mentionSources} />
-        </div>
-        <div className="min-w-0">
-          <ActivityCenter
-            workspaceId={workspaceId}
-            initialFeed={feed}
-            members={members}
-            objects={townHallObjects}
-            docs={docs}
-            initiatives={initiatives}
-            tz={tz}
-            todayKey={todayKey}
-            nowMs={nowMs}
-          />
-        </div>
-        <div className="min-w-0">
-          <RelationshipHealth rows={relationship} />
-        </div>
-      </div>
+      <BriefingCard
+        bullets={briefingBullets}
+        actionItems={actionItems}
+        tasks={tasks}
+        blocked={blocked}
+        meetings={meetings}
+        nowMs={nowMs}
+      />
 
-      {/* Pinned projects + AI assist — 50 / 50 */}
-      <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-2">
-        <PinnedProjects pinned={pinnedProjects} allProjects={pickerProjects} recent={recentProjects} />
-        <AIAssistPanel scope="daily" />
-      </div>
-
-      {/* Scorecard — full width, skinny */}
-      <Scorecard rows={scorecard} />
+      <CustomizableDashboard widgets={widgets} savedLayout={dashboardLayout} />
     </ItemDrawerProvider>
   );
 }
