@@ -7,6 +7,7 @@ import { AIAssistPanel } from "./ai-assist-panel";
 import { TodayBriefing } from "./today-briefing";
 import { NeedsYouNow } from "./needs-you-now";
 import { Scorecard } from "./scorecard";
+import { KpiStrip } from "./kpi-strip";
 import { ActivityCenter } from "@/components/town-hall/activity-center";
 import { ItemDrawerProvider } from "../item-drawer";
 import type { BlockedProject } from "@/db/queries/this-week";
@@ -49,6 +50,7 @@ interface DailyViewProps {
   countdown: WorkspaceCountdown | null;
   feed: FeedItem[];
   initiatives: InitiativePick[];
+  kpis: ScorecardRow[];
   initialItem?: { entityType: "action_item" | "milestone" | "meeting"; id: string } | null;
 }
 
@@ -73,6 +75,7 @@ export function DailyView({
   countdown,
   feed,
   initiatives,
+  kpis,
   initialItem,
 }: DailyViewProps) {
   const townHallObjects: RefObject[] = pickerProjects.map((p) => ({
@@ -98,6 +101,9 @@ export function DailyView({
 
       {/* Top: exactly 3 — meetings today · tasks due · countdown */}
       <TopRow counts={counts} countdown={countdown} nowMs={nowMs} />
+
+      {/* KPIs above Town Hall (the starred Priorities key results) */}
+      <KpiStrip kpis={kpis} />
 
       {/* Town Hall — front & center: the activity log */}
       <ActivityCenter

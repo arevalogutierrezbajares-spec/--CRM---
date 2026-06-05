@@ -11,6 +11,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { DbBanner } from "@/components/db-banner";
+import { KpiSettings } from "@/components/priorities/kpi-settings";
+import { listKeyResultsForKpiPicker, type KpiPickRow } from "@/db/queries/okrs";
 import { safeRead } from "@/lib/db-status";
 import {
   getWorkspaceView,
@@ -28,6 +30,7 @@ export default async function WorkspacePage(props: {
   const user = await requireUser();
   const viewRes = await safeRead(() => getWorkspaceView(), null);
   const view = viewRes.data;
+  const kpiRowsRes = await safeRead<KpiPickRow[]>(() => listKeyResultsForKpiPicker(user.workspaceId), []);
   const sp = await props.searchParams;
 
   return (
@@ -137,6 +140,19 @@ export default async function WorkspacePage(props: {
                 </form>
                 <p className="mt-2 text-xs text-[var(--muted-foreground)]">
                   Shown as the live countdown clock at the top of Home.
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle>Top KPIs</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <KpiSettings rows={kpiRowsRes.data} />
+                <p className="mt-2 text-xs text-[var(--muted-foreground)]">
+                  Shown as the KPI strip above Town Hall on Home — the same key results as
+                  Priorities.
                 </p>
               </CardContent>
             </Card>

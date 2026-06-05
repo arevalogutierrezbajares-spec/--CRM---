@@ -18,7 +18,7 @@ import { listTownHallFeed, type FeedItem } from "@/db/queries/town-hall-feed";
 import { getWorkspaceCountdown, type WorkspaceCountdown } from "@/db/queries/workspace-settings";
 import { listInitiativesForPicker, type InitiativePick } from "@/db/queries/item-initiatives";
 import { listPinnedProjects, listRecentProjects, type PinnedProject } from "@/db/queries/pins";
-import { listScorecard, quarterOf, type ScorecardRow } from "@/db/queries/okrs";
+import { listScorecard, listKpis, quarterOf, type ScorecardRow } from "@/db/queries/okrs";
 import { getDashboardLayout } from "@/db/queries/dashboard-layout";
 import { DEFAULT_WIDGETS, type DashWidget } from "@/lib/dashboard/layout";
 import { WeeklyView } from "@/components/dashboard/weekly/weekly-view";
@@ -166,6 +166,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
     docsRes,
     countdownRes,
     initiativesRes,
+    kpisRes,
   ] = await Promise.all([
     safeRead<DashCounts>(() => dashboardCounts(user.workspaceId, todayStr), EMPTY_COUNTS),
     safeRead<PipelineStageBar[]>(() => pipelineSnapshot(user.workspaceId), []),
@@ -191,6 +192,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
     safeRead<RefObject[]>(() => listWorkspaceDocs(user.workspaceId), []),
     safeRead<WorkspaceCountdown | null>(() => getWorkspaceCountdown(user.workspaceId), null),
     safeRead<InitiativePick[]>(() => listInitiativesForPicker(user.workspaceId), []),
+    safeRead<ScorecardRow[]>(() => listKpis(user.workspaceId), []),
   ]);
 
   const members = membersRes.data;
@@ -360,6 +362,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
           countdown={countdownRes.data}
           feed={feedRes.data}
           initiatives={initiativesRes.data}
+          kpis={kpisRes.data}
           initialItem={initialItem}
         />
       )}

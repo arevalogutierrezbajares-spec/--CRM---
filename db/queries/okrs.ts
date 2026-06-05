@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import * as schema from "@/db/schema";
 
@@ -31,6 +31,7 @@ export type KeyResultView = {
   unit: string | null;
   direction: KrDirection;
   onScorecard: boolean;
+  isKpi: boolean;
   progress: number; // 0..1
   health: KrHealth;
 };
@@ -82,6 +83,7 @@ function toKrView(r: typeof schema.keyResults.$inferSelect & { ownerName: string
     unit: r.unit,
     direction: r.direction as KrDirection,
     onScorecard: r.onScorecard,
+    isKpi: r.isKpi,
     progress,
     health: healthOf(progress),
   };
@@ -199,6 +201,47 @@ export async function listScorecard(
   return rows.map((r) => ({ ...toKrView({ ...r.kr, ownerName: r.ownerName }), objectiveTitle: r.objectiveTitle }));
 }
 
+/** Headline KPIs (key results flagged is_kpi) shown above Town Hall — across all quarters. */
+export async function listKpis(workspaceId: string): Promise<ScorecardRow[]> {
+  const rows = await db
+    .select({
+      kr: schema.keyResults,
+      ownerName: schema.users.displayName,
+      objectiveTitle: schema.objectives.title,
+    })
+    .from(schema.keyResults)
+    .innerJoin(schema.objectives, eq(schema.objectives.id, schema.keyResults.objectiveId))
+    .leftJoin(
+      schema.workspaceMembers,
+      and(
+        eq(schema.workspaceMembers.userId, schema.keyResults.ownerId),
+        eq(schema.workspaceMembers.workspaceId, schema.keyResults.workspaceId),
+      ),
+    )
+    .leftJoin(schema.users, eq(schema.users.id, schema.workspaceMembers.userId))
+    .where(and(eq(schema.keyResults.workspaceId, workspaceId), eq(schema.keyResults.isKpi, true)))
+    .orderBy(asc(schema.keyResults.sortOrder))
+    .limit(8);
+  return rows.map((r) => ({ ...toKrView({ ...r.kr, ownerName: r.ownerName }), objectiveTitle: r.objectiveTitle }));
+}
+
+/** All key results (title + objective + isKpi) for the "Top KPIs" settings picker. */
+export type KpiPickRow = { id: string; title: string; objectiveTitle: string; isKpi: boolean };
+export async function listKeyResultsForKpiPicker(workspaceId: string): Promise<KpiPickRow[]> {
+  const rows = await db
+    .select({
+      id: schema.keyResults.id,
+      title: schema.keyResults.title,
+      objectiveTitle: schema.objectives.title,
+      isKpi: schema.keyResults.isKpi,
+    })
+    .from(schema.keyResults)
+    .innerJoin(schema.objectives, eq(schema.objectives.id, schema.keyResults.objectiveId))
+    .where(eq(schema.keyResults.workspaceId, workspaceId))
+    .orderBy(desc(schema.keyResults.isKpi), asc(schema.objectives.sortOrder), asc(schema.keyResults.sortOrder));
+  return rows;
+}
+
 /* ─── mutations (all workspace-fenced by the caller via server actions) ───── */
 
 export async function createObjective(input: {
@@ -312,10 +355,12 @@ export async function updateKeyResult(input: {
   direction?: KrDirection;
   ownerId?: string | null;
   onScorecard?: boolean;
+  isKpi?: boolean;
 }): Promise<boolean> {
   if (input.ownerId !== undefined && !(await ownerInWorkspace(input.workspaceId, input.ownerId))) return false;
   const patch: Partial<typeof schema.keyResults.$inferInsert> = {};
   if (input.title !== undefined) patch.title = input.title;
+  if (input.isKpi !== undefined) patch.isKpi = input.isKpi;
   if (input.current !== undefined) patch.current = input.current;
   if (input.target !== undefined) patch.target = input.target;
   if (input.startValue !== undefined) patch.startValue = input.startValue;

@@ -99,6 +99,7 @@ export async function updateKeyResultAction(input: {
   direction?: KrDirection;
   ownerId?: string | null;
   onScorecard?: boolean;
+  isKpi?: boolean;
 }): Promise<Res> {
   const user = await requireUser();
   for (const n of [input.target, input.current, input.startValue]) {

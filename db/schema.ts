@@ -1613,6 +1613,8 @@ export const keyResults = pgTable("key_results", {
   unit: text("unit"), // "$", "%", "users", null
   direction: krDirection("direction").notNull().default("higher"),
   onScorecard: boolean("on_scorecard").notNull().default(true),
+  // Curated headline KPI shown above Town Hall on Home.
+  isKpi: boolean("is_kpi").notNull().default(false),
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
