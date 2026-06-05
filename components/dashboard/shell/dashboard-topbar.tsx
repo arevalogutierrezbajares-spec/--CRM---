@@ -15,7 +15,7 @@ interface DashboardTopbarProps {
 export function DashboardTopbar({ email, displayName, header }: DashboardTopbarProps) {
   return (
     <header
-      className="sticky top-0 z-30 flex h-14 items-center justify-between gap-3 border-b px-4 sm:px-6 lg:h-[104px]"
+      className="sticky top-0 z-30 flex h-14 items-center justify-between gap-3 border-b px-4 sm:px-6 lg:h-[148px]"
       style={{
         borderColor: "var(--border-default)",
         background: "color-mix(in oklab, var(--bg-page) 92%, transparent)",
