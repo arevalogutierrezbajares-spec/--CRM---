@@ -4,7 +4,7 @@ import { type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Heart } from "lucide-react";
 import { DEMON_BROADCAST_MESSAGES, QUOTES, type Quote } from "@/lib/quotes";
-import { DEFAULT_QUOTE_PACE, NIGO_DEMON_MODE_KEY, QUOTE_FAVONLY_KEY, QUOTE_FAVS_KEY, QUOTE_PACE_KEY } from "@/lib/quote-prefs";
+import { DEFAULT_QUOTE_PACE, NIGO_DEMON_MODE_KEY, QUOTE_FAVONLY_KEY, QUOTE_FAVS_KEY, QUOTE_PACE_KEY, readDisabledBroadcasts } from "@/lib/quote-prefs";
 import { isAudioMuted, onAudioMuteChange } from "@/lib/audio-mute";
 
 function pickDifferent(pool: number[], current: number): number {
@@ -34,6 +34,7 @@ export function QuoteBubble({ initialIndex }: { initialIndex: number }) {
   const [pace, setPace] = useState(DEFAULT_QUOTE_PACE);
   const [favOnly, setFavOnly] = useState(false);
   const [demonMode, setDemonMode] = useState(false);
+  const [demonDisabled, setDemonDisabled] = useState<Set<string>>(new Set());
   const [isSpeaking, setIsSpeaking] = useState(false);
 
   const lastHoveredIndex = useRef<number | null>(null);
@@ -46,8 +47,11 @@ export function QuoteBubble({ initialIndex }: { initialIndex: number }) {
   const CLICK_TO_ADVANCE_DELAY_MS = 180;
 
   const messages = useMemo<Quote[]>(
-    () => (demonMode ? [...QUOTES, ...DEMON_BROADCAST_MESSAGES] : QUOTES),
-    [demonMode],
+    () =>
+      demonMode
+        ? [...QUOTES, ...DEMON_BROADCAST_MESSAGES.filter((b) => !demonDisabled.has(b.audioSrc ?? ""))]
+        : QUOTES,
+    [demonMode, demonDisabled],
   );
 
   useEffect(() => {
@@ -66,6 +70,7 @@ export function QuoteBubble({ initialIndex }: { initialIndex: number }) {
         if (Number.isFinite(p) && p >= 3) setPace(p);
         setFavOnly(fo);
         setDemonMode(dm);
+        setDemonDisabled(readDisabledBroadcasts());
         if (fo && savedFavs.size > 0) {
           const next = hydratedMessages.findIndex(
             (quote) => quote.kind !== "demon-broadcast" && savedFavs.has(quote.text),

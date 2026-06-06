@@ -3,9 +3,16 @@
 import { useEffect, useRef, useState } from "react";
 import { Heart, Volume2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DEMON_BROADCAST_MESSAGES, QUOTES } from "@/lib/quotes";
-import { DEFAULT_QUOTE_PACE, NIGO_DEMON_MODE_KEY, QUOTE_FAVONLY_KEY, QUOTE_FAVS_KEY, QUOTE_PACE_KEY } from "@/lib/quote-prefs";
-import { isAudioMuted } from "@/lib/audio-mute";
+import { DEMON_BROADCAST_MESSAGES, QUOTES, type Quote } from "@/lib/quotes";
+import {
+  DEFAULT_QUOTE_PACE,
+  NIGO_DEMON_DISABLED_KEY,
+  NIGO_DEMON_MODE_KEY,
+  QUOTE_FAVONLY_KEY,
+  QUOTE_FAVS_KEY,
+  QUOTE_PACE_KEY,
+  readDisabledBroadcasts,
+} from "@/lib/quote-prefs";
 
 /** Manage the ÑIGO Home bubble: rotation pace, Demon Mode, favorites-only mode,
  *  and the favorites list. Persists to localStorage (the same keys the bubble reads). */
@@ -14,9 +21,9 @@ export function QuoteSettingsCard() {
   const [pace, setPace] = useState(DEFAULT_QUOTE_PACE);
   const [favOnly, setFavOnly] = useState(false);
   const [demonMode, setDemonMode] = useState(false);
-  const [testMsg, setTestMsg] = useState<string | null>(null);
-  const [testing, setTesting] = useState(false);
-  const testAudioRef = useRef<HTMLAudioElement | null>(null);
+  const [demonDisabled, setDemonDisabled] = useState<Set<string>>(new Set());
+  const [playingId, setPlayingId] = useState<string | null>(null);
+  const sampleAudioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     const raf = requestAnimationFrame(() => {
@@ -27,6 +34,7 @@ export function QuoteSettingsCard() {
         if (Number.isFinite(p) && p >= 3) setPace(p);
         setFavOnly(localStorage.getItem(QUOTE_FAVONLY_KEY) === "1");
         setDemonMode(localStorage.getItem(NIGO_DEMON_MODE_KEY) === "1");
+        setDemonDisabled(readDisabledBroadcasts());
       } catch {
         /* ignore */
       }
@@ -61,42 +69,30 @@ export function QuoteSettingsCard() {
       /* ignore */
     }
   }
-  /** Play one demon broadcast line through the live TTS endpoint as a test. */
-  async function testAnnouncement() {
-    setTestMsg(null);
-    if (isAudioMuted()) {
-      setTestMsg("Audio is muted — unmute it in the top bar to hear the test.");
-      return;
-    }
-    const q = DEMON_BROADCAST_MESSAGES[Math.floor((Date.now() / 1000) % DEMON_BROADCAST_MESSAGES.length)] ?? DEMON_BROADCAST_MESSAGES[0];
-    setTesting(true);
-    try {
-      const audio = testAudioRef.current;
-      if (!audio) return;
-      // Broadcasts use the original extracted clip (static file), not TTS.
-      if (q.audioSrc) {
-        audio.src = q.audioSrc;
-        await audio.play();
-        setTestMsg(`Playing original clip: “${q.text}”`);
-        return;
+  /** Preview a broadcast's original clip (deliberate click → plays even if the
+   *  global mute is on; mute only governs the auto-rotation). */
+  function playSample(q: Quote) {
+    const audio = sampleAudioRef.current;
+    if (!audio || !q.audioSrc) return;
+    audio.pause();
+    audio.currentTime = 0;
+    audio.src = q.audioSrc;
+    setPlayingId(q.audioSrc);
+    void audio.play().catch(() => setPlayingId(null));
+  }
+  /** Toggle whether a broadcast is announced in the rotation. */
+  function toggleBroadcast(id: string) {
+    setDemonDisabled((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      try {
+        localStorage.setItem(NIGO_DEMON_DISABLED_KEY, JSON.stringify(Array.from(next)));
+      } catch {
+        /* ignore */
       }
-      const res = await fetch("/api/voice/quote", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: q.text, ref: q.ref }),
-      });
-      if (!res.ok) {
-        const detail = await res.text().catch(() => "");
-        throw new Error(detail || `Speech failed (${res.status})`);
-      }
-      audio.src = URL.createObjectURL(await res.blob());
-      await audio.play();
-      setTestMsg(`Playing: “${q.text}”`);
-    } catch {
-      setTestMsg("Couldn’t play — the broadcast clip may be missing, or audio is blocked until you interact.");
-    } finally {
-      setTesting(false);
-    }
+      return next;
+    });
   }
 
   function removeFav(text: string) {
@@ -144,7 +140,7 @@ export function QuoteSettingsCard() {
             <span className="min-w-0">
               <span className="block font-medium text-text-secondary">DEMON Mode</span>
               <span className="mt-0.5 block text-xs leading-5 text-[var(--muted-foreground)]">
-                When enabled, ÑIGO mixes approved broadcast lines into the Home bubble and speaks them on hover or click.
+                Mixes real broadcast soundbites into the Home bubble (plays the original audio on hover/click). Preview each below and choose which are in the loop.
               </span>
             </span>
             <input
@@ -155,30 +151,49 @@ export function QuoteSettingsCard() {
             />
           </label>
           {demonMode && (
-            <>
-              <div className="mt-3 flex flex-wrap items-center gap-2 border-t pt-3" style={{ borderColor: "var(--border-default)" }}>
-                <button
-                  type="button"
-                  onClick={testAnnouncement}
-                  disabled={testing}
-                  className="inline-flex min-h-9 items-center gap-1.5 rounded-md border px-3 text-xs font-medium text-text-secondary transition-colors hover:bg-surface hover:text-text-primary disabled:opacity-60"
-                  style={{ borderColor: "var(--border-default)" }}
-                >
-                  <Volume2 size={13} className={testing ? "animate-pulse" : ""} />
-                  {testing ? "Generating…" : "Test announcement"}
-                </button>
-                {testMsg && <span className="min-w-0 flex-1 truncate text-[11px] text-[var(--muted-foreground)]">{testMsg}</span>}
+            <div className="mt-3 border-t pt-3" style={{ borderColor: "var(--border-default)" }}>
+              <div className="mb-2 flex items-center justify-between text-[11px] text-[var(--muted-foreground)]">
+                <span>Broadcasts</span>
+                <span className="tabular-nums">{DEMON_BROADCAST_MESSAGES.length - demonDisabled.size} of {DEMON_BROADCAST_MESSAGES.length} in loop</span>
               </div>
-              <ul className="mt-3 max-h-40 space-y-2 overflow-y-auto text-xs">
-                {DEMON_BROADCAST_MESSAGES.map((q) => (
-                  <li key={`${q.ref}-${q.text}`} className="leading-5">
-                    <span className="text-text-secondary">“{q.text}”</span>{" "}
-                    <span className="font-mono text-[11px] text-text-tertiary">— {q.ref}</span>
-                  </li>
-                ))}
+              <ul className="max-h-64 space-y-1 overflow-y-auto pr-1">
+                {DEMON_BROADCAST_MESSAGES.map((q) => {
+                  const id = q.audioSrc ?? q.ref;
+                  const inLoop = !demonDisabled.has(id);
+                  const isPlaying = playingId === id;
+                  return (
+                    <li key={id} className="flex items-center gap-2 rounded-md px-1 py-1 transition-colors hover:bg-surface">
+                      <button
+                        type="button"
+                        onClick={() => playSample(q)}
+                        aria-label={`Hear sample: ${q.text}`}
+                        title="Hear sample"
+                        className={`grid h-8 w-8 shrink-0 place-items-center rounded-full border transition hover:text-text-primary ${
+                          isPlaying ? "border-[var(--green-text)] text-[var(--green-text)]" : "text-text-tertiary"
+                        }`}
+                        style={isPlaying ? undefined : { borderColor: "var(--border-default)" }}
+                      >
+                        <Volume2 size={14} className={isPlaying ? "animate-pulse" : ""} />
+                      </button>
+                      <span className="min-w-0 flex-1 truncate text-xs text-text-secondary" title={q.text}>
+                        {q.text}
+                      </span>
+                      <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-[11px] text-text-tertiary">
+                        <input
+                          type="checkbox"
+                          checked={inLoop}
+                          onChange={() => toggleBroadcast(id)}
+                          className="h-4 w-4 cursor-pointer accent-[var(--red-text)]"
+                        />
+                        In loop
+                      </label>
+                    </li>
+                  );
+                })}
               </ul>
-              <audio ref={testAudioRef} preload="none" />
-            </>
+              <p className="mt-2 text-[11px] text-[var(--muted-foreground)]">Changes apply next time you open Home.</p>
+              <audio ref={sampleAudioRef} preload="none" onEnded={() => setPlayingId(null)} onPause={() => setPlayingId(null)} />
+            </div>
           )}
         </div>
 

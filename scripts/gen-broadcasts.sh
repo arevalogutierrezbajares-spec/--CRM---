@@ -28,6 +28,10 @@ clip() { # videoId startSec endSec
 
 dl mGkrbzJZCoE
 dl SWk_g7EWZjQ
+dl 0Szj21arytU   # Conor McGregor — "I want to take this chance to apologize…"
+dl OKN8dFO_ZLA   # David Goggins — "Who is going to carry the boats and the logs"
+dl ZXp7vMzGwjM   # Zlatan Ibrahimović — "This is the mentality you must have"
+dl cY4dM7xno4M   # Kobe Bryant — "Why you should keep going"
 
 clip mGkrbzJZCoE 0 16
 clip mGkrbzJZCoE 40 65
@@ -36,5 +40,9 @@ clip SWk_g7EWZjQ 36 50
 clip SWk_g7EWZjQ 60 70
 clip SWk_g7EWZjQ 91 100
 clip SWk_g7EWZjQ 102 120
+clip 0Szj21arytU 16 46
+clip OKN8dFO_ZLA 0 36
+clip ZXp7vMzGwjM 0 17
+clip cY4dM7xno4M 0 12
 
 echo "✓ broadcasts → $OUT"

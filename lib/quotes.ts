@@ -214,6 +214,10 @@ export const DEMON_BROADCAST_MESSAGES: Quote[] = [
   { ref: "Demon mode broadcast (SWk_g7EWZjQ · 1:00-1:10)", text: "You are the best. Thanks to your capacity, your talent, and the old team.", kind: "demon-broadcast", audioSrc: "/broadcasts/SWk_g7EWZjQ_60-70.mp3" },
   { ref: "Demon mode broadcast (SWk_g7EWZjQ · 1:31-1:40)", text: "I need to wait until everybody crosses the line. It's looking good.", kind: "demon-broadcast", audioSrc: "/broadcasts/SWk_g7EWZjQ_91-100.mp3" },
   { ref: "Demon mode broadcast (SWk_g7EWZjQ · 1:42-2:00)", text: "Hamilton is second, Button is third, and Ferrari's back.", kind: "demon-broadcast", audioSrc: "/broadcasts/SWk_g7EWZjQ_102-120.mp3" },
+  { ref: "Conor McGregor (0Szj21arytU · 0:16-0:46)", text: "I'd like to apologize… to absolutely nobody. The double champ does what he wants.", kind: "demon-broadcast", audioSrc: "/broadcasts/0Szj21arytU_16-46.mp3" },
+  { ref: "David Goggins (OKN8dFO_ZLA · 0:00-0:36)", text: "Who's gonna carry the boats and the logs?! They don't know me, son!", kind: "demon-broadcast", audioSrc: "/broadcasts/OKN8dFO_ZLA_0-36.mp3" },
+  { ref: "Zlatan Ibrahimović (ZXp7vMzGwjM · 0:00-0:17)", text: "I'm playing to win. When I win, it's my proof that I'm alive. The most complete player that ever existed.", kind: "demon-broadcast", audioSrc: "/broadcasts/ZXp7vMzGwjM_0-17.mp3" },
+  { ref: "Kobe Bryant (cY4dM7xno4M · 0:00-0:12)", text: "Always keep going. The storm eventually ends — make sure you're ready.", kind: "demon-broadcast", audioSrc: "/broadcasts/cY4dM7xno4M_0-12.mp3" },
 ];
 
 export const HOME_BUBBLE_MESSAGES = [...QUOTES, ...DEMON_BROADCAST_MESSAGES];
