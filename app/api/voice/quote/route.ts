@@ -5,6 +5,9 @@ const DEFAULT_VOICE_ID = "wDsJlOXPqcvIUKdLXjDs";
 const DEFAULT_MODEL = "eleven_multilingual_v2";
 const MAX_TEXT_LENGTH = 900;
 const MAX_REF_LENGTH = 220;
+// Bump when the spoken-text shape changes so warm in-memory caches don't serve
+// stale audio. v2 = speak the quote only, no "— source" suffix.
+const SPEECH_VERSION = "v2";
 
 type QuoteSpeechRequest = {
   text?: unknown;
@@ -24,12 +27,13 @@ function readSafeText(raw: unknown): string | null {
 }
 
 function cacheKey(voiceId: string, text: string, ref: string): string {
-  return `${voiceId}|${text}|${ref}`;
+  return `${SPEECH_VERSION}|${voiceId}|${text}|${ref}`;
 }
 
-function spokenText(text: string, ref: string): string {
-  const safeRef = ref.length > 0 ? ` — ${ref}` : "";
-  return `"${text}"${safeRef}`;
+// Speak the quote only — never the source/attribution. (`ref` is still used for
+// the cache key so different sources with identical text stay distinct.)
+function spokenText(text: string): string {
+  return text;
 }
 
 async function elevenLabsSpeech(text: string, ref: string): Promise<ArrayBuffer> {
@@ -59,7 +63,7 @@ async function elevenLabsSpeech(text: string, ref: string): Promise<ArrayBuffer>
           Accept: "audio/mpeg",
         },
         body: JSON.stringify({
-          text: spokenText(text, ref),
+          text: spokenText(text),
           model_id: modelId,
           voice_settings: {
             stability: 0.6,
