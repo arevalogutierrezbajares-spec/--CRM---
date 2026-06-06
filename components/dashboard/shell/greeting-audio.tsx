@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
-import { Volume2 } from "lucide-react";
+import { AudioLines } from "lucide-react";
 import { greetingAudioSrc, type GreetingPeriod, type GreetingSlug } from "@/lib/greeting";
+import { isAudioMuted, onAudioMuteChange } from "@/lib/audio-mute";
 
 /** Bumping the suffix re-greets everyone (e.g. after a voice refresh). */
 const SESSION_KEY = "agb_greeted_v1";
@@ -16,23 +17,48 @@ const HOME_REGREET_THROTTLE_MS = 5_000;
 /**
  * ÑIGO voice greeting. Auto-plays "Good {period}, {nickname}" from a pre-rendered
  * static clip on the first dashboard load of a browser session, and again on any
- * later Home load — returning to "/" or refreshing the page. If the browser
- * blocks autoplay (no prior user gesture), the speaker chip pulses amber as a
- * tap-to-play affordance; the chip is always present for manual replay.
+ * later Home load (returning to "/" or refreshing). The *first* greeting of a
+ * session uses `firstSlug` when provided (e.g. "Sir TIGR"); later re-greets swap
+ * to `slug` (e.g. "Master Top G"). Respects the global mute. If the browser
+ * blocks autoplay, the speaker chip pulses amber as a tap-to-play affordance.
  *
  * setState only fires inside async callbacks (play promise, error/ended events,
- * click) — never synchronously in the effect body → satisfies set-state-in-effect.
+ * click, mute event) — never synchronously in the effect body.
  */
-export function GreetingAudio({ slug, period }: { slug: GreetingSlug; period: GreetingPeriod }) {
-  const src = greetingAudioSrc(slug, period);
+export function GreetingAudio({
+  slug,
+  firstSlug,
+  period,
+}: {
+  slug: GreetingSlug;
+  firstSlug?: GreetingSlug;
+  period: GreetingPeriod;
+}) {
+  const swapSrc = greetingAudioSrc(slug, period);
+  const firstSrc = greetingAudioSrc(firstSlug ?? slug, period);
   const pathname = usePathname();
   const ref = useRef<HTMLAudioElement | null>(null);
   const [available, setAvailable] = useState(true); // false once the clip 404s
   const [needsTap, setNeedsTap] = useState(false); // autoplay was blocked
   const [playing, setPlaying] = useState(false);
 
+  // Stop immediately if the user mutes mid-greeting.
+  useEffect(
+    () =>
+      onAudioMuteChange((muted) => {
+        if (!muted) return;
+        const el = ref.current;
+        if (el) {
+          el.pause();
+          el.currentTime = 0;
+        }
+      }),
+    [],
+  );
+
   useEffect(() => {
     if (typeof window === "undefined") return;
+    if (isAudioMuted()) return; // global mute → no auto-greet
     let greeted = false;
     let lastAutoMs = 0;
     try {
@@ -45,14 +71,13 @@ export function GreetingAudio({ slug, period }: { slug: GreetingSlug; period: Gr
     if (!el) return;
     const now = Date.now();
     const sinceLastAuto = lastAutoMs > 0 ? now - lastAutoMs : Infinity;
-    // Greet on the first dashboard load of the session, and again on every later
-    // Home load — returning to "/" or refreshing. Static clips are free, so the
-    // only gate is the short anti-double-fire throttle.
     const shouldPlayFirstGreeting = !greeted;
     const shouldReplayOnHome = pathname === "/" && greeted && sinceLastAuto > HOME_REGREET_THROTTLE_MS;
 
     if (!shouldPlayFirstGreeting && !shouldReplayOnHome) return;
 
+    // First greeting of the session → "Sir TIGR"; every later one → "Master Top G".
+    el.src = shouldPlayFirstGreeting ? firstSrc : swapSrc;
     el.currentTime = 0;
     el
       .play()
@@ -68,11 +93,14 @@ export function GreetingAudio({ slug, period }: { slug: GreetingSlug; period: Gr
         // Autoplay policy blocked it → invite a tap (amber pulse).
         setNeedsTap(true);
       });
-  }, [pathname, src]);
+  }, [pathname, firstSrc, swapSrc]);
 
   function replay() {
+    if (isAudioMuted()) return; // muted → the mute toggle is the master switch
     const el = ref.current;
     if (!el) return;
+    // Manual replay uses whatever was last loaded, defaulting to the swap voice.
+    if (!el.currentSrc) el.src = swapSrc;
     el.currentTime = 0;
     el
       .play()
@@ -96,10 +124,10 @@ export function GreetingAudio({ slug, period }: { slug: GreetingSlug; period: Gr
     <>
       <audio
         ref={ref}
-        src={src}
         preload="auto"
         onPlay={() => setPlaying(true)}
         onEnded={() => setPlaying(false)}
+        onPause={() => setPlaying(false)}
         onError={() => setAvailable(false)}
       />
       <button
@@ -112,7 +140,7 @@ export function GreetingAudio({ slug, period }: { slug: GreetingSlug; period: Gr
         } ${playing ? "text-amber-text" : ""}`}
         style={{ borderColor: "var(--border-default)" }}
       >
-        <Volume2 size={15} />
+        <AudioLines size={15} />
       </button>
     </>
   );

@@ -11,22 +11,29 @@
 
 export type GreetingPeriod = "morning" | "afternoon" | "evening";
 
-export type GreetingSlug = "charles" | "joe" | "topg" | "agb" | "founder";
+export type GreetingSlug = "charles" | "joe" | "topg" | "tigr" | "agb" | "founder";
 
 export type GreetingIdentity = {
   /** Stable file slug → /greetings/{slug}-{period}.mp3 */
   slug: GreetingSlug;
   /** What the voice says after "Good {period}, ". */
   spokenTitle: string;
+  /** Optional persona for the *first* greeting of a session, before swapping to
+   *  the primary one on later re-greets (e.g. "Sir TIGR" first, then "Master Top
+   *  G"). When absent, the first greeting uses `slug`/`spokenTitle`. */
+  firstSlug?: GreetingSlug;
+  firstSpokenTitle?: string;
 };
 
 export const GREETING_PERIODS: GreetingPeriod[] = ["morning", "afternoon", "evening"];
 
-/** Every identity the NIGO voice can greet. `founder` is the generic fallback. */
+/** Every identity the NIGO voice can greet. `founder` is the generic fallback.
+ *  `tigr` is the clean first-greeting persona (Sir TIGR). */
 export const GREETING_IDENTITIES: GreetingIdentity[] = [
   { slug: "charles", spokenTitle: "Sir Charles" },
   { slug: "joe", spokenTitle: "Master Joe" },
   { slug: "topg", spokenTitle: "Master Top G" },
+  { slug: "tigr", spokenTitle: "Sir TIGR" },
   { slug: "agb", spokenTitle: "Don AGB" },
   { slug: "founder", spokenTitle: "Founder" },
 ];
@@ -38,7 +45,9 @@ export const GREETING_IDENTITIES: GreetingIdentity[] = [
  */
 export function greetingIdentity(displayName: string, email: string): GreetingIdentity {
   const key = `${email.split("@")[0] ?? ""} ${displayName}`.toLowerCase();
-  if (key.includes("tg.2000") || key.includes("tomas")) return { slug: "topg", spokenTitle: "Master Top G" };
+  // Tomás is greeted formally first ("Sir TIGR"), then swapped to "Master Top G".
+  if (key.includes("tg.2000") || key.includes("tomas"))
+    return { slug: "topg", spokenTitle: "Master Top G", firstSlug: "tigr", firstSpokenTitle: "Sir TIGR" };
   if (key.includes("charles")) return { slug: "charles", spokenTitle: "Sir Charles" };
   if (key.includes("jose") || key.includes("joe") || key.includes("ernesto")) return { slug: "joe", spokenTitle: "Master Joe" };
   if (key.includes("arevalo") || key.includes("agb")) return { slug: "agb", spokenTitle: "Don AGB" };

@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Heart } from "lucide-react";
 import { DEMON_BROADCAST_MESSAGES, QUOTES, type Quote } from "@/lib/quotes";
 import { DEFAULT_QUOTE_PACE, NIGO_DEMON_MODE_KEY, QUOTE_FAVONLY_KEY, QUOTE_FAVS_KEY, QUOTE_PACE_KEY } from "@/lib/quote-prefs";
+import { isAudioMuted, onAudioMuteChange } from "@/lib/audio-mute";
 
 function pickDifferent(pool: number[], current: number): number {
   if (pool.length <= 1) return pool[0] ?? current;
@@ -107,12 +108,29 @@ export function QuoteBubble({ initialIndex }: { initialIndex: number }) {
     return () => clearInterval(id);
   }, [pace, eligible]);
 
+  // Stop any in-flight speech the moment the user mutes.
+  useEffect(
+    () =>
+      onAudioMuteChange((muted) => {
+        if (!muted) return;
+        abortRef.current?.abort();
+        const audio = audioRef.current;
+        if (audio) {
+          audio.pause();
+          audio.currentTime = 0;
+        }
+        setIsSpeaking(false);
+      }),
+    [],
+  );
+
   const currentIndex = ((index % messages.length) + messages.length) % messages.length;
   const q = messages[currentIndex] ?? QUOTES[0];
   const isBroadcast = q.kind === "demon-broadcast";
   const isFav = !isBroadcast && favs.has(q.text);
 
   async function speakQuote(quote: Quote) {
+    if (isAudioMuted()) return; // global mute → no quote/demon speech
     const requestId = ++speakRequest.current;
     const key = quoteCacheKey(quote);
 

@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Heart } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Heart, Volume2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DEMON_BROADCAST_MESSAGES, QUOTES } from "@/lib/quotes";
 import { DEFAULT_QUOTE_PACE, NIGO_DEMON_MODE_KEY, QUOTE_FAVONLY_KEY, QUOTE_FAVS_KEY, QUOTE_PACE_KEY } from "@/lib/quote-prefs";
+import { isAudioMuted } from "@/lib/audio-mute";
 
 /** Manage the ÑIGO Home bubble: rotation pace, Demon Mode, favorites-only mode,
  *  and the favorites list. Persists to localStorage (the same keys the bubble reads). */
@@ -13,6 +14,9 @@ export function QuoteSettingsCard() {
   const [pace, setPace] = useState(DEFAULT_QUOTE_PACE);
   const [favOnly, setFavOnly] = useState(false);
   const [demonMode, setDemonMode] = useState(false);
+  const [testMsg, setTestMsg] = useState<string | null>(null);
+  const [testing, setTesting] = useState(false);
+  const testAudioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     const raf = requestAnimationFrame(() => {
@@ -57,6 +61,39 @@ export function QuoteSettingsCard() {
       /* ignore */
     }
   }
+  /** Play one demon broadcast line through the live TTS endpoint as a test. */
+  async function testAnnouncement() {
+    setTestMsg(null);
+    if (isAudioMuted()) {
+      setTestMsg("Audio is muted — unmute it in the top bar to hear the test.");
+      return;
+    }
+    const q = DEMON_BROADCAST_MESSAGES[Math.floor((Date.now() / 1000) % DEMON_BROADCAST_MESSAGES.length)] ?? DEMON_BROADCAST_MESSAGES[0];
+    setTesting(true);
+    try {
+      const res = await fetch("/api/voice/quote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: q.text, ref: q.ref }),
+      });
+      if (!res.ok) {
+        const detail = await res.text().catch(() => "");
+        throw new Error(detail || `Speech failed (${res.status})`);
+      }
+      const url = URL.createObjectURL(await res.blob());
+      const audio = testAudioRef.current;
+      if (audio) {
+        audio.src = url;
+        await audio.play();
+      }
+      setTestMsg(`Playing: “${q.text}”`);
+    } catch {
+      setTestMsg("Couldn’t play — check that ELEVENLABS_API_KEY is set on the server.");
+    } finally {
+      setTesting(false);
+    }
+  }
+
   function removeFav(text: string) {
     const next = new Set(favs);
     next.delete(text);
@@ -113,14 +150,30 @@ export function QuoteSettingsCard() {
             />
           </label>
           {demonMode && (
-            <ul className="mt-3 max-h-40 space-y-2 overflow-y-auto border-t pt-3 text-xs" style={{ borderColor: "var(--border-default)" }}>
-              {DEMON_BROADCAST_MESSAGES.map((q) => (
-                <li key={`${q.ref}-${q.text}`} className="leading-5">
-                  <span className="text-text-secondary">“{q.text}”</span>{" "}
-                  <span className="font-mono text-[11px] text-text-tertiary">— {q.ref}</span>
-                </li>
-              ))}
-            </ul>
+            <>
+              <div className="mt-3 flex flex-wrap items-center gap-2 border-t pt-3" style={{ borderColor: "var(--border-default)" }}>
+                <button
+                  type="button"
+                  onClick={testAnnouncement}
+                  disabled={testing}
+                  className="inline-flex min-h-9 items-center gap-1.5 rounded-md border px-3 text-xs font-medium text-text-secondary transition-colors hover:bg-surface hover:text-text-primary disabled:opacity-60"
+                  style={{ borderColor: "var(--border-default)" }}
+                >
+                  <Volume2 size={13} className={testing ? "animate-pulse" : ""} />
+                  {testing ? "Generating…" : "Test announcement"}
+                </button>
+                {testMsg && <span className="min-w-0 flex-1 truncate text-[11px] text-[var(--muted-foreground)]">{testMsg}</span>}
+              </div>
+              <ul className="mt-3 max-h-40 space-y-2 overflow-y-auto text-xs">
+                {DEMON_BROADCAST_MESSAGES.map((q) => (
+                  <li key={`${q.ref}-${q.text}`} className="leading-5">
+                    <span className="text-text-secondary">“{q.text}”</span>{" "}
+                    <span className="font-mono text-[11px] text-text-tertiary">— {q.ref}</span>
+                  </li>
+                ))}
+              </ul>
+              <audio ref={testAudioRef} preload="none" />
+            </>
           )}
         </div>
 

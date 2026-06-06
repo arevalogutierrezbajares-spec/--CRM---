@@ -4,6 +4,7 @@ import { DashboardShell } from "@/components/dashboard/shell/dashboard-shell";
 import { RightColumn } from "@/components/dashboard/shell/right-column";
 import { GreetingTyping } from "@/components/dashboard/shell/greeting-typing";
 import { GreetingAudio } from "@/components/dashboard/shell/greeting-audio";
+import { MuteButton } from "@/components/dashboard/shell/mute-button";
 import { greetingIdentity } from "@/lib/greeting";
 import { QuoteBubble } from "@/components/dashboard/daily/quote-bubble";
 import { HOME_BUBBLE_MESSAGES } from "@/lib/quotes";
@@ -355,6 +356,10 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
   const dbError =
     !countsRes.ok || !pipelineRes.ok || !relRes.ok || !eventDaysRes.ok;
 
+  // Greeting persona (+ first-greeting swap) and period, computed once.
+  const greet = greetingIdentity(user.displayName, user.email);
+  const greetPeriod = periodInTz(user.timezone);
+
   // @mention sources for the right-rail Action items capture box.
   const actionItemSources = {
     people: members,
@@ -382,8 +387,9 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
       header={
         <div className="flex min-w-0 flex-col justify-center gap-2.5 py-1.5">
           <div className="flex min-w-0 items-center gap-2">
-            <GreetingTyping title={formalTitle(user.displayName, user.email)} period={periodInTz(user.timezone)} />
-            <GreetingAudio slug={greetingIdentity(user.displayName, user.email).slug} period={periodInTz(user.timezone)} />
+            <GreetingTyping title={formalTitle(user.displayName, user.email)} firstTitle={greet.firstSpokenTitle} period={greetPeriod} />
+            <GreetingAudio slug={greet.slug} firstSlug={greet.firstSlug} period={greetPeriod} />
+            <MuteButton />
           </div>
           <QuoteBubble initialIndex={nowMs % HOME_BUBBLE_MESSAGES.length} />
         </div>
