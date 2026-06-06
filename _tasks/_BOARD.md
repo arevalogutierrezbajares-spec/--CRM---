@@ -295,6 +295,19 @@ or cost-of-life polish on top of an already-working bot.
 
 ---
 
+## Home / Quote-bubble polish (backlog)
+
+From live UX feedback (2026-06-06). Scoped in [`TASK-AGB-QB-001`](./TASK-AGB-QB-001-quote-bubble-ux-polish.md) (P2, ~2pt, `status: open`).
+
+| # | Change | Where |
+|---|--------|-------|
+| 1 | Hover off → **click to listen** only (no hover-speak) | `components/dashboard/daily/quote-bubble.tsx` |
+| 2 | **Don't mix** real broadcast clips with AI TTS in one rotation (needs 1 product decision) | `quote-bubble.tsx` |
+| 3 | Base rotation interval **10s → 30s** (custom paces preserved) | `lib/quote-prefs.ts` (`DEFAULT_QUOTE_PACE`) |
+| 4 | Small clean **animated "next" arrow** to advance (retire double-click) | `quote-bubble.tsx` |
+
+---
+
 ## Brainstorm — strategic / multi-system ideas (NOT committed)
 
 These are larger ideas worth shaping before they get a task ID. Each is
