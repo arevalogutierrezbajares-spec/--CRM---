@@ -131,6 +131,25 @@ export function QuoteBubble({ initialIndex }: { initialIndex: number }) {
 
   async function speakQuote(quote: Quote) {
     if (isAudioMuted()) return; // global mute → no quote/demon speech
+
+    // Demon broadcasts play their ORIGINAL extracted audio clip (a static file),
+    // never TTS — you hear the real soundbite, not a voice reading the transcript.
+    if (quote.audioSrc) {
+      ++speakRequest.current; // invalidate any in-flight TTS
+      abortRef.current?.abort();
+      const audio = audioRef.current;
+      if (!audio) return;
+      audio.pause();
+      audio.currentTime = 0;
+      audio.src = quote.audioSrc;
+      try {
+        await audio.play();
+      } catch {
+        setIsSpeaking(false);
+      }
+      return;
+    }
+
     const requestId = ++speakRequest.current;
     const key = quoteCacheKey(quote);
 

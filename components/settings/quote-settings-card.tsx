@@ -71,6 +71,15 @@ export function QuoteSettingsCard() {
     const q = DEMON_BROADCAST_MESSAGES[Math.floor((Date.now() / 1000) % DEMON_BROADCAST_MESSAGES.length)] ?? DEMON_BROADCAST_MESSAGES[0];
     setTesting(true);
     try {
+      const audio = testAudioRef.current;
+      if (!audio) return;
+      // Broadcasts use the original extracted clip (static file), not TTS.
+      if (q.audioSrc) {
+        audio.src = q.audioSrc;
+        await audio.play();
+        setTestMsg(`Playing original clip: “${q.text}”`);
+        return;
+      }
       const res = await fetch("/api/voice/quote", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -80,15 +89,11 @@ export function QuoteSettingsCard() {
         const detail = await res.text().catch(() => "");
         throw new Error(detail || `Speech failed (${res.status})`);
       }
-      const url = URL.createObjectURL(await res.blob());
-      const audio = testAudioRef.current;
-      if (audio) {
-        audio.src = url;
-        await audio.play();
-      }
+      audio.src = URL.createObjectURL(await res.blob());
+      await audio.play();
       setTestMsg(`Playing: “${q.text}”`);
     } catch {
-      setTestMsg("Couldn’t play — check that ELEVENLABS_API_KEY is set on the server.");
+      setTestMsg("Couldn’t play — the broadcast clip may be missing, or audio is blocked until you interact.");
     } finally {
       setTesting(false);
     }

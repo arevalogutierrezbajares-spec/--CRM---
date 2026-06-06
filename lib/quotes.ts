@@ -1,6 +1,7 @@
 /** A quote or broadcast line for the Home bubble. `ref` is the attribution or source
- * label shown low-key under the text. */
-export type Quote = { ref: string; text: string; kind?: "quote" | "demon-broadcast" };
+ * label shown low-key under the text. `audioSrc`, when set (demon broadcasts), is a
+ * pre-extracted clip of the ORIGINAL source audio — played verbatim instead of TTS. */
+export type Quote = { ref: string; text: string; kind?: "quote" | "demon-broadcast"; audioSrc?: string };
 
 export const QUOTES: Quote[] = [
   { ref: "Philippians 4:13", text: "I can do all things through Christ who strengthens me." },
@@ -198,14 +199,21 @@ export const QUOTES: Quote[] = [
   { ref: "Gustavo Dudamel", text: "Las únicas armas del pueblo son las herramientas para forjar su propio futuro: instrumentos musicales, pinceles, libros — las más altas expresiones del espíritu humano." },
 ];
 
+/**
+ * Demon-mode broadcasts. Each line is a verbatim soundbite extracted from its
+ * source YouTube video at the marked timestamps (ref = "videoId · m:ss-m:ss").
+ * `audioSrc` is the pre-rendered clip in /public/broadcasts (regenerate with
+ * `scripts/gen-broadcasts.ts`); the bubble plays it instead of TTS so you hear
+ * the ORIGINAL audio, not a voice reading the transcript.
+ */
 export const DEMON_BROADCAST_MESSAGES: Quote[] = [
-  { ref: "Demon mode broadcast (mGkrbzJZCoE · 0:00-0:16)", text: "Perfect, Wally. Great job. We are on a run.", kind: "demon-broadcast" },
-  { ref: "Demon mode broadcast (mGkrbzJZCoE · 0:40-1:05)", text: "That was the smoothest operation of my life.", kind: "demon-broadcast" },
-  { ref: "Demon mode broadcast (SWk_g7EWZjQ · 0:14-0:16)", text: "To whom it may concern to you.", kind: "demon-broadcast" },
-  { ref: "Demon mode broadcast (SWk_g7EWZjQ · 0:36-0:50)", text: "Cheers, boys. We took it. We are the time zone. Yes.", kind: "demon-broadcast" },
-  { ref: "Demon mode broadcast (SWk_g7EWZjQ · 1:00-1:10)", text: "You are the best. Thanks to your capacity, your talent, and the old team.", kind: "demon-broadcast" },
-  { ref: "Demon mode broadcast (SWk_g7EWZjQ · 1:31-1:40)", text: "I need to wait until everybody crosses the line. It's looking good.", kind: "demon-broadcast" },
-  { ref: "Demon mode broadcast (SWk_g7EWZjQ · 1:42-1:60)", text: "Hamilton is second, Button is third, and Ferrari's back.", kind: "demon-broadcast" },
+  { ref: "Demon mode broadcast (mGkrbzJZCoE · 0:00-0:16)", text: "Perfect, Wally. Great job. We are on a run.", kind: "demon-broadcast", audioSrc: "/broadcasts/mGkrbzJZCoE_0-16.mp3" },
+  { ref: "Demon mode broadcast (mGkrbzJZCoE · 0:40-1:05)", text: "That was the smoothest operation of my life.", kind: "demon-broadcast", audioSrc: "/broadcasts/mGkrbzJZCoE_40-65.mp3" },
+  { ref: "Demon mode broadcast (SWk_g7EWZjQ · 0:14-0:16)", text: "To whom it may concern to you.", kind: "demon-broadcast", audioSrc: "/broadcasts/SWk_g7EWZjQ_14-16.mp3" },
+  { ref: "Demon mode broadcast (SWk_g7EWZjQ · 0:36-0:50)", text: "Cheers, boys. We took it. We are the time zone. Yes.", kind: "demon-broadcast", audioSrc: "/broadcasts/SWk_g7EWZjQ_36-50.mp3" },
+  { ref: "Demon mode broadcast (SWk_g7EWZjQ · 1:00-1:10)", text: "You are the best. Thanks to your capacity, your talent, and the old team.", kind: "demon-broadcast", audioSrc: "/broadcasts/SWk_g7EWZjQ_60-70.mp3" },
+  { ref: "Demon mode broadcast (SWk_g7EWZjQ · 1:31-1:40)", text: "I need to wait until everybody crosses the line. It's looking good.", kind: "demon-broadcast", audioSrc: "/broadcasts/SWk_g7EWZjQ_91-100.mp3" },
+  { ref: "Demon mode broadcast (SWk_g7EWZjQ · 1:42-2:00)", text: "Hamilton is second, Button is third, and Ferrari's back.", kind: "demon-broadcast", audioSrc: "/broadcasts/SWk_g7EWZjQ_102-120.mp3" },
 ];
 
 export const HOME_BUBBLE_MESSAGES = [...QUOTES, ...DEMON_BROADCAST_MESSAGES];
