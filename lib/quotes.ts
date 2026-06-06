@@ -218,6 +218,7 @@ export const DEMON_BROADCAST_MESSAGES: Quote[] = [
   { ref: "David Goggins (OKN8dFO_ZLA · 0:00-0:36)", text: "Who's gonna carry the boats and the logs?! They don't know me, son!", kind: "demon-broadcast", audioSrc: "/broadcasts/OKN8dFO_ZLA_0-36.mp3" },
   { ref: "Zlatan Ibrahimović (ZXp7vMzGwjM · 0:00-0:17)", text: "I'm playing to win. When I win, it's my proof that I'm alive. The most complete player that ever existed.", kind: "demon-broadcast", audioSrc: "/broadcasts/ZXp7vMzGwjM_0-17.mp3" },
   { ref: "Kobe Bryant (cY4dM7xno4M · 0:00-0:12)", text: "Always keep going. The storm eventually ends — make sure you're ready.", kind: "demon-broadcast", audioSrc: "/broadcasts/cY4dM7xno4M_0-12.mp3" },
+  { ref: "Donald Trump (sNiiGruLJ7M · 0:00-0:20)", text: "We're gonna win so much, you may even get tired of winning. No — we have to keep winning.", kind: "demon-broadcast", audioSrc: "/broadcasts/sNiiGruLJ7M_0-20.mp3" },
 ];
 
 export const HOME_BUBBLE_MESSAGES = [...QUOTES, ...DEMON_BROADCAST_MESSAGES];
