@@ -232,6 +232,170 @@ export const partnerAccessEventType = pgEnum("partner_access_event_type", [
   "expired",
 ]);
 
+/* ─── Pitch feedback module enums ─────────────────────────────────────── */
+
+export const pitchFeedbackAudience = pgEnum("pitch_feedback_audience", [
+  "friends_family",
+  "advisor",
+  "partner",
+  "customer",
+  "investor",
+  "internal",
+]);
+
+export const pitchFeedbackCampaignStatus = pgEnum(
+  "pitch_feedback_campaign_status",
+  ["draft", "active", "closed", "archived"],
+);
+
+export const pitchFeedbackInviteStatus = pgEnum(
+  "pitch_feedback_invite_status",
+  [
+    "draft",
+    "link_generated",
+    "sent",
+    "opened",
+    "in_progress",
+    "completed",
+    "expired",
+    "revoked",
+  ],
+);
+
+export const pitchFeedbackChannel = pgEnum("pitch_feedback_channel", [
+  "email",
+  "whatsapp",
+  "signal",
+  "link",
+  "manual",
+]);
+
+export const pitchFeedbackEventType = pgEnum("pitch_feedback_event_type", [
+  "invite_created",
+  "link_generated",
+  "invite_sent",
+  "invite_copied",
+  "link_opened",
+  "session_started",
+  "section_entered",
+  "section_completed",
+  "reaction_submitted",
+  "question_answered",
+  "final_feedback_submitted",
+  "invite_completed",
+  "ai_summary_generated",
+  "followup_draft_created",
+  "followup_task_created",
+  "followup_sent",
+  "invite_expired",
+  "invite_revoked",
+  "feedback_redacted",
+]);
+
+export const pitchFeedbackResponseType = pgEnum(
+  "pitch_feedback_response_type",
+  ["reaction", "score", "text", "intro", "objection", "final"],
+);
+
+export const pitchFeedbackInsightScope = pgEnum("pitch_feedback_insight_scope", [
+  "invite",
+  "contact",
+  "campaign",
+]);
+
+export const pitchFeedbackSentiment = pgEnum("pitch_feedback_sentiment", [
+  "positive",
+  "neutral",
+  "mixed",
+  "negative",
+]);
+
+export const pitchFeedbackSupportLevel = pgEnum(
+  "pitch_feedback_support_level",
+  ["champion", "supportive", "curious", "skeptical", "disengaged"],
+);
+
+export const pitchFeedbackDeliveryStatus = pgEnum(
+  "pitch_feedback_delivery_status",
+  ["pending", "sent", "failed", "copied", "manual"],
+);
+
+export type PitchFeedbackPromptSnapshot = {
+  key: string;
+  label: string;
+  type: "reaction" | "score" | "text" | "intro" | "objection" | "final";
+  required?: boolean;
+};
+
+export type PitchFeedbackSectionSnapshot = Array<{
+  key: string;
+  eyebrow?: string;
+  title: string;
+  body: string;
+  proof?: string;
+  prompts: PitchFeedbackPromptSnapshot[];
+}>;
+
+/* ─── Email module enums ───────────────────────────────────────────────── */
+
+export const emailProviderKind = pgEnum("email_provider_kind", [
+  "sandbox",
+  "microsoft_365",
+]);
+
+export const emailConnectionStatus = pgEnum("email_connection_status", [
+  "connected",
+  "degraded",
+  "disconnected",
+]);
+
+export const emailMailboxType = pgEnum("email_mailbox_type", [
+  "personal",
+  "shared",
+  "system",
+]);
+
+export const emailMailboxStatus = pgEnum("email_mailbox_status", [
+  "active",
+  "paused",
+  "error",
+  "deactivated",
+]);
+
+export const emailThreadStatus = pgEnum("email_thread_status", [
+  "open",
+  "waiting",
+  "done",
+  "snoozed",
+]);
+
+export const emailMessageDirection = pgEnum("email_message_direction", [
+  "inbound",
+  "outbound",
+]);
+
+export const emailDraftStatus = pgEnum("email_draft_status", [
+  "draft",
+  "queued",
+  "sent",
+  "discarded",
+]);
+
+export const emailSendJobStatus = pgEnum("email_send_job_status", [
+  "pending",
+  "sending",
+  "sent",
+  "failed",
+]);
+
+export const emailCrmLinkType = pgEnum("email_crm_link_type", [
+  "contact",
+  "project",
+  "initiative",
+  "action_item",
+  "milestone",
+]);
+
 // ─────────────────────────────────────────────────────────────────────────────
 // USERS (mirrors auth.users) — `whatsapp_phone` enables inbound bot routing.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -425,7 +589,10 @@ export const pipelineStages = pgTable("pipeline_stages", {
 // PROJECTS
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const projects = pgTable("projects", {
+// A Line of Business (LoB) is the top-level venture record: portfolio display,
+// pipeline, shared links/docs/contacts, and module self-nesting. Formerly the
+// `projects` table; the lighter execution-unit `projects` table now rolls up to it.
+export const linesOfBusiness = pgTable("lines_of_business", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   workspaceId: uuid("workspace_id")
     .notNull()
@@ -454,8 +621,35 @@ export const projects = pgTable("projects", {
   logoUrl: text("logo_url"), // /logos/x.svg or external URL
   logoUrlDark: text("logo_url_dark"), // dark-mode variant (optional)
   objectives: jsonb("objectives").$type<string[]>().default([]), // 3-5 high-level bullets
-  // Self-reference for module/sub-project nesting (e.g. CaneyCloud → Stays/Restaurants/WA Concierge)
-  parentProjectId: uuid("parent_project_id"),
+  // Self-reference for module/sub-LoB nesting (e.g. CaneyCloud → Stays/Restaurants/WA Concierge)
+  parentLobId: uuid("parent_lob_id"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+// A Project is the lighter execution unit that rolls up to exactly one LoB.
+// Milestones, finance allocations, and meetings attach here (not on the LoB).
+export const projects = pgTable("projects", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  lobId: uuid("lob_id")
+    .notNull()
+    .references(() => linesOfBusiness.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  status: projectStatus("status").notNull().default("active"),
+  dueDate: date("due_date"),
+  healthColor: healthColor("health_color").notNull().default("green"),
+  waitingOn: text("waiting_on"),
+  expectedUnblockDate: date("expected_unblock_date"),
+  createdBy: uuid("created_by")
+    .notNull()
+    .references(() => users.id),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -480,9 +674,9 @@ export const projectLinks = pgTable("project_links", {
   workspaceId: uuid("workspace_id")
     .notNull()
     .references(() => workspaces.id, { onDelete: "cascade" }),
-  projectId: uuid("project_id")
+  lobId: uuid("lob_id")
     .notNull()
-    .references(() => projects.id, { onDelete: "cascade" }),
+    .references(() => linesOfBusiness.id, { onDelete: "cascade" }),
   // FR-DOC-13 discriminator. Defaults to 'link' for new inserts via the
   // create-link server action; the 134 existing url=null rows are backfilled
   // to 'note'.
@@ -515,7 +709,7 @@ export const projectLinkAudits = pgTable("project_link_audits", {
   workspaceId: uuid("workspace_id")
     .notNull()
     .references(() => workspaces.id, { onDelete: "cascade" }),
-  projectId: uuid("project_id").references(() => projects.id, {
+  lobId: uuid("lob_id").references(() => linesOfBusiness.id, {
     onDelete: "set null",
   }),
   linkId: uuid("link_id").notNull(), // intentionally NOT a FK
@@ -625,7 +819,7 @@ export const partnerShares = pgTable("partner_shares", {
   contactId: uuid("contact_id").references(() => contacts.id, {
     onDelete: "set null",
   }),
-  projectId: uuid("project_id").references(() => projects.id, {
+  lobId: uuid("lob_id").references(() => linesOfBusiness.id, {
     onDelete: "set null",
   }),
   projectLinkId: uuid("project_link_id").references(() => projectLinks.id, {
@@ -678,6 +872,248 @@ export const partnerAccessEvents = pgTable("partner_access_events", {
     .defaultNow(),
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// PITCH FEEDBACK — contact-linked private pitch walkthroughs and feedback.
+// Public tokens are hashed; campaign snapshots preserve what a recipient saw.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const pitchFeedbackCampaigns = pgTable("pitch_feedback_campaigns", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  lobId: uuid("lob_id").references(() => linesOfBusiness.id, {
+    onDelete: "set null",
+  }),
+  name: text("name").notNull(),
+  description: text("description"),
+  audience: pitchFeedbackAudience("audience")
+    .notNull()
+    .default("friends_family"),
+  status: pitchFeedbackCampaignStatus("status").notNull().default("draft"),
+  version: integer("version").notNull().default(1),
+  sections: jsonb("sections")
+    .$type<PitchFeedbackSectionSnapshot>()
+    .notNull()
+    .default([]),
+  createdBy: uuid("created_by")
+    .notNull()
+    .references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const pitchFeedbackInvites = pgTable(
+  "pitch_feedback_invites",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    campaignId: uuid("campaign_id")
+      .notNull()
+      .references(() => pitchFeedbackCampaigns.id, { onDelete: "cascade" }),
+    contactId: uuid("contact_id")
+      .notNull()
+      .references(() => contacts.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash"),
+    status: pitchFeedbackInviteStatus("status").notNull().default("draft"),
+    channel: pitchFeedbackChannel("channel").notNull().default("manual"),
+    personalization: jsonb("personalization")
+      .$type<{
+        welcomeNote?: string;
+        sendMessage?: string;
+        focusQuestions?: string[];
+      }>()
+      .notNull()
+      .default({}),
+    campaignVersion: integer("campaign_version").notNull().default(1),
+    sectionsSnapshot: jsonb("sections_snapshot")
+      .$type<PitchFeedbackSectionSnapshot>()
+      .notNull()
+      .default([]),
+    sentMessage: text("sent_message"),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    firstOpenedAt: timestamp("first_opened_at", { withTimezone: true }),
+    lastViewedAt: timestamp("last_viewed_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    completionPercent: integer("completion_percent").notNull().default(0),
+    currentSectionKey: text("current_section_key"),
+    viewCount: integer("view_count").notNull().default(0),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    uniqTokenHash: uniqueIndex("pitch_feedback_invites_token_hash_uniq").on(
+      t.tokenHash,
+    ),
+  }),
+);
+
+export const pitchFeedbackSessions = pgTable("pitch_feedback_sessions", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  inviteId: uuid("invite_id")
+    .notNull()
+    .references(() => pitchFeedbackInvites.id, { onDelete: "cascade" }),
+  contactId: uuid("contact_id")
+    .notNull()
+    .references(() => contacts.id, { onDelete: "cascade" }),
+  startedAt: timestamp("started_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  userAgentHash: text("user_agent_hash"),
+  ipHash: text("ip_hash"),
+  referrer: text("referrer"),
+  metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+});
+
+export const pitchFeedbackEvents = pgTable("pitch_feedback_events", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  inviteId: uuid("invite_id")
+    .notNull()
+    .references(() => pitchFeedbackInvites.id, { onDelete: "cascade" }),
+  sessionId: uuid("session_id").references(() => pitchFeedbackSessions.id, {
+    onDelete: "set null",
+  }),
+  contactId: uuid("contact_id")
+    .notNull()
+    .references(() => contacts.id, { onDelete: "cascade" }),
+  actorUserId: uuid("actor_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  eventType: pitchFeedbackEventType("event_type").notNull(),
+  sectionKey: text("section_key"),
+  metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const pitchFeedbackResponses = pgTable(
+  "pitch_feedback_responses",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    inviteId: uuid("invite_id")
+      .notNull()
+      .references(() => pitchFeedbackInvites.id, { onDelete: "cascade" }),
+    sessionId: uuid("session_id").references(() => pitchFeedbackSessions.id, {
+      onDelete: "set null",
+    }),
+    contactId: uuid("contact_id")
+      .notNull()
+      .references(() => contacts.id, { onDelete: "cascade" }),
+    sectionKey: text("section_key").notNull(),
+    promptKey: text("prompt_key").notNull(),
+    responseType: pitchFeedbackResponseType("response_type").notNull(),
+    value: jsonb("value").$type<Record<string, unknown>>().notNull().default({}),
+    redactedAt: timestamp("redacted_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    uniqInviteSectionPrompt: uniqueIndex(
+      "pitch_feedback_responses_invite_section_prompt_uniq",
+    ).on(t.inviteId, t.sectionKey, t.promptKey),
+  }),
+);
+
+export const pitchFeedbackAiInsights = pgTable("pitch_feedback_ai_insights", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  campaignId: uuid("campaign_id").references(() => pitchFeedbackCampaigns.id, {
+    onDelete: "cascade",
+  }),
+  inviteId: uuid("invite_id").references(() => pitchFeedbackInvites.id, {
+    onDelete: "cascade",
+  }),
+  contactId: uuid("contact_id").references(() => contacts.id, {
+    onDelete: "cascade",
+  }),
+  scope: pitchFeedbackInsightScope("scope").notNull().default("invite"),
+  model: text("model").notNull().default("heuristic"),
+  summary: text("summary").notNull(),
+  sentiment: pitchFeedbackSentiment("sentiment").notNull().default("neutral"),
+  confidenceScore: integer("confidence_score").notNull().default(50),
+  supportLevel: pitchFeedbackSupportLevel("support_level")
+    .notNull()
+    .default("curious"),
+  objections: jsonb("objections").$type<string[]>().notNull().default([]),
+  confusionPoints: jsonb("confusion_points").$type<string[]>().notNull().default([]),
+  positiveSignals: jsonb("positive_signals").$type<string[]>().notNull().default([]),
+  recommendedFollowup: text("recommended_followup"),
+  suggestedPitchEdits: jsonb("suggested_pitch_edits")
+    .$type<Array<{ sectionKey?: string; suggestion: string }>>()
+    .notNull()
+    .default([]),
+  sourceResponseIds: jsonb("source_response_ids").$type<string[]>().notNull().default([]),
+  createdBy: uuid("created_by").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const pitchFeedbackDeliveryAttempts = pgTable(
+  "pitch_feedback_delivery_attempts",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    inviteId: uuid("invite_id")
+      .notNull()
+      .references(() => pitchFeedbackInvites.id, { onDelete: "cascade" }),
+    contactId: uuid("contact_id")
+      .notNull()
+      .references(() => contacts.id, { onDelete: "cascade" }),
+    channel: pitchFeedbackChannel("channel").notNull().default("manual"),
+    status: pitchFeedbackDeliveryStatus("status").notNull().default("pending"),
+    messageSnapshot: text("message_snapshot").notNull().default(""),
+    providerResult: jsonb("provider_result").$type<Record<string, unknown>>(),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    uniqInviteChannelMessage: uniqueIndex(
+      "pitch_feedback_delivery_invite_channel_msg_uniq",
+    ).on(t.inviteId, t.channel, t.messageSnapshot),
+  }),
+);
+
 // FR-PMO: per-user pinned projects for quick access on the Home dashboard.
 export const projectPins = pgTable(
   "project_pins",
@@ -685,15 +1121,15 @@ export const projectPins = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    projectId: uuid("project_id")
+    lobId: uuid("lob_id")
       .notNull()
-      .references(() => projects.id, { onDelete: "cascade" }),
+      .references(() => linesOfBusiness.id, { onDelete: "cascade" }),
     workspaceId: uuid("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => ({ pk: primaryKey({ columns: [t.userId, t.projectId] }) }),
+  (t) => ({ pk: primaryKey({ columns: [t.userId, t.lobId] }) }),
 );
 
 // FR-PMO: recently-opened projects per user (Home "Recent").
@@ -703,15 +1139,15 @@ export const projectVisits = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    projectId: uuid("project_id")
+    lobId: uuid("lob_id")
       .notNull()
-      .references(() => projects.id, { onDelete: "cascade" }),
+      .references(() => linesOfBusiness.id, { onDelete: "cascade" }),
     workspaceId: uuid("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
     visitedAt: timestamp("visited_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => ({ pk: primaryKey({ columns: [t.userId, t.projectId] }) }),
+  (t) => ({ pk: primaryKey({ columns: [t.userId, t.lobId] }) }),
 );
 
 // FR-PMO: attach docs/links directly to an action item, milestone, or meeting.
@@ -741,16 +1177,16 @@ export const itemAttachments = pgTable("item_attachments", {
 export const projectContacts = pgTable(
   "project_contacts",
   {
-    projectId: uuid("project_id")
+    lobId: uuid("lob_id")
       .notNull()
-      .references(() => projects.id, { onDelete: "cascade" }),
+      .references(() => linesOfBusiness.id, { onDelete: "cascade" }),
     contactId: uuid("contact_id")
       .notNull()
       .references(() => contacts.id, { onDelete: "cascade" }),
     role: text("role").notNull().default("primary"),
   },
   (t) => ({
-    pk: primaryKey({ columns: [t.projectId, t.contactId] }),
+    pk: primaryKey({ columns: [t.lobId, t.contactId] }),
   }),
 );
 
@@ -805,7 +1241,7 @@ export const touches = pgTable("touches", {
   contactId: uuid("contact_id")
     .notNull()
     .references(() => contacts.id, { onDelete: "cascade" }),
-  projectId: uuid("project_id").references(() => projects.id, {
+  lobId: uuid("lob_id").references(() => linesOfBusiness.id, {
     onDelete: "set null",
   }),
   meetingId: uuid("meeting_id"),
@@ -870,16 +1306,23 @@ export const meetingAttendees = pgTable(
 export const usersRelations = relations(users, ({ many }) => ({
   memberships: many(workspaceMembers),
   createdContacts: many(contacts),
+  createdLinesOfBusiness: many(linesOfBusiness),
   createdProjects: many(projects),
   createdMilestones: many(milestones),
   createdTouches: many(touches),
   createdMeetings: many(meetings),
+  createdPitchFeedbackCampaigns: many(pitchFeedbackCampaigns),
+  createdPitchFeedbackInvites: many(pitchFeedbackInvites),
+  createdPitchFeedbackInsights: many(pitchFeedbackAiInsights),
 }));
 
 export const workspacesRelations = relations(workspaces, ({ many }) => ({
   members: many(workspaceMembers),
   contacts: many(contacts),
+  linesOfBusiness: many(linesOfBusiness),
   projects: many(projects),
+  pitchFeedbackCampaigns: many(pitchFeedbackCampaigns),
+  pitchFeedbackInvites: many(pitchFeedbackInvites),
 }));
 
 export const workspaceMembersRelations = relations(
@@ -915,28 +1358,60 @@ export const contactsRelations = relations(contacts, ({ one, many }) => ({
   touches: many(touches),
   projectLinks: many(projectContacts),
   meetingAppearances: many(meetingAttendees),
+  pitchFeedbackInvites: many(pitchFeedbackInvites),
+  pitchFeedbackSessions: many(pitchFeedbackSessions),
+  pitchFeedbackEvents: many(pitchFeedbackEvents),
+  pitchFeedbackResponses: many(pitchFeedbackResponses),
+  pitchFeedbackInsights: many(pitchFeedbackAiInsights),
 }));
+
+export const linesOfBusinessRelations = relations(
+  linesOfBusiness,
+  ({ one, many }) => ({
+    workspace: one(workspaces, {
+      fields: [linesOfBusiness.workspaceId],
+      references: [workspaces.id],
+    }),
+    creator: one(users, {
+      fields: [linesOfBusiness.createdBy],
+      references: [users.id],
+    }),
+    template: one(pipelineTemplates, {
+      fields: [linesOfBusiness.templateId],
+      references: [pipelineTemplates.id],
+    }),
+    currentStage: one(pipelineStages, {
+      fields: [linesOfBusiness.currentStageId],
+      references: [pipelineStages.id],
+    }),
+    parent: one(linesOfBusiness, {
+      fields: [linesOfBusiness.parentLobId],
+      references: [linesOfBusiness.id],
+      relationName: "lobModules",
+    }),
+    modules: many(linesOfBusiness, { relationName: "lobModules" }),
+    projects: many(projects),
+    links: many(projectLinks),
+    touches: many(touches),
+    contactLinks: many(projectContacts),
+    pitchFeedbackCampaigns: many(pitchFeedbackCampaigns),
+  }),
+);
 
 export const projectsRelations = relations(projects, ({ one, many }) => ({
   workspace: one(workspaces, {
     fields: [projects.workspaceId],
     references: [workspaces.id],
   }),
+  lob: one(linesOfBusiness, {
+    fields: [projects.lobId],
+    references: [linesOfBusiness.id],
+  }),
   creator: one(users, {
     fields: [projects.createdBy],
     references: [users.id],
   }),
-  template: one(pipelineTemplates, {
-    fields: [projects.templateId],
-    references: [pipelineTemplates.id],
-  }),
-  currentStage: one(pipelineStages, {
-    fields: [projects.currentStageId],
-    references: [pipelineStages.id],
-  }),
   milestones: many(milestones),
-  touches: many(touches),
-  contactLinks: many(projectContacts),
   meetings: many(meetings),
 }));
 
@@ -961,7 +1436,7 @@ export const pipelineTemplatesRelations = relations(
   pipelineTemplates,
   ({ many }) => ({
     stages: many(pipelineStages),
-    projects: many(projects),
+    linesOfBusiness: many(linesOfBusiness),
   }),
 );
 
@@ -1019,7 +1494,7 @@ export const reminders = pgTable("reminders", {
   sourceContactId: uuid("source_contact_id").references(() => contacts.id, {
     onDelete: "set null",
   }),
-  sourceProjectId: uuid("source_project_id").references(() => projects.id, {
+  sourceLobId: uuid("source_lob_id").references(() => linesOfBusiness.id, {
     onDelete: "set null",
   }),
   createdAt: timestamp("created_at", { withTimezone: true })
@@ -1336,8 +1811,8 @@ export const initiatives = pgTable("initiatives", {
   workspaceId: uuid("workspace_id")
     .notNull()
     .references(() => workspaces.id, { onDelete: "cascade" }),
-  // Optional venture (project) — initiatives can be cross-venture
-  projectId: uuid("project_id").references(() => projects.id, {
+  // Optional venture (LoB) — initiatives can be cross-venture
+  lobId: uuid("lob_id").references(() => linesOfBusiness.id, {
     onDelete: "set null",
   }),
   title: text("title").notNull(),
@@ -1474,9 +1949,9 @@ export const themesRelations = relations(themes, ({ many }) => ({
 export const initiativesRelations = relations(
   initiatives,
   ({ one, many }) => ({
-    project: one(projects, {
-      fields: [initiatives.projectId],
-      references: [projects.id],
+    lob: one(linesOfBusiness, {
+      fields: [initiatives.lobId],
+      references: [linesOfBusiness.id],
     }),
     owner: one(users, {
       fields: [initiatives.ownerUserId],
@@ -1572,7 +2047,7 @@ export const researchNotes = pgTable("research_notes", {
   workspaceId: uuid("workspace_id")
     .notNull()
     .references(() => workspaces.id, { onDelete: "cascade" }),
-  projectId: uuid("project_id").references(() => projects.id, {
+  lobId: uuid("lob_id").references(() => linesOfBusiness.id, {
     onDelete: "set null",
   }),
   sourceRoot: text("source_root").notNull(),
@@ -1737,6 +2212,391 @@ export const notifications = pgTable("notifications", {
   kind: text("kind").notNull().default("mention"),
   readAt: timestamp("read_at", { withTimezone: true }),
   snoozedUntil: timestamp("snoozed_until", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EMAIL MODULE — first-class company mailboxes, shared inbox workflow, CRM links.
+// Microsoft 365 is the production mailbox authority; sandbox rows support local
+// deterministic development and E2E tests without real provider credentials.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const emailProviderConnections = pgTable(
+  "email_provider_connections",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    provider: emailProviderKind("provider").notNull().default("sandbox"),
+    domain: text("domain").notNull(),
+    status: emailConnectionStatus("status").notNull().default("connected"),
+    tenantId: text("tenant_id"),
+    providerTenantName: text("provider_tenant_name"),
+    encryptedAccessToken: text("encrypted_access_token"),
+    encryptedRefreshToken: text("encrypted_refresh_token"),
+    webhookClientStateHash: text("webhook_client_state_hash"),
+    healthStatus: text("health_status").notNull().default("healthy"),
+    healthDetail: text("health_detail"),
+    lastHealthAt: timestamp("last_health_at", { withTimezone: true }),
+    connectedBy: uuid("connected_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    connectedAt: timestamp("connected_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    uniqWorkspaceProviderDomain: uniqueIndex(
+      "email_provider_connections_workspace_provider_domain_uniq",
+    ).on(t.workspaceId, t.provider, t.domain),
+  }),
+);
+
+export const emailMailboxes = pgTable(
+  "email_mailboxes",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    providerConnectionId: uuid("provider_connection_id")
+      .notNull()
+      .references(() => emailProviderConnections.id, { onDelete: "cascade" }),
+    address: text("address").notNull(),
+    displayName: text("display_name").notNull(),
+    type: emailMailboxType("type").notNull().default("personal"),
+    status: emailMailboxStatus("status").notNull().default("active"),
+    providerMailboxId: text("provider_mailbox_id").notNull(),
+    ownerUserId: uuid("owner_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    syncEnabled: boolean("sync_enabled").notNull().default(true),
+    sendEnabled: boolean("send_enabled").notNull().default(true),
+    aiEnabled: boolean("ai_enabled").notNull().default(false),
+    signature: text("signature"),
+    providerMetadata: jsonb("provider_metadata")
+      .$type<{
+        sendAsDeniedUserIds?: string[];
+        folders?: string[];
+        lastDeltaToken?: string;
+      }>()
+      .notNull()
+      .default({}),
+    unreadCount: integer("unread_count").notNull().default(0),
+    threadCount: integer("thread_count").notNull().default(0),
+    lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
+    lastSyncError: text("last_sync_error"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    uniqWorkspaceAddress: uniqueIndex("email_mailboxes_workspace_address_uniq").on(
+      t.workspaceId,
+      t.address,
+    ),
+    uniqWorkspaceProviderMailbox: uniqueIndex(
+      "email_mailboxes_workspace_provider_mailbox_uniq",
+    ).on(t.workspaceId, t.providerMailboxId),
+  }),
+);
+
+export const emailMailboxAccess = pgTable(
+  "email_mailbox_access",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    mailboxId: uuid("mailbox_id")
+      .notNull()
+      .references(() => emailMailboxes.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    canView: boolean("can_view").notNull().default(true),
+    canReply: boolean("can_reply").notNull().default(false),
+    canSendAs: boolean("can_send_as").notNull().default(false),
+    canAssign: boolean("can_assign").notNull().default(false),
+    canManageAccess: boolean("can_manage_access").notNull().default(false),
+    canManageSettings: boolean("can_manage_settings").notNull().default(false),
+    grantedBy: uuid("granted_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    grantedAt: timestamp("granted_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+  },
+  (t) => ({
+    uniqMailboxUser: uniqueIndex("email_mailbox_access_mailbox_user_uniq").on(
+      t.mailboxId,
+      t.userId,
+    ),
+  }),
+);
+
+export const emailThreads = pgTable(
+  "email_threads",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    mailboxId: uuid("mailbox_id")
+      .notNull()
+      .references(() => emailMailboxes.id, { onDelete: "cascade" }),
+    providerThreadId: text("provider_thread_id").notNull(),
+    subject: text("subject").notNull(),
+    status: emailThreadStatus("status").notNull().default("open"),
+    assignedToId: uuid("assigned_to_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    lastMessageAt: timestamp("last_message_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    lastMessagePreview: text("last_message_preview"),
+    isUnread: boolean("is_unread").notNull().default(true),
+    hasAttachments: boolean("has_attachments").notNull().default(false),
+    snoozedUntil: timestamp("snoozed_until", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    uniqMailboxProviderThread: uniqueIndex(
+      "email_threads_mailbox_provider_thread_uniq",
+    ).on(t.mailboxId, t.providerThreadId),
+  }),
+);
+
+export const emailMessages = pgTable(
+  "email_messages",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    threadId: uuid("thread_id")
+      .notNull()
+      .references(() => emailThreads.id, { onDelete: "cascade" }),
+    mailboxId: uuid("mailbox_id")
+      .notNull()
+      .references(() => emailMailboxes.id, { onDelete: "cascade" }),
+    providerMessageId: text("provider_message_id").notNull(),
+    internetMessageId: text("internet_message_id"),
+    direction: emailMessageDirection("direction").notNull(),
+    fromAddress: text("from_address").notNull(),
+    fromName: text("from_name"),
+    toRecipients: jsonb("to_recipients").$type<string[]>().notNull().default([]),
+    ccRecipients: jsonb("cc_recipients").$type<string[]>().notNull().default([]),
+    bccRecipients: jsonb("bcc_recipients").$type<string[]>().notNull().default([]),
+    subject: text("subject").notNull(),
+    bodyText: text("body_text").notNull(),
+    bodyHtml: text("body_html"),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    receivedAt: timestamp("received_at", { withTimezone: true }),
+    isRead: boolean("is_read").notNull().default(false),
+    providerFolder: text("provider_folder").notNull().default("inbox"),
+    inReplyTo: text("in_reply_to"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    uniqMailboxProviderMessage: uniqueIndex(
+      "email_messages_mailbox_provider_message_uniq",
+    ).on(t.mailboxId, t.providerMessageId),
+  }),
+);
+
+export const emailAttachments = pgTable(
+  "email_attachments",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    messageId: uuid("message_id")
+      .notNull()
+      .references(() => emailMessages.id, { onDelete: "cascade" }),
+    providerAttachmentId: text("provider_attachment_id").notNull(),
+    filename: text("filename").notNull(),
+    mimeType: text("mime_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull().default(0),
+    storagePath: text("storage_path"),
+    isInline: boolean("is_inline").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    uniqMessageProviderAttachment: uniqueIndex(
+      "email_attachments_message_provider_attachment_uniq",
+    ).on(t.messageId, t.providerAttachmentId),
+  }),
+);
+
+export const emailDrafts = pgTable("email_drafts", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  threadId: uuid("thread_id").references(() => emailThreads.id, {
+    onDelete: "cascade",
+  }),
+  mailboxId: uuid("mailbox_id")
+    .notNull()
+    .references(() => emailMailboxes.id, { onDelete: "cascade" }),
+  authorUserId: uuid("author_user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  status: emailDraftStatus("status").notNull().default("draft"),
+  toRecipients: jsonb("to_recipients").$type<string[]>().notNull().default([]),
+  ccRecipients: jsonb("cc_recipients").$type<string[]>().notNull().default([]),
+  bccRecipients: jsonb("bcc_recipients").$type<string[]>().notNull().default([]),
+  subject: text("subject").notNull(),
+  bodyText: text("body_text").notNull(),
+  attachmentMetadata: jsonb("attachment_metadata")
+    .$type<
+      Array<{
+        filename: string;
+        sizeBytes: number;
+        mimeType: string;
+        contentBase64?: string;
+      }>
+    >()
+    .notNull()
+    .default([]),
+  aiGenerated: boolean("ai_generated").notNull().default(false),
+  aiMetadata: jsonb("ai_metadata")
+    .$type<{
+      sourceThreadId?: string;
+      citations?: Array<{ messageId: string; sentAt: string | null; label: string }>;
+      policy?: string;
+    }>()
+    .notNull()
+    .default({}),
+  clientMutationId: text("client_mutation_id"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const emailSendJobs = pgTable(
+  "email_send_jobs",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    draftId: uuid("draft_id").references(() => emailDrafts.id, {
+      onDelete: "set null",
+    }),
+    mailboxId: uuid("mailbox_id")
+      .notNull()
+      .references(() => emailMailboxes.id, { onDelete: "cascade" }),
+    actorId: uuid("actor_id")
+      .notNull()
+      .references(() => users.id),
+    idempotencyKey: text("idempotency_key").notNull(),
+    status: emailSendJobStatus("status").notNull().default("pending"),
+    providerMessageId: text("provider_message_id"),
+    error: text("error"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    uniqIdempotencyKey: uniqueIndex("email_send_jobs_idempotency_key_uniq").on(
+      t.idempotencyKey,
+    ),
+  }),
+);
+
+export const emailInternalNotes = pgTable("email_internal_notes", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  threadId: uuid("thread_id")
+    .notNull()
+    .references(() => emailThreads.id, { onDelete: "cascade" }),
+  authorUserId: uuid("author_user_id")
+    .notNull()
+    .references(() => users.id),
+  body: text("body").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const emailThreadCrmLinks = pgTable(
+  "email_thread_crm_links",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    threadId: uuid("thread_id")
+      .notNull()
+      .references(() => emailThreads.id, { onDelete: "cascade" }),
+    linkType: emailCrmLinkType("link_type").notNull(),
+    refId: uuid("ref_id").notNull(),
+    label: text("label").notNull(),
+    createdBy: uuid("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    uniqThreadLink: uniqueIndex("email_thread_crm_links_thread_ref_uniq").on(
+      t.threadId,
+      t.linkType,
+      t.refId,
+    ),
+  }),
+);
+
+export const emailAuditEvents = pgTable("email_audit_events", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  actorId: uuid("actor_id").references(() => users.id, { onDelete: "set null" }),
+  mailboxId: uuid("mailbox_id").references(() => emailMailboxes.id, {
+    onDelete: "set null",
+  }),
+  threadId: uuid("thread_id").references(() => emailThreads.id, {
+    onDelete: "set null",
+  }),
+  messageId: uuid("message_id").references(() => emailMessages.id, {
+    onDelete: "set null",
+  }),
+  action: text("action").notNull(),
+  reason: text("reason"),
+  metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

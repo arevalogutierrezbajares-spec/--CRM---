@@ -6,7 +6,8 @@ import { CommandPalette } from "@/components/command/command-palette";
 import { GlobalShortcuts } from "@/components/command/global-shortcuts";
 import { MotionProvider } from "@/components/motion-provider";
 import { safeRead } from "@/lib/db-status";
-import { listProjectsForPicker, listWorkspaceDocs, type WorkspaceDoc } from "@/db/queries/items";
+import { listWorkspaceDocs, type WorkspaceDoc } from "@/db/queries/items";
+import { listLines } from "@/db/queries/lines-of-business";
 import { listFavoriteProjects } from "@/db/queries/pins";
 
 export default async function AppLayout({
@@ -16,7 +17,10 @@ export default async function AppLayout({
 }) {
   const user = await requireUser();
   const [projectsRes, favoritesRes, docsRes] = await Promise.all([
-    safeRead<{ id: string; title: string }[]>(() => listProjectsForPicker(user.workspaceId), []),
+    safeRead<{ id: string; title: string }[]>(
+      () => listLines({ workspaceId: user.workspaceId, topLevelOnly: false }),
+      [],
+    ),
     safeRead<{ id: string; title: string }[]>(() => listFavoriteProjects(user.workspaceId, user.id), []),
     safeRead<WorkspaceDoc[]>(() => listWorkspaceDocs(user.workspaceId), []),
   ]);

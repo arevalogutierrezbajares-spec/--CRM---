@@ -42,7 +42,7 @@ export async function createTouch(input: unknown): Promise<TouchActionResult> {
     .insert(touches)
     .values({
       contactId,
-      projectId: projectId ?? null,
+      lobId: projectId ?? null,
       channel,
       body,
       workspaceId: user.workspaceId,

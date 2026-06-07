@@ -24,7 +24,7 @@ import {
   seedDefaultThemes,
   type InitiativeListItem,
 } from "@/db/queries/work";
-import { listProjects } from "@/db/queries/projects";
+import { listLines } from "@/db/queries/lines-of-business";
 import { listAllUsers } from "@/db/queries/users";
 
 type SearchParams = Promise<{
@@ -83,7 +83,7 @@ export default async function InitiativesPage(props: {
       ),
       safeRead(() => listThemes(user.workspaceId), []),
       safeRead(
-        () => listProjects({ workspaceId: user.workspaceId, status: "active" }),
+        () => listLines({ workspaceId: user.workspaceId, status: "active" }),
         [],
       ),
       safeRead(() => listAllUsers(), []),
@@ -101,10 +101,10 @@ export default async function InitiativesPage(props: {
       init.priority,
       (priorityCounts.get(init.priority) ?? 0) + 1,
     );
-    if (init.projectId)
+    if (init.lobId)
       ventureCounts.set(
-        init.projectId,
-        (ventureCounts.get(init.projectId) ?? 0) + 1,
+        init.lobId,
+        (ventureCounts.get(init.lobId) ?? 0) + 1,
       );
     if (init.ownerUserId)
       ownerCounts.set(

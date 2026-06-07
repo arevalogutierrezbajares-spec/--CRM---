@@ -22,6 +22,7 @@ const {
   contactChannels,
   contactTags,
   tags,
+  linesOfBusiness,
   projects,
   pipelineStages,
   projectContacts,
@@ -47,6 +48,7 @@ async function main() {
       milestones,
       project_contacts,
       projects,
+      lines_of_business,
       contact_tags,
       contact_channels,
       contacts
@@ -162,14 +164,14 @@ async function main() {
     archived: true,
   });
 
-  // ── Project: Marta — Caney onboarding ───────────────────────────────────
+  // ── LoB: Marta — Caney onboarding (+ one child Project) ─────────────────
   const caneyStages = await db
     .select()
     .from(pipelineStages)
     .where(eq(pipelineStages.templateId, "caney-posada-onboarding"))
     .orderBy(asc(pipelineStages.order));
-  const [martaProject] = await db
-    .insert(projects)
+  const [martaLob] = await db
+    .insert(linesOfBusiness)
     .values({
       ...base,
       title: "Marta — Caney onboarding",
@@ -178,9 +180,18 @@ async function main() {
       dueDate: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
     })
     .returning();
+  const [martaProject] = await db
+    .insert(projects)
+    .values({
+      ...base,
+      lobId: martaLob.id,
+      title: "Marta — Caney onboarding",
+      dueDate: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
+    })
+    .returning();
   await db
     .insert(projectContacts)
-    .values({ projectId: martaProject.id, contactId: marta.id, role: "primary" });
+    .values({ lobId: martaLob.id, contactId: marta.id, role: "primary" });
   const ms = await instantiateMilestonesFromTemplate({
     projectId: martaProject.id,
     templateId: "caney-posada-onboarding",
@@ -200,9 +211,9 @@ async function main() {
     })
     .where(eq(milestones.id, ms[2].id));
 
-  // ── Project: blocked / waiting ──────────────────────────────────────────
-  const [vavProject] = await db
-    .insert(projects)
+  // ── LoB: blocked / waiting (+ one child Project) ────────────────────────
+  const [vavLob] = await db
+    .insert(linesOfBusiness)
     .values({
       ...base,
       title: "VAV Q3 creator pipeline",
@@ -214,9 +225,22 @@ async function main() {
         .slice(0, 10),
     })
     .returning();
+  const [vavProject] = await db
+    .insert(projects)
+    .values({
+      ...base,
+      lobId: vavLob.id,
+      title: "VAV Q3 creator pipeline",
+      status: "waiting",
+      waitingOn: "Diego's signed deliverables agreement",
+      expectedUnblockDate: new Date(Date.now() - 5 * 86400000)
+        .toISOString()
+        .slice(0, 10),
+    })
+    .returning();
   await db
     .insert(projectContacts)
-    .values({ projectId: vavProject.id, contactId: diego.id, role: "primary" });
+    .values({ lobId: vavLob.id, contactId: diego.id, role: "primary" });
 
   // ── Touches ─────────────────────────────────────────────────────────────
   const now = Date.now();
@@ -230,7 +254,7 @@ async function main() {
     await db.insert(touches).values({
       ...base,
       contactId: marta.id,
-      projectId: martaProject.id,
+      lobId: martaLob.id,
       channel: t.channel,
       body: t.body,
       createdAt: new Date(now - t.days * 86400000),
@@ -240,7 +264,7 @@ async function main() {
     {
       ...base,
       contactId: diego.id,
-      projectId: vavProject.id,
+      lobId: vavLob.id,
       channel: "email",
       body: "Followed up on the deliverables agreement — still waiting",
       createdAt: new Date(now - 8 * 86400000),
@@ -291,7 +315,7 @@ async function main() {
       dueAt: new Date(now + 2 * 86400000),
       recur: "once",
       sourceContactId: marta.id,
-      sourceProjectId: martaProject.id,
+      sourceLobId: martaLob.id,
     },
     {
       workspaceId: FAKE_WORKSPACE_ID,

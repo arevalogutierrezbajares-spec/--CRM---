@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/current-user";
-import { getProjectLinkById } from "@/db/queries/projects";
+import { getProjectLinkById } from "@/db/queries/lines-of-business";
 import { createProjectDoc, saveProjectDocContent } from "@/db/queries/docs";
 import * as schema from "@/db/schema";
 
@@ -20,7 +20,7 @@ function coerceCategory(value?: string) {
 
 /** Create a blank collaborative doc and return its id (= the project_links id). */
 export async function createDocAction(opts: {
-  projectId: string;
+  lobId: string;
   label?: string;
   category?: string;
 }): Promise<ActionResult> {
@@ -28,12 +28,12 @@ export async function createDocAction(opts: {
   const label = opts.label?.trim() || "Untitled doc";
   const { linkId } = await createProjectDoc({
     workspaceId: user.workspaceId,
-    projectId: opts.projectId,
+    lobId: opts.lobId,
     actorId: user.id,
     label,
     category: coerceCategory(opts.category),
   });
-  revalidatePath(`/projects/${opts.projectId}`);
+  revalidatePath(`/lob/${opts.lobId}`);
   return { ok: true, id: linkId };
 }
 

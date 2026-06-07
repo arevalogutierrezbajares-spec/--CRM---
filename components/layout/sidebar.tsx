@@ -149,11 +149,11 @@ export function Sidebar({
               {favorites.map((f) => (
                 <Link
                   key={f.id}
-                  href={`/projects/${f.id}`}
-                  aria-current={pathname.startsWith(`/projects/${f.id}`) ? "page" : undefined}
+                  href={`/lob/${f.id}`}
+                  aria-current={pathname.startsWith(`/lob/${f.id}`) ? "page" : undefined}
                   className={cn(
                     "flex items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px] transition-colors",
-                    pathname.startsWith(`/projects/${f.id}`)
+                    pathname.startsWith(`/lob/${f.id}`)
                       ? "bg-surface font-medium text-text-primary"
                       : "text-text-secondary hover:bg-surface hover:text-text-primary",
                   )}

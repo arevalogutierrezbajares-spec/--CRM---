@@ -7,9 +7,17 @@ import {
 } from "@/lib/nudge-engine";
 import { FAKE_USER_ID, FAKE_WORKSPACE_ID } from "./setup";
 
-const { contacts, projects, milestones, nudges } = schema;
+const { contacts, linesOfBusiness, projects, milestones, nudges } = schema;
 
 const base = { workspaceId: FAKE_WORKSPACE_ID, createdBy: FAKE_USER_ID };
+
+async function makeLob(title: string) {
+  const [lob] = await db
+    .insert(linesOfBusiness)
+    .values({ ...base, title })
+    .returning();
+  return lob.id;
+}
 
 describe("[integration] nudge engine", () => {
   it("gathers candidates from overdue/blocked/stale", async () => {
@@ -18,9 +26,10 @@ describe("[integration] nudge engine", () => {
     const longAgo = new Date();
     longAgo.setDate(longAgo.getDate() - 120);
 
+    const lobId = await makeLob("Nudge LoB");
     const [proj] = await db
       .insert(projects)
-      .values({ ...base, title: "Overdue project" })
+      .values({ ...base, lobId, title: "Overdue project" })
       .returning();
     await db.insert(milestones).values({
       ...base,
@@ -33,6 +42,7 @@ describe("[integration] nudge engine", () => {
     past.setDate(past.getDate() - 3);
     await db.insert(projects).values({
       ...base,
+      lobId,
       title: "Blocked project",
       status: "waiting",
       waitingOn: "their signature",
@@ -56,9 +66,10 @@ describe("[integration] nudge engine", () => {
   it("dedupes candidates already fired today", async () => {
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
+    const lobId = await makeLob("Dedupe LoB");
     const [proj] = await db
       .insert(projects)
-      .values({ ...base, title: "P" })
+      .values({ ...base, lobId, title: "P" })
       .returning();
     const [m] = await db
       .insert(milestones)

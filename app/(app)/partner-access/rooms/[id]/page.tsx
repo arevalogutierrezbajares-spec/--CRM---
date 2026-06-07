@@ -188,9 +188,9 @@ export default async function PartnerAccessRoomPage(props: { params: Params }) {
                                 </div>
                               </td>
                               <td className="py-3 pr-4">
-                                {share.projectId ? (
+                                {share.lobId ? (
                                   <Link
-                                    href={`/projects/${share.projectId}`}
+                                    href={`/lob/${share.lobId}`}
                                     className="font-medium hover:underline"
                                   >
                                     {share.projectTitle ?? "Project"}

@@ -18,7 +18,7 @@ import {
   type ResearchCounts,
   type ResearchNoteListItem,
 } from "@/db/queries/research";
-import { listProjects } from "@/db/queries/projects";
+import { listLines } from "@/db/queries/lines-of-business";
 
 type SearchParams = Promise<{
   q?: string;
@@ -89,7 +89,7 @@ export default async function ResearchPage(props: {
       () => researchCounts(user.workspaceId),
       EMPTY_COUNTS,
     ),
-    safeRead(() => listProjects({ workspaceId: user.workspaceId }), []),
+    safeRead(() => listLines({ workspaceId: user.workspaceId }), []),
   ]);
 
   const counts = countsRes.data;
@@ -297,7 +297,7 @@ export default async function ResearchPage(props: {
                       </div>
                       {n.projectTitle && (
                         <Link
-                          href={`/research?project=${n.projectId}`}
+                          href={`/research?project=${n.lobId}`}
                           className="shrink-0"
                         >
                           <DashBadge

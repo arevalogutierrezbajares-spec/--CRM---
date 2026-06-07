@@ -53,14 +53,23 @@ describe("contact validation", () => {
 });
 
 describe("project validation", () => {
+  const LOB = "00000000-0000-0000-0000-000000000001";
+
+  it("requires a line of business", () => {
+    expect(() => parseProjectFormData(fd([["title", "X"]]))).toThrow();
+  });
+
   it("requires title", () => {
-    expect(() => parseProjectFormData(fd([["title", "  "]]))).toThrow();
+    expect(() =>
+      parseProjectFormData(fd([["lobId", LOB], ["title", "  "]])),
+    ).toThrow();
   });
 
   it("requires waitingOn when status=waiting", () => {
     expect(() =>
       parseProjectFormData(
         fd([
+          ["lobId", LOB],
           ["title", "Marta"],
           ["status", "waiting"],
         ]),
@@ -71,6 +80,7 @@ describe("project validation", () => {
   it("accepts waiting with waitingOn", () => {
     const v = parseProjectFormData(
       fd([
+        ["lobId", LOB],
         ["title", "Marta"],
         ["status", "waiting"],
         ["waitingOn", "Marta's signature"],
@@ -84,6 +94,7 @@ describe("project validation", () => {
     expect(() =>
       parseProjectFormData(
         fd([
+          ["lobId", LOB],
           ["title", "X"],
           ["dueDate", "tomorrow"],
         ]),

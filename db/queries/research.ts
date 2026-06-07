@@ -1,7 +1,7 @@
 import { and, desc, eq, ilike, or, sql as rawSql } from "drizzle-orm";
 import { db, schema } from "@/db";
 
-const { researchNotes, projects } = schema;
+const { researchNotes, linesOfBusiness } = schema;
 
 export type ResearchNote = typeof researchNotes.$inferSelect;
 export type ResearchNoteListItem = ResearchNote & {
@@ -20,7 +20,7 @@ export async function listResearchNotes(opts: {
 }): Promise<ResearchNoteListItem[]> {
   const conditions = [eq(researchNotes.workspaceId, opts.workspaceId)];
   if (opts.projectId)
-    conditions.push(eq(researchNotes.projectId, opts.projectId));
+    conditions.push(eq(researchNotes.lobId, opts.projectId));
   if (opts.sourceRoot)
     conditions.push(eq(researchNotes.sourceRoot, opts.sourceRoot));
   if (opts.folder) conditions.push(eq(researchNotes.folder, opts.folder));
@@ -39,11 +39,11 @@ export async function listResearchNotes(opts: {
   const rows = await db
     .select({
       note: researchNotes,
-      projectTitle: projects.title,
-      projectColor: projects.coverColor,
+      projectTitle: linesOfBusiness.title,
+      projectColor: linesOfBusiness.coverColor,
     })
     .from(researchNotes)
-    .leftJoin(projects, eq(projects.id, researchNotes.projectId))
+    .leftJoin(linesOfBusiness, eq(linesOfBusiness.id, researchNotes.lobId))
     .where(and(...conditions))
     .orderBy(desc(researchNotes.lastModified))
     .limit(opts.limit ?? 200);
@@ -62,11 +62,11 @@ export async function getResearchNoteById(opts: {
   const [row] = await db
     .select({
       note: researchNotes,
-      projectTitle: projects.title,
-      projectColor: projects.coverColor,
+      projectTitle: linesOfBusiness.title,
+      projectColor: linesOfBusiness.coverColor,
     })
     .from(researchNotes)
-    .leftJoin(projects, eq(projects.id, researchNotes.projectId))
+    .leftJoin(linesOfBusiness, eq(linesOfBusiness.id, researchNotes.lobId))
     .where(
       and(
         eq(researchNotes.id, opts.id),
@@ -102,7 +102,7 @@ export async function researchCounts(
     .select({
       sourceRoot: researchNotes.sourceRoot,
       folder: researchNotes.folder,
-      projectId: researchNotes.projectId,
+      projectId: researchNotes.lobId,
       kind: researchNotes.kind,
       lastModified: researchNotes.lastModified,
     })

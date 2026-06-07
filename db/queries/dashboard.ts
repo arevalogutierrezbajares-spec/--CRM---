@@ -7,6 +7,7 @@ const {
   meetingAttendees,
   milestones,
   projects,
+  linesOfBusiness,
   contacts,
   pipelineStages,
   touches,
@@ -288,14 +289,14 @@ export async function pipelineSnapshot(
       stageId: pipelineStages.id,
       stageName: pipelineStages.name,
       sortOrder: pipelineStages.order,
-      projectId: projects.id,
+      projectId: linesOfBusiness.id,
     })
-    .from(projects)
-    .innerJoin(pipelineStages, eq(pipelineStages.id, projects.currentStageId))
+    .from(linesOfBusiness)
+    .innerJoin(pipelineStages, eq(pipelineStages.id, linesOfBusiness.currentStageId))
     .where(
       and(
-        eq(projects.workspaceId, workspaceId),
-        eq(projects.status, "active"),
+        eq(linesOfBusiness.workspaceId, workspaceId),
+        eq(linesOfBusiness.status, "active"),
       ),
     )
     .orderBy(asc(pipelineStages.order));

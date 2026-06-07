@@ -163,7 +163,7 @@ export async function POST() {
         await db
           .update(researchNotes)
           .set({
-            projectId,
+            lobId: projectId,
             title,
             summary,
             folder: topFolder,
@@ -181,7 +181,7 @@ export async function POST() {
           .insert(researchNotes)
           .values({
             workspaceId: user.workspaceId,
-            projectId,
+            lobId: projectId,
             sourceRoot: rootKey,
             relPath: rel,
             title,

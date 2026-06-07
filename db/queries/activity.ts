@@ -64,7 +64,7 @@ export async function listWorkspaceActivity(
           actorName: u.displayName,
           action: schema.projectLinkAudits.action,
           at: schema.projectLinkAudits.createdAt,
-          projectId: schema.projectLinkAudits.projectId,
+          projectId: schema.projectLinkAudits.lobId,
           linkId: schema.projectLinkAudits.linkId,
           kind: schema.projectLinks.kind,
           label: schema.projectLinks.label,
@@ -129,7 +129,7 @@ export async function listWorkspaceActivity(
           actorId: schema.touches.createdBy,
           actorName: u.displayName,
           body: schema.touches.body,
-          projectId: schema.touches.projectId,
+          projectId: schema.touches.lobId,
           contactId: schema.touches.contactId,
           at: schema.touches.createdAt,
         })
@@ -253,8 +253,8 @@ export async function listWorkspaceActivity(
     const href =
       a.action !== "delete" && a.projectId
         ? kind === "doc"
-          ? `/projects/${a.projectId}/docs/${a.linkId}`
-          : `/projects/${a.projectId}`
+          ? `/lob/${a.projectId}/docs/${a.linkId}`
+          : `/lob/${a.projectId}`
         : null;
     events.push({
       id: `audit:${a.id}`,
@@ -286,7 +286,7 @@ export async function listWorkspaceActivity(
       verb: "logged a touch",
       entity: "touch",
       label: snippet(t.body),
-      href: t.projectId ? `/projects/${t.projectId}` : t.contactId ? `/contacts/${t.contactId}` : null,
+      href: t.projectId ? `/lob/${t.projectId}` : t.contactId ? `/contacts/${t.contactId}` : null,
       at: t.at,
       initiatives: [],
     });

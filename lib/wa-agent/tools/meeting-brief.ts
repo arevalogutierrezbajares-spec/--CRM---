@@ -7,7 +7,7 @@ const {
   contactChannels,
   touches,
   reminders,
-  projects,
+  linesOfBusiness,
   projectContacts,
 } = schema;
 
@@ -132,13 +132,13 @@ export const meetingBrief: ToolEntry = {
 
       // Linked projects
       const linkedProjects = await db
-        .select({ title: projects.title, status: projects.status })
-        .from(projects)
-        .innerJoin(projectContacts, eq(projectContacts.projectId, projects.id))
+        .select({ title: linesOfBusiness.title, status: linesOfBusiness.status })
+        .from(linesOfBusiness)
+        .innerJoin(projectContacts, eq(projectContacts.lobId, linesOfBusiness.id))
         .where(
           and(
             eq(projectContacts.contactId, contactId),
-            eq(projects.workspaceId, ctx.workspaceId),
+            eq(linesOfBusiness.workspaceId, ctx.workspaceId),
           ),
         )
         .limit(3);

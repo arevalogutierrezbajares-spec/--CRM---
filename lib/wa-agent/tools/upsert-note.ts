@@ -113,7 +113,7 @@ export const upsertNote: ToolEntry = {
           createdBy: ctx.userId,
           channel: "manual",
           body: noteBody,
-          projectId: projectId as string | null,
+          lobId: projectId as string | null,
         });
 
         // Bump contact's last_touch_at
