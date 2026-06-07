@@ -3,24 +3,23 @@
 import { useEffect, useRef, useState } from "react";
 import { Heart, Volume2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DEMON_BROADCAST_MESSAGES, QUOTES, type Quote } from "@/lib/quotes";
+import { DEMON_BROADCAST_MESSAGES, DEMON_CATEGORIES, QUOTES, type Quote } from "@/lib/quotes";
 import {
   DEFAULT_QUOTE_PACE,
   NIGO_DEMON_DISABLED_KEY,
-  NIGO_DEMON_MODE_KEY,
   QUOTE_FAVONLY_KEY,
   QUOTE_FAVS_KEY,
   QUOTE_PACE_KEY,
   readDisabledBroadcasts,
 } from "@/lib/quote-prefs";
 
-/** Manage the ÑIGO Home bubble: rotation pace, Demon Mode, favorites-only mode,
- *  and the favorites list. Persists to localStorage (the same keys the bubble reads). */
+/** Manage the ÑIGO Home bubble (rotation pace, favorites) + the demon-mode
+ *  broadcast soundbites that play from the 🐆 button, grouped by category.
+ *  Persists to localStorage (the same keys the bubble + button read). */
 export function QuoteSettingsCard() {
   const [favs, setFavs] = useState<Set<string>>(new Set());
   const [pace, setPace] = useState(DEFAULT_QUOTE_PACE);
   const [favOnly, setFavOnly] = useState(false);
-  const [demonMode, setDemonMode] = useState(false);
   const [demonDisabled, setDemonDisabled] = useState<Set<string>>(new Set());
   const [playingId, setPlayingId] = useState<string | null>(null);
   const sampleAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -33,7 +32,6 @@ export function QuoteSettingsCard() {
         const p = Number(localStorage.getItem(QUOTE_PACE_KEY));
         if (Number.isFinite(p) && p >= 3) setPace(p);
         setFavOnly(localStorage.getItem(QUOTE_FAVONLY_KEY) === "1");
-        setDemonMode(localStorage.getItem(NIGO_DEMON_MODE_KEY) === "1");
         setDemonDisabled(readDisabledBroadcasts());
       } catch {
         /* ignore */
@@ -60,15 +58,6 @@ export function QuoteSettingsCard() {
       /* ignore */
     }
   }
-  function toggleDemonMode() {
-    const next = !demonMode;
-    setDemonMode(next);
-    try {
-      localStorage.setItem(NIGO_DEMON_MODE_KEY, next ? "1" : "0");
-    } catch {
-      /* ignore */
-    }
-  }
   /** Preview a broadcast's original clip (deliberate click → plays even if the
    *  global mute is on; mute only governs the auto-rotation). */
   function playSample(q: Quote) {
@@ -80,7 +69,7 @@ export function QuoteSettingsCard() {
     setPlayingId(q.audioSrc);
     void audio.play().catch(() => setPlayingId(null));
   }
-  /** Toggle whether a broadcast is announced in the rotation. */
+  /** Toggle whether a broadcast is in the 🐆 button's pool. */
   function toggleBroadcast(id: string) {
     setDemonDisabled((prev) => {
       const next = new Set(prev);
@@ -111,7 +100,7 @@ export function QuoteSettingsCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>ÑIGO voice & Demon Mode</CardTitle>
+        <CardTitle>ÑIGO voice & Demon broadcasts</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <label className="flex min-h-11 items-center justify-between gap-3 text-sm">
@@ -136,65 +125,68 @@ export function QuoteSettingsCard() {
         </label>
 
         <div className="rounded-xl border p-3" style={{ borderColor: "var(--border-default)" }}>
-          <label className="flex min-h-11 cursor-pointer items-start justify-between gap-3 text-sm">
+          <div className="flex items-start justify-between gap-3">
             <span className="min-w-0">
-              <span className="block font-medium text-text-secondary">DEMON Mode</span>
+              <span className="block font-medium text-text-secondary">Demon broadcasts</span>
               <span className="mt-0.5 block text-xs leading-5 text-[var(--muted-foreground)]">
-                Swaps the Home bubble to real broadcast soundbites only (no AI voice) — click the bubble to hear the original audio. Preview each below and choose which are in the loop.
+                Real soundbites that play from the 🐆 button in the top bar (audio only — never shown as a quote). Preview each and tick which are in the pool.
               </span>
             </span>
-            <input
-              type="checkbox"
-              checked={demonMode}
-              onChange={toggleDemonMode}
-              className="mt-1 h-5 w-5 shrink-0 cursor-pointer accent-[var(--red-text)]"
-            />
-          </label>
-          {demonMode && (
-            <div className="mt-3 border-t pt-3" style={{ borderColor: "var(--border-default)" }}>
-              <div className="mb-2 flex items-center justify-between text-[11px] text-[var(--muted-foreground)]">
-                <span>Broadcasts</span>
-                <span className="tabular-nums">{DEMON_BROADCAST_MESSAGES.length - demonDisabled.size} of {DEMON_BROADCAST_MESSAGES.length} in loop</span>
-              </div>
-              <ul className="max-h-64 space-y-1 overflow-y-auto pr-1">
-                {DEMON_BROADCAST_MESSAGES.map((q) => {
-                  const id = q.audioSrc ?? q.ref;
-                  const inLoop = !demonDisabled.has(id);
-                  const isPlaying = playingId === id;
-                  return (
-                    <li key={id} className="flex items-center gap-2 rounded-md px-1 py-1 transition-colors hover:bg-surface">
-                      <button
-                        type="button"
-                        onClick={() => playSample(q)}
-                        aria-label={`Hear sample: ${q.text}`}
-                        title="Hear sample"
-                        className={`grid h-8 w-8 shrink-0 place-items-center rounded-full border transition hover:text-text-primary ${
-                          isPlaying ? "border-[var(--green-text)] text-[var(--green-text)]" : "text-text-tertiary"
-                        }`}
-                        style={isPlaying ? undefined : { borderColor: "var(--border-default)" }}
-                      >
-                        <Volume2 size={14} className={isPlaying ? "animate-pulse" : ""} />
-                      </button>
-                      <span className="min-w-0 flex-1 truncate text-xs text-text-secondary" title={q.text}>
-                        {q.text}
-                      </span>
-                      <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-[11px] text-text-tertiary">
-                        <input
-                          type="checkbox"
-                          checked={inLoop}
-                          onChange={() => toggleBroadcast(id)}
-                          className="h-4 w-4 cursor-pointer accent-[var(--red-text)]"
-                        />
-                        In loop
-                      </label>
-                    </li>
-                  );
-                })}
-              </ul>
-              <p className="mt-2 text-[11px] text-[var(--muted-foreground)]">Changes apply next time you open Home.</p>
-              <audio ref={sampleAudioRef} preload="none" onEnded={() => setPlayingId(null)} onPause={() => setPlayingId(null)} />
-            </div>
-          )}
+            <span className="shrink-0 whitespace-nowrap text-[11px] tabular-nums text-[var(--muted-foreground)]">
+              {DEMON_BROADCAST_MESSAGES.length - demonDisabled.size}/{DEMON_BROADCAST_MESSAGES.length} on
+            </span>
+          </div>
+
+          <div className="mt-3 max-h-72 space-y-3 overflow-y-auto border-t pt-3" style={{ borderColor: "var(--border-default)" }}>
+            {DEMON_CATEGORIES.map((cat) => {
+              const items = DEMON_BROADCAST_MESSAGES.filter((b) => (b.category ?? "INSPIRATIONAL") === cat);
+              if (items.length === 0) return null;
+              return (
+                <div key={cat}>
+                  <div className="mb-1 font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-text-tertiary">
+                    {cat} · {items.length}
+                  </div>
+                  <ul className="space-y-1">
+                    {items.map((q) => {
+                      const id = q.audioSrc ?? q.ref;
+                      const on = !demonDisabled.has(id);
+                      const isPlaying = playingId === id;
+                      return (
+                        <li key={id} className="flex items-center gap-2 rounded-md px-1 py-1 transition-colors hover:bg-surface">
+                          <button
+                            type="button"
+                            onClick={() => playSample(q)}
+                            aria-label={`Hear sample: ${q.text}`}
+                            title="Hear sample"
+                            className={`grid h-8 w-8 shrink-0 place-items-center rounded-full border transition hover:text-text-primary ${
+                              isPlaying ? "border-[var(--green-text)] text-[var(--green-text)]" : "text-text-tertiary"
+                            }`}
+                            style={isPlaying ? undefined : { borderColor: "var(--border-default)" }}
+                          >
+                            <Volume2 size={14} className={isPlaying ? "animate-pulse" : ""} />
+                          </button>
+                          <span className="min-w-0 flex-1 truncate text-xs text-text-secondary" title={q.text}>
+                            {q.text}
+                          </span>
+                          <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-[11px] text-text-tertiary">
+                            <input
+                              type="checkbox"
+                              checked={on}
+                              onChange={() => toggleBroadcast(id)}
+                              className="h-4 w-4 cursor-pointer accent-[var(--red-text)]"
+                            />
+                            On
+                          </label>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              );
+            })}
+          </div>
+          <p className="mt-2 text-[11px] text-[var(--muted-foreground)]">Changes apply next time you press the 🐆 button.</p>
+          <audio ref={sampleAudioRef} preload="none" onEnded={() => setPlayingId(null)} onPause={() => setPlayingId(null)} />
         </div>
 
         <div className="border-t pt-3" style={{ borderColor: "var(--border-default)" }}>

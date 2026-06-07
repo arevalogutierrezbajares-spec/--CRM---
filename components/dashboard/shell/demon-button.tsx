@@ -14,11 +14,11 @@ export function DemonButton() {
 
   function play() {
     const disabled = readDisabledBroadcasts();
-    const withClips = DEMON_BROADCAST_MESSAGES.filter((b) => b.audioSrc);
-    const pool = withClips.filter((b) => !disabled.has(b.audioSrc ?? ""));
-    const list = pool.length > 0 ? pool : withClips; // ignore in-loop filter only if it empties the list
-    if (list.length === 0) return;
-    const pick = list[Math.floor(Math.random() * list.length)];
+    // Only the broadcasts turned ON in Settings (across all categories). If the
+    // user turned every one off, the button stays silent.
+    const pool = DEMON_BROADCAST_MESSAGES.filter((b) => b.audioSrc && !disabled.has(b.audioSrc));
+    if (pool.length === 0) return;
+    const pick = pool[Math.floor(Math.random() * pool.length)];
     const audio = audioRef.current;
     if (!audio || !pick.audioSrc) return;
     audio.pause();
