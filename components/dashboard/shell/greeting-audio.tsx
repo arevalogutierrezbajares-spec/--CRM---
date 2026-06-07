@@ -126,7 +126,11 @@ export function GreetingAudio({
         ref={ref}
         preload="auto"
         onPlay={() => setPlaying(true)}
-        onEnded={() => setPlaying(false)}
+        onEnded={() => {
+          setPlaying(false);
+          // Cue the login WIN video (it only plays if armed by a fresh login).
+          window.dispatchEvent(new Event("agb:greeting-ended"));
+        }}
         onPause={() => setPlaying(false)}
         onError={() => setAvailable(false)}
       />

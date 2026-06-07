@@ -5,6 +5,8 @@ import { RightColumn } from "@/components/dashboard/shell/right-column";
 import { GreetingTyping } from "@/components/dashboard/shell/greeting-typing";
 import { GreetingAudio } from "@/components/dashboard/shell/greeting-audio";
 import { MuteButton } from "@/components/dashboard/shell/mute-button";
+import { DemonButton } from "@/components/dashboard/shell/demon-button";
+import { WinVideo } from "@/components/dashboard/shell/win-video";
 import { greetingIdentity } from "@/lib/greeting";
 import { QuoteBubble } from "@/components/dashboard/daily/quote-bubble";
 import { HOME_BUBBLE_MESSAGES } from "@/lib/quotes";
@@ -381,6 +383,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
       members={members}
       initialItem={initialItem}
     >
+    <WinVideo />
     <DashboardShell
       email={user.email}
       displayName={user.displayName}
@@ -390,6 +393,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
             <GreetingTyping title={formalTitle(user.displayName, user.email)} firstTitle={greet.firstSpokenTitle} period={greetPeriod} />
             <GreetingAudio slug={greet.slug} firstSlug={greet.firstSlug} period={greetPeriod} />
             <MuteButton />
+            <DemonButton />
           </div>
           <QuoteBubble initialIndex={nowMs % HOME_BUBBLE_MESSAGES.length} />
         </div>

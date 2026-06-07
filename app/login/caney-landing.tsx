@@ -314,6 +314,12 @@ function HolographicForm() {
       setError(result.error ?? "Could not sign in.");
       return;
     }
+    // Arm the post-greeting WIN video — only on a fresh login (consumed once on Home).
+    try {
+      sessionStorage.setItem("agb_play_win", "1");
+    } catch {
+      /* ignore */
+    }
     setEnteringTo(nextTarget());
   }
 
