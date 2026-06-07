@@ -1,46 +1,154 @@
 "use client";
 
-import { useRef } from "react";
-import { DEMON_BROADCAST_MESSAGES } from "@/lib/quotes";
+import { useEffect, useRef, useState } from "react";
+import { Play } from "lucide-react";
+import { DEMON_BROADCAST_MESSAGES, DEMON_CATEGORIES, DEMON_CATEGORY_LABEL, type DemonCategory } from "@/lib/quotes";
 import { readDisabledBroadcasts } from "@/lib/quote-prefs";
 
+/** Remembers the last category the user picked (so a quick click replays from it). */
+const CATEGORY_KEY = "agb_demon_category";
+
 /**
- * Top-bar button (next to the mute toggle) that plays a random demon-mode
- * broadcast soundbite on press. Deliberate action → plays even when muted.
- * Icon: the jaguar (public/icons/jaguar-stalking.svg).
+ * Top-bar jaguar button. Click → plays a random sound from the active category.
+ * Hover → a compact popover to pick a category and play a specific sound. Honors
+ * the per-broadcast on/off pool from Settings. Deliberate action → plays even
+ * when muted. setState only fires in rAF / events.
  */
 export function DemonButton() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const closeTimer = useRef<number | null>(null);
+  const [open, setOpen] = useState(false);
+  const [cat, setCat] = useState<DemonCategory>(DEMON_CATEGORIES[0]);
+  const [disabled, setDisabled] = useState<Set<string>>(new Set());
+  const [playing, setPlaying] = useState<string | null>(null);
 
-  function play() {
-    const disabled = readDisabledBroadcasts();
-    // Only the broadcasts turned ON in Settings (across all categories). If the
-    // user turned every one off, the button stays silent.
-    const pool = DEMON_BROADCAST_MESSAGES.filter((b) => b.audioSrc && !disabled.has(b.audioSrc));
-    if (pool.length === 0) return;
-    const pick = pool[Math.floor(Math.random() * pool.length)];
-    const audio = audioRef.current;
-    if (!audio || !pick.audioSrc) return;
-    audio.pause();
-    audio.currentTime = 0;
-    audio.src = pick.audioSrc;
-    void audio.play().catch(() => {});
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => {
+      setDisabled(readDisabledBroadcasts());
+      try {
+        const c = localStorage.getItem(CATEGORY_KEY);
+        if (c && (DEMON_CATEGORIES as string[]).includes(c)) setCat(c as DemonCategory);
+      } catch {
+        /* ignore */
+      }
+    });
+    return () => {
+      cancelAnimationFrame(raf);
+      if (closeTimer.current) window.clearTimeout(closeTimer.current);
+    };
+  }, []);
+
+  function poolFor(category: DemonCategory) {
+    return DEMON_BROADCAST_MESSAGES.filter((b) => b.audioSrc && b.category === category && !disabled.has(b.audioSrc));
+  }
+  function playSrc(src: string) {
+    const a = audioRef.current;
+    if (!a) return;
+    a.pause();
+    a.currentTime = 0;
+    a.src = src;
+    setPlaying(src);
+    void a.play().catch(() => setPlaying(null));
+  }
+  function quickPlay() {
+    const pool = poolFor(cat);
+    const list =
+      pool.length > 0 ? pool : DEMON_BROADCAST_MESSAGES.filter((b) => b.audioSrc && !disabled.has(b.audioSrc));
+    if (list.length === 0) return;
+    const pick = list[Math.floor(Math.random() * list.length)];
+    if (pick.audioSrc) playSrc(pick.audioSrc);
+  }
+  function selectCat(c: DemonCategory) {
+    setCat(c);
+    try {
+      localStorage.setItem(CATEGORY_KEY, c);
+    } catch {
+      /* ignore */
+    }
+  }
+  function openMenu() {
+    if (closeTimer.current) {
+      window.clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+    setOpen(true);
+  }
+  function scheduleClose() {
+    closeTimer.current = window.setTimeout(() => setOpen(false), 160);
   }
 
+  const sounds = poolFor(cat);
+
   return (
-    <>
-      <audio ref={audioRef} preload="none" />
+    <div className="relative hidden shrink-0 sm:block" onMouseEnter={openMenu} onMouseLeave={scheduleClose}>
+      <audio ref={audioRef} preload="none" onEnded={() => setPlaying(null)} onPause={() => setPlaying(null)} />
+
       <button
         type="button"
-        onClick={play}
-        aria-label="Play a demon-mode message"
-        title="Demon-mode message"
-        className="hidden h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full border opacity-90 transition hover:scale-110 hover:opacity-100 sm:inline-flex"
+        onClick={quickPlay}
+        aria-label="Demon message — hover to pick a category"
+        title="Demon message — hover to pick"
+        className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border opacity-90 transition hover:scale-110 hover:opacity-100"
         style={{ borderColor: "var(--border-default)" }}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/icons/jaguar-stalking.svg" alt="" className="h-[18px] w-[18px]" />
       </button>
-    </>
+
+      {open && (
+        <div
+          role="menu"
+          className="absolute right-0 top-[calc(100%+6px)] z-50 w-[200px] rounded-xl border p-1.5 shadow-lg"
+          style={{ background: "var(--bg-card)", borderColor: "var(--border-default)" }}
+        >
+          {/* Category pills */}
+          <div className="flex flex-wrap gap-1">
+            {DEMON_CATEGORIES.map((c) => {
+              const active = c === cat;
+              return (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => selectCat(c)}
+                  className={`rounded-full px-2 py-0.5 font-mono text-[9.5px] font-medium uppercase tracking-wide transition-colors ${
+                    active ? "text-white" : "text-text-tertiary hover:text-text-primary"
+                  }`}
+                  style={active ? { background: "var(--red-text)" } : { background: "var(--surface)" }}
+                >
+                  {DEMON_CATEGORY_LABEL[c]}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Sounds in the active category */}
+          <div className="mt-1.5 max-h-[176px] overflow-y-auto border-t pt-1" style={{ borderColor: "var(--border-default)" }}>
+            {sounds.length === 0 ? (
+              <p className="px-1.5 py-1.5 text-tiny text-text-tertiary">Nothing on in {DEMON_CATEGORY_LABEL[cat]}.</p>
+            ) : (
+              sounds.map((s) => {
+                const isPlaying = playing === s.audioSrc;
+                return (
+                  <button
+                    key={s.audioSrc}
+                    type="button"
+                    onClick={() => s.audioSrc && playSrc(s.audioSrc)}
+                    title={s.text}
+                    className="flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-xs text-text-secondary transition-colors hover:bg-surface hover:text-text-primary"
+                  >
+                    <Play
+                      size={11}
+                      className={`shrink-0 ${isPlaying ? "text-[var(--green-text)]" : "text-text-tertiary"}`}
+                      fill="currentColor"
+                    />
+                    <span className="truncate">{s.name ?? s.text}</span>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

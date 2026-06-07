@@ -2,11 +2,27 @@
 export type DemonCategory = "WIN" | "MOTIVATE" | "GRATEFUL" | "INSPIRATIONAL" | "WARRIOR ETHOS";
 export const DEMON_CATEGORIES: DemonCategory[] = ["WIN", "MOTIVATE", "GRATEFUL", "INSPIRATIONAL", "WARRIOR ETHOS"];
 
+/** Short display label per category (for compact pills). */
+export const DEMON_CATEGORY_LABEL: Record<DemonCategory, string> = {
+  WIN: "WIN",
+  MOTIVATE: "MOTIVATE",
+  GRATEFUL: "GRATEFUL",
+  INSPIRATIONAL: "INSPIRE",
+  "WARRIOR ETHOS": "WARRIOR",
+};
+
 /** A quote or broadcast line for the Home bubble. `ref` is the attribution or source
  * label shown low-key under the text. `audioSrc`, when set (demon broadcasts), is a
  * pre-extracted clip of the ORIGINAL source audio — played verbatim instead of TTS.
- * `category` buckets a demon broadcast (WIN / MOTIVATE / GRATEFUL / …). */
-export type Quote = { ref: string; text: string; kind?: "quote" | "demon-broadcast"; audioSrc?: string; category?: DemonCategory };
+ * `category` buckets a demon broadcast; `name` is its short label (a few words). */
+export type Quote = {
+  ref: string;
+  text: string;
+  kind?: "quote" | "demon-broadcast";
+  audioSrc?: string;
+  category?: DemonCategory;
+  name?: string;
+};
 
 export const QUOTES: Quote[] = [
   { ref: "Philippians 4:13", text: "I can do all things through Christ who strengthens me." },
@@ -212,18 +228,18 @@ export const QUOTES: Quote[] = [
  * the ORIGINAL audio, not a voice reading the transcript.
  */
 export const DEMON_BROADCAST_MESSAGES: Quote[] = [
-  { ref: "Demon mode broadcast (mGkrbzJZCoE · 0:00-0:16)", text: "Perfect, Wally. Great job. We are on a run.", kind: "demon-broadcast", audioSrc: "/broadcasts/mGkrbzJZCoE_0-16.mp3", category: "WIN" },
-  { ref: "Demon mode broadcast (mGkrbzJZCoE · 0:40-1:05)", text: "That was the smoothest operation of my life.", kind: "demon-broadcast", audioSrc: "/broadcasts/mGkrbzJZCoE_40-65.mp3", category: "WIN" },
-  { ref: "Demon mode broadcast (SWk_g7EWZjQ · 0:14-0:16)", text: "To whom it may concern to you.", kind: "demon-broadcast", audioSrc: "/broadcasts/SWk_g7EWZjQ_14-16.mp3", category: "WIN" },
-  { ref: "Demon mode broadcast (SWk_g7EWZjQ · 0:36-0:50)", text: "Cheers, boys. We took it. We are the time zone. Yes.", kind: "demon-broadcast", audioSrc: "/broadcasts/SWk_g7EWZjQ_36-50.mp3", category: "WIN" },
-  { ref: "Demon mode broadcast (SWk_g7EWZjQ · 1:00-1:10)", text: "You are the best. Thanks to your capacity, your talent, and the old team.", kind: "demon-broadcast", audioSrc: "/broadcasts/SWk_g7EWZjQ_60-70.mp3", category: "GRATEFUL" },
-  { ref: "Demon mode broadcast (SWk_g7EWZjQ · 1:31-1:40)", text: "I need to wait until everybody crosses the line. It's looking good.", kind: "demon-broadcast", audioSrc: "/broadcasts/SWk_g7EWZjQ_91-100.mp3", category: "MOTIVATE" },
-  { ref: "Demon mode broadcast (SWk_g7EWZjQ · 1:42-2:00)", text: "Hamilton is second, Button is third, and Ferrari's back.", kind: "demon-broadcast", audioSrc: "/broadcasts/SWk_g7EWZjQ_102-120.mp3", category: "WIN" },
-  { ref: "Conor McGregor (0Szj21arytU · 0:16-0:46)", text: "I'd like to apologize… to absolutely nobody. The double champ does what he wants.", kind: "demon-broadcast", audioSrc: "/broadcasts/0Szj21arytU_16-46.mp3", category: "WARRIOR ETHOS" },
-  { ref: "David Goggins (OKN8dFO_ZLA · 0:00-0:36)", text: "Who's gonna carry the boats and the logs?! They don't know me, son!", kind: "demon-broadcast", audioSrc: "/broadcasts/OKN8dFO_ZLA_0-36.mp3", category: "WARRIOR ETHOS" },
-  { ref: "Zlatan Ibrahimović (ZXp7vMzGwjM · 0:00-0:17)", text: "I'm playing to win. When I win, it's my proof that I'm alive. The most complete player that ever existed.", kind: "demon-broadcast", audioSrc: "/broadcasts/ZXp7vMzGwjM_0-17.mp3", category: "WARRIOR ETHOS" },
-  { ref: "Kobe Bryant (cY4dM7xno4M · 0:00-0:12)", text: "Always keep going. The storm eventually ends — make sure you're ready.", kind: "demon-broadcast", audioSrc: "/broadcasts/cY4dM7xno4M_0-12.mp3", category: "INSPIRATIONAL" },
-  { ref: "Donald Trump (sNiiGruLJ7M · 0:00-0:20)", text: "We're gonna win so much, you may even get tired of winning. No — we have to keep winning.", kind: "demon-broadcast", audioSrc: "/broadcasts/sNiiGruLJ7M_0-20.mp3", category: "WIN" },
+  { ref: "Brawn GP radio", name: "On a run", text: "Perfect, Wally. Great job. We are on a run.", kind: "demon-broadcast", audioSrc: "/broadcasts/mGkrbzJZCoE_0-16.mp3", category: "WIN" },
+  { ref: "Brawn GP radio", name: "Smoothest op", text: "That was the smoothest operation of my life.", kind: "demon-broadcast", audioSrc: "/broadcasts/mGkrbzJZCoE_40-65.mp3", category: "WIN" },
+  { ref: "Brawn GP radio", name: "To whom it concerns", text: "To whom it may concern to you.", kind: "demon-broadcast", audioSrc: "/broadcasts/SWk_g7EWZjQ_14-16.mp3", category: "WIN" },
+  { ref: "Brawn GP radio", name: "We took it", text: "Cheers, boys. We took it. We are the time zone. Yes.", kind: "demon-broadcast", audioSrc: "/broadcasts/SWk_g7EWZjQ_36-50.mp3", category: "WIN" },
+  { ref: "Brawn GP radio", name: "You're the best", text: "You are the best. Thanks to your capacity, your talent, and the old team.", kind: "demon-broadcast", audioSrc: "/broadcasts/SWk_g7EWZjQ_60-70.mp3", category: "GRATEFUL" },
+  { ref: "Brawn GP radio", name: "Cross the line", text: "I need to wait until everybody crosses the line. It's looking good.", kind: "demon-broadcast", audioSrc: "/broadcasts/SWk_g7EWZjQ_91-100.mp3", category: "MOTIVATE" },
+  { ref: "Brawn GP radio", name: "Hamilton P2", text: "Hamilton is second, Button is third, and Ferrari's back.", kind: "demon-broadcast", audioSrc: "/broadcasts/SWk_g7EWZjQ_102-120.mp3", category: "WIN" },
+  { ref: "Conor McGregor", name: "Apologize to nobody", text: "I'd like to apologize… to absolutely nobody. The double champ does what he wants.", kind: "demon-broadcast", audioSrc: "/broadcasts/0Szj21arytU_16-46.mp3", category: "WARRIOR ETHOS" },
+  { ref: "David Goggins", name: "Carry the boats", text: "Who's gonna carry the boats and the logs?! They don't know me, son!", kind: "demon-broadcast", audioSrc: "/broadcasts/OKN8dFO_ZLA_0-36.mp3", category: "WARRIOR ETHOS" },
+  { ref: "Zlatan Ibrahimović", name: "Proof I'm alive", text: "I'm playing to win. When I win, it's my proof that I'm alive. The most complete player that ever existed.", kind: "demon-broadcast", audioSrc: "/broadcasts/ZXp7vMzGwjM_0-17.mp3", category: "WARRIOR ETHOS" },
+  { ref: "Kobe Bryant", name: "Keep going", text: "Always keep going. The storm eventually ends — make sure you're ready.", kind: "demon-broadcast", audioSrc: "/broadcasts/cY4dM7xno4M_0-12.mp3", category: "INSPIRATIONAL" },
+  { ref: "Donald Trump", name: "Tired of winning", text: "We're gonna win so much, you may even get tired of winning. No — we have to keep winning.", kind: "demon-broadcast", audioSrc: "/broadcasts/sNiiGruLJ7M_0-20.mp3", category: "WIN" },
 ];
 
 export const HOME_BUBBLE_MESSAGES = [...QUOTES, ...DEMON_BROADCAST_MESSAGES];

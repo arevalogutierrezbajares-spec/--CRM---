@@ -166,7 +166,7 @@ export function QuoteSettingsCard() {
                             <Volume2 size={14} className={isPlaying ? "animate-pulse" : ""} />
                           </button>
                           <span className="min-w-0 flex-1 truncate text-xs text-text-secondary" title={q.text}>
-                            {q.text}
+                            {q.name ?? q.text}
                           </span>
                           <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-[11px] text-text-tertiary">
                             <input
