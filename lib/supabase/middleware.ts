@@ -9,7 +9,9 @@ const PUBLIC_PATHS = [
   "/auth/callback",
   "/auth/handoff", // implicit-flow magic-link → server-side session establishment
   "/access/", // Partner Access public rooms authenticate by hashed token.
+  "/f/", // F&F Pitch Feedback public links authenticate by invite token.
   "/api/health",
+  "/api/pitch-feedback/respond", // F&F Pitch Feedback public response capture.
   "/api/whatsapp/webhook", // Meta — verifies via WA_VERIFY_TOKEN + HMAC
   "/api/postmark/inbound", // Postmark — verifies via ?secret= query
   "/api/cron/", // Vercel Cron — verifies via Authorization: Bearer CRON_SECRET
