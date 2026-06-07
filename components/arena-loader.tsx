@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { isAudioMuted } from "@/lib/audio-mute";
 
 // ─── Post-sign-in loading interstitial ──────────────────────────────────────
 // Plays after a successful sign-in while the CRM loads. The "Man in the Arena"
-// passage types out over the B&W expedition photo, the attribution fades in,
-// then we auto-advance into the app two seconds later. Skip (top-right or Esc)
-// jumps straight in.
+// passage types out over the B&W expedition photo with a Free Bird solo playing
+// behind it; the attribution fades in, then we auto-advance into the app (which
+// then greets + plays the WIN audio). Skip (top-right or Esc) jumps straight in.
 //
 // Timing is time-bounded, not per-character: the whole passage always finishes
 // in TYPE_MS regardless of its length, so the screen never runs long. Sentence
@@ -48,6 +49,19 @@ export function ArenaLoader({ next }: { next: string }) {
   const [done, setDone] = useState(() => prefersReducedMotion());
   const [leaving, setLeaving] = useState(false);
   const navigatedRef = useRef(false);
+  const songRef = useRef<HTMLAudioElement | null>(null);
+
+  // Background song (Free Bird solo) while the poem is on screen — this is the
+  // same document as the sign-in click, so autoplay is allowed. Respects mute.
+  useEffect(() => {
+    if (isAudioMuted()) return;
+    const a = songRef.current;
+    if (a) {
+      a.volume = 0.55;
+      void a.play().catch(() => {});
+    }
+  }, []);
+
 
   // Per-character completion times: char i becomes visible at deadlines[i] (ms).
   const deadlines = useMemo(() => {
@@ -65,6 +79,18 @@ export function ArenaLoader({ next }: { next: string }) {
       if (navigatedRef.current) return;
       navigatedRef.current = true;
       setLeaving(true);
+      // fade the song down as we leave (songRef is a ref → no dep needed)
+      const a = songRef.current;
+      if (a) {
+        const step = (a.volume || 0.55) / 8;
+        const id = window.setInterval(() => {
+          a.volume = Math.max(0, a.volume - step);
+          if (a.volume <= 0.02) {
+            a.pause();
+            window.clearInterval(id);
+          }
+        }, 45);
+      }
       // let the fade-to-black play, then hand off to the CRM
       window.setTimeout(() => {
         window.location.href = next;
@@ -126,6 +152,9 @@ export function ArenaLoader({ next }: { next: string }) {
         transition: "opacity 420ms cubic-bezier(0.16,1,0.3,1)",
       }}
     >
+      {/* Background song while the poem is on screen (Free Bird solo). */}
+      <audio ref={songRef} preload="auto" src="/audio/arena-intro.mp3" />
+
       {/* Photo backdrop with a slow push-in (transform only — never layout) */}
       <div
         className="absolute inset-0 bg-cover bg-center [animation:arena-kenburns_34s_cubic-bezier(0.16,1,0.3,1)_forwards] motion-reduce:animate-none"
