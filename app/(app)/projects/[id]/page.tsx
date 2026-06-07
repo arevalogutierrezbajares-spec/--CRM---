@@ -14,6 +14,7 @@ import { Separator } from "@/components/ui/separator";
 import { HealthBadge } from "@/components/ui/health-badge";
 import { DbBanner } from "@/components/db-banner";
 import { MilestoneList } from "@/components/projects/milestone-list";
+import { ProjectTasks } from "@/components/projects/project-tasks";
 import { TouchList } from "@/components/touches/touch-list";
 import { LinksBoard } from "@/components/projects/links-board";
 import {
@@ -33,6 +34,7 @@ import {
   type ProjectLinkView,
 } from "@/db/queries/projects";
 import { listContacts } from "@/db/queries/contacts";
+import { listWorkspaceMembers } from "@/db/queries/team";
 import { listAttachedPaths } from "@/lib/project-files/storage";
 import { recordProjectVisit } from "@/db/queries/pins";
 import { listTouchesForProject } from "@/db/queries/touches";
@@ -127,7 +129,7 @@ export default async function ProjectDetailPage(props: {
     );
   }
 
-  const [touchesRes, linksRes, researchRes, shareContactsRes] = await Promise.all([
+  const [touchesRes, linksRes, researchRes, shareContactsRes, membersRes] = await Promise.all([
     safeRead(
       () =>
         listTouchesForProject({
@@ -155,6 +157,7 @@ export default async function ProjectDetailPage(props: {
       [],
     ),
     safeRead(() => listContacts({ workspaceId: user.workspaceId }), []),
+    safeRead(() => listWorkspaceMembers(user.workspaceId), []),
   ]);
 
   // Flag links whose target is actually reachable so the board can grey out
@@ -441,6 +444,30 @@ export default async function ProjectDetailPage(props: {
 
         <div className="grid gap-4 lg:grid-cols-[1fr_300px]">
           <div className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Tasks</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ProjectTasks
+                  projectId={displayed.id}
+                  tasks={displayed.milestones.map((m) => ({
+                    id: m.id,
+                    title: m.title,
+                    description: m.description ?? null,
+                    status: m.status,
+                    dueDate: m.dueDate,
+                    priority: m.priority ?? null,
+                    assignedTo: m.assignedTo ?? null,
+                  }))}
+                  members={membersRes.data.map((m) => ({
+                    userId: m.userId,
+                    displayName: m.displayName,
+                  }))}
+                />
+              </CardContent>
+            </Card>
+
             <Card>
               <CardHeader>
                 <CardTitle>Milestones</CardTitle>

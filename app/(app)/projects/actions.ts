@@ -348,6 +348,169 @@ export async function addMilestone(opts: {
   return { ok: true, id: row.id };
 }
 
+/* ─── Project Tasks (milestones) — multi-view board/table ────────────────── */
+
+type TaskStatus =
+  | "pending"
+  | "in_progress"
+  | "in_review"
+  | "blocked"
+  | "done"
+  | "cancelled";
+type TaskPriority = "now" | "next" | "later" | "backlog";
+type TaskBucket = "pending" | "started" | "completed";
+
+const BUCKET_STATUS: Record<TaskBucket, Extract<TaskStatus, "pending" | "in_progress" | "done">> = {
+  pending: "pending",
+  started: "in_progress",
+  completed: "done",
+};
+
+/** Confirm a project exists in the caller's workspace; returns its id or null. */
+async function ownedProjectId(
+  projectId: string,
+  workspaceId: string,
+): Promise<string | null> {
+  const [project] = await db
+    .select({ id: projects.id })
+    .from(projects)
+    .where(and(eq(projects.id, projectId), eq(projects.workspaceId, workspaceId)))
+    .limit(1);
+  return project?.id ?? null;
+}
+
+/** Returns the userId if it belongs to the workspace, otherwise null. */
+async function memberOrNull(
+  workspaceId: string,
+  userId: string | null | undefined,
+): Promise<string | null> {
+  if (!userId) return null;
+  const { workspaceMembers } = schema;
+  const [member] = await db
+    .select({ userId: workspaceMembers.userId })
+    .from(workspaceMembers)
+    .where(
+      and(
+        eq(workspaceMembers.workspaceId, workspaceId),
+        eq(workspaceMembers.userId, userId),
+      ),
+    )
+    .limit(1);
+  return member?.userId ?? null;
+}
+
+export async function addProjectTask(opts: {
+  projectId: string;
+  title: string;
+  description?: string | null;
+  dueDate?: string | null;
+  priority?: TaskPriority | null;
+  assignedTo?: string | null;
+  status?: TaskStatus;
+}): Promise<ActionResult> {
+  const user = await requireUser();
+  if (!opts.title.trim()) return { ok: false, error: "Title required" };
+  if (!(await ownedProjectId(opts.projectId, user.workspaceId)))
+    return { ok: false, error: "Project not found" };
+
+  const status = opts.status ?? "pending";
+  const { milestones } = schema;
+  const [row] = await db
+    .insert(milestones)
+    .values({
+      projectId: opts.projectId,
+      title: opts.title.trim(),
+      description: opts.description?.trim() || null,
+      workspaceId: user.workspaceId,
+      createdBy: user.id,
+      dueDate: opts.dueDate || null,
+      priority: opts.priority ?? null,
+      assignedTo: await memberOrNull(user.workspaceId, opts.assignedTo),
+      status,
+      completedAt: status === "done" ? new Date() : null,
+    })
+    .returning({ id: milestones.id });
+
+  revalidatePath(`/projects/${opts.projectId}`);
+  return { ok: true, id: row.id };
+}
+
+export async function updateProjectTask(opts: {
+  taskId: string;
+  projectId: string;
+  title?: string;
+  description?: string | null;
+  dueDate?: string | null;
+  priority?: TaskPriority | null;
+  assignedTo?: string | null;
+  status?: TaskStatus;
+}): Promise<ActionResult> {
+  const user = await requireUser();
+  if (!(await ownedProjectId(opts.projectId, user.workspaceId)))
+    return { ok: false, error: "Project not found" };
+
+  const { milestones } = schema;
+  const patch: Partial<typeof milestones.$inferInsert> = {};
+  if (opts.title !== undefined) {
+    if (!opts.title.trim()) return { ok: false, error: "Title required" };
+    patch.title = opts.title.trim();
+  }
+  if (opts.description !== undefined)
+    patch.description = opts.description?.trim() || null;
+  if (opts.dueDate !== undefined) patch.dueDate = opts.dueDate || null;
+  if (opts.priority !== undefined) patch.priority = opts.priority;
+  if (opts.assignedTo !== undefined)
+    patch.assignedTo = await memberOrNull(user.workspaceId, opts.assignedTo);
+  if (opts.status !== undefined) {
+    patch.status = opts.status;
+    patch.completedAt = opts.status === "done" ? new Date() : null;
+  }
+  if (Object.keys(patch).length === 0) return { ok: true, id: opts.taskId };
+
+  const [row] = await db
+    .update(milestones)
+    .set(patch)
+    .where(
+      and(
+        eq(milestones.id, opts.taskId),
+        eq(milestones.projectId, opts.projectId),
+        eq(milestones.workspaceId, user.workspaceId),
+      ),
+    )
+    .returning({ id: milestones.id });
+  if (!row) return { ok: false, error: "Task not found" };
+  revalidatePath(`/projects/${opts.projectId}`);
+  return { ok: true, id: row.id };
+}
+
+/** Move a task between the Pending / Started / Completed buckets (drag-drop). */
+export async function moveTaskBucket(opts: {
+  taskId: string;
+  projectId: string;
+  bucket: TaskBucket;
+}): Promise<ActionResult> {
+  const user = await requireUser();
+  if (!(await ownedProjectId(opts.projectId, user.workspaceId)))
+    return { ok: false, error: "Project not found" };
+
+  const status = BUCKET_STATUS[opts.bucket];
+  const { milestones } = schema;
+  const [row] = await db
+    .update(milestones)
+    .set({ status, completedAt: status === "done" ? new Date() : null })
+    .where(
+      and(
+        eq(milestones.id, opts.taskId),
+        eq(milestones.projectId, opts.projectId),
+        eq(milestones.workspaceId, user.workspaceId),
+      ),
+    )
+    .returning({ id: milestones.id });
+  if (!row) return { ok: false, error: "Task not found" };
+  revalidatePath(`/projects/${opts.projectId}`);
+  return { ok: true, id: row.id };
+}
+
 /* ─── Project links (FR-DOC-1/2/4/5/6/9/11) ─────────────────────────────── */
 
 async function assertProjectInWorkspace(

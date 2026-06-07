@@ -1113,6 +1113,8 @@ export const milestones = pgTable("milestones", {
     .notNull()
     .references(() => projects.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
+  // Free-text detail for the task (surfaced in the project Tasks table view).
+  description: text("description"),
   dueDate: date("due_date"),
   createdBy: uuid("created_by")
     .notNull()
