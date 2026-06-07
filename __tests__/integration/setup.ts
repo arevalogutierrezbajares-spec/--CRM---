@@ -69,6 +69,13 @@ afterEach(async () => {
   await db.execute(
     /* sql */ `
     truncate table
+      pitch_feedback_delivery_attempts,
+      pitch_feedback_ai_insights,
+      pitch_feedback_responses,
+      pitch_feedback_events,
+      pitch_feedback_sessions,
+      pitch_feedback_invites,
+      pitch_feedback_campaigns,
       wa_activity,
       wa_conversations,
       nudges,

@@ -232,6 +232,110 @@ export const partnerAccessEventType = pgEnum("partner_access_event_type", [
   "expired",
 ]);
 
+/* ─── Pitch feedback module enums ─────────────────────────────────────── */
+
+export const pitchFeedbackAudience = pgEnum("pitch_feedback_audience", [
+  "friends_family",
+  "advisor",
+  "partner",
+  "customer",
+  "investor",
+  "internal",
+]);
+
+export const pitchFeedbackCampaignStatus = pgEnum(
+  "pitch_feedback_campaign_status",
+  ["draft", "active", "closed", "archived"],
+);
+
+export const pitchFeedbackInviteStatus = pgEnum(
+  "pitch_feedback_invite_status",
+  [
+    "draft",
+    "link_generated",
+    "sent",
+    "opened",
+    "in_progress",
+    "completed",
+    "expired",
+    "revoked",
+  ],
+);
+
+export const pitchFeedbackChannel = pgEnum("pitch_feedback_channel", [
+  "email",
+  "whatsapp",
+  "signal",
+  "link",
+  "manual",
+]);
+
+export const pitchFeedbackEventType = pgEnum("pitch_feedback_event_type", [
+  "invite_created",
+  "link_generated",
+  "invite_sent",
+  "invite_copied",
+  "link_opened",
+  "session_started",
+  "section_entered",
+  "section_completed",
+  "reaction_submitted",
+  "question_answered",
+  "final_feedback_submitted",
+  "invite_completed",
+  "ai_summary_generated",
+  "followup_draft_created",
+  "followup_task_created",
+  "followup_sent",
+  "invite_expired",
+  "invite_revoked",
+  "feedback_redacted",
+]);
+
+export const pitchFeedbackResponseType = pgEnum(
+  "pitch_feedback_response_type",
+  ["reaction", "score", "text", "intro", "objection", "final"],
+);
+
+export const pitchFeedbackInsightScope = pgEnum("pitch_feedback_insight_scope", [
+  "invite",
+  "contact",
+  "campaign",
+]);
+
+export const pitchFeedbackSentiment = pgEnum("pitch_feedback_sentiment", [
+  "positive",
+  "neutral",
+  "mixed",
+  "negative",
+]);
+
+export const pitchFeedbackSupportLevel = pgEnum(
+  "pitch_feedback_support_level",
+  ["champion", "supportive", "curious", "skeptical", "disengaged"],
+);
+
+export const pitchFeedbackDeliveryStatus = pgEnum(
+  "pitch_feedback_delivery_status",
+  ["pending", "sent", "failed", "copied", "manual"],
+);
+
+export type PitchFeedbackPromptSnapshot = {
+  key: string;
+  label: string;
+  type: "reaction" | "score" | "text" | "intro" | "objection" | "final";
+  required?: boolean;
+};
+
+export type PitchFeedbackSectionSnapshot = Array<{
+  key: string;
+  eyebrow?: string;
+  title: string;
+  body: string;
+  proof?: string;
+  prompts: PitchFeedbackPromptSnapshot[];
+}>;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // USERS (mirrors auth.users) — `whatsapp_phone` enables inbound bot routing.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -678,6 +782,248 @@ export const partnerAccessEvents = pgTable("partner_access_events", {
     .defaultNow(),
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// PITCH FEEDBACK — contact-linked private pitch walkthroughs and feedback.
+// Public tokens are hashed; campaign snapshots preserve what a recipient saw.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const pitchFeedbackCampaigns = pgTable("pitch_feedback_campaigns", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  projectId: uuid("project_id").references(() => projects.id, {
+    onDelete: "set null",
+  }),
+  name: text("name").notNull(),
+  description: text("description"),
+  audience: pitchFeedbackAudience("audience")
+    .notNull()
+    .default("friends_family"),
+  status: pitchFeedbackCampaignStatus("status").notNull().default("draft"),
+  version: integer("version").notNull().default(1),
+  sections: jsonb("sections")
+    .$type<PitchFeedbackSectionSnapshot>()
+    .notNull()
+    .default([]),
+  createdBy: uuid("created_by")
+    .notNull()
+    .references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const pitchFeedbackInvites = pgTable(
+  "pitch_feedback_invites",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    campaignId: uuid("campaign_id")
+      .notNull()
+      .references(() => pitchFeedbackCampaigns.id, { onDelete: "cascade" }),
+    contactId: uuid("contact_id")
+      .notNull()
+      .references(() => contacts.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash"),
+    status: pitchFeedbackInviteStatus("status").notNull().default("draft"),
+    channel: pitchFeedbackChannel("channel").notNull().default("manual"),
+    personalization: jsonb("personalization")
+      .$type<{
+        welcomeNote?: string;
+        sendMessage?: string;
+        focusQuestions?: string[];
+      }>()
+      .notNull()
+      .default({}),
+    campaignVersion: integer("campaign_version").notNull().default(1),
+    sectionsSnapshot: jsonb("sections_snapshot")
+      .$type<PitchFeedbackSectionSnapshot>()
+      .notNull()
+      .default([]),
+    sentMessage: text("sent_message"),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    firstOpenedAt: timestamp("first_opened_at", { withTimezone: true }),
+    lastViewedAt: timestamp("last_viewed_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    completionPercent: integer("completion_percent").notNull().default(0),
+    currentSectionKey: text("current_section_key"),
+    viewCount: integer("view_count").notNull().default(0),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    uniqTokenHash: uniqueIndex("pitch_feedback_invites_token_hash_uniq").on(
+      t.tokenHash,
+    ),
+  }),
+);
+
+export const pitchFeedbackSessions = pgTable("pitch_feedback_sessions", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  inviteId: uuid("invite_id")
+    .notNull()
+    .references(() => pitchFeedbackInvites.id, { onDelete: "cascade" }),
+  contactId: uuid("contact_id")
+    .notNull()
+    .references(() => contacts.id, { onDelete: "cascade" }),
+  startedAt: timestamp("started_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  userAgentHash: text("user_agent_hash"),
+  ipHash: text("ip_hash"),
+  referrer: text("referrer"),
+  metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+});
+
+export const pitchFeedbackEvents = pgTable("pitch_feedback_events", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  inviteId: uuid("invite_id")
+    .notNull()
+    .references(() => pitchFeedbackInvites.id, { onDelete: "cascade" }),
+  sessionId: uuid("session_id").references(() => pitchFeedbackSessions.id, {
+    onDelete: "set null",
+  }),
+  contactId: uuid("contact_id")
+    .notNull()
+    .references(() => contacts.id, { onDelete: "cascade" }),
+  actorUserId: uuid("actor_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  eventType: pitchFeedbackEventType("event_type").notNull(),
+  sectionKey: text("section_key"),
+  metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const pitchFeedbackResponses = pgTable(
+  "pitch_feedback_responses",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    inviteId: uuid("invite_id")
+      .notNull()
+      .references(() => pitchFeedbackInvites.id, { onDelete: "cascade" }),
+    sessionId: uuid("session_id").references(() => pitchFeedbackSessions.id, {
+      onDelete: "set null",
+    }),
+    contactId: uuid("contact_id")
+      .notNull()
+      .references(() => contacts.id, { onDelete: "cascade" }),
+    sectionKey: text("section_key").notNull(),
+    promptKey: text("prompt_key").notNull(),
+    responseType: pitchFeedbackResponseType("response_type").notNull(),
+    value: jsonb("value").$type<Record<string, unknown>>().notNull().default({}),
+    redactedAt: timestamp("redacted_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    uniqInviteSectionPrompt: uniqueIndex(
+      "pitch_feedback_responses_invite_section_prompt_uniq",
+    ).on(t.inviteId, t.sectionKey, t.promptKey),
+  }),
+);
+
+export const pitchFeedbackAiInsights = pgTable("pitch_feedback_ai_insights", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  campaignId: uuid("campaign_id").references(() => pitchFeedbackCampaigns.id, {
+    onDelete: "cascade",
+  }),
+  inviteId: uuid("invite_id").references(() => pitchFeedbackInvites.id, {
+    onDelete: "cascade",
+  }),
+  contactId: uuid("contact_id").references(() => contacts.id, {
+    onDelete: "cascade",
+  }),
+  scope: pitchFeedbackInsightScope("scope").notNull().default("invite"),
+  model: text("model").notNull().default("heuristic"),
+  summary: text("summary").notNull(),
+  sentiment: pitchFeedbackSentiment("sentiment").notNull().default("neutral"),
+  confidenceScore: integer("confidence_score").notNull().default(50),
+  supportLevel: pitchFeedbackSupportLevel("support_level")
+    .notNull()
+    .default("curious"),
+  objections: jsonb("objections").$type<string[]>().notNull().default([]),
+  confusionPoints: jsonb("confusion_points").$type<string[]>().notNull().default([]),
+  positiveSignals: jsonb("positive_signals").$type<string[]>().notNull().default([]),
+  recommendedFollowup: text("recommended_followup"),
+  suggestedPitchEdits: jsonb("suggested_pitch_edits")
+    .$type<Array<{ sectionKey?: string; suggestion: string }>>()
+    .notNull()
+    .default([]),
+  sourceResponseIds: jsonb("source_response_ids").$type<string[]>().notNull().default([]),
+  createdBy: uuid("created_by").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const pitchFeedbackDeliveryAttempts = pgTable(
+  "pitch_feedback_delivery_attempts",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    inviteId: uuid("invite_id")
+      .notNull()
+      .references(() => pitchFeedbackInvites.id, { onDelete: "cascade" }),
+    contactId: uuid("contact_id")
+      .notNull()
+      .references(() => contacts.id, { onDelete: "cascade" }),
+    channel: pitchFeedbackChannel("channel").notNull().default("manual"),
+    status: pitchFeedbackDeliveryStatus("status").notNull().default("pending"),
+    messageSnapshot: text("message_snapshot").notNull().default(""),
+    providerResult: jsonb("provider_result").$type<Record<string, unknown>>(),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    uniqInviteChannelMessage: uniqueIndex(
+      "pitch_feedback_delivery_invite_channel_msg_uniq",
+    ).on(t.inviteId, t.channel, t.messageSnapshot),
+  }),
+);
+
 // FR-PMO: per-user pinned projects for quick access on the Home dashboard.
 export const projectPins = pgTable(
   "project_pins",
@@ -874,12 +1220,17 @@ export const usersRelations = relations(users, ({ many }) => ({
   createdMilestones: many(milestones),
   createdTouches: many(touches),
   createdMeetings: many(meetings),
+  createdPitchFeedbackCampaigns: many(pitchFeedbackCampaigns),
+  createdPitchFeedbackInvites: many(pitchFeedbackInvites),
+  createdPitchFeedbackInsights: many(pitchFeedbackAiInsights),
 }));
 
 export const workspacesRelations = relations(workspaces, ({ many }) => ({
   members: many(workspaceMembers),
   contacts: many(contacts),
   projects: many(projects),
+  pitchFeedbackCampaigns: many(pitchFeedbackCampaigns),
+  pitchFeedbackInvites: many(pitchFeedbackInvites),
 }));
 
 export const workspaceMembersRelations = relations(
@@ -915,6 +1266,11 @@ export const contactsRelations = relations(contacts, ({ one, many }) => ({
   touches: many(touches),
   projectLinks: many(projectContacts),
   meetingAppearances: many(meetingAttendees),
+  pitchFeedbackInvites: many(pitchFeedbackInvites),
+  pitchFeedbackSessions: many(pitchFeedbackSessions),
+  pitchFeedbackEvents: many(pitchFeedbackEvents),
+  pitchFeedbackResponses: many(pitchFeedbackResponses),
+  pitchFeedbackInsights: many(pitchFeedbackAiInsights),
 }));
 
 export const projectsRelations = relations(projects, ({ one, many }) => ({
@@ -938,6 +1294,7 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
   touches: many(touches),
   contactLinks: many(projectContacts),
   meetings: many(meetings),
+  pitchFeedbackCampaigns: many(pitchFeedbackCampaigns),
 }));
 
 export const meetingsRelations = relations(meetings, ({ one, many }) => ({

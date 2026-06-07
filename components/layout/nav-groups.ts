@@ -12,6 +12,7 @@ import {
   CalendarCheck,
   KanbanSquare,
   Contact2,
+  MessageSquareText,
   Network,
   UsersRound,
   Wallet,
@@ -73,6 +74,7 @@ export const NAV_GROUPS: NavGroup[] = [
     tree: true,
     items: [
       { href: "/contacts", label: "Contacts", icon: Contact2 },
+      { href: "/pitch-feedback", label: "Pitch Feedback", icon: MessageSquareText },
       { href: "/network", label: "Network", icon: Network },
       { href: "/team", label: "Team", icon: UsersRound },
       { href: "/treasury", label: "Treasury", icon: Wallet },
