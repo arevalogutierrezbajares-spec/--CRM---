@@ -14,7 +14,9 @@ export const DEMON_CATEGORY_LABEL: Record<DemonCategory, string> = {
 /** A quote or broadcast line for the Home bubble. `ref` is the attribution or source
  * label shown low-key under the text. `audioSrc`, when set (demon broadcasts), is a
  * pre-extracted clip of the ORIGINAL source audio — played verbatim instead of TTS.
- * `category` buckets a demon broadcast; `name` is its short label (a few words). */
+ * `category` buckets a demon broadcast; `name` is its short label (a few words).
+ * `pinned` is the signature line (the Motto) — sorts to the top + plays on every
+ * jaguar click. */
 export type Quote = {
   ref: string;
   text: string;
@@ -22,7 +24,11 @@ export type Quote = {
   audioSrc?: string;
   category?: DemonCategory;
   name?: string;
+  pinned?: boolean;
 };
+
+/** The signature line played on every jaguar click (= win.mov audio). */
+export const DEMON_SIGNATURE_SRC = "/audio/win.mp3";
 
 export const QUOTES: Quote[] = [
   { ref: "Philippians 4:13", text: "I can do all things through Christ who strengthens me." },
@@ -228,9 +234,8 @@ export const QUOTES: Quote[] = [
  * the ORIGINAL audio, not a voice reading the transcript.
  */
 export const DEMON_BROADCAST_MESSAGES: Quote[] = [
-  { ref: "Brawn GP radio", name: "On a run", text: "Perfect, Wally. Great job. We are on a run.", kind: "demon-broadcast", audioSrc: "/broadcasts/mGkrbzJZCoE_0-16.mp3", category: "WIN" },
+  { ref: "Signature line", name: "Motto", text: "Thou shall win and win and win again. A serial winning mentality.", kind: "demon-broadcast", audioSrc: DEMON_SIGNATURE_SRC, category: "WIN", pinned: true },
   { ref: "Brawn GP radio", name: "Smoothest op", text: "That was the smoothest operation of my life.", kind: "demon-broadcast", audioSrc: "/broadcasts/mGkrbzJZCoE_40-65.mp3", category: "WIN" },
-  { ref: "Brawn GP radio", name: "To whom it concerns", text: "To whom it may concern to you.", kind: "demon-broadcast", audioSrc: "/broadcasts/SWk_g7EWZjQ_14-16.mp3", category: "WIN" },
   { ref: "Brawn GP radio", name: "We took it", text: "Cheers, boys. We took it. We are the time zone. Yes.", kind: "demon-broadcast", audioSrc: "/broadcasts/SWk_g7EWZjQ_36-50.mp3", category: "WIN" },
   { ref: "Brawn GP radio", name: "You're the best", text: "You are the best. Thanks to your capacity, your talent, and the old team.", kind: "demon-broadcast", audioSrc: "/broadcasts/SWk_g7EWZjQ_60-70.mp3", category: "GRATEFUL" },
   { ref: "Brawn GP radio", name: "Cross the line", text: "I need to wait until everybody crosses the line. It's looking good.", kind: "demon-broadcast", audioSrc: "/broadcasts/SWk_g7EWZjQ_91-100.mp3", category: "MOTIVATE" },

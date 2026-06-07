@@ -139,7 +139,9 @@ export function QuoteSettingsCard() {
 
           <div className="mt-3 max-h-72 space-y-3 overflow-y-auto border-t pt-3" style={{ borderColor: "var(--border-default)" }}>
             {DEMON_CATEGORIES.map((cat) => {
-              const items = DEMON_BROADCAST_MESSAGES.filter((b) => (b.category ?? "INSPIRATIONAL") === cat);
+              const items = DEMON_BROADCAST_MESSAGES.filter((b) => (b.category ?? "INSPIRATIONAL") === cat).sort(
+                (a, b) => Number(b.pinned ?? false) - Number(a.pinned ?? false),
+              );
               if (items.length === 0) return null;
               return (
                 <div key={cat}>
@@ -165,18 +167,27 @@ export function QuoteSettingsCard() {
                           >
                             <Volume2 size={14} className={isPlaying ? "animate-pulse" : ""} />
                           </button>
-                          <span className="min-w-0 flex-1 truncate text-xs text-text-secondary" title={q.text}>
+                          <span
+                            className={`min-w-0 flex-1 truncate text-xs ${q.pinned ? "font-medium text-text-primary" : "text-text-secondary"}`}
+                            title={q.text}
+                          >
                             {q.name ?? q.text}
                           </span>
-                          <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-[11px] text-text-tertiary">
-                            <input
-                              type="checkbox"
-                              checked={on}
-                              onChange={() => toggleBroadcast(id)}
-                              className="h-4 w-4 cursor-pointer accent-[var(--red-text)]"
-                            />
-                            On
-                          </label>
+                          {q.pinned ? (
+                            <span className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium text-[var(--red-text)]" style={{ background: "color-mix(in oklab, var(--red-text) 12%, transparent)" }}>
+                              Signature
+                            </span>
+                          ) : (
+                            <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-[11px] text-text-tertiary">
+                              <input
+                                type="checkbox"
+                                checked={on}
+                                onChange={() => toggleBroadcast(id)}
+                                className="h-4 w-4 cursor-pointer accent-[var(--red-text)]"
+                              />
+                              On
+                            </label>
+                          )}
                         </li>
                       );
                     })}
