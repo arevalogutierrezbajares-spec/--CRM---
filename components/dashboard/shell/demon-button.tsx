@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Play } from "lucide-react";
-import { DEMON_BROADCAST_MESSAGES, DEMON_CATEGORIES, DEMON_CATEGORY_LABEL, type DemonCategory } from "@/lib/quotes";
+import { DEMON_BROADCAST_MESSAGES, DEMON_CATEGORIES, DEMON_CATEGORY_LABEL, DEMON_SIGNATURE_SRC, type DemonCategory } from "@/lib/quotes";
 import { readDisabledBroadcasts } from "@/lib/quote-prefs";
 
 /** Remembers the last category the user picked (so a quick click replays from it). */
@@ -39,7 +39,11 @@ export function DemonButton() {
   }, []);
 
   function poolFor(category: DemonCategory) {
-    return DEMON_BROADCAST_MESSAGES.filter((b) => b.audioSrc && b.category === category && !disabled.has(b.audioSrc));
+    // The pinned signature (Motto) always shows; others honor the on/off pool.
+    // Pinned sorts to the top.
+    return DEMON_BROADCAST_MESSAGES.filter(
+      (b) => b.audioSrc && b.category === category && (b.pinned || !disabled.has(b.audioSrc)),
+    ).sort((a, b) => Number(b.pinned ?? false) - Number(a.pinned ?? false));
   }
   function playSrc(src: string) {
     const a = audioRef.current;
@@ -51,12 +55,8 @@ export function DemonButton() {
     void a.play().catch(() => setPlaying(null));
   }
   function quickPlay() {
-    const pool = poolFor(cat);
-    const list =
-      pool.length > 0 ? pool : DEMON_BROADCAST_MESSAGES.filter((b) => b.audioSrc && !disabled.has(b.audioSrc));
-    if (list.length === 0) return;
-    const pick = list[Math.floor(Math.random() * list.length)];
-    if (pick.audioSrc) playSrc(pick.audioSrc);
+    // Signature line plays on EVERY click — always first, even if just played.
+    playSrc(DEMON_SIGNATURE_SRC);
   }
   function selectCat(c: DemonCategory) {
     setCat(c);
@@ -86,8 +86,8 @@ export function DemonButton() {
       <button
         type="button"
         onClick={quickPlay}
-        aria-label="Demon message — hover to pick a category"
-        title="Demon message — hover to pick"
+        aria-label="Play the Motto — hover to pick a sound"
+        title="Play the Motto — hover to pick"
         className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border opacity-90 transition hover:scale-110 hover:opacity-100"
         style={{ borderColor: "var(--border-default)" }}
       >
@@ -134,14 +134,19 @@ export function DemonButton() {
                     type="button"
                     onClick={() => s.audioSrc && playSrc(s.audioSrc)}
                     title={s.text}
-                    className="flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-xs text-text-secondary transition-colors hover:bg-surface hover:text-text-primary"
+                    className={`flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-xs transition-colors hover:bg-surface hover:text-text-primary ${
+                      s.pinned ? "font-medium text-text-primary" : "text-text-secondary"
+                    }`}
                   >
                     <Play
                       size={11}
-                      className={`shrink-0 ${isPlaying ? "text-[var(--green-text)]" : "text-text-tertiary"}`}
+                      className={`shrink-0 ${
+                        isPlaying ? "text-[var(--green-text)]" : s.pinned ? "text-[var(--red-text)]" : "text-text-tertiary"
+                      }`}
                       fill="currentColor"
                     />
                     <span className="truncate">{s.name ?? s.text}</span>
+                    {s.pinned && <span aria-hidden className="ml-auto shrink-0 text-[9px]">📌</span>}
                   </button>
                 );
               })
