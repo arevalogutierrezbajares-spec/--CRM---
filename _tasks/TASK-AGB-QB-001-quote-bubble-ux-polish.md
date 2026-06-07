@@ -1,19 +1,37 @@
 ---
 id: TASK-AGB-QB-001
 title: Quote bubble UX polish — click-to-listen, no audio mixing, 30s pace, next arrow
-status: open
+status: merged
 priority: P2
 phase: 6
 fr_covered: []
-owner: null
-branch: null
+owner: OVL-AGB-Claude
+branch: main
 pr: null
 estimated_points: 2
 created: 2026-06-06
-updated: 2026-06-06
+updated: 2026-06-07
 blocked_by: []
 blocker_note: null
 ---
+
+## ✅ Done (2026-06-07)
+
+All four shipped to `main`. Decision on AC2 (confirmed by user): **Demon Mode =
+clips only** — the bubble rotates broadcast clips OR quotes, never mixed.
+
+- **Click-to-listen:** hover-speak removed (`onMouseEnter`/double-click gone);
+  single click plays the current message's audio.
+- **No mixing:** `messages` = `demonMode ? enabledClips : QUOTES` (falls back to
+  QUOTES if every broadcast is switched off).
+- **30s pace:** `DEFAULT_QUOTE_PACE = 30`.
+- **Next arrow:** small circular `ChevronRight` button (idle nudge + hover slide,
+  keyboard-accessible) advances the message; double-click affordance retired.
+
+Files: `components/dashboard/daily/quote-bubble.tsx`, `lib/quote-prefs.ts`,
+`components/settings/quote-settings-card.tsx` (demon copy updated). Verified at
+1280px in both modes.
+
 
 ## What
 

@@ -140,7 +140,7 @@ export function QuoteSettingsCard() {
             <span className="min-w-0">
               <span className="block font-medium text-text-secondary">DEMON Mode</span>
               <span className="mt-0.5 block text-xs leading-5 text-[var(--muted-foreground)]">
-                Mixes real broadcast soundbites into the Home bubble (plays the original audio on hover/click). Preview each below and choose which are in the loop.
+                Swaps the Home bubble to real broadcast soundbites only (no AI voice) — click the bubble to hear the original audio. Preview each below and choose which are in the loop.
               </span>
             </span>
             <input

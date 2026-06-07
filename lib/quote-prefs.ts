@@ -7,7 +7,7 @@ export const NIGO_DEMON_MODE_KEY = "agb_nigo_demon_mode";
 /** JSON array of broadcast ids (audioSrc) the user has switched OFF — so they
  *  don't get announced in the rotation. Empty/absent = all broadcasts on. */
 export const NIGO_DEMON_DISABLED_KEY = "agb_nigo_demon_disabled";
-export const DEFAULT_QUOTE_PACE = 10;
+export const DEFAULT_QUOTE_PACE = 30;
 
 /** Read the set of disabled broadcast ids from localStorage (client-only). */
 export function readDisabledBroadcasts(): Set<string> {
