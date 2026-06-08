@@ -102,6 +102,50 @@ const EMPTY_MONTH_STATS = {
   contactsTouched: 0,
 };
 
+const FALLBACK_COMMAND_METRICS: HomeCommandMetric[] = [
+  {
+    id: "clients",
+    label: "Client motion",
+    value: 0,
+    subline: "CRM read unavailable",
+    detail: "Client signal data did not load. Check the database warning.",
+    href: "/contacts",
+    progressPct: 0,
+    tone: "blue",
+  },
+  {
+    id: "vav_launch",
+    label: "VAV launch",
+    value: 0,
+    suffix: "%",
+    subline: "launch read unavailable",
+    detail: "VAV launch data did not load. Check the database warning.",
+    href: "/lob",
+    progressPct: 0,
+    tone: "green",
+  },
+  {
+    id: "influencers",
+    label: "Influencer engine",
+    value: 0,
+    subline: "CRM read unavailable",
+    detail: "Influencer signal data did not load. Check the database warning.",
+    href: "/contacts",
+    progressPct: 0,
+    tone: "purple",
+  },
+  {
+    id: "docs",
+    label: "Docs moved",
+    value: 0,
+    subline: "doc read unavailable",
+    detail: "Document activity did not load. Check the database warning.",
+    href: "/lob",
+    progressPct: 0,
+    tone: "amber",
+  },
+];
+
 function briefingBullets(
   counts: DashCounts,
   tasks: DashTask[],
@@ -265,6 +309,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
     pinnedProjects: PinnedProject[];
     recentProjects: { id: string; title: string }[];
     commandMetrics: HomeCommandMetric[];
+    commandMetricsError: string | null;
   } | null = null;
   let weeklyData: {
     tasks: DashTask[];
@@ -288,7 +333,10 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
       safeRead<DashActionItem[]>(() => listOpenActionItems(user.workspaceId, 12, todayStr), []),
       safeRead<PinnedProject[]>(() => listPinnedProjects(user.workspaceId, user.id, todayStr), []),
       safeRead<{ id: string; title: string }[]>(() => listRecentProjects(user.workspaceId, user.id, 8), []),
-      safeRead<HomeCommandMetric[]>(() => homeCommandMetrics(user.workspaceId), []),
+      safeRead<HomeCommandMetric[]>(
+        () => homeCommandMetrics(user.workspaceId),
+        FALLBACK_COMMAND_METRICS,
+      ),
     ]);
     dailyData = {
       tasks: tasks.data,
@@ -299,6 +347,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
       pinnedProjects: pinnedProjects.data,
       recentProjects: recentProjects.data,
       commandMetrics: commandMetrics.data,
+      commandMetricsError: commandMetrics.ok ? null : commandMetrics.error,
     };
   } else if (view === "weekly") {
     const [tasks, meetings, projects] = await Promise.all([
@@ -362,7 +411,18 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
   );
 
   const dbError =
-    !countsRes.ok || !pipelineRes.ok || !relRes.ok || !eventDaysRes.ok;
+    !countsRes.ok ||
+    !pipelineRes.ok ||
+    !relRes.ok ||
+    !eventDaysRes.ok ||
+    Boolean(dailyData?.commandMetricsError);
+  const dbErrorMessage =
+    (countsRes as { error?: string }).error ??
+    (pipelineRes as { error?: string }).error ??
+    (relRes as { error?: string }).error ??
+    (eventDaysRes as { error?: string }).error ??
+    dailyData?.commandMetricsError ??
+    "Database error";
 
   // Greeting persona (+ first-greeting swap) and period, computed once.
   const greet = greetingIdentity(user.displayName, user.email);
@@ -419,11 +479,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
     >
       {dbError && (
         <DbBanner
-          error={
-            (countsRes as { error?: string }).error ??
-            (pipelineRes as { error?: string }).error ??
-            "Database error"
-          }
+          error={dbErrorMessage}
         />
       )}
 
@@ -448,6 +504,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
           initiatives={initiativesRes.data}
           kpis={kpisRes.data}
           commandMetrics={dailyData.commandMetrics}
+          commandMetricsError={dailyData.commandMetricsError}
           blocked={blockedRes.data}
           briefingBullets={briefing}
           dashboardLayout={layoutRes.data}

@@ -18,6 +18,50 @@ import { SectionLabel } from "../shared/section-label";
 import { CountUp } from "../shared/count-up";
 import type { HomeCommandMetric } from "@/db/queries/dashboard";
 
+const FALLBACK_METRICS: HomeCommandMetric[] = [
+  {
+    id: "clients",
+    label: "Client motion",
+    value: 0,
+    subline: "CRM read unavailable",
+    detail: "Client signal data did not load. Check the Home database warning.",
+    href: "/contacts",
+    progressPct: 0,
+    tone: "blue",
+  },
+  {
+    id: "vav_launch",
+    label: "VAV launch",
+    value: 0,
+    suffix: "%",
+    subline: "launch read unavailable",
+    detail: "VAV launch data did not load. Check the Home database warning.",
+    href: "/lob",
+    progressPct: 0,
+    tone: "green",
+  },
+  {
+    id: "influencers",
+    label: "Influencer engine",
+    value: 0,
+    subline: "CRM read unavailable",
+    detail: "Influencer signal data did not load. Check the Home database warning.",
+    href: "/contacts",
+    progressPct: 0,
+    tone: "purple",
+  },
+  {
+    id: "docs",
+    label: "Docs moved",
+    value: 0,
+    subline: "doc read unavailable",
+    detail: "Document activity did not load. Check the Home database warning.",
+    href: "/lob",
+    progressPct: 0,
+    tone: "amber",
+  },
+];
+
 const TONE: Record<
   HomeCommandMetric["tone"],
   { text: string; bg: string; mid: string }
@@ -135,14 +179,25 @@ function Scene({ metric, color }: { metric: HomeCommandMetric; color: string }) 
   );
 }
 
-export function DynamicKpiStrip({ metrics }: { metrics: HomeCommandMetric[] }) {
-  const [selectedId, setSelectedId] = useState(metrics[0]?.id ?? null);
+export function DynamicKpiStrip({
+  metrics,
+  error,
+}: {
+  metrics: HomeCommandMetric[];
+  error?: string | null;
+}) {
+  const visibleMetrics = metrics.length > 0 ? metrics : FALLBACK_METRICS;
+  const showingFallback = metrics.length === 0 || Boolean(error);
+  const [selectedId, setSelectedId] = useState(visibleMetrics[0]?.id ?? null);
   const selected = useMemo(
-    () => metrics.find((m) => m.id === selectedId) ?? metrics[0] ?? null,
-    [metrics, selectedId],
+    () =>
+      visibleMetrics.find((m) => m.id === selectedId) ??
+      visibleMetrics[0] ??
+      null,
+    [visibleMetrics, selectedId],
   );
 
-  if (metrics.length === 0 || !selected) return null;
+  if (!selected) return null;
 
   const activeTone = TONE[selected.tone];
 
@@ -151,12 +206,17 @@ export function DynamicKpiStrip({ metrics }: { metrics: HomeCommandMetric[] }) {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <SectionLabel icon={Activity}>Home motion</SectionLabel>
         <span className="rounded-full bg-surface px-2 py-1 text-tiny text-text-tertiary">
-          Live CRM signals
+          {showingFallback ? "CRM signal fallback" : "Live CRM signals"}
         </span>
       </div>
+      {showingFallback && (
+        <p className="-mt-1 mb-2 text-[12px] text-text-secondary">
+          Showing the KPI scene shell while the CRM signal query recovers.
+        </p>
+      )}
 
       <div className="mt-2.5 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-        {metrics.map((metric) => {
+        {visibleMetrics.map((metric) => {
           const tone = TONE[metric.tone];
           const isSelected = selected.id === metric.id;
           return (

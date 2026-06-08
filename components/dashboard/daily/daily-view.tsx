@@ -41,6 +41,7 @@ interface DailyViewProps {
   initiatives: InitiativePick[];
   kpis: KpiRow[];
   commandMetrics: HomeCommandMetric[];
+  commandMetricsError?: string | null;
   blocked: BlockedProject[];
   briefingBullets: string[];
   dashboardLayout: DashWidget[];
@@ -67,6 +68,7 @@ export function DailyView({
   initiatives,
   kpis,
   commandMetrics,
+  commandMetricsError,
   blocked,
   briefingBullets,
   dashboardLayout,
@@ -128,7 +130,7 @@ export function DailyView({
       {/* Top row: meetings agenda · tasks-due agenda · countdown (Angel Falls) */}
       <TopRow meetings={meetings} tasks={tasks} countdown={countdown} nowMs={nowMs} tz={tz} />
 
-      <DynamicKpiStrip metrics={commandMetrics} />
+      <DynamicKpiStrip metrics={commandMetrics} error={commandMetricsError} />
 
       {/* KPIs — slim, full-width strip (inline-editable) */}
       <KpiStrip kpis={kpis} />
