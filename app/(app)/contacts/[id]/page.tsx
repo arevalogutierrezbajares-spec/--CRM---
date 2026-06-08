@@ -19,6 +19,8 @@ import { reciprocityFor } from "@/db/queries/reciprocity";
 import { getContact } from "@/db/queries/contacts";
 import { listPartnerAccessForContact } from "@/db/queries/partner-access";
 import { PartnerAccessPanel } from "@/components/partner-access/partner-access-panel";
+import { listPitchFeedbackForContact } from "@/db/queries/pitch-feedback";
+import { PitchFeedbackPanel } from "@/components/pitch-feedback/pitch-feedback-panel";
 import { listTouchesForContact } from "@/db/queries/touches";
 import { listMeetingsForContact } from "@/db/queries/meetings";
 import { safeRead, isDbConfigured } from "@/lib/db-status";
@@ -31,7 +33,7 @@ export default async function ContactDetailPage(props: { params: Params }) {
   const user = await requireUser();
   const { id } = await props.params;
 
-  const [contactRes, touchesRes, warmPathRes, reciprocityRes, meetingsRes, accessRes] = await Promise.all([
+  const [contactRes, touchesRes, warmPathRes, reciprocityRes, meetingsRes, accessRes, pitchFeedbackRes] = await Promise.all([
     safeRead(() => getContact({ id, workspaceId: user.workspaceId }), null),
     safeRead(() => listTouchesForContact({ contactId: id, workspaceId: user.workspaceId }), []),
     safeRead(
@@ -52,6 +54,10 @@ export default async function ContactDetailPage(props: { params: Params }) {
     safeRead(() => listPartnerAccessForContact({ contactId: id, workspaceId: user.workspaceId }), {
       rooms: [],
       shares: [],
+    }),
+    safeRead(() => listPitchFeedbackForContact({ contactId: id, workspaceId: user.workspaceId }), {
+      campaigns: [],
+      invites: [],
     }),
   ]);
 
@@ -207,6 +213,11 @@ export default async function ContactDetailPage(props: { params: Params }) {
               <aside className="space-y-6">
                 <WarmPath path={warmPathRes.data} />
                 <ReciprocityCard data={reciprocityRes.data} />
+                <PitchFeedbackPanel
+                  contactId={contact.id}
+                  contactName={contact.name}
+                  overview={pitchFeedbackRes.data}
+                />
                 <PartnerAccessPanel access={accessRes.data} />
                 <Card>
                   <CardHeader>

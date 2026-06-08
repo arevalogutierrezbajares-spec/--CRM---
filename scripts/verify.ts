@@ -263,6 +263,49 @@ const checks: Check[] = [
     },
   },
   // ──────────────────────────────────────────────────────────────────────────
+  // Company email provider (AGB CRM Email module)
+  // ──────────────────────────────────────────────────────────────────────────
+  {
+    id: "microsoft-graph-email",
+    label: "Microsoft Graph email provider token",
+    required: ["MS_GRAPH_TENANT_ID", "MS_GRAPH_CLIENT_ID", "MS_GRAPH_CLIENT_SECRET"],
+    async run() {
+      const body = new URLSearchParams({
+        client_id: process.env.MS_GRAPH_CLIENT_ID!,
+        client_secret: process.env.MS_GRAPH_CLIENT_SECRET!,
+        scope: "https://graph.microsoft.com/.default",
+        grant_type: "client_credentials",
+      });
+      const resp = await fetch(
+        `https://login.microsoftonline.com/${process.env.MS_GRAPH_TENANT_ID}/oauth2/v2.0/token`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body,
+        },
+      );
+      const text = await resp.text();
+      if (!resp.ok) {
+        return {
+          verdict: "broken" as const,
+          detail: `HTTP ${resp.status} — ${text.slice(0, 200)}`,
+        };
+      }
+      return { verdict: "active" as const, detail: "app-only token issued" };
+    },
+  },
+  {
+    id: "email-ops-env",
+    label: "Email webhook + cron guard env",
+    required: ["EMAIL_GRAPH_WEBHOOK_CLIENT_STATE", "CRON_SECRET", "NEXT_PUBLIC_SITE_URL"],
+    async run() {
+      return {
+        verdict: "active" as const,
+        detail: "webhook client-state, cron secret, and public site URL configured",
+      };
+    },
+  },
+  // ──────────────────────────────────────────────────────────────────────────
   // Obsidian sync
   // ──────────────────────────────────────────────────────────────────────────
   {

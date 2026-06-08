@@ -1,6 +1,7 @@
 import {
   Home,
   Inbox,
+  Mail,
   ListTodo,
   CalendarDays,
   Megaphone,
@@ -12,6 +13,7 @@ import {
   CalendarCheck,
   KanbanSquare,
   Contact2,
+  MessageSquareText,
   Network,
   UsersRound,
   Wallet,
@@ -47,6 +49,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/", label: "Home", icon: Home },
       { href: "/inbox", label: "Inbox", icon: Inbox },
+      { href: "/email", label: "Email", icon: Mail },
       { href: "/work", label: "My Work", icon: ListTodo },
       { href: "/meetings", label: "Meetings", icon: CalendarDays },
       { href: "/town-hall", label: "Town Hall", icon: Megaphone },
@@ -73,6 +76,7 @@ export const NAV_GROUPS: NavGroup[] = [
     tree: true,
     items: [
       { href: "/contacts", label: "Contacts", icon: Contact2 },
+      { href: "/pitch-feedback", label: "Pitch Feedback", icon: MessageSquareText },
       { href: "/network", label: "Network", icon: Network },
       { href: "/team", label: "Team", icon: UsersRound },
       { href: "/treasury", label: "Treasury", icon: Wallet },
