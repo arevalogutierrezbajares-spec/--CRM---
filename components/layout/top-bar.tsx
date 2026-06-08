@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { Mail } from "lucide-react";
 import { UserMenu } from "./user-menu";
 import { MobileNav } from "./mobile-nav";
 import { NotificationBell } from "@/components/town-hall/notification-bell";
@@ -27,6 +29,14 @@ export function TopBar({
       <div className="flex shrink-0 items-center gap-2 sm:gap-3">
         {action}
         <MobileTownHallButton />
+        <Link
+          href="/email"
+          aria-label="Open email"
+          title="Open email"
+          className="inline-grid h-10 w-10 place-items-center rounded-md text-[var(--muted-foreground)] transition-colors hover:bg-[var(--accent)] hover:text-[var(--foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+        >
+          <Mail className="h-4 w-4" />
+        </Link>
         <NotificationBell />
         <UserMenu email={email} displayName={displayName} />
       </div>
