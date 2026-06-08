@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { advanceLobStage } from "@/app/(app)/lob/actions";
+import { advanceProjectStage } from "@/app/(app)/projects/actions";
 
 type Card = {
   id: string;
@@ -40,8 +40,8 @@ export function KanbanCard({
 
   function move(stageId: string) {
     startTransition(async () => {
-      const res = await advanceLobStage({
-        lobId: card.id,
+      const res = await advanceProjectStage({
+        projectId: card.id,
         toStageId: stageId,
       });
       if (res.ok) toast.success(`Moved "${card.title}"`);
@@ -58,7 +58,7 @@ export function KanbanCard({
           className={cn("mt-1.5 h-2 w-2 shrink-0 rounded-full", healthDot[card.health])}
         />
         <Link
-          href={`/lob/${card.id}`}
+          href={`/projects/${card.id}`}
           className="min-w-0 flex-1 font-medium hover:underline"
         >
           {card.title}

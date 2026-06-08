@@ -13,7 +13,7 @@ export const GO_TO: GoTo[] = [
   { keys: "w", label: "My Work", href: "/work" },
   { keys: "p", label: "Priorities", href: "/priorities" },
   { keys: "r", label: "Weekly Review", href: "/review" },
-  { keys: "j", label: "Lines of Business", href: "/lob" },
+  { keys: "j", label: "Projects", href: "/projects" },
   { keys: "m", label: "Meetings", href: "/meetings" },
   { keys: "t", label: "Town Hall", href: "/town-hall" },
   { keys: "c", label: "Contacts", href: "/contacts" },

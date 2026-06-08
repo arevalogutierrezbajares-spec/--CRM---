@@ -125,7 +125,7 @@ export const logTouch: ToolEntry = {
             | "meeting"
             | "voice_memo"
             | "obsidian") ?? "manual",
-        lobId: (safeStr(input.project_id) || null) as string | null,
+        projectId: (safeStr(input.project_id) || null) as string | null,
         workspaceId: ctx.workspaceId,
         createdBy: ctx.userId,
       })

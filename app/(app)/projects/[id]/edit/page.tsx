@@ -6,8 +6,8 @@ import { TopBar } from "@/components/layout/top-bar";
 import { Card, CardContent } from "@/components/ui/card";
 import { ProjectForm } from "@/components/projects/project-form";
 import { DbBanner } from "@/components/db-banner";
-import { getProject } from "@/db/queries/projects";
-import { listLines } from "@/db/queries/lines-of-business";
+import { getProject, listTemplates } from "@/db/queries/projects";
+import { listContacts } from "@/db/queries/contacts";
 import { safeRead } from "@/lib/db-status";
 import { updateProject } from "../../actions";
 
@@ -17,11 +17,15 @@ export default async function EditProjectPage(props: { params: Params }) {
   const user = await requireUser();
   const { id } = await props.params;
 
-  const [projectRes, lobsRes] = await Promise.all([
+  const [projectRes, templatesRes, contactsRes] = await Promise.all([
     safeRead(() => getProject({ id, workspaceId: user.workspaceId }), null),
     safeRead(
-      () => listLines({ workspaceId: user.workspaceId, topLevelOnly: false }),
-      [],
+      () => listTemplates(),
+      [] as Awaited<ReturnType<typeof listTemplates>>,
+    ),
+    safeRead(
+      () => listContacts({ workspaceId: user.workspaceId }),
+      [] as Awaited<ReturnType<typeof listContacts>>,
     ),
   ]);
 
@@ -47,6 +51,10 @@ export default async function EditProjectPage(props: { params: Params }) {
           <h1 className="text-2xl font-semibold tracking-tight">
             Edit {project?.title ?? "project"}
           </h1>
+          <p className="text-sm text-[var(--muted-foreground)]">
+            Template is set at creation and locked — milestones live on the
+            project itself.
+          </p>
         </header>
 
         {!projectRes.ok && <DbBanner error={projectRes.error} />}
@@ -54,17 +62,25 @@ export default async function EditProjectPage(props: { params: Params }) {
         <Card>
           <CardContent className="pt-6">
             <ProjectForm
-              lobs={lobsRes.data.map((l) => ({ id: l.id, title: l.title }))}
+              templateLocked
+              templates={templatesRes.data.map((t) => ({
+                id: t.id,
+                name: t.name,
+                description: t.description,
+              }))}
+              contacts={contactsRes.data.map((c) => ({ id: c.id, name: c.name }))}
               initial={
                 project
                   ? {
                       id: project.id,
-                      lobId: project.lobId,
                       title: project.title,
                       status: project.status,
+                      templateId: project.templateId,
+                      contactIds: project.contacts.map((c) => c.id),
                       dueDate: project.dueDate,
                       waitingOn: project.waitingOn,
                       expectedUnblockDate: project.expectedUnblockDate,
+                      notesPath: project.notesPath,
                     }
                   : undefined
               }

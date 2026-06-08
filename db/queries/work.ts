@@ -9,7 +9,6 @@ const {
   milestoneThemes,
   milestones,
   projects,
-  linesOfBusiness,
   users,
 } = schema;
 
@@ -79,18 +78,18 @@ export async function listInitiatives(opts: {
   const conditions = [eq(initiatives.workspaceId, opts.workspaceId)];
   if (opts.status) conditions.push(eq(initiatives.status, opts.status));
   if (opts.priority) conditions.push(eq(initiatives.priority, opts.priority));
-  if (opts.projectId) conditions.push(eq(initiatives.lobId, opts.projectId));
+  if (opts.projectId) conditions.push(eq(initiatives.projectId, opts.projectId));
   if (opts.ownerUserId)
     conditions.push(eq(initiatives.ownerUserId, opts.ownerUserId));
 
   const rows = await db
     .select({
       init: initiatives,
-      projectTitle: linesOfBusiness.title,
+      projectTitle: projects.title,
       ownerName: users.displayName,
     })
     .from(initiatives)
-    .leftJoin(linesOfBusiness, eq(linesOfBusiness.id, initiatives.lobId))
+    .leftJoin(projects, eq(projects.id, initiatives.projectId))
     .leftJoin(users, eq(users.id, initiatives.ownerUserId))
     .where(and(...conditions))
     .orderBy(desc(initiatives.updatedAt));

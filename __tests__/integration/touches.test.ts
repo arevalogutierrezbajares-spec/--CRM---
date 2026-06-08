@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import { db, schema } from "@/db";
 import {
   listTouchesForContact,
-  listTouchesForLob,
+  listTouchesForProject,
 } from "@/db/queries/touches";
 import { FAKE_USER_ID, FAKE_WORKSPACE_ID } from "./setup";
 
-const { contacts, touches, linesOfBusiness } = schema;
+const { contacts, touches, projects } = schema;
 
 const base = { workspaceId: FAKE_WORKSPACE_ID, createdBy: FAKE_USER_ID };
 
@@ -31,33 +31,33 @@ describe("[integration] touches", () => {
     expect(list[0].body).toBeTruthy();
   });
 
-  it("touches scoped to a line of business surface via listTouchesForLob", async () => {
+  it("touches scoped to a project surface via listTouchesForProject", async () => {
     const [c] = await db
       .insert(contacts)
-      .values({ ...base, name: "LoB contact" })
+      .values({ ...base, name: "Project contact" })
       .returning();
-    const [lob] = await db
-      .insert(linesOfBusiness)
-      .values({ ...base, title: "Test LoB" })
+    const [p] = await db
+      .insert(projects)
+      .values({ ...base, title: "Test project" })
       .returning();
 
     await db.insert(touches).values([
       {
         ...base,
         contactId: c.id,
-        lobId: lob.id,
+        projectId: p.id,
         channel: "meeting",
         body: "Project kickoff",
       },
       { ...base, contactId: c.id, channel: "manual", body: "Unrelated note" },
     ]);
 
-    const lobTouches = await listTouchesForLob({
-      lobId: lob.id,
+    const projectTouches = await listTouchesForProject({
+      projectId: p.id,
       workspaceId: FAKE_WORKSPACE_ID,
     });
-    expect(lobTouches).toHaveLength(1);
-    expect(lobTouches[0].body).toBe("Project kickoff");
+    expect(projectTouches).toHaveLength(1);
+    expect(projectTouches[0].body).toBe("Project kickoff");
   });
 
   it("respects workspace ownership boundary", async () => {

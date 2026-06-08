@@ -13,12 +13,36 @@ export type PitchFeedbackPrompt = {
   required?: boolean;
 };
 
+export type PitchFeedbackVisual = {
+  kind:
+    | "image"
+    | "placeholder"
+    | "metric"
+    | "system"
+    | "map"
+    | "impact"
+    | "people"
+    | "brand";
+  label?: string;
+  title?: string;
+  caption?: string;
+  src?: string;
+  alt?: string;
+  stat?: string;
+  points?: string[];
+  metrics?: Array<{
+    value: string;
+    label: string;
+  }>;
+};
+
 export type PitchFeedbackSection = {
   key: string;
   eyebrow?: string;
   title: string;
   body: string;
   proof?: string;
+  visual?: PitchFeedbackVisual;
   prompts: PitchFeedbackPrompt[];
 };
 

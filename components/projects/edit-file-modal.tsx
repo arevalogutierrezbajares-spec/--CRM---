@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { updateLinkAction } from "@/app/(app)/lob/actions";
+import { updateLinkAction } from "@/app/(app)/projects/actions";
 import type { LinkCategory } from "@/lib/project-links/detect-category";
 
 const CATEGORY_OPTIONS: { value: LinkCategory; label: string }[] = [
@@ -50,12 +50,12 @@ export type FileEditInitial = {
  * file-safe path (the action only validates a URL when one is provided).
  */
 export function EditFileModal({
-  lobId,
+  projectId,
   open,
   onOpenChange,
   initial,
 }: {
-  lobId: string;
+  projectId: string;
   open: boolean;
   onOpenChange: (v: boolean) => void;
   initial?: FileEditInitial;
@@ -65,7 +65,7 @@ export function EditFileModal({
       {open && initial && (
         <FileForm
           key={initial.linkId}
-          lobId={lobId}
+          projectId={projectId}
           onOpenChange={onOpenChange}
           initial={initial}
         />
@@ -75,11 +75,11 @@ export function EditFileModal({
 }
 
 function FileForm({
-  lobId,
+  projectId,
   onOpenChange,
   initial,
 }: {
-  lobId: string;
+  projectId: string;
   onOpenChange: (v: boolean) => void;
   initial: FileEditInitial;
 }) {
@@ -97,7 +97,7 @@ function FileForm({
     }
     startTransition(async () => {
       const res = await updateLinkAction({
-        lobId,
+        projectId,
         linkId: initial.linkId,
         label,
         category,

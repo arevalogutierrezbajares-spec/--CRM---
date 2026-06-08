@@ -200,17 +200,17 @@ async function ensureProject(input: {
 }) {
   const [existing] = await db
     .select()
-    .from(schema.linesOfBusiness)
+    .from(schema.projects)
     .where(
       and(
-        eq(schema.linesOfBusiness.workspaceId, input.workspaceId),
-        eq(schema.linesOfBusiness.title, input.title),
+        eq(schema.projects.workspaceId, input.workspaceId),
+        eq(schema.projects.title, input.title),
       ),
     )
     .limit(1);
   if (existing) return existing;
   const [project] = await db
-    .insert(schema.linesOfBusiness)
+    .insert(schema.projects)
     .values({
       workspaceId: input.workspaceId,
       title: input.title,

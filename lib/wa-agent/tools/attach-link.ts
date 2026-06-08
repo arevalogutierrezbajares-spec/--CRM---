@@ -1,12 +1,12 @@
 import { and, eq, ilike } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { createProjectLink } from "@/db/queries/lines-of-business";
+import { createProjectLink } from "@/db/queries/projects";
 import { validateLinkUrl } from "@/lib/project-links/validate";
 import { detectCategory } from "@/lib/project-links/detect-category";
 import { brandForUrl } from "@/lib/project-links/host-brands";
 import { safeStr, type ToolEntry } from "./_types";
 
-const { linesOfBusiness } = schema;
+const { projects } = schema;
 
 const CATEGORIES = [
   "business",
@@ -29,9 +29,9 @@ async function resolveProject(
 > {
   if (projectId) {
     const [p] = await db
-      .select({ id: linesOfBusiness.id, title: linesOfBusiness.title })
-      .from(linesOfBusiness)
-      .where(and(eq(linesOfBusiness.id, projectId), eq(linesOfBusiness.workspaceId, workspaceId)))
+      .select({ id: projects.id, title: projects.title })
+      .from(projects)
+      .where(and(eq(projects.id, projectId), eq(projects.workspaceId, workspaceId)))
       .limit(1);
     return p
       ? { ok: true, ...p }
@@ -39,12 +39,12 @@ async function resolveProject(
   }
   if (projectQuery) {
     const rows = await db
-      .select({ id: linesOfBusiness.id, title: linesOfBusiness.title })
-      .from(linesOfBusiness)
+      .select({ id: projects.id, title: projects.title })
+      .from(projects)
       .where(
         and(
-          eq(linesOfBusiness.workspaceId, workspaceId),
-          ilike(linesOfBusiness.title, `%${projectQuery}%`),
+          eq(projects.workspaceId, workspaceId),
+          ilike(projects.title, `%${projectQuery}%`),
         ),
       )
       .limit(2);
@@ -52,7 +52,7 @@ async function resolveProject(
     if (rows.length > 1) {
       return {
         ok: false,
-        error: `Multiple linesOfBusiness match "${projectQuery}" — ask which one, or pass project_id.`,
+        error: `Multiple projects match "${projectQuery}" — ask which one, or pass project_id.`,
       };
     }
     return { ok: true, ...rows[0] };
@@ -111,7 +111,7 @@ export const attachLink: ToolEntry = {
 
     const row = await createProjectLink({
       workspaceId: ctx.workspaceId,
-      lobId: project.id,
+      projectId: project.id,
       actorId: ctx.userId,
       label,
       url: cleanUrl,

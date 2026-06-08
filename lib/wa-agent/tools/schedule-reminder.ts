@@ -66,7 +66,7 @@ export const scheduleReminder: ToolEntry = {
             : null,
         recurTime,
         sourceContactId: safeStr(input.source_contact_id) || null,
-        sourceLobId: safeStr(input.source_project_id) || null,
+        sourceProjectId: safeStr(input.source_project_id) || null,
       })
       .returning({ id: reminders.id });
 

@@ -10,7 +10,7 @@ import { createClient } from "@/lib/supabase/client";
 import {
   createUploadUrlAction,
   finalizeFileUploadAction,
-} from "@/app/(app)/lob/actions";
+} from "@/app/(app)/projects/actions";
 import { isAllowedUpload, REJECT_MESSAGE } from "./allowed-types";
 import { maxUploadBytes, tooLargeMessage } from "./limits";
 import { PROJECT_FILES_BUCKET } from "./constants";
@@ -28,7 +28,7 @@ export function preValidateFile(file: File): { ok: true } | { ok: false; error: 
 }
 
 export async function uploadProjectFile(opts: {
-  lobId: string;
+  projectId: string;
   file: File;
   label?: string;
   category?: string;
@@ -37,7 +37,7 @@ export async function uploadProjectFile(opts: {
   if (!pre.ok) return pre;
 
   const signed = await createUploadUrlAction({
-    lobId: opts.lobId,
+    projectId: opts.projectId,
     filename: opts.file.name,
     mime: opts.file.type,
     sizeBytes: opts.file.size,
@@ -55,7 +55,7 @@ export async function uploadProjectFile(opts: {
   }
 
   const finalized = await finalizeFileUploadAction({
-    lobId: opts.lobId,
+    projectId: opts.projectId,
     storagePath: signed.path,
     originalFilename: opts.file.name,
     mime: opts.file.type,

@@ -17,7 +17,7 @@ import type {
 
 const {
   contacts,
-  linesOfBusiness,
+  projects,
   touches,
   pitchFeedbackCampaigns,
   pitchFeedbackInvites,
@@ -796,7 +796,7 @@ export async function getPitchFeedbackInviteDetail(opts: {
       invite: pitchFeedbackInvites,
       campaign: pitchFeedbackCampaigns,
       contact: contacts,
-      projectTitle: linesOfBusiness.title,
+      projectTitle: projects.title,
     })
     .from(pitchFeedbackInvites)
     .innerJoin(
@@ -805,8 +805,8 @@ export async function getPitchFeedbackInviteDetail(opts: {
     )
     .innerJoin(contacts, eq(contacts.id, pitchFeedbackInvites.contactId))
     .leftJoin(
-      linesOfBusiness,
-      eq(linesOfBusiness.id, pitchFeedbackCampaigns.lobId),
+      projects,
+      eq(projects.id, pitchFeedbackCampaigns.projectId),
     )
     .where(
       and(

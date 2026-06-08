@@ -70,7 +70,7 @@ export default async function ResearchNotePage(props: { params: Params }) {
               <>
                 <span>·</span>
                 <Link
-                  href={`/lob/${note.lobId}`}
+                  href={`/projects/${note.projectId}`}
                   className="hover:text-text-primary"
                 >
                   <DashBadge variant="neutral">{note.projectTitle}</DashBadge>

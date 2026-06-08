@@ -31,16 +31,13 @@ export async function listWorkspaceDocs(workspaceId: string, limit = 300): Promi
       kind: schema.projectLinks.kind,
       category: schema.projectLinks.category,
       url: schema.projectLinks.url,
-      projectId: schema.projectLinks.lobId,
-      projectTitle: schema.linesOfBusiness.title,
+      projectId: schema.projectLinks.projectId,
+      projectTitle: schema.projects.title,
     })
     .from(schema.projectLinks)
-    .innerJoin(
-      schema.linesOfBusiness,
-      eq(schema.linesOfBusiness.id, schema.projectLinks.lobId),
-    )
-    .where(eq(schema.linesOfBusiness.workspaceId, workspaceId))
-    .orderBy(asc(schema.linesOfBusiness.title), asc(schema.projectLinks.label))
+    .innerJoin(schema.projects, eq(schema.projects.id, schema.projectLinks.projectId))
+    .where(eq(schema.projects.workspaceId, workspaceId))
+    .orderBy(asc(schema.projects.title), asc(schema.projectLinks.label))
     .limit(limit);
   return rows.map((r) => {
     const external = r.kind === "link" && Boolean(r.url);
@@ -55,10 +52,10 @@ export async function listWorkspaceDocs(workspaceId: string, limit = 300): Promi
       external,
       href:
         r.kind === "doc"
-          ? `/lob/${r.projectId}/docs/${r.id}`
+          ? `/projects/${r.projectId}/docs/${r.id}`
           : external
             ? (r.url as string)
-            : `/lob/${r.projectId}`,
+            : `/projects/${r.projectId}`,
     };
   });
 }
@@ -453,9 +450,8 @@ export async function findTasks(opts: {
 
 /* ── unified detail ───────────────────────────────────────────────────── */
 
-// Docs/links live on the LoB; resolve them by the owning Line of Business.
-async function projectDocsFor(lobId: string | null): Promise<ProjectDocRef[]> {
-  if (!lobId) return [];
+async function projectDocsFor(projectId: string | null): Promise<ProjectDocRef[]> {
+  if (!projectId) return [];
   const rows = await db
     .select({
       id: schema.projectLinks.id,
@@ -464,7 +460,7 @@ async function projectDocsFor(lobId: string | null): Promise<ProjectDocRef[]> {
       url: schema.projectLinks.url,
     })
     .from(schema.projectLinks)
-    .where(eq(schema.projectLinks.lobId, lobId))
+    .where(eq(schema.projectLinks.projectId, projectId))
     .orderBy(asc(schema.projectLinks.category), asc(schema.projectLinks.sortOrder));
   return rows.map((r) => ({ id: r.id, label: r.label, kind: r.kind, url: r.url }));
 }
@@ -502,7 +498,6 @@ export async function getItemDetail(
         voiceNoteId: schema.actionItems.voiceNoteId,
         projectId: schema.actionItems.projectId,
         projectTitle: schema.projects.title,
-        lobId: schema.projects.lobId,
         contactId: schema.actionItems.contactId,
         contactName: schema.contacts.name,
         assigneeId: schema.actionItems.assigneeUserId,
@@ -516,7 +511,7 @@ export async function getItemDetail(
       .limit(1);
     if (!row) return null;
     const [projectDocs, attachments] = await Promise.all([
-      projectDocsFor(row.lobId),
+      projectDocsFor(row.projectId),
       listItemAttachments(workspaceId, entityType, id),
     ]);
     return {
@@ -552,7 +547,6 @@ export async function getItemDetail(
         priority: schema.milestones.priority,
         projectId: schema.milestones.projectId,
         projectTitle: schema.projects.title,
-        lobId: schema.projects.lobId,
         initiativeId: schema.milestones.initiativeId,
         initiativeTitle: schema.initiatives.title,
         sprintId: schema.milestones.sprintId,
@@ -570,7 +564,7 @@ export async function getItemDetail(
       .limit(1);
     if (!row) return null;
     const [projectDocs, attachments, subtasks] = await Promise.all([
-      projectDocsFor(row.lobId),
+      projectDocsFor(row.projectId),
       listItemAttachments(workspaceId, entityType, id),
       db
         .select({ id: schema.milestones.id, title: schema.milestones.title, status: schema.milestones.status })
@@ -623,7 +617,6 @@ export async function getItemDetail(
       endedAt: schema.meetings.endedAt,
       projectId: schema.meetings.linkedProjectId,
       projectTitle: schema.projects.title,
-      lobId: schema.projects.lobId,
     })
     .from(schema.meetings)
     .leftJoin(schema.projects, eq(schema.projects.id, schema.meetings.linkedProjectId))
@@ -631,7 +624,7 @@ export async function getItemDetail(
     .limit(1);
   if (!row) return null;
   const [projectDocs, attachments, generated, attendeeRows] = await Promise.all([
-    projectDocsFor(row.lobId),
+    projectDocsFor(row.projectId),
     listItemAttachments(workspaceId, entityType, id),
     db
       .select({ id: schema.milestones.id, title: schema.milestones.title, status: schema.milestones.status })

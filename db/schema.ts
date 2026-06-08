@@ -606,10 +606,7 @@ export const pipelineStages = pgTable("pipeline_stages", {
 // PROJECTS
 // ─────────────────────────────────────────────────────────────────────────────
 
-// A Line of Business (LoB) is the top-level venture record: portfolio display,
-// pipeline, shared links/docs/contacts, and module self-nesting. Formerly the
-// `projects` table; the lighter execution-unit `projects` table now rolls up to it.
-export const linesOfBusiness = pgTable("lines_of_business", {
+export const projects = pgTable("projects", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   workspaceId: uuid("workspace_id")
     .notNull()
@@ -638,35 +635,8 @@ export const linesOfBusiness = pgTable("lines_of_business", {
   logoUrl: text("logo_url"), // /logos/x.svg or external URL
   logoUrlDark: text("logo_url_dark"), // dark-mode variant (optional)
   objectives: jsonb("objectives").$type<string[]>().default([]), // 3-5 high-level bullets
-  // Self-reference for module/sub-LoB nesting (e.g. CaneyCloud → Stays/Restaurants/WA Concierge)
-  parentLobId: uuid("parent_lob_id"),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-});
-
-// A Project is the lighter execution unit that rolls up to exactly one LoB.
-// Milestones, finance allocations, and meetings attach here (not on the LoB).
-export const projects = pgTable("projects", {
-  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  workspaceId: uuid("workspace_id")
-    .notNull()
-    .references(() => workspaces.id, { onDelete: "cascade" }),
-  lobId: uuid("lob_id")
-    .notNull()
-    .references(() => linesOfBusiness.id, { onDelete: "cascade" }),
-  title: text("title").notNull(),
-  status: projectStatus("status").notNull().default("active"),
-  dueDate: date("due_date"),
-  healthColor: healthColor("health_color").notNull().default("green"),
-  waitingOn: text("waiting_on"),
-  expectedUnblockDate: date("expected_unblock_date"),
-  createdBy: uuid("created_by")
-    .notNull()
-    .references(() => users.id),
+  // Self-reference for module/sub-project nesting (e.g. CaneyCloud → Stays/Restaurants/WA Concierge)
+  parentProjectId: uuid("parent_project_id"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -691,9 +661,9 @@ export const projectLinks = pgTable("project_links", {
   workspaceId: uuid("workspace_id")
     .notNull()
     .references(() => workspaces.id, { onDelete: "cascade" }),
-  lobId: uuid("lob_id")
+  projectId: uuid("project_id")
     .notNull()
-    .references(() => linesOfBusiness.id, { onDelete: "cascade" }),
+    .references(() => projects.id, { onDelete: "cascade" }),
   // FR-DOC-13 discriminator. Defaults to 'link' for new inserts via the
   // create-link server action; the 134 existing url=null rows are backfilled
   // to 'note'.
@@ -726,7 +696,7 @@ export const projectLinkAudits = pgTable("project_link_audits", {
   workspaceId: uuid("workspace_id")
     .notNull()
     .references(() => workspaces.id, { onDelete: "cascade" }),
-  lobId: uuid("lob_id").references(() => linesOfBusiness.id, {
+  projectId: uuid("project_id").references(() => projects.id, {
     onDelete: "set null",
   }),
   linkId: uuid("link_id").notNull(), // intentionally NOT a FK
@@ -836,7 +806,7 @@ export const partnerShares = pgTable("partner_shares", {
   contactId: uuid("contact_id").references(() => contacts.id, {
     onDelete: "set null",
   }),
-  lobId: uuid("lob_id").references(() => linesOfBusiness.id, {
+  projectId: uuid("project_id").references(() => projects.id, {
     onDelete: "set null",
   }),
   projectLinkId: uuid("project_link_id").references(() => projectLinks.id, {
@@ -899,7 +869,7 @@ export const pitchFeedbackCampaigns = pgTable("pitch_feedback_campaigns", {
   workspaceId: uuid("workspace_id")
     .notNull()
     .references(() => workspaces.id, { onDelete: "cascade" }),
-  lobId: uuid("lob_id").references(() => linesOfBusiness.id, {
+  projectId: uuid("project_id").references(() => projects.id, {
     onDelete: "set null",
   }),
   name: text("name").notNull(),
@@ -1138,15 +1108,15 @@ export const projectPins = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    lobId: uuid("lob_id")
+    projectId: uuid("project_id")
       .notNull()
-      .references(() => linesOfBusiness.id, { onDelete: "cascade" }),
+      .references(() => projects.id, { onDelete: "cascade" }),
     workspaceId: uuid("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => ({ pk: primaryKey({ columns: [t.userId, t.lobId] }) }),
+  (t) => ({ pk: primaryKey({ columns: [t.userId, t.projectId] }) }),
 );
 
 // FR-PMO: recently-opened projects per user (Home "Recent").
@@ -1156,15 +1126,15 @@ export const projectVisits = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    lobId: uuid("lob_id")
+    projectId: uuid("project_id")
       .notNull()
-      .references(() => linesOfBusiness.id, { onDelete: "cascade" }),
+      .references(() => projects.id, { onDelete: "cascade" }),
     workspaceId: uuid("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
     visitedAt: timestamp("visited_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => ({ pk: primaryKey({ columns: [t.userId, t.lobId] }) }),
+  (t) => ({ pk: primaryKey({ columns: [t.userId, t.projectId] }) }),
 );
 
 // FR-PMO: attach docs/links directly to an action item, milestone, or meeting.
@@ -1194,16 +1164,16 @@ export const itemAttachments = pgTable("item_attachments", {
 export const projectContacts = pgTable(
   "project_contacts",
   {
-    lobId: uuid("lob_id")
+    projectId: uuid("project_id")
       .notNull()
-      .references(() => linesOfBusiness.id, { onDelete: "cascade" }),
+      .references(() => projects.id, { onDelete: "cascade" }),
     contactId: uuid("contact_id")
       .notNull()
       .references(() => contacts.id, { onDelete: "cascade" }),
     role: text("role").notNull().default("primary"),
   },
   (t) => ({
-    pk: primaryKey({ columns: [t.lobId, t.contactId] }),
+    pk: primaryKey({ columns: [t.projectId, t.contactId] }),
   }),
 );
 
@@ -1259,7 +1229,7 @@ export const touches = pgTable("touches", {
   contactId: uuid("contact_id")
     .notNull()
     .references(() => contacts.id, { onDelete: "cascade" }),
-  lobId: uuid("lob_id").references(() => linesOfBusiness.id, {
+  projectId: uuid("project_id").references(() => projects.id, {
     onDelete: "set null",
   }),
   meetingId: uuid("meeting_id"),
@@ -1324,7 +1294,6 @@ export const meetingAttendees = pgTable(
 export const usersRelations = relations(users, ({ many }) => ({
   memberships: many(workspaceMembers),
   createdContacts: many(contacts),
-  createdLinesOfBusiness: many(linesOfBusiness),
   createdProjects: many(projects),
   createdMilestones: many(milestones),
   createdTouches: many(touches),
@@ -1337,7 +1306,6 @@ export const usersRelations = relations(users, ({ many }) => ({
 export const workspacesRelations = relations(workspaces, ({ many }) => ({
   members: many(workspaceMembers),
   contacts: many(contacts),
-  linesOfBusiness: many(linesOfBusiness),
   projects: many(projects),
   pitchFeedbackCampaigns: many(pitchFeedbackCampaigns),
   pitchFeedbackInvites: many(pitchFeedbackInvites),
@@ -1383,54 +1351,28 @@ export const contactsRelations = relations(contacts, ({ one, many }) => ({
   pitchFeedbackInsights: many(pitchFeedbackAiInsights),
 }));
 
-export const linesOfBusinessRelations = relations(
-  linesOfBusiness,
-  ({ one, many }) => ({
-    workspace: one(workspaces, {
-      fields: [linesOfBusiness.workspaceId],
-      references: [workspaces.id],
-    }),
-    creator: one(users, {
-      fields: [linesOfBusiness.createdBy],
-      references: [users.id],
-    }),
-    template: one(pipelineTemplates, {
-      fields: [linesOfBusiness.templateId],
-      references: [pipelineTemplates.id],
-    }),
-    currentStage: one(pipelineStages, {
-      fields: [linesOfBusiness.currentStageId],
-      references: [pipelineStages.id],
-    }),
-    parent: one(linesOfBusiness, {
-      fields: [linesOfBusiness.parentLobId],
-      references: [linesOfBusiness.id],
-      relationName: "lobModules",
-    }),
-    modules: many(linesOfBusiness, { relationName: "lobModules" }),
-    projects: many(projects),
-    links: many(projectLinks),
-    touches: many(touches),
-    contactLinks: many(projectContacts),
-    pitchFeedbackCampaigns: many(pitchFeedbackCampaigns),
-  }),
-);
-
 export const projectsRelations = relations(projects, ({ one, many }) => ({
   workspace: one(workspaces, {
     fields: [projects.workspaceId],
     references: [workspaces.id],
   }),
-  lob: one(linesOfBusiness, {
-    fields: [projects.lobId],
-    references: [linesOfBusiness.id],
-  }),
   creator: one(users, {
     fields: [projects.createdBy],
     references: [users.id],
   }),
+  template: one(pipelineTemplates, {
+    fields: [projects.templateId],
+    references: [pipelineTemplates.id],
+  }),
+  currentStage: one(pipelineStages, {
+    fields: [projects.currentStageId],
+    references: [pipelineStages.id],
+  }),
   milestones: many(milestones),
+  touches: many(touches),
+  contactLinks: many(projectContacts),
   meetings: many(meetings),
+  pitchFeedbackCampaigns: many(pitchFeedbackCampaigns),
 }));
 
 export const meetingsRelations = relations(meetings, ({ one, many }) => ({
@@ -1454,7 +1396,7 @@ export const pipelineTemplatesRelations = relations(
   pipelineTemplates,
   ({ many }) => ({
     stages: many(pipelineStages),
-    linesOfBusiness: many(linesOfBusiness),
+    projects: many(projects),
   }),
 );
 
@@ -1512,7 +1454,7 @@ export const reminders = pgTable("reminders", {
   sourceContactId: uuid("source_contact_id").references(() => contacts.id, {
     onDelete: "set null",
   }),
-  sourceLobId: uuid("source_lob_id").references(() => linesOfBusiness.id, {
+  sourceProjectId: uuid("source_project_id").references(() => projects.id, {
     onDelete: "set null",
   }),
   createdAt: timestamp("created_at", { withTimezone: true })
@@ -1830,7 +1772,7 @@ export const initiatives = pgTable("initiatives", {
     .notNull()
     .references(() => workspaces.id, { onDelete: "cascade" }),
   // Optional venture (LoB) — initiatives can be cross-venture
-  lobId: uuid("lob_id").references(() => linesOfBusiness.id, {
+  projectId: uuid("project_id").references(() => projects.id, {
     onDelete: "set null",
   }),
   title: text("title").notNull(),
@@ -1967,9 +1909,9 @@ export const themesRelations = relations(themes, ({ many }) => ({
 export const initiativesRelations = relations(
   initiatives,
   ({ one, many }) => ({
-    lob: one(linesOfBusiness, {
-      fields: [initiatives.lobId],
-      references: [linesOfBusiness.id],
+    project: one(projects, {
+      fields: [initiatives.projectId],
+      references: [projects.id],
     }),
     owner: one(users, {
       fields: [initiatives.ownerUserId],
@@ -2065,7 +2007,7 @@ export const researchNotes = pgTable("research_notes", {
   workspaceId: uuid("workspace_id")
     .notNull()
     .references(() => workspaces.id, { onDelete: "cascade" }),
-  lobId: uuid("lob_id").references(() => linesOfBusiness.id, {
+  projectId: uuid("project_id").references(() => projects.id, {
     onDelete: "set null",
   }),
   sourceRoot: text("source_root").notNull(),

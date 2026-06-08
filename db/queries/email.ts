@@ -24,7 +24,6 @@ const {
   contacts,
   contactChannels,
   projects,
-  linesOfBusiness,
   initiatives,
   milestones,
   touches,
@@ -285,10 +284,10 @@ async function listContactOptions(workspaceId: string): Promise<EmailContactOpti
 async function listProjectOptions(workspaceId: string): Promise<EmailProjectOption[]> {
   // Email-as-touch links to a venture (Line of Business).
   return db
-    .select({ id: linesOfBusiness.id, title: linesOfBusiness.title })
-    .from(linesOfBusiness)
-    .where(eq(linesOfBusiness.workspaceId, workspaceId))
-    .orderBy(asc(linesOfBusiness.title))
+    .select({ id: projects.id, title: projects.title })
+    .from(projects)
+    .where(eq(projects.workspaceId, workspaceId))
+    .orderBy(asc(projects.title))
     .limit(200);
 }
 
@@ -828,7 +827,7 @@ export async function createTouchFromThread(args: {
     .values({
       workspaceId: args.workspaceId,
       contactId: args.contactId,
-      lobId: args.projectId ?? null,
+      projectId: args.projectId ?? null,
       channel: "email",
       body: `${thread.subject}\n\n${thread.lastMessagePreview ?? ""}`.trim(),
       createdBy: args.actorId,
