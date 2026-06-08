@@ -2,9 +2,15 @@ import { requireUser } from "@/lib/current-user";
 import { TopBar } from "@/components/layout/top-bar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LiveCallRecorder } from "@/components/voice/live-call-recorder";
+import { RecordingsList } from "@/components/voice/recordings-list";
+import { listCallRecordings } from "@/db/queries/call-recordings";
+import { safeRead } from "@/lib/db-status";
 
 export default async function RecordCallPage() {
   const user = await requireUser();
+  const recordings = (
+    await safeRead(() => listCallRecordings({ workspaceId: user.workspaceId }), [])
+  ).data;
   return (
     <>
       <TopBar email={user.email} displayName={user.displayName} />
@@ -13,8 +19,8 @@ export default async function RecordCallPage() {
           <h1 className="text-2xl font-semibold tracking-tight">Record a call</h1>
           <p className="text-sm text-[var(--muted-foreground)]">
             Put the call on speaker, hit record, and watch the transcript build
-            live. Stop files a brief and creates action items — and logs the call
-            to a contact if you name one.
+            live. Stop always saves the full transcript + brief and creates action
+            items — and links the call to a contact if you name one.
           </p>
         </header>
 
@@ -24,6 +30,15 @@ export default async function RecordCallPage() {
           </CardHeader>
           <CardContent>
             <LiveCallRecorder />
+          </CardContent>
+        </Card>
+
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle>Saved recordings</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <RecordingsList recordings={recordings} />
           </CardContent>
         </Card>
 

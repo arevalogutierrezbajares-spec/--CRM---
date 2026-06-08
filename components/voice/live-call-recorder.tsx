@@ -9,10 +9,12 @@ type State = "idle" | "connecting" | "recording" | "saving" | "done" | "error";
 type Lang = "es" | "en" | "multi";
 
 type SaveResult = {
+  recordingId: string;
   title: string;
   brief: string;
   actionItemCount: number;
   contact: { id: string; name: string } | null;
+  contactAmbiguous?: boolean;
 };
 
 // Deepgram tries 'token' first (the documented browser subprotocol); if the
@@ -224,6 +226,7 @@ export function LiveCallRecorder() {
           transcript,
           durationSecs: seconds,
           contactName: contactName.trim() || undefined,
+          language: lang,
         }),
       });
       const body = (await r.json()) as SaveResult & {
@@ -232,12 +235,15 @@ export function LiveCallRecorder() {
       };
       if (!r.ok || !body.ok) throw new Error(body.error || `Save failed (${r.status})`);
       setResult({
+        recordingId: body.recordingId,
         title: body.title,
         brief: body.brief,
         actionItemCount: body.actionItemCount,
         contact: body.contact,
+        contactAmbiguous: body.contactAmbiguous,
       });
       setState("done");
+      router.refresh(); // surface the new recording in the list below
     } catch (e) {
       setError(e instanceof Error ? e.message : "Save failed");
       setState("error");
@@ -319,7 +325,7 @@ export function LiveCallRecorder() {
       {result && (
         <div className="rounded-md border border-[var(--health-green)]/40 bg-[var(--health-green)]/10 p-4">
           <div className="mb-2 flex items-center gap-2 text-sm font-medium text-[var(--health-green)]">
-            <Check className="h-4 w-4" /> Filed: {result.title}
+            <Check className="h-4 w-4" /> Saved: {result.title}
           </div>
           {result.brief && (
             <pre className="mb-3 whitespace-pre-wrap font-sans text-sm text-[var(--foreground)]">
@@ -327,19 +333,23 @@ export function LiveCallRecorder() {
             </pre>
           )}
           <p className="text-sm text-[var(--muted-foreground)]">
-            {result.actionItemCount} action item
+            Transcript saved · {result.actionItemCount} action item
             {result.actionItemCount === 1 ? "" : "s"} created
             {result.contact
               ? ` · logged to ${result.contact.name}`
-              : contactName.trim()
-                ? " · no unique contact match (not logged to a contact)"
-                : ""}
+              : result.contactAmbiguous
+                ? " · contact name matched several people, so it was saved without a contact link"
+                : contactName.trim()
+                  ? " · no contact matched that name, saved without a contact link"
+                  : ""}
             .
           </p>
-          <div className="mt-3 flex gap-2">
-            <Button type="button" size="sm" onClick={() => router.push("/action-items")}>
-              View action items
-            </Button>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {result.actionItemCount > 0 && (
+              <Button type="button" size="sm" onClick={() => router.push("/action-items")}>
+                View action items
+              </Button>
+            )}
             {result.contact && (
               <Button
                 type="button"

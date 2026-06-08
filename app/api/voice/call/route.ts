@@ -3,6 +3,10 @@ import { and, eq, ilike } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { getCurrentUser } from "@/lib/current-user";
 import { claudeWithTools, claudeChat, type ClaudeToolDef } from "@/lib/anthropic";
+import {
+  createCallRecording,
+  updateCallRecording,
+} from "@/db/queries/call-recordings";
 
 const { actionItems, touches, contacts } = schema;
 const PRIORITIES = ["now", "next", "later", "backlog"] as const;
@@ -66,12 +70,24 @@ export async function POST(req: NextRequest) {
     transcript?: string;
     durationSecs?: number;
     contactName?: string;
+    language?: string;
   } | null;
 
   const transcript = (payload?.transcript ?? "").trim();
   if (!transcript) {
     return NextResponse.json({ error: "transcript required" }, { status: 400 });
   }
+
+  // 0. PERSIST THE TRANSCRIPT FIRST — before any LLM call or contact matching.
+  // This is the durability guarantee: a recording is never lost just because
+  // extraction fails or no contact matches. Everything below only enriches it.
+  const recordingId = await createCallRecording({
+    workspaceId: user.workspaceId,
+    createdBy: user.id,
+    transcript,
+    durationSecs: payload?.durationSecs ?? null,
+    language: payload?.language ?? null,
+  });
 
   // 1. Extract brief + structured items.
   let title = "Call";
@@ -131,7 +147,7 @@ export async function POST(req: NextRequest) {
     if (chat.ok) brief = chat.text;
   }
 
-  // 2. Create action items (link-free; surface on the Home dashboard).
+  // 2. Create action items (link them back to the recording for provenance).
   const createdItemIds: string[] = [];
   for (const it of items) {
     const t = String(it.title ?? "").slice(0, 200).trim();
@@ -153,14 +169,18 @@ export async function POST(req: NextRequest) {
         description,
         dueDate,
         priority,
+        callRecordingId: recordingId,
         createdBy: user.id,
       })
       .returning({ id: actionItems.id });
     createdItemIds.push(row.id);
   }
 
-  // 3. If a contact name was given and uniquely matches, log the call as a touch.
+  // 3. If a contact name was given and uniquely matches, log the call as a touch
+  //    AND attach the recording to that contact. (Matching no longer gates
+  //    persistence — the recording is already saved.)
   let attached: { id: string; name: string } | null = null;
+  let ambiguous = false;
   const contactName = (payload?.contactName ?? "").trim();
   if (contactName) {
     const matches = await db
@@ -187,15 +207,29 @@ export async function POST(req: NextRequest) {
         .set({ lastTouchAt: new Date() })
         .where(eq(contacts.id, matches[0].id));
       attached = matches[0];
+    } else if (matches.length > 1) {
+      ambiguous = true;
     }
   }
 
+  // 4. Enrich the recording with the extracted title/brief/contact/item count.
+  await updateCallRecording({
+    id: recordingId,
+    workspaceId: user.workspaceId,
+    title,
+    brief: brief || null,
+    contactId: attached?.id ?? null,
+    actionItemCount: createdItemIds.length,
+  });
+
   return NextResponse.json({
     ok: true,
+    recordingId,
     title,
     brief,
     actionItemCount: createdItemIds.length,
     contact: attached,
     contactQueryMatched: attached !== null,
+    contactAmbiguous: ambiguous,
   });
 }
