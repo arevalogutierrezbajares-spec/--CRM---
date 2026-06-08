@@ -21,7 +21,7 @@ export function TopRow({
 }) {
   return (
     <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-      <MeetingsAgenda meetings={meetings} nowMs={nowMs} tz={tz} />
+      <MeetingsAgenda meetings={meetings} nowMs={nowMs} />
       <TasksDueAgenda tasks={tasks} tz={tz} />
       {countdown && countdown.date ? (
         <CountdownCard targetDate={countdown.date} title={countdown.title} subpoints={countdown.subpoints} nowMs={nowMs} />

@@ -8,11 +8,12 @@ interface MeetingHeatmapProps {
   weekStart: Date;
 }
 
-function isSameDay(a: Date, b: Date) {
+// Meeting times are an ET wall-clock pinned to UTC — match by UTC components.
+function meetingOnLocalDay(m: Date, day: Date) {
   return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
+    m.getUTCFullYear() === day.getFullYear() &&
+    m.getUTCMonth() === day.getMonth() &&
+    m.getUTCDate() === day.getDate()
   );
 }
 
@@ -24,7 +25,7 @@ export function MeetingHeatmap({ meetings, weekStart }: MeetingHeatmapProps) {
   });
 
   const counts = days.map(
-    (d) => meetings.filter((m) => isSameDay(m.scheduledAt, d)).length,
+    (d) => meetings.filter((m) => meetingOnLocalDay(m.scheduledAt, d)).length,
   );
   const max = Math.max(1, ...counts);
 

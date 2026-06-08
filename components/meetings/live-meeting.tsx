@@ -230,7 +230,7 @@ export function LiveMeeting({
           <ElapsedTimer elapsed={elapsed} />
           {startedAt && (
             <span className="hidden text-xs text-[var(--muted-foreground)] sm:block">
-              Started {startedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              Started {startedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", timeZone: "America/New_York" })} ET
             </span>
           )}
         </div>

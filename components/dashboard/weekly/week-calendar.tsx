@@ -20,6 +20,16 @@ function isSameDay(a: Date, b: Date) {
   );
 }
 
+// Meeting times are an ET wall-clock pinned to UTC, so match them to a (local)
+// grid day by their UTC components.
+function meetingOnLocalDay(m: Date, day: Date) {
+  return (
+    m.getUTCFullYear() === day.getFullYear() &&
+    m.getUTCMonth() === day.getMonth() &&
+    m.getUTCDate() === day.getDate()
+  );
+}
+
 const TYPE_COLOR: Record<DashMeeting["type"], string> = {
   one_on_one: "bg-blue-bg text-blue-text",
   group: "bg-purple-bg text-purple-text",
@@ -108,7 +118,8 @@ function ContextRow({
         const isToday = isSameDay(d, today);
         const slotMeetings = meetings.filter(
           (m) =>
-            isSameDay(m.scheduledAt, d) && m.scheduledAt.getHours() === hour,
+            meetingOnLocalDay(m.scheduledAt, d) &&
+            m.scheduledAt.getUTCHours() === hour,
         );
         return (
           <div

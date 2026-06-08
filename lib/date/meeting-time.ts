@@ -60,6 +60,42 @@ export function formatMeetingDateTime(value: Date | string): string {
   return time ? `${date} · ${time} ${MEETING_TZ_LABEL}` : date;
 }
 
+/** Just the ET time, e.g. "9:30 AM". */
+export function formatMeetingTimeOnly(value: Date | string): string {
+  return formatMeetingTime(value).time;
+}
+
+/**
+ * Convert a real instant (ms) into the "ET wall-clock encoded as UTC" ms — the
+ * same encoding meeting times are stored in — so it can be compared/subtracted
+ * against scheduledAt directly ("minutes until next meeting", "is it live").
+ * Pure given the input ms (no clock read), so it's safe in client render when
+ * fed a server-snapshot nowMs.
+ */
+export function toEtWallMs(realMs: number): number {
+  try {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: ET_TZ,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    }).formatToParts(new Date(realMs));
+    const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "00";
+    let hh = get("hour");
+    if (hh === "24") hh = "00"; // some engines emit 24 at midnight
+    const ms = Date.parse(
+      `${get("year")}-${get("month")}-${get("day")}T${hh}:${get("minute")}:${get("second")}Z`,
+    );
+    return Number.isNaN(ms) ? realMs : ms;
+  } catch {
+    return realMs;
+  }
+}
+
 /**
  * [from, to) UTC instants spanning a given ET calendar day "YYYY-MM-DD". Meeting
  * times are wall-clock-pinned to UTC, so the right "meetings on day X" window is

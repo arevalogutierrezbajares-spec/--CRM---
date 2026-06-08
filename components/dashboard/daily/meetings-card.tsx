@@ -7,6 +7,7 @@ import { SectionLabel } from "../shared/section-label";
 import { DashBadge } from "../shared/badge";
 import { useItemDrawer } from "../item-drawer";
 import type { DashMeeting } from "@/db/queries/dashboard";
+import { formatMeetingTimeOnly, toEtWallMs } from "@/lib/date/meeting-time";
 
 interface MeetingsCardProps {
   meetings: DashMeeting[];
@@ -20,17 +21,23 @@ const TYPE_LABEL: Record<DashMeeting["type"], string> = {
   call: "call",
 };
 
+// Meeting times are an ET wall-clock pinned to UTC, so read their UTC components.
 function timeOnly(d: Date): string {
-  return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  return formatMeetingTimeOnly(d);
 }
 
 function dayShort(d: Date): string {
-  return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+  return d.toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
 }
 
 function isLive(m: DashMeeting): boolean {
-  // From 5 min before start through ~60 min after — not a 90-min-early "Live".
-  const delta = Date.now() - m.scheduledAt.getTime();
+  // From 5 min before start through ~60 min after — compare in ET wall-clock.
+  const delta = toEtWallMs(Date.now()) - m.scheduledAt.getTime();
   return delta >= -5 * 60_000 && delta <= 60 * 60_000;
 }
 

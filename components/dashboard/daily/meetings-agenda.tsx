@@ -5,24 +5,19 @@ import { DashCard } from "../shared/dash-card";
 import { SectionLabel } from "../shared/section-label";
 import { useItemDrawer } from "../item-drawer";
 import type { DashMeeting } from "@/db/queries/dashboard";
+import { formatMeetingTimeOnly, toEtWallMs } from "@/lib/date/meeting-time";
 
 const ASSUMED_MIN = 60; // a meeting is "ongoing/upcoming" until ~60m after its start
 
-function fmtTime(at: Date, tz: string): string {
-  try {
-    return new Intl.DateTimeFormat(undefined, { timeZone: tz, hour: "numeric", minute: "2-digit" }).format(at);
-  } catch {
-    return "";
-  }
-}
-
 /** Today's meetings as an ordered agenda (Teams/Meet-style): time · title, the
- *  next one highlighted with a countdown, past ones dimmed. nowMs is a server
- *  snapshot so the time math is hydration-stable. */
-export function MeetingsAgenda({ meetings, nowMs, tz }: { meetings: DashMeeting[]; nowMs: number; tz: string }) {
+ *  next one highlighted with a countdown, past ones dimmed. Times render in ET
+ *  and "now" is converted to the same ET wall-clock so the math lines up. nowMs
+ *  is a server snapshot so the time math is hydration-stable. */
+export function MeetingsAgenda({ meetings, nowMs }: { meetings: DashMeeting[]; nowMs: number }) {
   const drawer = useItemDrawer();
+  const nowEt = toEtWallMs(nowMs);
   const sorted = [...meetings].sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime());
-  const nextId = sorted.find((m) => m.scheduledAt.getTime() + ASSUMED_MIN * 60000 > nowMs)?.id ?? null;
+  const nextId = sorted.find((m) => m.scheduledAt.getTime() + ASSUMED_MIN * 60000 > nowEt)?.id ?? null;
 
   return (
     <DashCard className="p-2.5">
@@ -37,8 +32,8 @@ export function MeetingsAgenda({ meetings, nowMs, tz }: { meetings: DashMeeting[
         <ol className="max-h-[152px] space-y-0.5 overflow-y-auto pr-1">
           {sorted.map((m) => {
             const startMs = m.scheduledAt.getTime();
-            const mins = Math.round((startMs - nowMs) / 60000);
-            const past = startMs + ASSUMED_MIN * 60000 <= nowMs;
+            const mins = Math.round((startMs - nowEt) / 60000);
+            const past = startMs + ASSUMED_MIN * 60000 <= nowEt;
             const isNext = m.id === nextId;
             const when = mins <= 0 ? "now" : mins < 60 ? `in ${mins}m` : `in ${Math.round(mins / 60)}h`;
             return (
@@ -47,7 +42,7 @@ export function MeetingsAgenda({ meetings, nowMs, tz }: { meetings: DashMeeting[
                 className={`flex min-h-[28px] items-center gap-2 rounded-md px-1.5 py-0.5 transition-colors hover:bg-surface ${isNext ? "bg-surface" : ""}`}
               >
                 <span className="w-[46px] shrink-0 text-right text-tiny tabular-nums text-text-tertiary">
-                  {fmtTime(m.scheduledAt, tz)}
+                  {formatMeetingTimeOnly(m.scheduledAt)}
                 </span>
                 <span
                   aria-hidden

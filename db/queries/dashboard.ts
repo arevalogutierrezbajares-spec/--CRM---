@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { utcToday } from "@/lib/date/today";
-import { etDayBoundsUtc, todayEtKey } from "@/lib/date/meeting-time";
+import { etDayBoundsUtc, todayEtKey, toEtWallMs } from "@/lib/date/meeting-time";
 
 const {
   meetings,
@@ -244,9 +244,12 @@ export async function dashboardCounts(
       ),
   ]);
 
-  const nextMeeting = meetingsRow.find((m) => m.scheduledAt > now);
+  // Meeting times are an ET wall-clock pinned to UTC, so compare against "now"
+  // expressed in the same encoding (not the raw UTC instant).
+  const nowEt = toEtWallMs(now.getTime());
+  const nextMeeting = meetingsRow.find((m) => m.scheduledAt.getTime() > nowEt);
   const nextMeetingMinutes = nextMeeting
-    ? Math.round((nextMeeting.scheduledAt.getTime() - now.getTime()) / 60_000)
+    ? Math.round((nextMeeting.scheduledAt.getTime() - nowEt) / 60_000)
     : null;
 
   const upcomingProjectDates = projectsRow

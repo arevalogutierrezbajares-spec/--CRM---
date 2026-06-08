@@ -6,6 +6,7 @@ import { AlertTriangle, Ban, CalendarClock, ListTodo, ListChecks } from "lucide-
 import { useItemDrawer } from "../item-drawer";
 import type { DashActionItem, DashMeeting, DashTask } from "@/db/queries/dashboard";
 import type { BlockedProject } from "@/db/queries/this-week";
+import { toEtWallMs } from "@/lib/date/meeting-time";
 
 // `nowMs` is a server-rendered snapshot passed in (not Date.now() at render),
 // so the time math is identical on the server and at hydration — no mismatch.
@@ -32,12 +33,15 @@ export function NeedsYouNow({
   nowMs: number;
 }) {
   const drawer = useItemDrawer();
+  // Meeting times are an ET wall-clock pinned to UTC — compare against "now" in
+  // the same encoding.
+  const nowEt = toEtWallMs(nowMs);
 
   const overdueAi = actionItems.filter((a) => a.isOverdue).slice(0, 4);
   const overdueTasks = tasks.filter((t) => t.isOverdue).slice(0, 4);
   const blockedShown = blocked.slice(0, 3);
   const soonMeeting = meetings.find((m) => {
-    const mm = minsUntil(m.scheduledAt, nowMs);
+    const mm = minsUntil(m.scheduledAt, nowEt);
     return mm >= -5 && mm <= 30;
   });
 
@@ -67,7 +71,7 @@ export function NeedsYouNow({
           <Link href={`/meetings/${soonMeeting.id}`} className="flex min-h-9 items-center gap-1.5 rounded-md px-2 text-text-secondary transition-colors hover:bg-red-bg hover:text-text-primary">
             <CalendarClock size={13} className="text-[var(--amber-text)]" />
             {(() => {
-              const m = minsUntil(soonMeeting.scheduledAt, nowMs);
+              const m = minsUntil(soonMeeting.scheduledAt, nowEt);
               return m <= 0 ? "Now" : `${m}m`;
             })()}: {soonMeeting.title}
           </Link>

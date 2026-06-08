@@ -4,6 +4,7 @@ import { DashCard } from "../shared/dash-card";
 import { SectionLabel } from "../shared/section-label";
 import { cn } from "@/lib/utils";
 import type { DashMeeting } from "@/db/queries/dashboard";
+import { meetingDayKey } from "@/lib/date/meeting-time";
 
 interface MonthCalendarProps {
   meetings: DashMeeting[];
@@ -32,10 +33,12 @@ export function MonthCalendar({ meetings, monthStart }: MonthCalendarProps) {
     year: "numeric",
   });
 
-  // Build a map of date -> meetings
+  // Build a map of date -> meetings. Meeting times are an ET wall-clock pinned
+  // to UTC, so bucket by their UTC day (matches the local grid-cell keys, which
+  // are local-midnight dates for each calendar day).
   const byDate = new Map<string, DashMeeting[]>();
   for (const m of meetings) {
-    const k = ymdLocal(m.scheduledAt);
+    const k = meetingDayKey(m.scheduledAt);
     const arr = byDate.get(k) ?? [];
     arr.push(m);
     byDate.set(k, arr);
