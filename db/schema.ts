@@ -2769,3 +2769,70 @@ export const weeklyReviews = pgTable("weekly_reviews", {
   snapshot: jsonb("snapshot"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MCP — Model Context Protocol server. Lets a user connect their Claude Code to
+// this CRM over an OAuth 2.1 flow and use a curated set of tools (read context +
+// upload info) scoped to their own user + workspace. Tokens are opaque random
+// strings stored only as SHA-256 hashes (same pattern as Partner Access), so
+// they're revocable and never recoverable from the DB.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Dynamically-registered OAuth clients (RFC 7591). Claude Code registers itself
+// the first time a user connects; `id` is the public client_id we hand back.
+export const mcpOauthClients = pgTable("mcp_oauth_clients", {
+  id: text("id").primaryKey(),
+  clientName: text("client_name"),
+  redirectUris: jsonb("redirect_uris").$type<string[]>().notNull().default([]),
+  grantTypes: jsonb("grant_types")
+    .$type<string[]>()
+    .notNull()
+    .default(["authorization_code", "refresh_token"]),
+  tokenEndpointAuthMethod: text("token_endpoint_auth_method").notNull().default("none"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Short-lived (~10 min) single-use authorization codes. PKCE S256 challenge is
+// bound here at /authorize and verified at /token.
+export const mcpAuthCodes = pgTable("mcp_auth_codes", {
+  codeHash: text("code_hash").primaryKey(),
+  clientId: text("client_id")
+    .notNull()
+    .references(() => mcpOauthClients.id, { onDelete: "cascade" }),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  redirectUri: text("redirect_uri").notNull(),
+  codeChallenge: text("code_challenge").notNull(),
+  scope: text("scope").notNull().default("crm.read crm.write"),
+  resource: text("resource"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  consumedAt: timestamp("consumed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Issued access + refresh tokens (both hashed). One row = one live connection;
+// revoking sets `revoked_at` and the MCP route rejects it on the next call.
+export const mcpAccessTokens = pgTable("mcp_access_tokens", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  accessTokenHash: text("access_token_hash").notNull().unique(),
+  refreshTokenHash: text("refresh_token_hash").unique(),
+  clientId: text("client_id")
+    .notNull()
+    .references(() => mcpOauthClients.id, { onDelete: "cascade" }),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  scope: text("scope").notNull().default("crm.read crm.write"),
+  accessExpiresAt: timestamp("access_expires_at", { withTimezone: true }).notNull(),
+  refreshExpiresAt: timestamp("refresh_expires_at", { withTimezone: true }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});

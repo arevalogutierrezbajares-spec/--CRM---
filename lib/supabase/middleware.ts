@@ -15,6 +15,12 @@ const PUBLIC_PATHS = [
   "/api/whatsapp/webhook", // Meta — verifies via WA_VERIFY_TOKEN + HMAC
   "/api/postmark/inbound", // Postmark — verifies via ?secret= query
   "/api/cron/", // Vercel Cron — verifies via Authorization: Bearer CRON_SECRET
+  "/.well-known/oauth-protected-resource", // MCP OAuth discovery (RFC 9728)
+  "/.well-known/oauth-authorization-server", // MCP OAuth metadata (RFC 8414)
+  // MCP server + its OAuth endpoints. Each self-authenticates per-request
+  // (Bearer access token, PKCE code, or — for /authorize — its own
+  // getCurrentUser() check that redirects to /login). Must NOT 307 to login.
+  "/api/mcp",
 ];
 
 export async function updateSession(request: NextRequest) {
