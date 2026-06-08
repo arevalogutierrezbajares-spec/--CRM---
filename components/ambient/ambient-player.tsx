@@ -1,25 +1,38 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Music2, Pause, Play, RotateCcw, Volume2, VolumeX } from "lucide-react";
+import { Music2, Pause, Play, RotateCcw, SkipForward, Volume2, VolumeX } from "lucide-react";
 import { isAudioMuted, onAudioMuteChange } from "@/lib/audio-mute";
 
 /**
- * Ambient motivation player. Loops one specific Motiversity video as background
- * audio across the whole app.
+ * Ambient motivation player — background audio across the whole app.
+ *
+ * Two modes:
+ *  - FIRST RUN (this browser has never heard the intro): plays the one fixed
+ *    Motiversity video start-to-finish. When it ends — or on the next session —
+ *    it switches to random mode forever.
+ *  - RANDOM: shuffles the Motiversity channel's uploads playlist (no API key —
+ *    a channel's uploads playlist id is its channel id with UC -> UU), starting
+ *    at a random index so each session differs, and auto-advances.
  *
  * The YouTube iframe is parked off-screen (audio only). A small music icon sits
- * bottom-right; hovering it slides up a control bar (restart / play / volume).
+ * bottom-right; hovering it slides up a control bar (restart / play / skip + vol).
  *
  * On a FRESH login, after the ÑIGO greeting ends (`agb:greeting-ended`), the
  * screen blurs for a beat and then playback begins. Armed by the one-shot
  * `agb_play_ambient` flag the sign-in flow sets. Respects the global mute.
  */
 
-// The background track — youtube.com/watch?v=r04ZPcYyTjw
+// The fixed intro track — youtube.com/watch?v=r04ZPcYyTjw
 const VIDEO_ID = "r04ZPcYyTjw";
+// Motiversity channel UCAPByrKU5-R1emswVlyH_-g -> uploads playlist (UC -> UU).
+const UPLOADS_PLAYLIST = "UUAPByrKU5-R1emswVlyH_-g";
+// Embedded playlists surface up to ~200 items; randomise the entry point within.
+const RANDOM_INDEX_RANGE = 200;
 
 const LS_VOLUME = "agb.ambient.volume";
+// Persists across sessions (per browser): set once the intro has been heard.
+const FIRST_DONE_KEY = "agb_ambient_first_done_v1";
 const LOGIN_FLAG = "agb_play_ambient";
 const GREETING_ENDED = "agb:greeting-ended";
 // If the greeting never fires (muted / autoplay blocked), start anyway after this.
@@ -31,6 +44,9 @@ type YTPlayer = {
   playVideo: () => void;
   pauseVideo: () => void;
   seekTo: (seconds: number, allowSeekAhead: boolean) => void;
+  nextVideo: () => void;
+  setShuffle: (on: boolean) => void;
+  loadPlaylist: (opts: { list: string; listType: string; index?: number }) => void;
   mute: () => void;
   unMute: () => void;
   setVolume: (v: number) => void;
@@ -64,12 +80,22 @@ function loadYouTubeApi(): Promise<void> {
   return apiPromise;
 }
 
+function markFirstDone() {
+  try {
+    localStorage.setItem(FIRST_DONE_KEY, "1");
+  } catch {
+    /* ignore */
+  }
+}
+
 type Phase = "idle" | "blurring" | "revealed";
 
 export function AmbientPlayer() {
   const holderRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YTPlayer | null>(null);
   const startedRef = useRef(false); // guards the one-shot login start sequence
+  const modeRef = useRef<"first" | "random">("random");
+  const goRandomRef = useRef<() => void>(() => {});
 
   const [ready, setReady] = useState(false);
   const [playing, setPlaying] = useState(false);
@@ -94,29 +120,56 @@ export function AmbientPlayer() {
     }
   }, [volume]);
 
-  // Create the hidden player once, looping the single track.
+  // Switch to shuffled-channel mode (used when the intro ends or on skip).
+  goRandomRef.current = () => {
+    const p = playerRef.current;
+    if (!p) return;
+    modeRef.current = "random";
+    markFirstDone();
+    const index = Math.floor(Math.random() * RANDOM_INDEX_RANGE);
+    p.loadPlaylist({ list: UPLOADS_PLAYLIST, listType: "playlist", index });
+    p.setShuffle(true);
+  };
+
+  // Create the hidden player once, in whichever mode this browser is owed.
   useEffect(() => {
     let cancelled = false;
+    let firstDone = false;
+    try {
+      firstDone = localStorage.getItem(FIRST_DONE_KEY) === "1";
+    } catch {
+      /* ignore */
+    }
+    modeRef.current = firstDone ? "random" : "first";
+    const startIndex = Math.floor(Math.random() * RANDOM_INDEX_RANGE);
+
+    const common = { autoplay: 0, controls: 0, disablekb: 1, playsinline: 1, modestbranding: 1 };
+    const playerVars = firstDone
+      ? { ...common, listType: "playlist", list: UPLOADS_PLAYLIST, index: startIndex, loop: 1 }
+      : { ...common, loop: 0 }; // intro plays once, then flows into random
+
     loadYouTubeApi().then(() => {
       if (cancelled || !holderRef.current || playerRef.current) return;
       playerRef.current = new window.YT!.Player(holderRef.current, {
         height: "1",
         width: "1",
-        videoId: VIDEO_ID,
-        playerVars: {
-          autoplay: 0,
-          controls: 0,
-          disablekb: 1,
-          loop: 1,
-          playlist: VIDEO_ID, // required for loop:1 to repeat a single video
-          playsinline: 1,
-          modestbranding: 1,
-        },
+        ...(firstDone ? {} : { videoId: VIDEO_ID }),
+        playerVars,
         events: {
-          onReady: () => setReady(true),
+          onReady: (e: { target: YTPlayer }) => {
+            if (modeRef.current === "random") e.target.setShuffle(true);
+            setReady(true);
+          },
           onStateChange: (e: { data: number }) => {
-            if (e.data === window.YT?.PlayerState.PLAYING) setPlaying(true);
-            else if (e.data === window.YT?.PlayerState.PAUSED) setPlaying(false);
+            const S = window.YT?.PlayerState;
+            if (e.data === S?.PLAYING) {
+              setPlaying(true);
+              if (modeRef.current === "first") markFirstDone(); // partial listens still count
+            } else if (e.data === S?.PAUSED) {
+              setPlaying(false);
+            } else if (e.data === S?.ENDED) {
+              if (modeRef.current === "first") goRandomRef.current(); // intro done -> random
+            }
           },
         },
       });
@@ -154,7 +207,6 @@ export function AmbientPlayer() {
       p.setVolume(volume);
     }
     p.playVideo();
-    // Verify it actually started with sound; if not, recover gracefully.
     window.setTimeout(() => {
       const pl = playerRef.current;
       if (!pl) return;
@@ -228,6 +280,14 @@ export function AmbientPlayer() {
     beginPlayback();
   }, [ready, beginPlayback]);
 
+  // Skip: in the intro, jump straight into random; otherwise next random video.
+  const skip = useCallback(() => {
+    const p = playerRef.current;
+    if (!ready || !p) return;
+    if (modeRef.current === "first") goRandomRef.current();
+    else p.nextVideo();
+  }, [ready]);
+
   return (
     <>
       {/* Off-screen YouTube iframe (audio only). */}
@@ -268,6 +328,15 @@ export function AmbientPlayer() {
             className="flex h-8 w-8 items-center justify-center rounded-full text-[var(--foreground)] hover:bg-[var(--accent)] disabled:opacity-40"
           >
             {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+          </button>
+          <button
+            type="button"
+            onClick={skip}
+            disabled={!ready}
+            title="Skip to a random video"
+            className="flex h-8 w-8 items-center justify-center rounded-full text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] disabled:opacity-40"
+          >
+            <SkipForward className="h-4 w-4" />
           </button>
 
           <span className="mx-0.5 h-5 w-px bg-[var(--border)]" />
