@@ -5,8 +5,8 @@ import Link from "next/link";
 import {
   Activity,
   ArrowUpRight,
-  FileClock,
-  Footprints,
+  FileText,
+  Flag,
   Megaphone,
   PersonStanding,
   Rocket,
@@ -18,22 +18,121 @@ import { SectionLabel } from "../shared/section-label";
 import { CountUp } from "../shared/count-up";
 import type { HomeCommandMetric } from "@/db/queries/dashboard";
 
-const TONE: Record<HomeCommandMetric["tone"], { text: string; bg: string; mid: string }> = {
+const TONE: Record<
+  HomeCommandMetric["tone"],
+  { text: string; bg: string; mid: string }
+> = {
   blue: { text: "var(--blue-text)", bg: "var(--blue-bg)", mid: "var(--blue-mid)" },
   green: { text: "var(--green-text)", bg: "var(--green-bg)", mid: "var(--green-mid)" },
   amber: { text: "var(--amber-text)", bg: "var(--amber-bg)", mid: "var(--amber-mid)" },
-  purple: { text: "var(--purple-text)", bg: "var(--purple-bg)", mid: "var(--purple-mid)" },
+  purple: {
+    text: "var(--purple-text)",
+    bg: "var(--purple-bg)",
+    mid: "var(--purple-mid)",
+  },
 };
+
+const CAP = 8; // most figures we draw before showing "+N"
 
 function clampPct(value: number): number {
   return Math.max(0, Math.min(100, Math.round(value)));
 }
 
-function iconFor(metric: HomeCommandMetric): { Icon: LucideIcon; animation: string; Companion?: LucideIcon } {
-  if (metric.id === "clients") return { Icon: PersonStanding, Companion: Footprints, animation: "home-kpi-walk 1.45s ease-in-out infinite" };
-  if (metric.id === "vav_launch") return { Icon: Rocket, animation: "home-kpi-lift 1.7s ease-in-out infinite" };
-  if (metric.id === "influencers") return { Icon: Megaphone, animation: "home-kpi-pulse 1.55s ease-in-out infinite" };
-  return { Icon: FileClock, animation: "home-kpi-tick 1.35s ease-in-out infinite" };
+/** The "scene": the metric's quantity rendered as a living visual. */
+function Scene({ metric, color }: { metric: HomeCommandMetric; color: string }) {
+  if (metric.id === "vav_launch") {
+    const pct = clampPct(metric.value);
+    const launched = pct >= 100;
+    return (
+      <div className="relative mt-3 h-9" aria-hidden>
+        {/* track (rocket + fill share the same 0–100% origin) */}
+        <div className="absolute inset-x-0 top-1/2 h-[3px] -translate-y-1/2 rounded-full bg-card" />
+        <div
+          className="absolute left-0 top-1/2 h-[3px] -translate-y-1/2 rounded-full transition-[width] duration-500"
+          style={{ width: `${pct}%`, background: color }}
+        />
+        {/* finish flag — lights up at launch */}
+        <Flag
+          size={14}
+          className="absolute right-0 top-1/2 -translate-y-1/2"
+          style={{ color, opacity: launched ? 1 : 0.45 }}
+        />
+        {/* rocket rides the fill; at 100% it has "launched" past the flag */}
+        {!launched && (
+          <span
+            className="absolute top-1/2"
+            style={{ left: `${pct}%`, transform: "translate(-50%,-50%)" }}
+          >
+            <Rocket
+              size={20}
+              style={{ color, animation: "home-kpi-lift 1.6s ease-in-out infinite" }}
+            />
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  if (metric.id === "influencers") {
+    const dots = Math.max(0, Math.min(metric.value, CAP));
+    const overflow = Math.max(0, metric.value - dots);
+    return (
+      <div className="mt-3 flex h-9 items-center gap-1.5" aria-hidden>
+        <Megaphone
+          size={20}
+          style={{ color, animation: "home-kpi-pulse 1.5s ease-in-out infinite" }}
+        />
+        <div className="flex items-center gap-1">
+          {Array.from({ length: dots }).map((_, i) => (
+            <span
+              key={i}
+              className="h-2 w-2 rounded-full"
+              style={{
+                background: color,
+                animation: "home-kpi-blip 1.4s ease-in-out infinite",
+                animationDelay: `${i * 0.12}s`,
+              }}
+            />
+          ))}
+          {overflow > 0 && (
+            <span className="text-[11px] font-medium text-text-tertiary tabular-nums">
+              +{overflow}
+            </span>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // clients (walking figures) + docs (page stack) share a row-of-icons scene.
+  const Icon: LucideIcon = metric.id === "clients" ? PersonStanding : FileText;
+  const anim = metric.id === "clients" ? "home-kpi-walk" : "home-kpi-tick";
+  const n = Math.max(0, Math.min(metric.value, CAP));
+  const overflow = Math.max(0, metric.value - n);
+  return (
+    <div className="mt-3 flex h-9 items-end gap-0.5" aria-hidden>
+      {n === 0 ? (
+        <span className="text-[12px] text-text-tertiary">—</span>
+      ) : (
+        Array.from({ length: n }).map((_, i) => (
+          <Icon
+            key={i}
+            size={metric.id === "clients" ? 19 : 16}
+            style={{
+              color,
+              animation: `${anim} 1.25s ease-in-out infinite`,
+              animationDelay: `${i * 0.1}s`,
+            }}
+          />
+        ))
+      )}
+      {overflow > 0 && (
+        <span className="ml-1 self-center text-[11px] font-medium text-text-tertiary tabular-nums">
+          +{overflow}
+        </span>
+      )}
+    </div>
+  );
 }
 
 export function DynamicKpiStrip({ metrics }: { metrics: HomeCommandMetric[] }) {
@@ -59,22 +158,25 @@ export function DynamicKpiStrip({ metrics }: { metrics: HomeCommandMetric[] }) {
       <div className="mt-2.5 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
         {metrics.map((metric) => {
           const tone = TONE[metric.tone];
-          const pct = clampPct(metric.progressPct);
           const isSelected = selected.id === metric.id;
-          const { Icon, Companion, animation } = iconFor(metric);
           return (
             <button
               key={metric.id}
               type="button"
+              aria-pressed={isSelected}
               onClick={() => setSelectedId(metric.id)}
-              onMouseEnter={() => setSelectedId(metric.id)}
+              onFocus={() => setSelectedId(metric.id)}
               className={cn(
-                "group min-h-[132px] rounded-lg border p-3 text-left outline-none transition-[border-color,background,transform] duration-200 focus-visible:ring-2 focus-visible:ring-[var(--ring)] active:scale-[0.98]",
+                "group min-h-[136px] rounded-lg border p-3 text-left outline-none transition-[border-color,background,transform,box-shadow] duration-200 focus-visible:ring-2 focus-visible:ring-[var(--ring)] active:scale-[0.98]",
                 isSelected ? "bg-surface" : "hover:bg-surface/70",
               )}
               style={{
                 borderColor: isSelected ? tone.text : "var(--border-default)",
-                background: isSelected ? `linear-gradient(180deg, ${tone.bg}, transparent 92%)` : undefined,
+                // Ring (not just hue) marks the active card — non-color cue.
+                boxShadow: isSelected ? `0 0 0 2px ${tone.text}` : undefined,
+                background: isSelected
+                  ? `linear-gradient(180deg, ${tone.bg}, transparent 92%)`
+                  : undefined,
               }}
             >
               <div className="flex items-start justify-between gap-2">
@@ -84,34 +186,19 @@ export function DynamicKpiStrip({ metrics }: { metrics: HomeCommandMetric[] }) {
                   </div>
                   <div className="mt-1 flex items-baseline gap-0.5 text-[27px] font-semibold leading-none text-text-primary tabular-nums">
                     <CountUp value={metric.value} />
-                    {metric.suffix && <span className="text-[13px] text-text-secondary">{metric.suffix}</span>}
+                    {metric.suffix && (
+                      <span className="text-[13px] text-text-secondary">
+                        {metric.suffix}
+                      </span>
+                    )}
                   </div>
                 </div>
-                <span
-                  className="relative grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-full"
-                  style={{ background: tone.bg, color: tone.text }}
-                  aria-hidden
-                >
-                  <Icon size={22} style={{ animation }} />
-                  {Companion && (
-                    <Companion
-                      size={12}
-                      className="absolute bottom-1 right-1 opacity-70"
-                      style={{ animation: "home-kpi-footprints 1.45s ease-in-out infinite" }}
-                    />
-                  )}
-                </span>
               </div>
 
-              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-card">
-                <span
-                  className="block h-full rounded-full transition-[width] duration-300"
-                  style={{ width: `${pct}%`, background: tone.mid }}
-                />
-              </div>
-              <div className="mt-2 flex items-center justify-between gap-2">
-                <span className="min-w-0 truncate text-[12px] text-text-secondary">{metric.subline}</span>
-                <span className="shrink-0 text-tiny text-text-tertiary tabular-nums">{pct}%</span>
+              <Scene metric={metric} color={tone.text} />
+
+              <div className="mt-2 truncate text-[12px] text-text-secondary">
+                {metric.subline}
               </div>
             </button>
           );
@@ -119,11 +206,17 @@ export function DynamicKpiStrip({ metrics }: { metrics: HomeCommandMetric[] }) {
       </div>
 
       <div
+        aria-live="polite"
         className="mt-2.5 flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between"
-        style={{ borderColor: activeTone.text, background: `color-mix(in oklab, ${activeTone.bg} 72%, transparent)` }}
+        style={{
+          borderColor: activeTone.text,
+          background: `color-mix(in oklab, ${activeTone.bg} 72%, transparent)`,
+        }}
       >
         <div className="min-w-0">
-          <div className="text-[12.5px] font-medium text-text-primary">{selected.label}</div>
+          <div className="text-[12.5px] font-medium text-text-primary">
+            {selected.label}
+          </div>
           <p className="mt-0.5 text-[12px] text-text-secondary">{selected.detail}</p>
         </div>
         <Link
@@ -137,24 +230,51 @@ export function DynamicKpiStrip({ metrics }: { metrics: HomeCommandMetric[] }) {
 
       <style jsx global>{`
         @keyframes home-kpi-walk {
-          0%, 100% { transform: translateX(-2px) rotate(-4deg); }
-          50% { transform: translateX(6px) rotate(4deg); }
-        }
-        @keyframes home-kpi-footprints {
-          0%, 100% { opacity: 0.35; transform: translateX(-3px); }
-          50% { opacity: 0.85; transform: translateX(2px); }
+          0%,
+          100% {
+            transform: translateY(0) rotate(-5deg);
+          }
+          50% {
+            transform: translateY(-3px) rotate(5deg);
+          }
         }
         @keyframes home-kpi-lift {
-          0%, 100% { transform: translateY(2px); }
-          50% { transform: translateY(-4px); }
+          0%,
+          100% {
+            transform: translateY(1px) rotate(-6deg);
+          }
+          50% {
+            transform: translateY(-4px) rotate(-2deg);
+          }
         }
         @keyframes home-kpi-pulse {
-          0%, 100% { transform: scale(1) rotate(-2deg); }
-          50% { transform: scale(1.08) rotate(2deg); }
+          0%,
+          100% {
+            transform: scale(1) rotate(-3deg);
+          }
+          50% {
+            transform: scale(1.1) rotate(3deg);
+          }
+        }
+        @keyframes home-kpi-blip {
+          0%,
+          100% {
+            opacity: 0.35;
+            transform: scale(0.8);
+          }
+          50% {
+            opacity: 1;
+            transform: scale(1.15);
+          }
         }
         @keyframes home-kpi-tick {
-          0%, 100% { transform: rotate(-5deg); }
-          50% { transform: rotate(6deg); }
+          0%,
+          100% {
+            transform: translateY(0);
+          }
+          50% {
+            transform: translateY(-3px);
+          }
         }
         @media (prefers-reduced-motion: reduce) {
           .home-kpi-motion * {

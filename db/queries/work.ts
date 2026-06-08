@@ -215,6 +215,9 @@ export type WorkTask = typeof milestones.$inferSelect & {
   projectTitle: string | null;
   initiativeTitle: string | null;
   sprintName: string | null;
+  /** Coalesced owner id (assigneeUserId, else legacy assignedTo) — matches the
+   *  dashboard's grouping so /work and home agree on who owns a task. */
+  ownerUserId: string | null;
   assigneeName: string | null;
   themes: ThemeRow[];
 };
@@ -236,21 +239,25 @@ export async function listWorkTasks(opts: {
   if (opts.projectId) conditions.push(eq(milestones.projectId, opts.projectId));
   if (opts.priority) conditions.push(eq(milestones.priority, opts.priority));
   if (opts.assigneeUserId)
-    conditions.push(eq(milestones.assigneeUserId, opts.assigneeUserId));
+    conditions.push(
+      sql`coalesce(${milestones.assigneeUserId}, ${milestones.assignedTo}) = ${opts.assigneeUserId}`,
+    );
 
+  const ownerExpr = sql<string | null>`coalesce(${milestones.assigneeUserId}, ${milestones.assignedTo})`;
   const rows = await db
     .select({
       ms: milestones,
       projectTitle: projects.title,
       initiativeTitle: initiatives.title,
       sprintName: sprints.name,
+      ownerUserId: ownerExpr,
       assigneeName: users.displayName,
     })
     .from(milestones)
     .innerJoin(projects, eq(projects.id, milestones.projectId))
     .leftJoin(initiatives, eq(initiatives.id, milestones.initiativeId))
     .leftJoin(sprints, eq(sprints.id, milestones.sprintId))
-    .leftJoin(users, eq(users.id, milestones.assigneeUserId))
+    .leftJoin(users, eq(users.id, sql`coalesce(${milestones.assigneeUserId}, ${milestones.assignedTo})`))
     .where(and(...conditions))
     .orderBy(asc(milestones.dueDate), desc(milestones.createdAt))
     .limit(opts.limit ?? 200);
@@ -263,11 +270,12 @@ export async function listWorkTasks(opts: {
     .innerJoin(themes, eq(themes.id, milestoneThemes.themeId))
     .where(inArray(milestoneThemes.milestoneId, ids));
 
-  const enriched = rows.map(({ ms, projectTitle, initiativeTitle, sprintName, assigneeName }) => ({
+  const enriched = rows.map(({ ms, projectTitle, initiativeTitle, sprintName, ownerUserId, assigneeName }) => ({
     ...ms,
     projectTitle,
     initiativeTitle,
     sprintName,
+    ownerUserId,
     assigneeName,
     themes: themeJoins
       .filter((t) => t.milestoneId === ms.id)

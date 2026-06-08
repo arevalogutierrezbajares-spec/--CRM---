@@ -41,6 +41,7 @@ type SearchParams = Promise<{
   priority?: string;
   status?: string;
   section?: string;
+  owner?: string;
 }>;
 
 const ALLOWED_PRIORITY = ["now", "next", "later", "backlog"];
@@ -52,6 +53,14 @@ function shortDate(iso: string | null): string {
     month: "short",
     day: "numeric",
   });
+}
+
+function initials(name: string): string {
+  const parts = name.split(/\s+/).filter(Boolean).slice(0, 2);
+  // Array.from → first whole code point (handles emoji / non-Latin), not a
+  // lone UTF-16 surrogate half.
+  const out = parts.map((w) => (Array.from(w)[0] ?? "").toUpperCase()).join("");
+  return out || "?";
 }
 
 export default async function WorkPage(props: { searchParams: SearchParams }) {
@@ -98,9 +107,13 @@ export default async function WorkPage(props: { searchParams: SearchParams }) {
       ),
     ]);
 
-  const crmTasks = sp.status
-    ? tasksRes.data.filter((t) => t.status === sp.status)
-    : tasksRes.data;
+  let crmTasks = tasksRes.data;
+  if (sp.status) crmTasks = crmTasks.filter((t) => t.status === sp.status);
+  // Owner filtered client-side so all owners in the current scope stay selectable.
+  if (sp.owner)
+    crmTasks = crmTasks.filter(
+      (t) => (t.ownerUserId ?? "unassigned") === sp.owner,
+    );
 
   const showCrm = source === "all" || source === "crm";
   const showOverlord = source === "all" || source === "overlord";
@@ -122,15 +135,32 @@ export default async function WorkPage(props: { searchParams: SearchParams }) {
   const themeCounts = new Map<string, number>();
   const ventureCounts = new Map<string, number>();
   const priorityCounts = new Map<string, number>();
+  const ownerCounts = new Map<string, number>();
+  const ownerNames = new Map<string, string>();
   for (const t of tasksRes.data) {
     if (t.priority)
       priorityCounts.set(t.priority, (priorityCounts.get(t.priority) ?? 0) + 1);
     if (t.projectId)
       ventureCounts.set(t.projectId, (ventureCounts.get(t.projectId) ?? 0) + 1);
+    const ownerKey = t.ownerUserId ?? "unassigned";
+    ownerCounts.set(ownerKey, (ownerCounts.get(ownerKey) ?? 0) + 1);
+    ownerNames.set(ownerKey, t.assigneeName ?? "Unassigned");
     for (const th of t.themes) {
       themeCounts.set(th.id, (themeCounts.get(th.id) ?? 0) + 1);
     }
   }
+  const ownerOptions = [...ownerCounts.entries()]
+    .map(([value, count]) => ({
+      value,
+      label: ownerNames.get(value) ?? "Unassigned",
+      count,
+    }))
+    // Named owners first (by count), "Unassigned" last.
+    .sort((a, b) => {
+      if (a.value === "unassigned") return 1;
+      if (b.value === "unassigned") return -1;
+      return b.count - a.count;
+    });
 
   const dimensions: FilterDimension[] = [
     {
@@ -155,6 +185,11 @@ export default async function WorkPage(props: { searchParams: SearchParams }) {
           count: ventureCounts.get(p.id) ?? 0,
         }))
         .filter((o) => (o.count ?? 0) > 0),
+    },
+    {
+      key: "owner",
+      label: "Owner",
+      options: ownerOptions,
     },
     {
       key: "priority",
@@ -310,6 +345,22 @@ export default async function WorkPage(props: { searchParams: SearchParams }) {
                           {t.dueDate && ` · ${shortDate(t.dueDate)}`}
                         </div>
                       </div>
+                      {t.assigneeName && (
+                        <span
+                          className="inline-flex shrink-0 items-center gap-1 rounded-full bg-surface px-1 py-0.5 text-tiny text-text-secondary sm:px-1.5"
+                          title={t.assigneeName}
+                        >
+                          <span
+                            className="grid h-[18px] w-[18px] place-items-center rounded-full text-[9px] font-semibold"
+                            style={{ background: "var(--blue-bg)", color: "var(--blue-text)" }}
+                          >
+                            {initials(t.assigneeName)}
+                          </span>
+                          <span className="hidden max-w-[84px] truncate sm:inline">
+                            {t.assigneeName}
+                          </span>
+                        </span>
+                      )}
                       {t.themes.length > 0 && (
                         <ThemeChips themes={t.themes} size="xs" />
                       )}
@@ -391,6 +442,7 @@ function pathWith(
     priority?: string;
     status?: string;
     section?: string;
+    owner?: string;
   },
   key: string,
   value: string | null,

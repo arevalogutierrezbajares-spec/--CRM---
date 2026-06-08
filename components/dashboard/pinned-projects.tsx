@@ -38,8 +38,20 @@ const HEALTH: Record<PinnedProject["health"], string> = {
   red: "var(--red-text)",
 };
 
-function formatTouched(iso: string | null): string {
-  if (!iso) return "No updates";
+/** "2h ago" / "yesterday" / "Jun 8" — nowMs is a server snapshot (purity-safe). */
+function relativeTime(iso: string | null, nowMs: number): string {
+  if (!iso) return "no updates";
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return "no updates";
+  const diff = nowMs - t;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days === 1) return "yesterday";
+  if (days < 7) return `${days}d ago`;
   return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
@@ -55,10 +67,12 @@ export function PinnedProjects({
   pinned,
   allProjects,
   recent = [],
+  nowMs,
 }: {
   pinned: PinnedProject[];
   allProjects: { id: string; title: string }[];
   recent?: { id: string; title: string }[];
+  nowMs: number;
 }) {
   const router = useRouter();
   const drawer = useItemDrawer();
@@ -74,6 +88,22 @@ export function PinnedProjects({
   const pinnable = allProjects.filter((p) => !pinnedIds.has(p.id));
   const selected = pinned.find((p) => p.id === open) ?? pinned[0] ?? null;
   const recentUnpinned = recent.filter((r) => !pinnedIds.has(r.id));
+
+  // The single most-recently-touched doc per pinned project, newest first —
+  // the "what changed since I last looked" rail.
+  const recentUpdates = useMemo(
+    () =>
+      pinned
+        .map((p) => (p.latestDocs[0] ? { project: p, doc: p.latestDocs[0] } : null))
+        .filter((x): x is { project: PinnedProject; doc: PinnedDoc } => Boolean(x))
+        .sort(
+          (a, b) =>
+            (Date.parse(b.doc.updatedAt ?? "") || 0) -
+            (Date.parse(a.doc.updatedAt ?? "") || 0),
+        )
+        .slice(0, 6),
+    [pinned],
+  );
 
   function preview(d: PinnedDoc) {
     setPreviewFile({ linkId: d.id, label: d.label, filename: d.filename ?? d.label, mime: d.mime ?? "" });
@@ -131,6 +161,59 @@ export function PinnedProjects({
     );
   }
 
+  /** A rich rail card: doc label + project + relative time, one click to open. */
+  function renderRailItem(project: PinnedProject, doc: PinnedDoc) {
+    const Icon = docIcon(doc);
+    const cls =
+      "group flex min-h-[52px] w-[210px] shrink-0 items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left outline-none transition-colors hover:bg-surface focus-visible:ring-2 focus-visible:ring-[var(--ring)]";
+    const style = { borderColor: "var(--border-default)" };
+    const body = (
+      <>
+        <span
+          className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-surface"
+          style={{ color: "var(--blue-text)" }}
+        >
+          <Icon size={14} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[12px] font-medium text-text-primary">
+            {doc.label}
+          </span>
+          <span className="block truncate text-tiny text-text-tertiary">
+            {project.title} · {relativeTime(doc.updatedAt, nowMs)}
+          </span>
+        </span>
+        {doc.kind === "link" ? (
+          <ExternalLink size={12} className="shrink-0 text-text-tertiary" />
+        ) : (
+          <ArrowUpRight
+            size={13}
+            className="shrink-0 text-text-tertiary transition-transform group-hover:translate-x-0.5"
+          />
+        )}
+      </>
+    );
+    if (doc.kind === "link" && doc.url) {
+      return (
+        <a key={doc.id} href={doc.url} target="_blank" rel="noopener noreferrer" className={cls} style={style} role="listitem">
+          {body}
+        </a>
+      );
+    }
+    if (doc.kind === "file") {
+      return (
+        <button key={doc.id} type="button" onClick={() => preview(doc)} className={cls} style={style} role="listitem">
+          {body}
+        </button>
+      );
+    }
+    return (
+      <Link key={doc.id} href={`/lob/${project.id}/docs/${doc.id}`} className={cls} style={style} role="listitem">
+        {body}
+      </Link>
+    );
+  }
+
   return (
     <DashCard className="overflow-hidden p-0">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] p-3">
@@ -155,6 +238,21 @@ export function PinnedProjects({
           </Select>
         )}
       </div>
+
+      {recentUpdates.length >= 2 && (
+        <div className="border-b border-[var(--border)] px-3 py-2.5">
+          <div className="mb-1.5 flex items-center gap-1 text-tiny font-medium text-text-tertiary">
+            <Clock3 size={11} /> Latest updates
+          </div>
+          <div
+            role="list"
+            aria-label="Latest document updates across pinned projects"
+            className="flex gap-2 overflow-x-auto px-0.5 py-1 [scrollbar-width:thin]"
+          >
+            {recentUpdates.map(({ project, doc }) => renderRailItem(project, doc))}
+          </div>
+        </div>
+      )}
 
       {pinned.length === 0 ? (
         <p className="px-3 py-5 text-center text-[12px] text-text-secondary">
@@ -190,7 +288,7 @@ export function PinnedProjects({
                       </div>
                     </div>
                     <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-card px-1.5 py-0.5 text-tiny text-text-tertiary">
-                      <Clock3 size={10} /> {formatTouched(p.lastUpdatedAt)}
+                      <Clock3 size={10} /> {relativeTime(p.lastUpdatedAt, nowMs)}
                     </span>
                   </div>
                   <div className="mt-3 flex items-center gap-2">
@@ -216,7 +314,7 @@ export function PinnedProjects({
                     <h3 className="truncate text-[15px] font-semibold text-text-primary">{selected.title}</h3>
                   </div>
                   <p className="mt-1 text-[12px] text-text-secondary">
-                    Latest touched {formatTouched(selected.lastUpdatedAt)}.
+                    Latest touched {relativeTime(selected.lastUpdatedAt, nowMs)}.
                   </p>
                 </div>
                 <div className="flex shrink-0 flex-wrap gap-1.5">
@@ -273,7 +371,7 @@ export function PinnedProjects({
                       <li key={doc.id} className="flex min-h-[40px] items-center justify-between gap-2 rounded-md bg-surface px-2 py-1.5">
                         <div className="min-w-0">
                           <div className="truncate text-[12px] text-text-primary">{doc.label}</div>
-                          <div className="text-tiny text-text-tertiary">{doc.category} · {formatTouched(doc.updatedAt)}</div>
+                          <div className="text-tiny text-text-tertiary">{doc.category} · {relativeTime(doc.updatedAt, nowMs)}</div>
                         </div>
                         {renderDocLink(selected.id, doc, "action")}
                       </li>

@@ -107,7 +107,7 @@ export function DailyView({
     },
     {
       id: "pinned",
-      node: <PinnedProjects pinned={pinnedProjects} allProjects={pickerProjects} recent={recentProjects} />,
+      node: <PinnedProjects pinned={pinnedProjects} allProjects={pickerProjects} recent={recentProjects} nowMs={nowMs} />,
     },
     {
       id: "relationships",
