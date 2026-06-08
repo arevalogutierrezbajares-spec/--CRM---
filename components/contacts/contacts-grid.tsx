@@ -39,6 +39,7 @@ import { SavedViews } from "@/components/grid/saved-views";
 import { ExportButton } from "@/components/grid/export-button";
 import { VenturePillBar } from "@/components/tags/venture-pill-bar";
 import { ContactsSearch } from "@/components/contacts/contacts-search";
+import { LeadVisibilitySegmented } from "@/components/contacts/lead-visibility-segmented";
 import { TypeSegmented } from "@/components/contacts/type-segmented";
 import { ReachIcons } from "@/components/contacts/reach-icons";
 import { TagPills } from "@/components/contacts/tag-pills";
@@ -106,6 +107,7 @@ const GROUP_OPTIONS = [
 ];
 
 const TYPE_CYCLE: Array<"all" | "person" | "org"> = ["all", "person", "org"];
+const LINKEDIN_LEAD_TAG_NAME = "linkedin lead";
 
 export function ContactsGrid({
   initialContacts,
@@ -122,6 +124,7 @@ export function ContactsGrid({
   const q = (sp.get("q") ?? "").trim().toLowerCase();
   const tag = sp.get("tag");
   const projectId = sp.get("project");
+  const leadView = sp.get("leadView") ?? "direct";
   const filters = parseFilter(sp.get("filter"));
   const sort = parseSort(sp.get("sort"));
   const group = sp.get("group") ?? undefined;
@@ -348,6 +351,9 @@ export function ContactsGrid({
     (t: Tag) => {
       const next = new URLSearchParams(sp.toString());
       next.set("tag", t.name);
+      if (t.name.toLowerCase() === LINKEDIN_LEAD_TAG_NAME) {
+        next.set("leadView", "leads");
+      }
       startTransition(() => router.push(`${pathname}?${next.toString()}`));
     },
     [router, pathname, sp],
@@ -356,7 +362,11 @@ export function ContactsGrid({
   const totalCount = initialContacts.length;
   const matchedCount = sorted.length;
   const hasActiveQuery =
-    q.length > 0 || Object.keys(filters).length > 0 || !!tag || !!projectId;
+    q.length > 0 ||
+    Object.keys(filters).length > 0 ||
+    !!tag ||
+    !!projectId ||
+    leadView !== "direct";
 
   // ─────────────────────────────────────────────────────────────────────
   return (
@@ -364,7 +374,10 @@ export function ContactsGrid({
       {/* ── toolbar ─────────────────────────────────────────────────── */}
       <div className="mb-4 space-y-2.5">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <TypeSegmented />
+          <div className="flex flex-wrap items-center gap-2">
+            <LeadVisibilitySegmented />
+            <TypeSegmented />
+          </div>
           <ContactsSearch />
         </div>
         <VenturePillBar tags={ventureTags} />

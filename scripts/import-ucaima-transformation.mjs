@@ -8,6 +8,8 @@ const WORKSPACE_ID = "11111111-2222-3333-4444-aaaaaaaaaaa1";
 const VAV_PROJECT_TITLE = "VAV - Vamos a Venezuela";
 const ALT_VAV_PROJECT_TITLE = "VAV — Vamos a Venezuela";
 const UCAIMA_PROJECT_TITLE = "Ucaima Transformation";
+const UCAIMA_DISPLAY_TAG = "Ucaima transformation";
+const LINKEDIN_LEAD_TAG = "linkedin lead";
 
 const sql = postgres(process.env.DATABASE_URL, {
   prepare: false,
@@ -17,6 +19,8 @@ const sql = postgres(process.env.DATABASE_URL, {
 const TAGS = [
   { name: "vav", kind: "venture", color: "#1565c0" },
   { name: "ucaima-transformation", kind: "custom", color: "#0f766e" },
+  { name: UCAIMA_DISPLAY_TAG, kind: "custom", color: "#0f766e" },
+  { name: LINKEDIN_LEAD_TAG, kind: "custom", color: "#0a66c2" },
   { name: "science-basecamp", kind: "custom", color: "#2563eb" },
   { name: "founding-member-prospect", kind: "custom", color: "#9333ea" },
   { name: "field-course-buyer", kind: "custom", color: "#16a34a" },
@@ -1318,6 +1322,31 @@ async function tagContact(tx, contactId, tagId) {
   `;
 }
 
+async function tagProjectContacts(tx, projectId, tagId) {
+  await tx`
+    insert into contact_tags (contact_id, tag_id)
+    select pc.contact_id, ${tagId}
+    from project_contacts pc
+    inner join contacts c on c.id = pc.contact_id
+    where pc.project_id = ${projectId}
+      and c.workspace_id = ${WORKSPACE_ID}
+    on conflict do nothing
+  `;
+}
+
+async function tagProjectPeople(tx, projectId, tagId) {
+  await tx`
+    insert into contact_tags (contact_id, tag_id)
+    select pc.contact_id, ${tagId}
+    from project_contacts pc
+    inner join contacts c on c.id = pc.contact_id
+    where pc.project_id = ${projectId}
+      and c.workspace_id = ${WORKSPACE_ID}
+      and c.type = 'person'
+    on conflict do nothing
+  `;
+}
+
 async function linkContactToProject(tx, projectId, contactId, role) {
   await tx`
     insert into project_contacts (project_id, contact_id, role)
@@ -1479,6 +1508,7 @@ async function main() {
 
       await tagContact(tx, orgId, tagIds.get("vav"));
       await tagContact(tx, orgId, tagIds.get("ucaima-transformation"));
+      await tagContact(tx, orgId, tagIds.get(UCAIMA_DISPLAY_TAG));
       await tagContact(tx, orgId, tagIds.get("founding-member-prospect"));
       const specificTag = categoryTag[p.category];
       if (specificTag) await tagContact(tx, orgId, tagIds.get(specificTag));
@@ -1502,6 +1532,8 @@ async function main() {
         await ensureChannel(tx, personId, "domain", c.officialUrl, false);
         await tagContact(tx, personId, tagIds.get("vav"));
         await tagContact(tx, personId, tagIds.get("ucaima-transformation"));
+        await tagContact(tx, personId, tagIds.get(UCAIMA_DISPLAY_TAG));
+        await tagContact(tx, personId, tagIds.get(LINKEDIN_LEAD_TAG));
         await tagContact(tx, personId, tagIds.get("founding-member-prospect"));
         const specificTag = categoryTag[p.category];
         if (specificTag) await tagContact(tx, personId, tagIds.get(specificTag));
@@ -1528,6 +1560,11 @@ async function main() {
       }
     });
   }
+
+  await sql.begin(async (tx) => {
+    await tagProjectContacts(tx, projectId, tagIds.get(UCAIMA_DISPLAY_TAG));
+    await tagProjectPeople(tx, projectId, tagIds.get(LINKEDIN_LEAD_TAG));
+  });
 
   await ensureProjectDoc(
       sql,
@@ -1590,6 +1627,61 @@ async function main() {
       from project_links
       where project_id = ${projectId}
     `;
+    const [tagSummary] = await sql`
+      select
+        count(*) filter (where c.type = 'person')::int as person_contacts,
+        count(*) filter (
+          where c.type = 'person'
+            and exists (
+              select 1
+              from contact_tags ct
+              inner join tags t on t.id = ct.tag_id
+              where ct.contact_id = c.id
+                and t.name = ${LINKEDIN_LEAD_TAG}
+            )
+        )::int as people_with_linkedin_lead,
+        count(*) filter (
+          where c.type = 'person'
+            and exists (
+              select 1
+              from contact_tags ct
+              inner join tags t on t.id = ct.tag_id
+              where ct.contact_id = c.id
+                and t.name = ${UCAIMA_DISPLAY_TAG}
+            )
+        )::int as people_with_ucaima_tag,
+        count(*) filter (
+          where c.type = 'person'
+            and (
+              not exists (
+                select 1
+                from contact_tags ct
+                inner join tags t on t.id = ct.tag_id
+                where ct.contact_id = c.id
+                  and t.name = ${LINKEDIN_LEAD_TAG}
+              )
+              or not exists (
+                select 1
+                from contact_tags ct
+                inner join tags t on t.id = ct.tag_id
+                where ct.contact_id = c.id
+                  and t.name = ${UCAIMA_DISPLAY_TAG}
+              )
+            )
+        )::int as people_missing_required_tags,
+        count(*) filter (
+          where not exists (
+            select 1
+            from contact_tags ct
+            inner join tags t on t.id = ct.tag_id
+            where ct.contact_id = c.id
+              and t.name = ${LINKEDIN_LEAD_TAG}
+          )
+        )::int as direct_view_contacts
+      from project_contacts pc
+      inner join contacts c on c.id = pc.contact_id
+      where pc.project_id = ${projectId}
+    `;
     console.log(
       JSON.stringify(
         {
@@ -1599,6 +1691,7 @@ async function main() {
           prospects: prospects.length,
           linkedContacts: contact_count,
           projectDocs: doc_count,
+          tagSummary,
           importedAt: nowIso(),
         },
         null,

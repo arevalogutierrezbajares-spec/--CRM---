@@ -2,6 +2,7 @@ import { and, desc, eq, inArray, sql as rawSql, type SQL } from "drizzle-orm";
 import { db, schema } from "@/db";
 
 const { contacts, contactChannels, contactTags, tags } = schema;
+const LINKEDIN_LEAD_TAG_NAME = "linkedin lead";
 
 export type ContactRow = typeof contacts.$inferSelect;
 export type ContactChannelRow = typeof contactChannels.$inferSelect;
@@ -27,13 +28,17 @@ export type ContactProjectOption = {
   contactCount: number;
 };
 
+export type ContactLeadMode = "direct" | "leads" | "all";
+
 export async function listContacts(opts: {
   workspaceId: string;
   archived?: boolean;
   tagName?: string;
   projectId?: string;
+  leadMode?: ContactLeadMode;
 }): Promise<ContactListItem[]> {
   const archived = opts.archived ?? false;
+  const leadMode = opts.leadMode ?? "all";
   const projectContactIds = opts.projectId
     ? await listContactIdsForProject({
         workspaceId: opts.workspaceId,
@@ -90,6 +95,24 @@ export async function listContacts(opts: {
     }),
   ]);
 
+  const tagsByContact = new Map<string, TagRow[]>();
+  for (const tagged of ctags) {
+    const contactTags = tagsByContact.get(tagged.contactId);
+    if (contactTags) contactTags.push(tagged.tag);
+    else tagsByContact.set(tagged.contactId, [tagged.tag]);
+  }
+
+  if (leadMode !== "all") {
+    rows = rows.filter((row) => {
+      const hasLinkedInLeadTag = (tagsByContact.get(row.id) ?? []).some(
+        (tag) => tag.name.toLowerCase() === LINKEDIN_LEAD_TAG_NAME,
+      );
+      return leadMode === "leads" ? hasLinkedInLeadTag : !hasLinkedInLeadTag;
+    });
+  }
+
+  if (rows.length === 0) return [];
+
   const projectsByContact = new Map<string, ContactProjectRef[]>();
   for (const ref of projectRefs) {
     const projects = projectsByContact.get(ref.contactId);
@@ -100,7 +123,7 @@ export async function listContacts(opts: {
   return rows.map((row) => ({
     ...row,
     channels: channels.filter((c) => c.contactId === row.id),
-    tags: ctags.filter((t) => t.contactId === row.id).map((t) => t.tag),
+    tags: tagsByContact.get(row.id) ?? [],
     projects: projectsByContact.get(row.id) ?? [],
   }));
 }

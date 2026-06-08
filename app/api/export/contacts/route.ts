@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/current-user";
-import { listContacts } from "@/db/queries/contacts";
+import { listContacts, type ContactLeadMode } from "@/db/queries/contacts";
 import { toCsv } from "@/lib/csv";
+
+function parseLeadMode(value: string | null): ContactLeadMode {
+  if (value === "leads" || value === "all") return value;
+  return "direct";
+}
 
 export async function GET(req: NextRequest) {
   const user = await getCurrentUser();
@@ -10,12 +15,14 @@ export async function GET(req: NextRequest) {
   const archived = req.nextUrl.searchParams.get("archived") === "true";
   const tag = req.nextUrl.searchParams.get("tag") ?? undefined;
   const projectId = req.nextUrl.searchParams.get("project") ?? undefined;
+  const leadMode = parseLeadMode(req.nextUrl.searchParams.get("leadView"));
 
   const rows = await listContacts({
     workspaceId: user.workspaceId,
     archived,
     tagName: tag,
     projectId,
+    leadMode,
   });
 
   const csv = toCsv(

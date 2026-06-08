@@ -10,12 +10,18 @@ import {
   listContactProjectOptions,
   listContacts,
   type ContactListItem,
+  type ContactLeadMode,
   type ContactProjectOption,
 } from "@/db/queries/contacts";
 import { listTags } from "@/db/queries/tags";
 import { safeRead } from "@/lib/db-status";
 
-type SearchParams = Promise<{ archived?: string; project?: string }>;
+type SearchParams = Promise<{ archived?: string; project?: string; leadView?: string }>;
+
+function parseLeadMode(value: string | undefined): ContactLeadMode {
+  if (value === "leads" || value === "all") return value;
+  return "direct";
+}
 
 export default async function ContactsPage(props: {
   searchParams: SearchParams;
@@ -24,10 +30,11 @@ export default async function ContactsPage(props: {
   const sp = await props.searchParams;
   const archived = sp.archived === "true";
   const projectId = sp.project || undefined;
+  const leadMode = parseLeadMode(sp.leadView);
 
   const [res, tagsRes, projectOptionsRes] = await Promise.all([
     safeRead<ContactListItem[]>(
-      () => listContacts({ workspaceId: user.workspaceId, archived, projectId }),
+      () => listContacts({ workspaceId: user.workspaceId, archived, projectId, leadMode }),
       [],
     ),
     safeRead(() => listTags(), []),
@@ -68,10 +75,16 @@ export default async function ContactsPage(props: {
             <h1 className="text-2xl font-semibold tracking-tight">Contacts</h1>
             <p className="text-sm text-[var(--muted-foreground)]">
               {selectedProject
-                ? `${selectedProject.title} project contacts.`
+                ? leadMode === "leads"
+                  ? `${selectedProject.title} LinkedIn leads.`
+                  : `${selectedProject.title} project contacts.`
                 : archived
                   ? "Archived contacts."
-                  : "People + orgs in your network."}
+                  : leadMode === "leads"
+                    ? "LinkedIn leads saved for follow-up."
+                    : leadMode === "all"
+                      ? "Direct contacts and LinkedIn leads."
+                      : "Direct contacts in your network."}
             </p>
           </div>
           <div className="flex gap-2 text-sm">

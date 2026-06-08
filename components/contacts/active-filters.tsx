@@ -31,6 +31,11 @@ const GROUP_LABEL: Record<string, string> = {
   project: "project",
 };
 
+const LEAD_VIEW_LABEL: Record<string, string> = {
+  leads: "LinkedIn leads only",
+  all: "Direct + LinkedIn leads",
+};
+
 export function ActiveFilters({
   projectOptions = [],
 }: {
@@ -43,6 +48,7 @@ export function ActiveFilters({
   const q = sp.get("q");
   const tag = sp.get("tag");
   const projectId = sp.get("project");
+  const leadView = sp.get("leadView");
   const group = sp.get("group");
 
   const chips: Array<{ key: string; label: string; onRemove: () => void }> = [];
@@ -81,6 +87,19 @@ export function ActiveFilters({
       onRemove: () => {
         const next = new URLSearchParams(sp.toString());
         next.delete("project");
+        const s = next.toString();
+        router.push(s ? `${pathname}?${s}` : pathname);
+      },
+    });
+  }
+
+  if (leadView && leadView !== "direct") {
+    chips.push({
+      key: "leadView",
+      label: LEAD_VIEW_LABEL[leadView] ?? `Lead view: ${leadView}`,
+      onRemove: () => {
+        const next = new URLSearchParams(sp.toString());
+        next.delete("leadView");
         const s = next.toString();
         router.push(s ? `${pathname}?${s}` : pathname);
       },
@@ -128,7 +147,9 @@ export function ActiveFilters({
     const next = new URLSearchParams(sp.toString());
     // Preserve `archived` toggle so users don't lose context.
     const archived = next.get("archived");
-    for (const k of ["q", "tag", "project", "filter", "group", "sort"]) next.delete(k);
+    for (const k of ["q", "tag", "project", "leadView", "filter", "group", "sort"]) {
+      next.delete(k);
+    }
     if (archived) next.set("archived", archived);
     const s = next.toString();
     router.push(s ? `${pathname}?${s}` : pathname);
