@@ -137,6 +137,12 @@ function daysAgo(days: number): Date {
   return d;
 }
 
+function timeMs(value: Date | string | null | undefined): number | null {
+  if (!value) return null;
+  const ms = value instanceof Date ? value.getTime() : Date.parse(value);
+  return Number.isFinite(ms) ? ms : null;
+}
+
 export async function homeCommandMetrics(workspaceId: string): Promise<HomeCommandMetric[]> {
   const [contactRows, vavRows, latestDocs] = await Promise.all([
     db
@@ -213,8 +219,14 @@ export async function homeCommandMetrics(workspaceId: string): Promise<HomeComma
     return tagHit || includesAny(c.organization, influencerWords);
   });
   const touchedCutoff = daysAgo(30).getTime();
-  const clientsTouched = clientRows.filter((c) => c.lastTouchAt && c.lastTouchAt.getTime() >= touchedCutoff).length;
-  const influencersTouched = influencerRows.filter((c) => c.lastTouchAt && c.lastTouchAt.getTime() >= touchedCutoff).length;
+  const clientsTouched = clientRows.filter((c) => {
+    const touchedAt = timeMs(c.lastTouchAt);
+    return touchedAt !== null && touchedAt >= touchedCutoff;
+  }).length;
+  const influencersTouched = influencerRows.filter((c) => {
+    const touchedAt = timeMs(c.lastTouchAt);
+    return touchedAt !== null && touchedAt >= touchedCutoff;
+  }).length;
 
   let vavProgress = 0;
   let vavOpenTasks = 0;
@@ -242,7 +254,10 @@ export async function homeCommandMetrics(workspaceId: string): Promise<HomeComma
   }
 
   const docsCutoff = daysAgo(14).getTime();
-  const docsTouched = latestDocs.filter((d) => d.touchedAt && d.touchedAt.getTime() >= docsCutoff).length;
+  const docsTouched = latestDocs.filter((d) => {
+    const touchedAt = timeMs(d.touchedAt);
+    return touchedAt !== null && touchedAt >= docsCutoff;
+  }).length;
   const latestDoc = latestDocs[0] ?? null;
 
   const totalContacts = Math.max(contactRows.length, 1);

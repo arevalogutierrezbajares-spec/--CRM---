@@ -19,6 +19,11 @@
 
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import {
+  getDatabaseUrl,
+  isSupabaseDatabaseUrl,
+  loadProjectLocalEnvIntoProcess,
+} from "../lib/database-url";
 
 type Verdict = "active" | "paused" | "broken";
 type Check = {
@@ -55,8 +60,10 @@ const checks: Check[] = [
     required: ["DATABASE_URL"],
     async run() {
       const { default: postgres } = await import("postgres");
-      const client = postgres(process.env.DATABASE_URL!, {
+      const databaseUrl = getDatabaseUrl();
+      const client = postgres(databaseUrl, {
         prepare: false,
+        ssl: isSupabaseDatabaseUrl(databaseUrl) ? "require" : undefined,
         max: 1,
         connection: { search_path: "public, extensions" },
       });
@@ -83,8 +90,10 @@ const checks: Check[] = [
     required: ["DATABASE_URL"],
     async run() {
       const { default: postgres } = await import("postgres");
-      const client = postgres(process.env.DATABASE_URL!, {
+      const databaseUrl = getDatabaseUrl();
+      const client = postgres(databaseUrl, {
         prepare: false,
+        ssl: isSupabaseDatabaseUrl(databaseUrl) ? "require" : undefined,
         max: 1,
         connection: { search_path: "public, extensions" },
       });
@@ -360,6 +369,9 @@ const checks: Check[] = [
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function loadEnv() {
+  loadProjectLocalEnvIntoProcess({
+    override: process.env.AGB_VERIFY_USE_PROCESS_ENV !== "1",
+  });
   // Tiny .env.local loader — only sets keys that aren't already in process.env.
   try {
     const text = await fs.readFile(

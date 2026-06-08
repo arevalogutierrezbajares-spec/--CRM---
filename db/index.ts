@@ -1,6 +1,7 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "./schema";
+import { getDatabaseUrl, isSupabaseDatabaseUrl } from "@/lib/database-url";
 
 type DB = ReturnType<typeof drizzle<typeof schema>>;
 
@@ -8,14 +9,10 @@ let _db: DB | null = null;
 
 export function getDb(): DB {
   if (_db) return _db;
-  const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) {
-    throw new Error(
-      "DATABASE_URL is not set. Set it in .env.local before running DB-backed actions.",
-    );
-  }
+  const connectionString = getDatabaseUrl();
   const client = postgres(connectionString, {
     prepare: false,
+    ssl: isSupabaseDatabaseUrl(connectionString) ? "require" : undefined,
     // Supabase forces an empty search_path for the postgres role. Tell every
     // connection to look in `public` (where our tables live) + `extensions`
     // (where Supabase keeps pgcrypto, uuid-ossp, etc.) so unqualified table

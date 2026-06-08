@@ -1,5 +1,11 @@
+import { getDatabaseUrl } from "@/lib/database-url";
+
 export function isDbConfigured(): boolean {
-  return Boolean(process.env.DATABASE_URL);
+  try {
+    return Boolean(getDatabaseUrl());
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -15,7 +21,8 @@ export async function safeRead<T>(
     return {
       ok: false,
       data: fallback,
-      error: "DATABASE_URL not set — finish AGB-000A to load real data.",
+      error:
+        "DATABASE_URL is missing or does not match this Supabase project. Check .env.local and any global shell DATABASE_URL.",
     };
   }
   try {
