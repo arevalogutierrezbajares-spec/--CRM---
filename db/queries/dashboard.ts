@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { utcToday } from "@/lib/date/today";
+import { etDayBoundsUtc, todayEtKey } from "@/lib/date/meeting-time";
 
 const {
   meetings,
@@ -167,7 +168,9 @@ async function listMeetingsBetween(
 }
 
 export async function listMeetingsToday(workspaceId: string) {
-  return listMeetingsBetween(workspaceId, startOfDay(), endOfDay());
+  // ET calendar day, matching the wall-clock-pinned storage (see meeting-time).
+  const { from, to } = etDayBoundsUtc(todayEtKey());
+  return listMeetingsBetween(workspaceId, from, to);
 }
 export async function listMeetingsThisWeek(workspaceId: string) {
   return listMeetingsBetween(workspaceId, startOfWeek(), endOfWeek());
@@ -216,8 +219,8 @@ export async function dashboardCounts(
       .where(
         and(
           eq(meetings.workspaceId, workspaceId),
-          gte(meetings.scheduledAt, startOfDay()),
-          lt(meetings.scheduledAt, endOfDay()),
+          gte(meetings.scheduledAt, etDayBoundsUtc(todayEtKey()).from),
+          lt(meetings.scheduledAt, etDayBoundsUtc(todayEtKey()).to),
         ),
       )
       .orderBy(meetings.scheduledAt),

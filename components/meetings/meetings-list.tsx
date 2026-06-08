@@ -1,173 +1,259 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { Radio, Search, X } from "lucide-react";
+import {
+  Briefcase,
+  ChevronDown,
+  Radio,
+  Search,
+  Users,
+  X,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import type { MeetingListItem } from "@/db/queries/meetings";
-import { formatDateTime } from "@/lib/utils";
+import {
+  formatMeetingTime,
+  meetingDayKey,
+  MEETING_TZ_LABEL,
+} from "@/lib/date/meeting-time";
 
 const TYPE_LABEL: Record<string, string> = {
   one_on_one: "1:1",
-  group: "group",
-  event: "event",
-  call: "call",
+  group: "Group",
+  event: "Event",
+  call: "Call",
 };
 
-function isToday(d: Date): boolean {
-  const now = new Date();
-  return (
-    d.getFullYear() === now.getFullYear() &&
-    d.getMonth() === now.getMonth() &&
-    d.getDate() === now.getDate()
-  );
-}
+type Kind = "client" | "internal";
+type Segment = "all" | Kind;
+type Group = "today" | "upcoming" | "past";
 
-function isThisWeek(d: Date): boolean {
-  if (isToday(d)) return false;
-  const now = new Date();
-  const weekStart = new Date(now);
-  weekStart.setDate(now.getDate() - now.getDay());
-  weekStart.setHours(0, 0, 0, 0);
-  const weekEnd = new Date(weekStart);
-  weekEnd.setDate(weekStart.getDate() + 7);
-  return d >= weekStart && d < weekEnd;
-}
-
-function isUpcoming(d: Date): boolean {
-  if (isToday(d)) return false;
-  return d > new Date();
-}
-
-type Group = "today" | "upcoming" | "this-week" | "past";
-
-function getGroup(m: MeetingListItem): Group {
-  if (isToday(m.scheduledAt)) return "today";
-  if (isUpcoming(m.scheduledAt)) return "upcoming";
-  if (isThisWeek(m.scheduledAt)) return "this-week";
-  return "past";
-}
-
-const GROUP_ORDER: Group[] = ["today", "upcoming", "this-week", "past"];
+const GROUP_ORDER: Group[] = ["today", "upcoming", "past"];
 const GROUP_LABEL: Record<Group, string> = {
   today: "Today",
   upcoming: "Upcoming",
-  "this-week": "This week",
   past: "Past",
 };
 
-interface MeetingsListProps {
-  meetings: MeetingListItem[];
+/**
+ * Client = has external attendees OR is tied to a project (the two signals of a
+ * client-facing engagement). Internal = neither — a team-only meeting.
+ */
+function kindOf(m: MeetingListItem): Kind {
+  return m.attendeeCount > 0 || m.projectTitle ? "client" : "internal";
 }
 
-export function MeetingsList({ meetings }: MeetingsListProps) {
-  const [search, setSearch] = useState("");
-  const [contactFilter, setContactFilter] = useState("");
+function groupOf(m: MeetingListItem, todayKey: string): Group {
+  const key = meetingDayKey(m.scheduledAt);
+  if (key === todayKey) return "today";
+  return key > todayKey ? "upcoming" : "past";
+}
 
-  // Collect all attendee names for the dropdown
-  const allNames = useMemo(() => {
-    const set = new Set<string>();
-    for (const m of meetings) {
-      for (const n of m.attendeeNames) set.add(n);
+/**
+ * Make raw minutes/agenda readable as a one-line peek: drop checkbox markers and
+ * leading markdown structure, strip inline emphasis — but never touch hyphens or
+ * underscores inside words (so "follow-up", "Q1-Q2", "snake_case" survive).
+ */
+function clean(s: string): string {
+  return s
+    .replace(/\[[ xX]?\]/g, "") // [ ] / [x] checkboxes
+    .replace(/^[\s>#*+-]+/gm, "") // leading list/heading/quote markers per line
+    .replace(/[*`]/g, "") // inline emphasis / code ticks
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function summaryOf(m: MeetingListItem): { label: string; text: string } | null {
+  const minutes = (m.minutes ?? "").trim();
+  if (minutes) return { label: "Summary", text: clean(minutes) };
+  const agenda = (m.agenda ?? "").trim();
+  if (agenda) return { label: "Agenda", text: clean(agenda) };
+  return null;
+}
+
+export function MeetingsList({
+  meetings,
+  todayKey,
+}: {
+  meetings: MeetingListItem[];
+  todayKey: string;
+}) {
+  const [search, setSearch] = useState("");
+  const [segment, setSegment] = useState<Segment>("all");
+  const [project, setProject] = useState("");
+
+  // Pre-tag each meeting once.
+  const tagged = useMemo(
+    () =>
+      meetings.map((m) => ({
+        m,
+        kind: kindOf(m),
+        group: groupOf(m, todayKey),
+      })),
+    [meetings, todayKey],
+  );
+
+  const counts = useMemo(() => {
+    let client = 0;
+    let internal = 0;
+    for (const t of tagged) {
+      if (t.kind === "client") client++;
+      else internal++;
     }
+    return { all: tagged.length, client, internal };
+  }, [tagged]);
+
+  const projects = useMemo(() => {
+    const set = new Set<string>();
+    for (const { m } of tagged) if (m.projectTitle) set.add(m.projectTitle);
     return Array.from(set).sort();
-  }, [meetings]);
+  }, [tagged]);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
-    return meetings.filter((m) => {
-      if (contactFilter && !m.attendeeNames.includes(contactFilter)) return false;
+    return tagged.filter(({ m, kind }) => {
+      if (segment !== "all" && kind !== segment) return false;
+      if (project && m.projectTitle !== project) return false;
       if (!q) return true;
-      if (m.title.toLowerCase().includes(q)) return true;
-      if (m.location?.toLowerCase().includes(q)) return true;
-      if (m.projectTitle?.toLowerCase().includes(q)) return true;
-      if (m.attendeeNames.some((n) => n.toLowerCase().includes(q))) return true;
-      return false;
+      return (
+        m.title.toLowerCase().includes(q) ||
+        (m.location ?? "").toLowerCase().includes(q) ||
+        (m.projectTitle ?? "").toLowerCase().includes(q) ||
+        m.attendeeNames.some((n) => n.toLowerCase().includes(q))
+      );
     });
-  }, [meetings, search, contactFilter]);
+  }, [tagged, search, segment, project]);
 
   const grouped = useMemo(() => {
-    const map = new Map<Group, MeetingListItem[]>();
-    for (const g of GROUP_ORDER) map.set(g, []);
-    for (const m of filtered) {
-      map.get(getGroup(m))!.push(m);
-    }
+    const map: Record<Group, typeof filtered> = {
+      today: [],
+      upcoming: [],
+      past: [],
+    };
+    for (const t of filtered) map[t.group].push(t);
+    // Today + Upcoming: soonest first. Past: most recent first.
+    map.today.sort((a, b) => +a.m.scheduledAt - +b.m.scheduledAt);
+    map.upcoming.sort((a, b) => +a.m.scheduledAt - +b.m.scheduledAt);
+    map.past.sort((a, b) => +b.m.scheduledAt - +a.m.scheduledAt);
     return map;
   }, [filtered]);
 
-  const hasResults = filtered.length > 0;
+  const active = !!(search || project) || segment !== "all";
 
   return (
-    <div className="space-y-6">
-      {/* Search + filter bar */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted-foreground)]" />
+    <div className="space-y-5">
+      {/* Segments */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div
+          role="group"
+          aria-label="Filter by meeting type"
+          className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--card)] p-0.5"
+        >
+          <SegBtn active={segment === "all"} onClick={() => setSegment("all")}>
+            All <Count n={counts.all} active={segment === "all"} />
+          </SegBtn>
+          <SegBtn
+            active={segment === "client"}
+            onClick={() => setSegment("client")}
+          >
+            <Users className="h-3.5 w-3.5" /> Client{" "}
+            <Count n={counts.client} active={segment === "client"} />
+          </SegBtn>
+          <SegBtn
+            active={segment === "internal"}
+            onClick={() => setSegment("internal")}
+          >
+            <Briefcase className="h-3.5 w-3.5" /> Internal{" "}
+            <Count n={counts.internal} active={segment === "internal"} />
+          </SegBtn>
+        </div>
+
+        {projects.length > 0 && (
+          <select
+            value={project}
+            onChange={(e) => setProject(e.target.value)}
+            className="min-h-[38px] rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
+            aria-label="Filter by project"
+          >
+            <option value="">All projects</option>
+            {projects.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </select>
+        )}
+
+        <div className="relative ml-auto min-w-[180px] flex-1 sm:flex-none sm:basis-64">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted-foreground)]" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search meetings…"
-            className="min-h-[44px] w-full rounded-md border border-[var(--border)] bg-[var(--background)] py-2 pl-9 pr-9 text-sm placeholder:text-[var(--muted-foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] sm:min-h-0"
+            className="min-h-[38px] w-full rounded-lg border border-[var(--border)] bg-[var(--background)] py-2 pl-9 pr-8 text-sm placeholder:text-[var(--muted-foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
           />
           {search && (
             <button
               type="button"
               onClick={() => setSearch("")}
-              className="absolute right-1 top-1/2 flex h-[40px] w-[40px] -translate-y-1/2 items-center justify-center rounded-md text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+              aria-label="Clear search"
+              className="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-md text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
             >
               <X className="h-3.5 w-3.5" />
             </button>
           )}
         </div>
 
-        {allNames.length > 0 && (
-          <select
-            value={contactFilter}
-            onChange={(e) => setContactFilter(e.target.value)}
-            className="min-h-[44px] rounded-md border border-[var(--border)] bg-[var(--background)] py-2 pl-3 pr-8 text-sm text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] sm:min-h-0"
-          >
-            <option value="">All contacts</option>
-            {allNames.map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ))}
-          </select>
-        )}
-
-        {(search || contactFilter) && (
+        {active && (
           <button
             type="button"
-            onClick={() => { setSearch(""); setContactFilter(""); }}
-            className="min-h-[44px] rounded-md px-2 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] sm:min-h-0"
+            onClick={() => {
+              setSearch("");
+              setSegment("all");
+              setProject("");
+            }}
+            className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
           >
-            Clear
+            Reset
           </button>
         )}
       </div>
 
       {/* Grouped list */}
-      {!hasResults ? (
-        <Card className="grid place-items-center px-6 py-10 text-center">
-          <p className="text-sm text-[var(--muted-foreground)]">No meetings match your filters.</p>
+      {filtered.length === 0 ? (
+        <Card className="grid place-items-center px-6 py-12 text-center">
+          <p className="text-sm text-[var(--muted-foreground)]">
+            No meetings match these filters.
+          </p>
         </Card>
       ) : (
-        <div className="space-y-8">
-          {GROUP_ORDER.map((group) => {
-            const items = grouped.get(group)!;
+        <div className="space-y-7">
+          {GROUP_ORDER.map((g) => {
+            const items = grouped[g];
             if (items.length === 0) return null;
             return (
-              <section key={group}>
-                <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-[var(--muted-foreground)]">
-                  {GROUP_LABEL[group]}
-                </h2>
+              <section key={g}>
+                <div className="mb-2 flex items-baseline gap-2">
+                  <h2 className="text-xs font-semibold uppercase tracking-widest text-[var(--muted-foreground)]">
+                    {GROUP_LABEL[g]}
+                  </h2>
+                  <span className="text-xs text-[var(--muted-foreground)]/60">
+                    {items.length}
+                  </span>
+                </div>
                 <Card className="overflow-hidden">
                   <ul className="divide-y divide-[var(--border)]">
-                    {items.map((m) => (
-                      <MeetingRow key={m.id} meeting={m} group={group} />
+                    {items.map(({ m, kind, group }) => (
+                      <MeetingRow
+                        key={m.id}
+                        meeting={m}
+                        kind={kind}
+                        isToday={group === "today"}
+                      />
                     ))}
                   </ul>
                 </Card>
@@ -180,55 +266,161 @@ export function MeetingsList({ meetings }: MeetingsListProps) {
   );
 }
 
+function SegBtn({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition ${
+        active
+          ? "bg-[var(--primary)] text-[var(--primary-foreground)] shadow-sm"
+          : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Count({ n, active }: { n: number; active: boolean }) {
+  return (
+    <span
+      aria-hidden
+      className={`rounded-full px-1.5 text-xs tabular-nums ${
+        active ? "bg-white/20" : "bg-[var(--muted)] text-[var(--muted-foreground)]"
+      }`}
+    >
+      {n}
+    </span>
+  );
+}
+
 function MeetingRow({
   meeting: m,
-  group,
+  kind,
+  isToday,
 }: {
   meeting: MeetingListItem;
-  group: Group;
+  kind: Kind;
+  isToday: boolean;
 }) {
-  const showGoLive = group === "today";
+  const [open, setOpen] = useState(false);
+  const { date, time } = formatMeetingTime(m.scheduledAt);
+  const summary = summaryOf(m);
 
   return (
-    <li className="flex min-h-[56px] items-center justify-between gap-3 px-4 py-3 hover:bg-[var(--muted)]/30 transition-colors">
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2 flex-wrap">
-          <Link
-            href={`/meetings/${m.id}`}
-            className="inline-flex min-h-[40px] items-center rounded-sm text-sm font-medium hover:underline sm:min-h-0"
-          >
-            {m.title}
-          </Link>
-          {m.openActionItems > 0 && (
-            <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-              {m.openActionItems} open AI{m.openActionItems === 1 ? "" : "s"}
-            </span>
-          )}
+    <li className="transition-colors hover:bg-[var(--muted)]/30">
+      <div className="flex items-stretch gap-3 px-4 py-3">
+        {/* Time rail */}
+        <div className="flex w-[68px] flex-none flex-col justify-center border-r border-[var(--border)] pr-3 text-right">
+          <div className="text-xs text-[var(--muted-foreground)]">{date}</div>
+          <div className="text-sm font-semibold tabular-nums">{time}</div>
+          <div className="text-[10px] uppercase tracking-wide text-[var(--muted-foreground)]/70">
+            {MEETING_TZ_LABEL}
+          </div>
         </div>
-        <div className="mt-0.5 text-xs text-[var(--muted-foreground)]">
-          {formatDateTime(m.scheduledAt)}
-          {m.location ? ` · ${m.location}` : ""}
-          {m.projectTitle ? ` · ${m.projectTitle}` : ""}
-          {m.attendeeNames.length > 0 && (
-            <> · {m.attendeeNames.slice(0, 3).join(", ")}
-              {m.attendeeNames.length > 3 && ` +${m.attendeeNames.length - 3}`}
-            </>
-          )}
-        </div>
-      </div>
 
-      <div className="flex items-center gap-2 shrink-0">
-        <Badge variant="outline" className="text-xs">
-          {TYPE_LABEL[m.type] ?? m.type}
-        </Badge>
-        {showGoLive && (
-          <Button asChild size="sm" variant="outline" className="gap-1 px-2 text-xs text-red-600 border-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 dark:border-red-800 dark:text-red-400 sm:h-7">
-            <Link href={`/meetings/${m.id}?live=1`}>
-              <Radio className="h-3 w-3" /> Go Live
+        {/* Body */}
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href={`/meetings/${m.id}`}
+              className="text-sm font-medium hover:underline"
+            >
+              {m.title}
             </Link>
+            <KindChip kind={kind} />
+            <Badge variant="outline" className="text-[11px]">
+              {TYPE_LABEL[m.type] ?? m.type}
+            </Badge>
+            {m.projectTitle && (
+              <span className="inline-flex max-w-[200px] items-center gap-1 rounded-full bg-[var(--primary)]/10 px-2 py-0.5 text-[11px] font-medium text-[var(--primary)]">
+                <Briefcase className="h-3 w-3 flex-none" />
+                <span className="truncate">{m.projectTitle}</span>
+              </span>
+            )}
+            {m.openActionItems > 0 && (
+              <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                {m.openActionItems} open
+              </span>
+            )}
+          </div>
+
+          <div className="mt-0.5 truncate text-xs text-[var(--muted-foreground)]">
+            {m.attendeeNames.length > 0
+              ? m.attendeeNames.slice(0, 3).join(", ") +
+                (m.attendeeNames.length > 3
+                  ? ` +${m.attendeeNames.length - 3}`
+                  : "")
+              : "No attendees"}
+            {m.location ? ` · ${m.location}` : ""}
+          </div>
+
+          {summary && (
+            <button
+              type="button"
+              onClick={() => setOpen((v) => !v)}
+              aria-expanded={open}
+              className="mt-1.5 flex w-full items-start gap-1 text-left text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+            >
+              <ChevronDown
+                className={`mt-0.5 h-3.5 w-3.5 flex-none transition-transform ${
+                  open ? "rotate-180" : ""
+                }`}
+              />
+              <span className={open ? "" : "line-clamp-1"}>
+                <span className="font-medium uppercase tracking-wide text-[var(--muted-foreground)]/70">
+                  {summary.label}:
+                </span>{" "}
+                {open ? summary.text : summary.text.slice(0, 120)}
+              </span>
+            </button>
+          )}
+        </div>
+
+        {/* Actions */}
+        <div className="flex flex-none items-center gap-2">
+          {isToday && (
+            <Button
+              asChild
+              size="sm"
+              variant="outline"
+              className="gap-1 border-red-300 px-2 text-xs text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
+            >
+              <Link href={`/meetings/${m.id}?live=1`}>
+                <Radio className="h-3 w-3" /> Live
+              </Link>
+            </Button>
+          )}
+          <Button asChild size="sm" variant="ghost" className="text-xs">
+            <Link href={`/meetings/${m.id}`}>Open</Link>
           </Button>
-        )}
+        </div>
       </div>
     </li>
+  );
+}
+
+function KindChip({ kind }: { kind: Kind }) {
+  if (kind === "client") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+        <Users className="h-3 w-3" /> Client
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-[var(--muted)] px-2 py-0.5 text-[11px] font-medium text-[var(--muted-foreground)]">
+      <Briefcase className="h-3 w-3" /> Internal
+    </span>
   );
 }

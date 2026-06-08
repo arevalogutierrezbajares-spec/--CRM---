@@ -8,10 +8,14 @@ import { DbBanner } from "@/components/db-banner";
 import { MeetingsList } from "@/components/meetings/meetings-list";
 import { listMeetings } from "@/db/queries/meetings";
 import { safeRead } from "@/lib/db-status";
+import { todayEtKey } from "@/lib/date/meeting-time";
 
 export default async function MeetingsPage() {
   const user = await requireUser();
   const res = await safeRead(() => listMeetings({ workspaceId: user.workspaceId }), []);
+  // Computed on the server (clock read) and passed down — client purity forbids
+  // new Date() in render. Drives Today / Upcoming / Past grouping in ET.
+  const todayKey = todayEtKey();
 
   return (
     <>
@@ -19,20 +23,25 @@ export default async function MeetingsPage() {
         email={user.email}
         displayName={user.displayName}
         action={
-          <Button asChild size="sm">
-            <Link href="/meetings/new">
-              <Plus className="h-4 w-4" /> New meeting
-            </Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button asChild size="sm" variant="outline">
+              <Link href="/record">
+                <Mic className="h-4 w-4" /> Record
+              </Link>
+            </Button>
+            <Button asChild size="sm">
+              <Link href="/meetings/new">
+                <Plus className="h-4 w-4" /> New meeting
+              </Link>
+            </Button>
+          </div>
         }
       />
       <main className="mx-auto w-full max-w-5xl flex-1 px-6 py-8">
         <header className="mb-6">
           <h1 className="text-2xl font-semibold tracking-tight">Meetings</h1>
           <p className="text-sm text-[var(--muted-foreground)]">
-            Every meeting auto-logs a Touch on each attendee. Action items in
-            minutes (lines starting with <code>[ ]</code>) become milestones on
-            the linked project.
+            Internal and client meetings, summaries, and times in US Eastern.
           </p>
         </header>
 
@@ -62,7 +71,7 @@ export default async function MeetingsPage() {
             </div>
           </Card>
         ) : (
-          <MeetingsList meetings={res.data} />
+          <MeetingsList meetings={res.data} todayKey={todayKey} />
         )}
       </main>
     </>

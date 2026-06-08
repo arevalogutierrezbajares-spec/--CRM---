@@ -14,7 +14,7 @@ import {
 import { DbBanner } from "@/components/db-banner";
 import { getMeeting } from "@/db/queries/meetings";
 import { safeRead } from "@/lib/db-status";
-import { formatDateTime } from "@/lib/utils";
+import { formatMeetingDateTime } from "@/lib/date/meeting-time";
 import { parseActionItems } from "@/lib/validation/meeting"; // used for server-side spawn button count
 import { InlineNotes } from "@/components/meetings/inline-notes";
 import { LiveMeeting } from "@/components/meetings/live-meeting";
@@ -144,7 +144,7 @@ export default async function MeetingDetailPage(props: {
                     {meeting.title}
                   </h1>
                   <div className="mt-1 flex flex-wrap gap-3 text-sm text-[var(--muted-foreground)]">
-                    <span>{formatDateTime(meeting.scheduledAt)}</span>
+                    <span>{formatMeetingDateTime(meeting.scheduledAt)}</span>
                     {meeting.location && <span>· {meeting.location}</span>}
                     {meeting.projectTitle && (
                       <span>· {meeting.projectTitle}</span>

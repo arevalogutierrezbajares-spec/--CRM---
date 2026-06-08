@@ -17,6 +17,7 @@ import {
   listMeetingMaterials,
 } from "@/db/queries/meeting-materials";
 import { createSignedDownloadUrl } from "@/lib/project-files/storage";
+import { wallClockToDate } from "@/lib/date/meeting-time";
 import {
   createPartnerShare,
   regeneratePartnerRoomAccessToken,
@@ -106,12 +107,15 @@ export async function createMeeting(
     };
   }
 
+  const scheduledAt = wallClockToDate(parsed.scheduledAt);
+  if (!scheduledAt) return { ok: false, error: "Invalid date + time" };
+
   const [inserted] = await db
     .insert(meetings)
     .values({
       title: parsed.title,
-      scheduledAt: new Date(parsed.scheduledAt),
-      endedAt: parsed.endedAt ? new Date(parsed.endedAt) : null,
+      scheduledAt,
+      endedAt: wallClockToDate(parsed.endedAt),
       type: parsed.type,
       location: parsed.location ?? null,
       agenda: parsed.agenda ?? null,
@@ -170,12 +174,15 @@ export async function updateMeeting(
     };
   }
 
+  const scheduledAt = wallClockToDate(parsed.scheduledAt);
+  if (!scheduledAt) return { ok: false, error: "Invalid date + time" };
+
   const [updated] = await db
     .update(meetings)
     .set({
       title: parsed.title,
-      scheduledAt: new Date(parsed.scheduledAt),
-      endedAt: parsed.endedAt ? new Date(parsed.endedAt) : null,
+      scheduledAt,
+      endedAt: wallClockToDate(parsed.endedAt),
       type: parsed.type,
       location: parsed.location ?? null,
       agenda: parsed.agenda ?? null,
