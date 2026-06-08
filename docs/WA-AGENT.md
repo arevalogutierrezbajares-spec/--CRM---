@@ -50,7 +50,7 @@ Add to `vercel.json` crons:
 {
   "crons": [
     { "path": "/api/cron/watchdogs",       "schedule": "0 12 * * *" },
-    { "path": "/api/cron/weekly-briefing", "schedule": "0 13 * * MON" },
+    { "path": "/api/cron/weekly-briefing", "schedule": "0 13 * * 1" },
     { "path": "/api/cron/reminders",       "schedule": "*/5 * * * *" },
     { "path": "/api/cron/nudges",          "schedule": "0 13 * * *" }
   ]

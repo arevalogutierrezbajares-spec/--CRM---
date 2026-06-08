@@ -100,7 +100,7 @@ Zoho Free caveat: AGB CRM can fully integrate with Zoho API-visible mailboxes. I
 | `/api/cron/reminders` | `*/5 * * * *` | Existing reminder delivery. |
 | `/api/cron/watchdogs` | `0 12 * * *` | Existing daily watchdog digest. |
 | `/api/cron/nudges` | `0 13 * * *` | Existing daily owner nudges. |
-| `/api/cron/weekly-briefing` | `0 13 * * MON` | Existing Monday briefing. |
+| `/api/cron/weekly-briefing` | `0 13 * * 1` | Existing Monday briefing. |
 
 All cron routes use `Authorization: Bearer $CRON_SECRET` when `CRON_SECRET` is set. Production must set `CRON_SECRET` and confirm Vercel cron invocations include the bearer header.
 

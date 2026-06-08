@@ -14,7 +14,7 @@ import { withErrorCapture } from "@/lib/instrument";
  * AGB-402 — weekly briefing.
  *
  * Vercel Cron:
- *   { "path": "/api/cron/weekly-briefing", "schedule": "0 13 * * MON" }
+ *   { "path": "/api/cron/weekly-briefing", "schedule": "0 13 * * 1" }
  *
  * Pulls Due/Blocked/Stale + asks Claude to write a short 5-bullet briefing.
  * Sends via Resend if configured; otherwise returns the rendered text.

@@ -29,4 +29,10 @@ describe("Vercel cron deployment config", () => {
       expect(cron.schedule).toMatch(/\S/);
     }
   });
+
+  it("uses Vercel-supported numeric cron fields", () => {
+    for (const cron of config.crons ?? []) {
+      expect(cron.schedule).not.toMatch(/[A-Za-z]/);
+    }
+  });
 });
