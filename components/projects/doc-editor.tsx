@@ -10,8 +10,8 @@ import "@blocknote/mantine/style.css";
 import { SupabaseYjsProvider } from "@/lib/project-docs/supabase-provider";
 import { toBase64 } from "@/lib/project-docs/yjs-base64";
 import { fromBase64 } from "@/lib/project-docs/yjs-base64";
-import { saveDocContentAction } from "@/app/(app)/lob/docs-actions";
-import { updateLinkAction } from "@/app/(app)/lob/actions";
+import { saveDocContentAction } from "@/app/(app)/projects/docs-actions";
+import { updateLinkAction } from "@/app/(app)/projects/actions";
 
 type SaveState = "idle" | "saving" | "saved";
 
@@ -23,14 +23,14 @@ function colorFromId(id: string): string {
 }
 
 export function DocEditor({
-  lobId,
+  projectId,
   docId,
   initialTitle,
   initialYdoc,
   userId,
   userName,
 }: {
-  lobId: string;
+  projectId: string;
   docId: string;
   initialTitle: string;
   initialYdoc: string | null;
@@ -138,7 +138,7 @@ export function DocEditor({
       return;
     }
     savedTitle.current = next;
-    void updateLinkAction({ lobId, linkId: docId, label: next });
+    void updateLinkAction({ projectId, linkId: docId, label: next });
   }
 
   // De-dupe presence avatars by name for the header.
@@ -148,7 +148,7 @@ export function DocEditor({
     <div className="flex h-[calc(100vh-3rem)] flex-col">
       <header className="flex items-center gap-3 border-b border-[var(--border)] px-4 py-2.5">
         <Link
-          href={`/lob/${lobId}`}
+          href={`/projects/${projectId}`}
           className="shrink-0 rounded p-1 text-text-tertiary hover:text-text-primary hover:bg-surface"
           aria-label="Back to project"
         >

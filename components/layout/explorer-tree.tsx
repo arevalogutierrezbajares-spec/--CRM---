@@ -119,14 +119,14 @@ export function ExplorerTree({ projects, docs }: { projects: Proj[]; docs: Works
           <ChevronRight size={13} className={`transition-transform ${rootOpen ? "rotate-90" : ""}`} />
         </button>
         <Link
-          href="/lob"
-          aria-current={pathname === "/lob" ? "page" : undefined}
+          href="/projects"
+          aria-current={pathname === "/projects" ? "page" : undefined}
           className={`flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-1 py-1 ${
-            pathname === "/lob" ? "bg-surface text-text-primary" : "text-text-secondary hover:bg-surface hover:text-text-primary"
+            pathname === "/projects" ? "bg-surface text-text-primary" : "text-text-secondary hover:bg-surface hover:text-text-primary"
           }`}
         >
           {rootOpen ? <FolderOpen size={13} className="shrink-0 text-text-tertiary" /> : <Folder size={13} className="shrink-0 text-text-tertiary" />}
-          <span>Lines of Business</span>
+          <span>Projects</span>
           <span className="ml-auto text-tiny tabular-nums text-text-tertiary">{projects.length}</span>
         </Link>
       </div>
@@ -138,7 +138,7 @@ export function ExplorerTree({ projects, docs }: { projects: Proj[]; docs: Works
           ) : (
             shown.map(({ p, docs: pDocs }) => {
               const isOpen = q ? true : openProjects.has(p.id); // filtering auto-expands hits
-              const projActive = pathname.startsWith(`/lob/${p.id}`);
+              const projActive = pathname.startsWith(`/projects/${p.id}`);
               const sections = bySection(pDocs);
               return (
                 <li key={p.id}>
@@ -154,7 +154,7 @@ export function ExplorerTree({ projects, docs }: { projects: Proj[]; docs: Works
                       <ChevronRight size={12} className={`transition-transform ${isOpen ? "rotate-90" : ""}`} />
                     </button>
                     <Link
-                      href={`/lob/${p.id}`}
+                      href={`/projects/${p.id}`}
                       aria-current={projActive ? "page" : undefined}
                       className={`flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-1 py-1 text-[12.5px] ${
                         projActive ? "bg-surface font-medium text-text-primary" : "text-text-secondary hover:bg-surface hover:text-text-primary"
@@ -169,7 +169,7 @@ export function ExplorerTree({ projects, docs }: { projects: Proj[]; docs: Works
                     <ul className="list-none">
                       {sections.length === 0 ? (
                         <li>
-                          <Link href={`/lob/${p.id}`} className="block py-1 pl-9 text-tiny text-text-tertiary hover:underline">No docs — add some →</Link>
+                          <Link href={`/projects/${p.id}`} className="block py-1 pl-9 text-tiny text-text-tertiary hover:underline">No docs — add some →</Link>
                         </li>
                       ) : (
                         sections.map((sec) => (

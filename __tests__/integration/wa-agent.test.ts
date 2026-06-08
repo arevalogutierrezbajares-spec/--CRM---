@@ -210,13 +210,9 @@ describe("[integration] WhatsApp agent loop", () => {
     const long_ago = new Date();
     long_ago.setDate(long_ago.getDate() - 120);
 
-    const [lob] = await db
-      .insert(schema.linesOfBusiness)
-      .values({ ...base, title: "Status LoB" })
-      .returning();
     const [proj] = await db
       .insert(schema.projects)
-      .values({ ...base, lobId: lob.id, title: "P" })
+      .values({ ...base, title: "P" })
       .returning();
     await db.insert(schema.milestones).values({
       ...base,
@@ -226,7 +222,6 @@ describe("[integration] WhatsApp agent loop", () => {
     });
     await db.insert(schema.projects).values({
       ...base,
-      lobId: lob.id,
       title: "Blocked",
       status: "waiting",
       waitingOn: "their signature",

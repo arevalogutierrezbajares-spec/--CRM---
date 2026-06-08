@@ -18,10 +18,10 @@ import { cn } from "@/lib/utils";
 import { HealthBadge } from "@/components/ui/health-badge";
 import { DashBadge } from "@/components/dashboard/shared/badge";
 import { ProgressBar } from "@/components/dashboard/shared/progress-bar";
-import type { LobListItem } from "@/db/queries/lines-of-business";
+import type { ProjectListItem } from "@/db/queries/projects";
 
 interface ProjectCardProps {
-  project: LobListItem;
+  project: ProjectListItem;
   variant?: "featured" | "default" | "muted";
 }
 
@@ -81,7 +81,7 @@ export function ProjectCard({ project: p, variant = "default" }: ProjectCardProp
       onMouseLeave={() => setHovered(false)}
     >
       <Link
-        href={`/lob/${p.id}`}
+        href={`/projects/${p.id}`}
         className={cn(
           "group block rounded-xl border bg-card overflow-hidden hover:shadow-lg transition-all relative",
           isFeatured && "ring-1 ring-blue-mid/10",
@@ -260,7 +260,7 @@ function ProjectAvatar({
   large,
   accent,
 }: {
-  project: LobListItem;
+  project: ProjectListItem;
   large: boolean;
   accent: string;
 }) {

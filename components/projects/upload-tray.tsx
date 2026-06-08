@@ -49,11 +49,11 @@ function defaultLabel(name: string): string {
  * category, per-file validation, and an "Upload all" action.
  */
 export function UploadTray({
-  lobId,
+  projectId,
   onUploaded,
   children,
 }: {
-  lobId: string;
+  projectId: string;
   onUploaded: () => void;
   children: React.ReactNode;
 }) {
@@ -98,7 +98,7 @@ export function UploadTray({
       for (const it of valid) {
         patch(it.id, { status: "uploading" });
         const res = await uploadProjectFile({
-          lobId,
+          projectId,
           file: it.file,
           label: it.label,
           category: it.category,

@@ -4,7 +4,7 @@ import { TopBar } from "@/components/layout/top-bar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { DbBanner } from "@/components/db-banner";
-import { KanbanCard } from "@/components/lob/kanban-card";
+import { KanbanCard } from "@/components/projects/kanban-card";
 import {
   getKanban,
   listPipelineTemplatesWithStages,

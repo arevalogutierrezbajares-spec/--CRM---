@@ -3,7 +3,7 @@
  * AGB-307/308/309 — Obsidian → DB sync.
  *
  * Reads every .md file under OBSIDIAN_VAULT, parses YAML frontmatter, and
- * upserts contacts / linesOfBusiness keyed by `notes_path` (the relative file path).
+ * upserts contacts / projects keyed by `notes_path` (the relative file path).
  *
  * Conflict resolution: last-write-wins per field, comparing the file's mtime
  * against the row's `updated_at` (AGB-308). If the file is older for a given
@@ -37,7 +37,7 @@ import { parse } from "yaml";
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 
-const { contacts, linesOfBusiness, contactTags, tags } = schema;
+const { contacts, projects, contactTags, tags } = schema;
 
 const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n/;
 
@@ -169,11 +169,11 @@ async function syncProject(opts: {
   const { workspaceId, userId, vaultPath, fm, mtime } = opts;
   const [existing] = await db
     .select()
-    .from(linesOfBusiness)
+    .from(projects)
     .where(
       and(
-        eq(linesOfBusiness.notesPath, vaultPath),
-        eq(linesOfBusiness.workspaceId, workspaceId),
+        eq(projects.notesPath, vaultPath),
+        eq(projects.workspaceId, workspaceId),
       ),
     )
     .limit(1);
@@ -196,15 +196,15 @@ async function syncProject(opts: {
 
   if (existing) {
     await db
-      .update(linesOfBusiness)
+      .update(projects)
       .set(baseValues)
-      .where(eq(linesOfBusiness.id, existing.id));
+      .where(eq(projects.id, existing.id));
     return { skipped: false, id: existing.id };
   } else {
     const [inserted] = await db
-      .insert(linesOfBusiness)
+      .insert(projects)
       .values(baseValues)
-      .returning({ id: linesOfBusiness.id });
+      .returning({ id: projects.id });
     return { skipped: false, id: inserted.id };
   }
 }
@@ -275,7 +275,7 @@ async function main() {
   }
 
   console.log(
-    `[obsidian-sync] scanned=${scanned} contacts=${contactsSynced} linesOfBusiness=${projectsSynced} skipped=${skipped}`,
+    `[obsidian-sync] scanned=${scanned} contacts=${contactsSynced} projects=${projectsSynced} skipped=${skipped}`,
   );
 }
 

@@ -4,14 +4,14 @@ import { requireUser } from "@/lib/current-user";
 import { TopBar } from "@/components/layout/top-bar";
 import { Button } from "@/components/ui/button";
 import { DbBanner } from "@/components/db-banner";
-import { ProjectCard } from "@/components/lob/project-card";
+import { ProjectCard } from "@/components/projects/project-card";
 import { DashCard } from "@/components/dashboard/shared/dash-card";
 import { SectionLabel } from "@/components/dashboard/shared/section-label";
 import {
   FilterBar,
   type FilterDimension,
 } from "@/components/work/filter-bar";
-import { listLines, type LobListItem } from "@/db/queries/lines-of-business";
+import { listProjects, type ProjectListItem } from "@/db/queries/projects";
 import { safeRead } from "@/lib/db-status";
 
 type SearchParams = Promise<{
@@ -28,8 +28,8 @@ export default async function ProjectsPage(props: {
   const user = await requireUser();
   const sp = await props.searchParams;
 
-  const allRes = await safeRead<LobListItem[]>(
-    () => listLines({ workspaceId: user.workspaceId }),
+  const allRes = await safeRead<ProjectListItem[]>(
+    () => listProjects({ workspaceId: user.workspaceId }),
     [],
   );
 
@@ -78,12 +78,12 @@ export default async function ProjectsPage(props: {
   // non-featured ventures are shaded "back-burner".
   const featured = filtered.filter((p) => p.featured);
   const rest = filtered.filter((p) => !p.featured);
-  const modules = rest.filter((p) => p.parentLobId);
-  const others = rest.filter((p) => !p.parentLobId);
+  const modules = rest.filter((p) => p.parentProjectId);
+  const others = rest.filter((p) => !p.parentProjectId);
 
   const groups: Record<
     "active" | "waiting" | "done" | "lost",
-    LobListItem[]
+    ProjectListItem[]
   > = { active: [], waiting: [], done: [], lost: [] };
   for (const p of others) groups[p.status].push(p);
 
@@ -94,17 +94,17 @@ export default async function ProjectsPage(props: {
         displayName={user.displayName}
         action={
           <Button asChild size="sm">
-            <Link href="/lob/new">
-              <Plus className="h-4 w-4" /> New line of business
+            <Link href="/projects/new">
+              <Plus className="h-4 w-4" /> New project
             </Link>
           </Button>
         }
       />
       <main className="mx-auto w-full max-w-7xl flex-1 px-6 py-6 space-y-4">
         <header>
-          <h1 className="text-[22px] font-medium tracking-tight">Lines of Business</h1>
+          <h1 className="text-[22px] font-medium tracking-tight">Projects</h1>
           <p className="text-[13px] text-text-secondary">
-            {allRes.data.length} venture{allRes.data.length === 1 ? "" : "s"} in your portfolio · each LoB groups its projects, links, docs &amp; contacts.
+            {allRes.data.length} venture{allRes.data.length === 1 ? "" : "s"} in your portfolio · each project has Business / Marketing / Tech sections inside.
           </p>
         </header>
 

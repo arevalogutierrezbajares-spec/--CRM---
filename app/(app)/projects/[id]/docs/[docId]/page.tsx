@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/current-user";
 import { getProjectDoc } from "@/db/queries/docs";
-import { DocEditor } from "@/components/lob/doc-editor";
+import { DocEditor } from "@/components/projects/doc-editor";
 
 type Params = Promise<{ id: string; docId: string }>;
 
@@ -10,11 +10,11 @@ export default async function ProjectDocPage(props: { params: Params }) {
   const { id, docId } = await props.params;
 
   const doc = await getProjectDoc({ linkId: docId, workspaceId: user.workspaceId });
-  if (!doc || doc.lobId !== id) notFound();
+  if (!doc || doc.projectId !== id) notFound();
 
   return (
     <DocEditor
-      lobId={id}
+      projectId={id}
       docId={doc.linkId}
       initialTitle={doc.label}
       initialYdoc={doc.ydoc}

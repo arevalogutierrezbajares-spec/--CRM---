@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
     .insert(touches)
     .values({
       contactId,
-      lobId: typeof projectId === "string" && projectId ? projectId : null,
+      projectId: typeof projectId === "string" && projectId ? projectId : null,
       channel: "voice_memo",
       body,
       transcript: result.text,

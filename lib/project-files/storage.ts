@@ -28,14 +28,14 @@ export function slugFilename(name: string): string {
   return `${base}${ext}`;
 }
 
-/** {workspace_id}/{lob_id}/{uuid}-{slug(original_filename)} */
+/** {workspace_id}/{project_id}/{uuid}-{slug(original_filename)} */
 export function buildStoragePath(opts: {
   workspaceId: string;
-  lobId: string;
+  projectId: string;
   originalFilename: string;
 }): string {
   const unique = crypto.randomUUID();
-  return `${opts.workspaceId}/${opts.lobId}/${unique}-${slugFilename(opts.originalFilename)}`;
+  return `${opts.workspaceId}/${opts.projectId}/${unique}-${slugFilename(opts.originalFilename)}`;
 }
 
 export type SignedUpload = { path: string; token: string; signedUrl: string };
