@@ -19,6 +19,8 @@ export type PresentMaterial = {
   url: string | null;
   description: string | null;
   mimeType: string | null;
+  /** Original upload filename — used to detect type when mime is generic. */
+  fileName: string | null;
   lobTitle: string | null;
   /** Signed URL minted server-side for stored files. */
   fileUrl: string | null;

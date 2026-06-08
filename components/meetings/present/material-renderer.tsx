@@ -2,27 +2,27 @@
 
 import { useState } from "react";
 import { ExternalLink, FileText, ImageOff } from "lucide-react";
+import { materialType } from "@/lib/materials/material-type";
 import type { PresentMaterial } from "./present-stage";
 
-function isHtml(m: PresentMaterial) {
-  return (
-    m.mimeType === "text/html" ||
-    /\.html?$/i.test(m.label) ||
-    /\.html?($|\?)/i.test(m.fileUrl ?? "")
-  );
-}
-function isPdf(m: PresentMaterial) {
-  return m.mimeType === "application/pdf" || /\.pdf($|\?)/i.test(m.fileUrl ?? "");
-}
-function isImage(m: PresentMaterial) {
-  return (m.mimeType ?? "").startsWith("image/");
+/** Microsoft Office Online embed URL for a publicly-fetchable file URL. */
+function officeEmbedSrc(fileUrl: string): string {
+  return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(
+    fileUrl,
+  )}`;
 }
 
-/** Renders a single material to fill the stage, chosen by kind/mime. */
+/** Renders a single material to fill the stage, chosen by its resolved type. */
 export function MaterialRenderer({ material }: { material: PresentMaterial }) {
-  // Stored file → deck (html), pdf, or image.
+  const type = materialType(
+    material.kind,
+    material.mimeType,
+    material.fileName ?? material.label,
+  );
+
+  // Stored file → image, html/pdf deck, or PowerPoint (via Office viewer).
   if (material.kind === "file" && material.fileUrl) {
-    if (isImage(material)) {
+    if (type.key === "image") {
       return (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -32,8 +32,20 @@ export function MaterialRenderer({ material }: { material: PresentMaterial }) {
         />
       );
     }
-    if (isHtml(material) || isPdf(material)) {
+    if (type.key === "html" || type.key === "pdf") {
       return <Frame src={material.fileUrl} title={material.label} />;
+    }
+    if (type.key === "pptx") {
+      // Browsers can't render .pptx inline — Microsoft's Office Online viewer
+      // renders it from the (temporarily public) signed URL. Open-out fallback
+      // downloads the original if the embed is blocked.
+      return (
+        <Frame
+          src={officeEmbedSrc(material.fileUrl)}
+          title={material.label}
+          fallbackHref={material.fileUrl}
+        />
+      );
     }
     return <OpenCard material={material} href={material.fileUrl} />;
   }

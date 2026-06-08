@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -39,6 +39,12 @@ import type {
   AttachableMaterial,
   MaterialKind,
 } from "@/db/queries/meeting-materials";
+import {
+  materialType,
+  materialTypeLabel,
+  MATERIAL_TYPE_ORDER,
+  type MaterialTypeKey,
+} from "@/lib/materials/material-type";
 
 function kindIcon(kind: MaterialKind) {
   switch (kind) {
@@ -186,7 +192,9 @@ export function MeetingMaterials({
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-medium">{m.label}</div>
                 <div className="truncate text-xs text-[var(--muted-foreground)]">
-                  <span className="uppercase tracking-wide">{m.kind}</span>
+                  <span className="uppercase tracking-wide">
+                    {materialType(m.kind, m.mimeType, m.originalFilename ?? m.label).label}
+                  </span>
                   {m.lobTitle ? ` · ${m.lobTitle}` : ""}
                 </div>
               </div>
@@ -438,16 +446,39 @@ function MaterialPicker({
   onAttach: (id: string) => void;
 }) {
   const [query, setQuery] = useState("");
+  const [typeFilter, setTypeFilter] = useState<MaterialTypeKey | "all">("all");
+
+  // Tag each material with its type once, so filtering + display agree.
+  const typed = useMemo(
+    () =>
+      attachable.map((m) => ({
+        ...m,
+        type: materialType(m.kind, m.mimeType, m.originalFilename ?? m.label),
+      })),
+    [attachable],
+  );
+
+  // Which type chips to show — only types actually present, in canonical order,
+  // each with a count.
+  const typesPresent = useMemo(() => {
+    const counts = new Map<MaterialTypeKey, number>();
+    for (const m of typed) counts.set(m.type.key, (counts.get(m.type.key) ?? 0) + 1);
+    return MATERIAL_TYPE_ORDER.filter((k) => counts.has(k)).map((k) => ({
+      key: k,
+      count: counts.get(k)!,
+    }));
+  }, [typed]);
 
   const groups = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const filtered = attachable.filter(
+    const filtered = typed.filter(
       (m) =>
-        !q ||
-        m.label.toLowerCase().includes(q) ||
-        (m.lobTitle ?? "").toLowerCase().includes(q),
+        (typeFilter === "all" || m.type.key === typeFilter) &&
+        (!q ||
+          m.label.toLowerCase().includes(q) ||
+          (m.lobTitle ?? "").toLowerCase().includes(q)),
     );
-    const map = new Map<string, AttachableMaterial[]>();
+    const map = new Map<string, typeof filtered>();
     for (const m of filtered) {
       const key = m.lobTitle ?? "Other";
       const arr = map.get(key) ?? [];
@@ -455,7 +486,7 @@ function MaterialPicker({
       map.set(key, arr);
     }
     return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-  }, [attachable, query]);
+  }, [typed, query, typeFilter]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -472,10 +503,32 @@ function MaterialPicker({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
-        <div className="-mx-2 max-h-[52vh] overflow-y-auto px-2">
+
+        {typesPresent.length > 1 && (
+          <div className="flex flex-wrap gap-1.5">
+            <FilterChip
+              active={typeFilter === "all"}
+              onClick={() => setTypeFilter("all")}
+            >
+              All
+            </FilterChip>
+            {typesPresent.map((t) => (
+              <FilterChip
+                key={t.key}
+                active={typeFilter === t.key}
+                onClick={() => setTypeFilter(t.key)}
+              >
+                {materialTypeLabel(t.key)}
+                <span className="ml-1 opacity-60">{t.count}</span>
+              </FilterChip>
+            ))}
+          </div>
+        )}
+
+        <div className="-mx-2 max-h-[48vh] overflow-y-auto px-2">
           {groups.length === 0 ? (
             <p className="py-8 text-center text-sm text-[var(--muted-foreground)]">
-              No materials found.
+              No materials match.
             </p>
           ) : (
             groups.map(([lob, items]) => (
@@ -500,7 +553,7 @@ function MaterialPicker({
                             {m.label}
                           </span>
                           <span className="block truncate text-xs uppercase tracking-wide text-[var(--muted-foreground)]">
-                            {m.kind}
+                            {m.type.label}
                           </span>
                         </span>
                         {m.attached ? (
@@ -518,5 +571,29 @@ function MaterialPicker({
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function FilterChip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-full border px-2.5 py-1 text-xs font-medium transition ${
+        active
+          ? "border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-foreground)]"
+          : "border-[var(--border)] text-[var(--muted-foreground)] hover:bg-[var(--muted)]"
+      }`}
+    >
+      {children}
+    </button>
   );
 }

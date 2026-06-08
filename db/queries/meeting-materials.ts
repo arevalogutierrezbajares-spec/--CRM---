@@ -63,6 +63,8 @@ export type AttachableMaterial = {
   label: string;
   category: string;
   url: string | null;
+  mimeType: string | null;
+  originalFilename: string | null;
   lobId: string;
   lobTitle: string | null;
   attached: boolean;
@@ -95,6 +97,8 @@ export async function listAttachableMaterials(opts: {
       label: projectLinks.label,
       category: projectLinks.category,
       url: projectLinks.url,
+      mimeType: projectLinks.mimeType,
+      originalFilename: projectLinks.originalFilename,
       lobId: projectLinks.lobId,
       lobTitle: linesOfBusiness.title,
     })

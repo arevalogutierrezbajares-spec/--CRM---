@@ -38,6 +38,7 @@ export default async function PresentPage(props: { params: Params }) {
         url: m.url,
         description: m.description,
         mimeType: m.mimeType,
+        fileName: m.originalFilename,
         lobTitle: m.lobTitle,
         fileUrl,
       };
