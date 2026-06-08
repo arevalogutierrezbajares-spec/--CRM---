@@ -9,11 +9,13 @@ export async function GET(req: NextRequest) {
 
   const archived = req.nextUrl.searchParams.get("archived") === "true";
   const tag = req.nextUrl.searchParams.get("tag") ?? undefined;
+  const projectId = req.nextUrl.searchParams.get("project") ?? undefined;
 
   const rows = await listContacts({
     workspaceId: user.workspaceId,
     archived,
     tagName: tag,
+    projectId,
   });
 
   const csv = toCsv(
@@ -23,6 +25,7 @@ export async function GET(req: NextRequest) {
       "type",
       "relationship",
       "organization",
+      "projects",
       "tags",
       "channels",
       "lastTouchAt",
@@ -36,6 +39,7 @@ export async function GET(req: NextRequest) {
       type: c.type,
       relationship: c.relationshipType,
       organization: c.organization,
+      projects: c.projects.map((p) => p.title).join("|"),
       tags: c.tags.map((t) => t.name).join("|"),
       channels: c.channels
         .map((ch) => `${ch.kind}:${ch.value}${ch.isPrimary ? "*" : ""}`)

@@ -1,7 +1,7 @@
 "use server";
 
 import { requireUser } from "@/lib/current-user";
-import { listProjectLinks } from "@/db/queries/projects";
+import { listProjectLinks } from "@/db/queries/lines-of-business";
 
 export type TreeDoc = {
   id: string;
@@ -15,21 +15,21 @@ export type TreeDoc = {
 };
 
 /**
- * Children of a project node in the sidebar Explorer tree — its docs/links.
- * Lazy-loaded on first expand (so we don't fetch every project's docs upfront).
+ * Children of a line-of-business node in the sidebar Explorer tree — its
+ * docs/links. Lazy-loaded on first expand.
  */
-export async function listProjectDocsAction(projectId: string): Promise<TreeDoc[]> {
+export async function listLobDocsAction(lobId: string): Promise<TreeDoc[]> {
   const user = await requireUser();
-  const links = await listProjectLinks({ projectId, workspaceId: user.workspaceId });
+  const links = await listProjectLinks({ lobId, workspaceId: user.workspaceId });
   return links.map((l) => {
     const base = { id: l.id, label: l.label, kind: l.kind, category: l.category };
     if (l.kind === "doc") {
-      return { ...base, href: `/projects/${projectId}/docs/${l.id}`, external: false };
+      return { ...base, href: `/lob/${lobId}/docs/${l.id}`, external: false };
     }
     if (l.kind === "link" && l.url) {
       return { ...base, href: l.url, external: true };
     }
-    // file / note (and url-less links) live on the project page.
-    return { ...base, href: `/projects/${projectId}`, external: false };
+    // file / note (and url-less links) live on the LoB page.
+    return { ...base, href: `/lob/${lobId}`, external: false };
   });
 }

@@ -20,11 +20,19 @@ import {
   ChevronDown,
   CheckSquare,
   Square,
+  FolderOpen,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ColumnHeader } from "@/components/grid/column-header";
 import { FilterBar } from "@/components/grid/filter-bar";
 import { SavedViews } from "@/components/grid/saved-views";
@@ -41,7 +49,7 @@ import {
   bulkArchiveContacts,
   bulkAddTagToContacts,
 } from "@/app/(app)/contacts/actions";
-import type { ContactListItem } from "@/db/queries/contacts";
+import type { ContactListItem, ContactProjectOption } from "@/db/queries/contacts";
 import {
   parseSort,
   parseFilter,
@@ -64,6 +72,7 @@ type Props = {
   initialContacts: ContactListItem[];
   ventureTags: Tag[];
   allTags: Tag[];
+  projectOptions: ContactProjectOption[];
   archived: boolean;
 };
 
@@ -93,6 +102,7 @@ const GROUP_OPTIONS = [
   { value: "relationship", label: "Relationship" },
   { value: "type", label: "Type" },
   { value: "org", label: "Organization" },
+  { value: "project", label: "Project" },
 ];
 
 const TYPE_CYCLE: Array<"all" | "person" | "org"> = ["all", "person", "org"];
@@ -101,6 +111,7 @@ export function ContactsGrid({
   initialContacts,
   ventureTags,
   allTags,
+  projectOptions,
   archived,
 }: Props) {
   const router = useRouter();
@@ -110,6 +121,7 @@ export function ContactsGrid({
 
   const q = (sp.get("q") ?? "").trim().toLowerCase();
   const tag = sp.get("tag");
+  const projectId = sp.get("project");
   const filters = parseFilter(sp.get("filter"));
   const sort = parseSort(sp.get("sort"));
   const group = sp.get("group") ?? undefined;
@@ -124,6 +136,7 @@ export function ContactsGrid({
         if ((c.organization ?? "").toLowerCase().includes(q)) return true;
         for (const ch of c.channels) if (ch.value.toLowerCase().includes(q)) return true;
         for (const t of c.tags) if (t.name.toLowerCase().includes(q)) return true;
+        for (const p of c.projects) if (p.title.toLowerCase().includes(q)) return true;
         return false;
       });
     }
@@ -132,6 +145,7 @@ export function ContactsGrid({
       type: (r, v) => r.type === v,
       org: (r, v) =>
         (r.organization ?? "").toLowerCase().includes(v.toLowerCase()),
+      project: (r, v) => r.projects.some((p) => p.id === v),
     });
     return applySort<ContactListItem>(rows, sort, {
       name: (r) => r.name.toLowerCase(),
@@ -148,6 +162,7 @@ export function ContactsGrid({
         if (group === "relationship") return r.relationshipType;
         if (group === "type") return r.type;
         if (group === "org") return r.organization ?? "—";
+        if (group === "project") return r.projects[0]?.title ?? "No project";
         return "";
       }),
     [sorted, group],
@@ -341,7 +356,7 @@ export function ContactsGrid({
   const totalCount = initialContacts.length;
   const matchedCount = sorted.length;
   const hasActiveQuery =
-    q.length > 0 || Object.keys(filters).length > 0 || !!tag;
+    q.length > 0 || Object.keys(filters).length > 0 || !!tag || !!projectId;
 
   // ─────────────────────────────────────────────────────────────────────
   return (
@@ -353,14 +368,17 @@ export function ContactsGrid({
           <ContactsSearch />
         </div>
         <VenturePillBar tags={ventureTags} />
-        <div className="flex items-end justify-between gap-3">
-          <FilterBar options={FILTER_OPTIONS} groupOptions={GROUP_OPTIONS} />
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div className="flex flex-wrap items-end gap-3">
+            <ProjectFilter options={projectOptions} />
+            <FilterBar options={FILTER_OPTIONS} groupOptions={GROUP_OPTIONS} />
+          </div>
           <div className="flex items-center gap-2">
             <ExportButton endpoint="/api/export/contacts" />
             <SavedViews namespace="contacts" />
           </div>
         </div>
-        <ActiveFilters />
+        <ActiveFilters projectOptions={projectOptions} />
       </div>
 
       {/* ── empty state ─────────────────────────────────────────────── */}
@@ -516,6 +534,7 @@ export function ContactsGrid({
                           {c.organization && (
                             <div className="text-xs text-[var(--muted-foreground)]">{c.organization}</div>
                           )}
+                          <ProjectPills projects={c.projects} className="mt-1" />
                         </td>
                         <td className="px-4 py-3">
                           <Badge variant="outline">{c.relationshipType}</Badge>
@@ -591,6 +610,113 @@ export function ContactsGrid({
   );
 }
 
+// ─── project filter ─────────────────────────────────────────────────────────
+function ProjectFilter({ options }: { options: ContactProjectOption[] }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const sp = useSearchParams();
+  const projectId = sp.get("project") ?? "";
+  const hasSelectedOption = options.some((p) => p.id === projectId);
+  const selectedValue = projectId && hasSelectedOption ? projectId : "_all";
+  const ucaima = options.find((p) => p.title.toLowerCase() === "ucaima transformation");
+
+  if (options.length === 0) return null;
+
+  function setProject(nextProjectId: string | null) {
+    const next = new URLSearchParams(sp.toString());
+    if (nextProjectId) next.set("project", nextProjectId);
+    else next.delete("project");
+    const s = next.toString();
+    router.push(s ? `${pathname}?${s}` : pathname);
+  }
+
+  return (
+    <div className="flex flex-wrap items-end gap-2">
+      <div className="space-y-1">
+        <label className="text-xs uppercase tracking-wide text-[var(--muted-foreground)]">
+          Project
+        </label>
+        <Select
+          value={selectedValue}
+          onValueChange={(v) => setProject(v === "_all" ? null : v)}
+        >
+          <SelectTrigger className="h-8 w-64 text-xs">
+            <SelectValue placeholder="All projects" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="_all">All projects</SelectItem>
+            {options.map((project) => (
+              <SelectItem key={project.id} value={project.id}>
+                {project.title} ({project.contactCount})
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      {ucaima && ucaima.id !== projectId && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-8 max-w-full gap-1.5 px-2 text-xs"
+          onClick={() => setProject(ucaima.id)}
+        >
+          <FolderOpen className="h-3.5 w-3.5" />
+          Ucaima Transformation
+        </Button>
+      )}
+      {projectId && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-8 px-2 text-xs"
+          onClick={() => setProject(null)}
+        >
+          Clear
+        </Button>
+      )}
+    </div>
+  );
+}
+
+function ProjectPills({
+  projects,
+  className,
+}: {
+  projects: ContactListItem["projects"];
+  className?: string;
+}) {
+  if (projects.length === 0) return null;
+
+  const visible = projects.slice(0, 2);
+  const extra = projects.length - visible.length;
+
+  return (
+    <div className={cn("flex max-w-full flex-wrap gap-1", className)}>
+      {visible.map((project) => (
+        <span
+          key={project.id}
+          className="inline-flex max-w-52 items-center gap-1 truncate rounded border border-[var(--border)] bg-[var(--muted)]/35 px-1.5 py-0.5 text-[10px] font-medium text-[var(--muted-foreground)]"
+          title={
+            project.parentTitle
+              ? `${project.parentTitle} / ${project.title}`
+              : project.title
+          }
+        >
+          <FolderOpen className="h-3 w-3 shrink-0" />
+          <span className="truncate">{project.title}</span>
+        </span>
+      ))}
+      {extra > 0 && (
+        <span className="inline-flex items-center rounded border border-[var(--border)] bg-[var(--muted)]/35 px-1.5 py-0.5 text-[10px] text-[var(--muted-foreground)]">
+          +{extra}
+        </span>
+      )}
+    </div>
+  );
+}
+
 // ─── mobile card ─────────────────────────────────────────────────────────────
 function MobileCard({
   contact: c,
@@ -636,6 +762,7 @@ function MobileCard({
         {c.organization && (
           <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">{c.organization}</p>
         )}
+        <ProjectPills projects={c.projects} className="mt-1.5" />
         <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2">
           <TagPills tags={c.tags} onTagClick={onTagClick} />
           <ReachIcons channels={c.channels} />

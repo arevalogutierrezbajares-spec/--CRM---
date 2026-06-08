@@ -105,7 +105,7 @@ export const logMeeting: ToolEntry = {
         contactId,
         body: `Meeting: ${title}${notes ? ` — ${notes.slice(0, 200)}` : ""}`,
         channel: "meeting",
-        projectId: projectId ?? undefined,
+        lobId: projectId ?? undefined,
         meetingId: meeting.id,
         workspaceId: ctx.workspaceId,
         createdBy: ctx.userId,

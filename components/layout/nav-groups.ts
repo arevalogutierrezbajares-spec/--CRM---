@@ -1,6 +1,7 @@
 import {
   Home,
   Inbox,
+  Mail,
   ListTodo,
   CalendarDays,
   Megaphone,
@@ -48,6 +49,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/", label: "Home", icon: Home },
       { href: "/inbox", label: "Inbox", icon: Inbox },
+      { href: "/email", label: "Email", icon: Mail },
       { href: "/work", label: "My Work", icon: ListTodo },
       { href: "/meetings", label: "Meetings", icon: CalendarDays },
       { href: "/town-hall", label: "Town Hall", icon: Megaphone },

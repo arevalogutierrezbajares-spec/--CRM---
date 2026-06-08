@@ -2,7 +2,8 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { computeHealth, type HealthColor } from "@/lib/health";
 
-const { projects, pipelineStages, pipelineTemplates, milestones } = schema;
+const { linesOfBusiness, projects, pipelineStages, pipelineTemplates, milestones } =
+  schema;
 
 export type KanbanCard = {
   id: string;
@@ -55,17 +56,27 @@ export async function getKanban(opts: {
     .where(eq(pipelineStages.templateId, opts.templateId))
     .orderBy(asc(pipelineStages.order));
 
-  const templateProjects = await db
+  // The pipeline tracks Lines of Business (the venture-level pipeline).
+  const templateLobs = await db
     .select()
-    .from(projects)
+    .from(linesOfBusiness)
     .where(
       and(
-        eq(projects.workspaceId, opts.workspaceId),
-        eq(projects.templateId, opts.templateId),
+        eq(linesOfBusiness.workspaceId, opts.workspaceId),
+        eq(linesOfBusiness.templateId, opts.templateId),
       ),
     );
 
-  const projectIds = templateProjects.map((p) => p.id);
+  const lobIds = templateLobs.map((l) => l.id);
+  // Milestones live on child Projects; roll them up to the owning LoB.
+  const childProjects = lobIds.length
+    ? await db
+        .select({ id: projects.id, lobId: projects.lobId })
+        .from(projects)
+        .where(inArray(projects.lobId, lobIds))
+    : [];
+  const projectIdToLob = new Map(childProjects.map((p) => [p.id, p.lobId]));
+  const projectIds = childProjects.map((p) => p.id);
   const allMs =
     projectIds.length === 0
       ? []
@@ -80,10 +91,10 @@ export async function getKanban(opts: {
     templateId: template.id,
     templateName: template.name,
     columns: stages.map((s) => {
-      const cards = templateProjects
+      const cards = templateLobs
         .filter((p) => p.currentStageId === s.id)
         .map<KanbanCard>((p) => {
-          const ms = allMs.filter((m) => m.projectId === p.id);
+          const ms = allMs.filter((m) => projectIdToLob.get(m.projectId) === p.id);
           return {
             id: p.id,
             title: p.title,

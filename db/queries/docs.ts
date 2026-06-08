@@ -2,11 +2,11 @@ import "server-only";
 import { and, eq, sql as rawSql } from "drizzle-orm";
 import { db } from "@/db";
 import * as schema from "@/db/schema";
-import type { ProjectLinkCategory } from "./projects";
+import type { ProjectLinkCategory } from "./lines-of-business";
 
 export type ProjectDoc = {
   linkId: string;
-  projectId: string;
+  lobId: string;
   label: string;
   category: string;
   ydoc: string | null;
@@ -21,7 +21,7 @@ export type ProjectDoc = {
  */
 export async function createProjectDoc(input: {
   workspaceId: string;
-  projectId: string;
+  lobId: string;
   actorId: string;
   label: string;
   category: ProjectLinkCategory;
@@ -34,7 +34,7 @@ export async function createProjectDoc(input: {
       .from(schema.projectLinks)
       .where(
         and(
-          eq(schema.projectLinks.projectId, input.projectId),
+          eq(schema.projectLinks.lobId, input.lobId),
           eq(schema.projectLinks.category, input.category),
         ),
       );
@@ -43,7 +43,7 @@ export async function createProjectDoc(input: {
       .insert(schema.projectLinks)
       .values({
         workspaceId: input.workspaceId,
-        projectId: input.projectId,
+        lobId: input.lobId,
         kind: "doc",
         category: input.category,
         label: input.label,
@@ -62,7 +62,7 @@ export async function createProjectDoc(input: {
 
     await tx.insert(schema.projectLinkAudits).values({
       workspaceId: input.workspaceId,
-      projectId: input.projectId,
+      lobId: input.lobId,
       linkId: row.id,
       actorId: input.actorId,
       action: "create",
@@ -82,7 +82,7 @@ export async function getProjectDoc(opts: {
   const [row] = await db
     .select({
       linkId: schema.projectLinks.id,
-      projectId: schema.projectLinks.projectId,
+      lobId: schema.projectLinks.lobId,
       label: schema.projectLinks.label,
       category: schema.projectLinks.category,
       kind: schema.projectLinks.kind,
@@ -106,7 +106,7 @@ export async function getProjectDoc(opts: {
   if (!row) return null;
   return {
     linkId: row.linkId,
-    projectId: row.projectId,
+    lobId: row.lobId,
     label: row.label,
     category: row.category,
     ydoc: row.ydoc ?? null,

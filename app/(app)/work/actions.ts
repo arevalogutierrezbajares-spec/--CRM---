@@ -83,7 +83,7 @@ export async function createInitiative(formData: FormData) {
       title: parsed.data.title,
       summary: parsed.data.summary,
       goal: parsed.data.goal,
-      projectId: parsed.data.projectId || null,
+      lobId: parsed.data.projectId || null,
       priority: parsed.data.priority,
       status: parsed.data.status,
       startDate: parsed.data.startDate || null,

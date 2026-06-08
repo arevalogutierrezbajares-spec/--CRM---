@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/current-user";
-import { listProjects } from "@/db/queries/projects";
+import { listLines } from "@/db/queries/lines-of-business";
 import { toCsv } from "@/lib/csv";
 
 export async function GET(req: NextRequest) {
@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const status = req.nextUrl.searchParams.get("status");
-  const rows = await listProjects({
+  const rows = await listLines({
     workspaceId: user.workspaceId,
     status:
       status === "active" || status === "waiting" || status === "done" || status === "lost"

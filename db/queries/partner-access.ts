@@ -73,14 +73,14 @@ export async function listPartnerAccessForContact(opts: {
       .select({
         share: schema.partnerShares,
         contactName: schema.contacts.name,
-        projectTitle: schema.projects.title,
+        projectTitle: schema.linesOfBusiness.title,
         liveLabel: schema.projectLinks.label,
         roomName: schema.partnerRooms.name,
         sharedByName: schema.users.displayName,
       })
       .from(schema.partnerShares)
       .leftJoin(schema.contacts, eq(schema.contacts.id, schema.partnerShares.contactId))
-      .leftJoin(schema.projects, eq(schema.projects.id, schema.partnerShares.projectId))
+      .leftJoin(schema.linesOfBusiness, eq(schema.linesOfBusiness.id, schema.partnerShares.lobId))
       .leftJoin(
         schema.projectLinks,
         eq(schema.projectLinks.id, schema.partnerShares.projectLinkId),
@@ -148,14 +148,14 @@ export async function listPartnerAccessDashboard(opts: {
       .select({
         share: schema.partnerShares,
         contactName: schema.contacts.name,
-        projectTitle: schema.projects.title,
+        projectTitle: schema.linesOfBusiness.title,
         liveLabel: schema.projectLinks.label,
         roomName: schema.partnerRooms.name,
         sharedByName: schema.users.displayName,
       })
       .from(schema.partnerShares)
       .leftJoin(schema.contacts, eq(schema.contacts.id, schema.partnerShares.contactId))
-      .leftJoin(schema.projects, eq(schema.projects.id, schema.partnerShares.projectId))
+      .leftJoin(schema.linesOfBusiness, eq(schema.linesOfBusiness.id, schema.partnerShares.lobId))
       .leftJoin(
         schema.projectLinks,
         eq(schema.projectLinks.id, schema.partnerShares.projectLinkId),
@@ -232,14 +232,14 @@ export async function getPartnerAccessRoom(opts: {
       .select({
         share: schema.partnerShares,
         contactName: schema.contacts.name,
-        projectTitle: schema.projects.title,
+        projectTitle: schema.linesOfBusiness.title,
         liveLabel: schema.projectLinks.label,
         roomName: schema.partnerRooms.name,
         sharedByName: schema.users.displayName,
       })
       .from(schema.partnerShares)
       .leftJoin(schema.contacts, eq(schema.contacts.id, schema.partnerShares.contactId))
-      .leftJoin(schema.projects, eq(schema.projects.id, schema.partnerShares.projectId))
+      .leftJoin(schema.linesOfBusiness, eq(schema.linesOfBusiness.id, schema.partnerShares.lobId))
       .leftJoin(
         schema.projectLinks,
         eq(schema.projectLinks.id, schema.partnerShares.projectLinkId),
@@ -541,16 +541,16 @@ export async function createPartnerShare(input: CreatePartnerShareInput) {
   const [linkRow] = await db
     .select({
       link: schema.projectLinks,
-      projectTitle: schema.projects.title,
+      projectTitle: schema.linesOfBusiness.title,
     })
     .from(schema.projectLinks)
-    .innerJoin(schema.projects, eq(schema.projects.id, schema.projectLinks.projectId))
+    .innerJoin(schema.linesOfBusiness, eq(schema.linesOfBusiness.id, schema.projectLinks.lobId))
     .where(
       and(
         eq(schema.projectLinks.id, input.projectLinkId),
-        eq(schema.projectLinks.projectId, input.projectId),
+        eq(schema.projectLinks.lobId, input.projectId),
         eq(schema.projectLinks.workspaceId, input.workspaceId),
-        eq(schema.projects.workspaceId, input.workspaceId),
+        eq(schema.linesOfBusiness.workspaceId, input.workspaceId),
       ),
     )
     .limit(1);
@@ -635,7 +635,7 @@ export async function createPartnerShare(input: CreatePartnerShareInput) {
       workspaceId: input.workspaceId,
       roomId: room.id,
       contactId: input.contactId,
-      projectId: input.projectId,
+      lobId: input.projectId,
       projectLinkId: input.projectLinkId,
       labelSnapshot: linkRow.link.label,
       kindSnapshot: linkRow.link.kind,
@@ -712,7 +712,7 @@ export async function getPublicPartnerRoomByToken(input: {
     .select({
       share: schema.partnerShares,
       contactName: schema.contacts.name,
-      projectTitle: schema.projects.title,
+      projectTitle: schema.linesOfBusiness.title,
       liveLabel: schema.projectLinks.label,
       roomName: schema.partnerRooms.name,
       sharedByName: schema.users.displayName,
@@ -724,7 +724,7 @@ export async function getPublicPartnerRoomByToken(input: {
     })
     .from(schema.partnerShares)
     .leftJoin(schema.contacts, eq(schema.contacts.id, schema.partnerShares.contactId))
-    .leftJoin(schema.projects, eq(schema.projects.id, schema.partnerShares.projectId))
+    .leftJoin(schema.linesOfBusiness, eq(schema.linesOfBusiness.id, schema.partnerShares.lobId))
     .leftJoin(
       schema.projectLinks,
       eq(schema.projectLinks.id, schema.partnerShares.projectLinkId),
@@ -929,6 +929,6 @@ export async function recordPartnerShareTracking(input: {
     id: share.id,
     roomId: share.roomId,
     contactId: share.contactId,
-    projectId: share.projectId,
+    projectId: share.lobId,
   };
 }

@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { createLinkAction, updateLinkAction } from "@/app/(app)/projects/actions";
+import { createLinkAction, updateLinkAction } from "@/app/(app)/lob/actions";
 import { detectCategory, type LinkCategory } from "@/lib/project-links/detect-category";
 import { brandForUrl } from "@/lib/project-links/host-brands";
 import { validateLinkUrl } from "@/lib/project-links/validate";
@@ -46,13 +46,13 @@ export type LinkModalInitial = {
 };
 
 export function AddLinkModal({
-  projectId,
+  lobId,
   open,
   onOpenChange,
   initial,
   defaultCategory,
 }: {
-  projectId: string;
+  lobId: string;
   open: boolean;
   onOpenChange: (v: boolean) => void;
   /** Present → edit mode. Absent → create mode. */
@@ -66,7 +66,7 @@ export function AddLinkModal({
       {open && (
         <LinkForm
           key={`${initial?.linkId ?? "new"}:${defaultCategory ?? ""}`}
-          projectId={projectId}
+          lobId={lobId}
           onOpenChange={onOpenChange}
           initial={initial}
           defaultCategory={defaultCategory}
@@ -77,12 +77,12 @@ export function AddLinkModal({
 }
 
 function LinkForm({
-  projectId,
+  lobId,
   onOpenChange,
   initial,
   defaultCategory,
 }: {
-  projectId: string;
+  lobId: string;
   onOpenChange: (v: boolean) => void;
   initial?: LinkModalInitial;
   defaultCategory?: LinkCategory;
@@ -123,7 +123,7 @@ function LinkForm({
     startTransition(async () => {
       const res = isEdit
         ? await updateLinkAction({
-            projectId,
+            lobId,
             linkId: initial!.linkId,
             url,
             label,
@@ -131,7 +131,7 @@ function LinkForm({
             description,
           })
         : await createLinkAction({
-            projectId,
+            lobId,
             url,
             label,
             category,

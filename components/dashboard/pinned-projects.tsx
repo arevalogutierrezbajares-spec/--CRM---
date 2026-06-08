@@ -24,8 +24,8 @@ import {
 } from "@/components/ui/select";
 import { togglePinAction } from "@/app/(app)/dashboard/pin-actions";
 import { useItemDrawer } from "./item-drawer";
-import { FilePreviewModal, type PreviewFile } from "../projects/file-preview-modal";
-import { getFileSignedUrlAction } from "@/app/(app)/projects/actions";
+import { FilePreviewModal, type PreviewFile } from "../lob/file-preview-modal";
+import { getFileSignedUrlAction } from "@/app/(app)/lob/actions";
 import type { PinnedProject, PinnedDoc } from "@/db/queries/pins";
 
 const HEALTH: Record<string, string> = {
@@ -148,7 +148,7 @@ export function PinnedProjects({
                     </span>
                   </button>
                   <Link
-                    href={`/projects/${p.id}`}
+                    href={`/lob/${p.id}`}
                     className="grid min-h-[40px] shrink-0 place-items-center rounded-md px-2 text-tiny text-[var(--blue-text)] transition-colors hover:bg-surface hover:underline"
                   >
                     open
@@ -172,7 +172,7 @@ export function PinnedProjects({
                         <FileText size={11} /> Docs &amp; links
                       </div>
                       {p.docs.length === 0 ? (
-                        <Link href={`/projects/${p.id}`} className="text-tiny text-text-tertiary hover:underline">
+                        <Link href={`/lob/${p.id}`} className="text-tiny text-text-tertiary hover:underline">
                           No docs yet — add some →
                         </Link>
                       ) : (
@@ -187,7 +187,7 @@ export function PinnedProjects({
                                   {d.label}
                                 </button>
                               ) : (
-                                <Link href={`/projects/${p.id}/docs/${d.id}`} className="min-w-0 flex-1 truncate rounded-sm text-text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-[var(--ring)]">{d.label}</Link>
+                                <Link href={`/lob/${p.id}/docs/${d.id}`} className="min-w-0 flex-1 truncate rounded-sm text-text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-[var(--ring)]">{d.label}</Link>
                               )}
                             </li>
                           ))}
@@ -255,7 +255,7 @@ export function PinnedProjects({
               .slice(0, 6)
               .map((r) => (
                 <div key={r.id} className="group flex min-h-[40px] items-center rounded-full bg-surface pr-0.5">
-                  <Link href={`/projects/${r.id}`} className="max-w-[140px] truncate rounded-full px-2.5 py-1.5 text-tiny text-text-secondary hover:text-text-primary">
+                  <Link href={`/lob/${r.id}`} className="max-w-[140px] truncate rounded-full px-2.5 py-1.5 text-tiny text-text-secondary hover:text-text-primary">
                     {r.title}
                   </Link>
                   <button

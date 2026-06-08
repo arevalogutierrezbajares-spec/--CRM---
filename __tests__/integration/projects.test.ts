@@ -1,18 +1,41 @@
 import { describe, expect, it } from "vitest";
 import { asc, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { listProjects, getProject } from "@/db/queries/projects";
+import { listLines, getLob } from "@/db/queries/lines-of-business";
 import { instantiateMilestonesFromTemplate } from "@/db/queries/milestones";
 import { FAKE_USER_ID, FAKE_WORKSPACE_ID } from "./setup";
 
-const { projects, pipelineStages, pipelineTemplates, milestones } = schema;
+const { linesOfBusiness, projects, pipelineStages, pipelineTemplates, milestones } =
+  schema;
 
-const baseProject = {
+const baseRow = {
   workspaceId: FAKE_WORKSPACE_ID,
   createdBy: FAKE_USER_ID,
 };
 
-describe("[integration] projects + template instantiation", () => {
+/** Create an LoB and a single child Project under it; return both ids. */
+async function makeLobWithProject(opts: {
+  title: string;
+  templateId?: string;
+  currentStageId?: string;
+}) {
+  const [lob] = await db
+    .insert(linesOfBusiness)
+    .values({
+      ...baseRow,
+      title: opts.title,
+      templateId: opts.templateId ?? null,
+      currentStageId: opts.currentStageId ?? null,
+    })
+    .returning();
+  const [project] = await db
+    .insert(projects)
+    .values({ ...baseRow, lobId: lob.id, title: opts.title })
+    .returning();
+  return { lobId: lob.id, projectId: project.id };
+}
+
+describe("[integration] LoB + projects + template instantiation", () => {
   it("instantiateMilestonesFromTemplate creates one milestone per stage with correct ordering", async () => {
     const template = "caney-posada-onboarding";
     const stages = await db
@@ -22,19 +45,14 @@ describe("[integration] projects + template instantiation", () => {
       .orderBy(asc(pipelineStages.order));
     expect(stages.length).toBe(12);
 
-    const [stage1] = stages;
-    const [p] = await db
-      .insert(projects)
-      .values({
-        ...baseProject,
-        title: "Marta — Caney onboarding",
-        templateId: template,
-        currentStageId: stage1.id,
-      })
-      .returning();
+    const { projectId } = await makeLobWithProject({
+      title: "Marta — Caney onboarding",
+      templateId: template,
+      currentStageId: stages[0].id,
+    });
 
     const created = await instantiateMilestonesFromTemplate({
-      projectId: p.id,
+      projectId,
       templateId: template,
       workspaceId: FAKE_WORKSPACE_ID,
       createdBy: FAKE_USER_ID,
@@ -44,7 +62,7 @@ describe("[integration] projects + template instantiation", () => {
     const stored = await db
       .select()
       .from(milestones)
-      .where(eq(milestones.projectId, p.id))
+      .where(eq(milestones.projectId, projectId))
       .orderBy(asc(milestones.order));
     expect(stored.map((m) => m.title)).toEqual(stages.map((s) => s.name));
 
@@ -57,7 +75,7 @@ describe("[integration] projects + template instantiation", () => {
     }
   });
 
-  it("listProjects computes health from milestones (overdue → red)", async () => {
+  it("listLines computes health from child-project milestones (overdue → red)", async () => {
     const template = "bd-courtship";
     const [stage1] = await db
       .select()
@@ -66,33 +84,29 @@ describe("[integration] projects + template instantiation", () => {
       .orderBy(asc(pipelineStages.order))
       .limit(1);
 
-    const [p] = await db
-      .insert(projects)
-      .values({
-        ...baseProject,
-        title: "Overdue project",
-        templateId: template,
-        currentStageId: stage1.id,
-      })
-      .returning();
+    const { lobId, projectId } = await makeLobWithProject({
+      title: "Overdue venture",
+      templateId: template,
+      currentStageId: stage1.id,
+    });
 
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     await db.insert(milestones).values({
-      projectId: p.id,
+      projectId,
       title: "Send proposal",
       workspaceId: FAKE_WORKSPACE_ID,
       createdBy: FAKE_USER_ID,
       dueDate: yesterday.toISOString().slice(0, 10),
     });
 
-    const list = await listProjects({ workspaceId: FAKE_WORKSPACE_ID });
-    const subject = list.find((x) => x.id === p.id)!;
+    const list = await listLines({ workspaceId: FAKE_WORKSPACE_ID });
+    const subject = list.find((x) => x.id === lobId)!;
     expect(subject.computedHealth).toBe("red");
     expect(subject.milestoneOverdueCount).toBe(1);
   });
 
-  it("getProject returns linked contacts + stages + milestones", async () => {
+  it("getLob returns linked contacts + stages + rolled-up milestones", async () => {
     const template = "vav-creator-campaign";
     const [stage1] = await db
       .select()
@@ -101,20 +115,13 @@ describe("[integration] projects + template instantiation", () => {
       .orderBy(asc(pipelineStages.order))
       .limit(1);
 
-    const [p] = await db
-      .insert(projects)
-      .values({
-        ...baseProject,
-        title: "VAV deal",
-        templateId: template,
-        currentStageId: stage1.id,
-      })
-      .returning();
-
-    const detail = await getProject({
-      id: p.id,
-      workspaceId: FAKE_WORKSPACE_ID,
+    const { lobId } = await makeLobWithProject({
+      title: "VAV deal",
+      templateId: template,
+      currentStageId: stage1.id,
     });
+
+    const detail = await getLob({ id: lobId, workspaceId: FAKE_WORKSPACE_ID });
     expect(detail).toBeTruthy();
     expect(detail!.templateName).toBe("VAV creator campaign");
     expect(detail!.stages.length).toBe(10);

@@ -5,36 +5,22 @@ import { TopBar } from "@/components/layout/top-bar";
 import { Card, CardContent } from "@/components/ui/card";
 import { ProjectForm } from "@/components/projects/project-form";
 import { DbBanner } from "@/components/db-banner";
-import { listTemplates } from "@/db/queries/projects";
-import { listContacts } from "@/db/queries/contacts";
+import { listLines } from "@/db/queries/lines-of-business";
 import { safeRead } from "@/lib/db-status";
-import { db, schema } from "@/db";
-import { eq } from "drizzle-orm";
 import { createProject } from "../actions";
 
-export default async function NewProjectPage() {
-  const user = await requireUser();
+type SearchParams = Promise<{ lob?: string }>;
 
-  const [templatesRes, contactsRes] = await Promise.all([
-    safeRead(async () => {
-      const tpl = await listTemplates();
-      const counts = await db
-        .select({ templateId: schema.pipelineStages.templateId })
-        .from(schema.pipelineStages);
-      return tpl.map((t) => ({
-        id: t.id,
-        name: t.name,
-        description: t.description,
-        stageCount: counts.filter((c) => c.templateId === t.id).length,
-      }));
-    }, [] as { id: string; name: string; description: string | null; stageCount: number }[]),
-    safeRead(
-      () => listContacts({ workspaceId: user.workspaceId }),
-      [] as Awaited<ReturnType<typeof listContacts>>,
-    ),
-  ]);
-  // (eq import is only used implicitly via @/db/queries; keep to avoid tree-shake)
-  void eq;
+export default async function NewProjectPage(props: {
+  searchParams: SearchParams;
+}) {
+  const user = await requireUser();
+  const sp = await props.searchParams;
+
+  const lobsRes = await safeRead(
+    () => listLines({ workspaceId: user.workspaceId, topLevelOnly: false }),
+    [],
+  );
 
   async function action(formData: FormData) {
     "use server";
@@ -46,26 +32,27 @@ export default async function NewProjectPage() {
       <TopBar email={user.email} displayName={user.displayName} />
       <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-8">
         <Link
-          href="/projects"
+          href={sp.lob ? `/lob/${sp.lob}` : "/lob"}
           className="inline-flex items-center gap-1 text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
         >
-          <ChevronLeft className="h-4 w-4" /> Back to projects
+          <ChevronLeft className="h-4 w-4" /> Back
         </Link>
         <header className="mt-4 mb-6">
           <h1 className="text-2xl font-semibold tracking-tight">New project</h1>
           <p className="text-sm text-[var(--muted-foreground)]">
-            Pick a template and the milestones get scheduled from each stage&apos;s
-            SLA.
+            A project rolls up to a line of business. Milestones, finance, and
+            meetings attach to it.
           </p>
         </header>
 
-        {!templatesRes.ok && <DbBanner error={templatesRes.error} />}
+        {!lobsRes.ok && <DbBanner error={lobsRes.error} />}
 
         <Card>
           <CardContent className="pt-6">
             <ProjectForm
-              templates={templatesRes.data}
-              contacts={contactsRes.data.map((c) => ({ id: c.id, name: c.name }))}
+              lobs={lobsRes.data.map((l) => ({ id: l.id, title: l.title }))}
+              lobLocked={Boolean(sp.lob)}
+              initial={sp.lob ? { lobId: sp.lob } : undefined}
               action={action}
               submitLabel="Create project"
             />

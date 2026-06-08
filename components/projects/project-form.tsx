@@ -12,28 +12,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 
 type Status = "active" | "waiting" | "done" | "lost";
 
-export type TemplateOption = {
-  id: string;
-  name: string;
-  description: string | null;
-  stageCount?: number;
-};
-export type ContactOption = { id: string; name: string };
+export type LobOption = { id: string; title: string };
 
 export type ProjectFormInitial = {
   id?: string;
+  lobId?: string;
   title?: string;
   status?: Status;
-  templateId?: string | null;
-  contactIds?: string[];
   dueDate?: string | null;
   waitingOn?: string | null;
   expectedUnblockDate?: string | null;
-  notesPath?: string | null;
 };
 
 type Action = (formData: FormData) => Promise<unknown>;
@@ -41,47 +32,28 @@ type Action = (formData: FormData) => Promise<unknown>;
 export function ProjectForm({
   initial,
   action,
-  templates,
-  contacts,
+  lobs,
+  lobLocked = false,
   submitLabel = "Save",
-  templateLocked = false,
 }: {
   initial?: ProjectFormInitial;
   action: Action;
-  templates: TemplateOption[];
-  contacts: ContactOption[];
+  lobs: LobOption[];
+  lobLocked?: boolean;
   submitLabel?: string;
-  templateLocked?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<Status>(initial?.status ?? "active");
-  const [selectedContacts, setSelectedContacts] = useState<Set<string>>(
-    new Set(initial?.contactIds ?? []),
-  );
-  const [templateId, setTemplateId] = useState<string>(
-    initial?.templateId ?? "",
-  );
-
-  function toggleContact(id: string) {
-    setSelectedContacts((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
+  const [lobId, setLobId] = useState<string>(initial?.lobId ?? "");
 
   return (
     <form
       action={(formData) => {
         setError(null);
         formData.set("status", status);
-        if (templateId) formData.set("templateId", templateId);
-        else formData.delete("templateId");
-        formData.delete("contactId");
-        for (const id of selectedContacts) formData.append("contactId", id);
+        formData.set("lobId", lobId);
         startTransition(async () => {
           try {
             await action(formData);
@@ -95,6 +67,28 @@ export function ProjectForm({
     >
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1.5 sm:col-span-2">
+          <Label htmlFor="lobId">Line of business</Label>
+          {lobLocked ? (
+            <Input
+              value={lobs.find((l) => l.id === lobId)?.title ?? "—"}
+              disabled
+            />
+          ) : (
+            <Select value={lobId || undefined} onValueChange={setLobId}>
+              <SelectTrigger id="lobId">
+                <SelectValue placeholder="Choose a line of business…" />
+              </SelectTrigger>
+              <SelectContent>
+                {lobs.map((l) => (
+                  <SelectItem key={l.id} value={l.id}>
+                    {l.title}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+        <div className="space-y-1.5 sm:col-span-2">
           <Label htmlFor="title">Title</Label>
           <Input
             id="title"
@@ -102,7 +96,7 @@ export function ProjectForm({
             required
             autoFocus
             defaultValue={initial?.title ?? ""}
-            placeholder="e.g. Marta — Caney onboarding"
+            placeholder="e.g. Q2 onboarding sprint"
           />
         </div>
         <div className="space-y-1.5">
@@ -128,43 +122,6 @@ export function ProjectForm({
             defaultValue={initial?.dueDate ?? ""}
           />
         </div>
-        <div className="space-y-1.5 sm:col-span-2">
-          <Label htmlFor="templateId">Pipeline template</Label>
-          {templateLocked ? (
-            <Input
-              value={
-                templates.find((t) => t.id === templateId)?.name ?? "No template"
-              }
-              disabled
-            />
-          ) : (
-            <Select
-              value={templateId || "_none"}
-              onValueChange={(v) => setTemplateId(v === "_none" ? "" : v)}
-            >
-              <SelectTrigger id="templateId">
-                <SelectValue placeholder="Choose template…" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="_none">No template</SelectItem>
-                {templates.map((t) => (
-                  <SelectItem key={t.id} value={t.id}>
-                    {t.name}
-                    {typeof t.stageCount === "number"
-                      ? ` · ${t.stageCount} stages`
-                      : ""}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-          {!templateLocked && (
-            <p className="text-xs text-[var(--muted-foreground)]">
-              Choosing a template instantiates one milestone per stage with due
-              dates from each stage&apos;s SLA.
-            </p>
-          )}
-        </div>
 
         {status === "waiting" && (
           <>
@@ -189,46 +146,7 @@ export function ProjectForm({
             </div>
           </>
         )}
-
-        <div className="space-y-1.5 sm:col-span-2">
-          <Label htmlFor="notesPath">Obsidian notes path</Label>
-          <Input
-            id="notesPath"
-            name="notesPath"
-            defaultValue={initial?.notesPath ?? ""}
-            placeholder="Projects/Marta Caney.md"
-          />
-        </div>
       </div>
-
-      {contacts.length > 0 && (
-        <section className="space-y-3">
-          <Label>Linked contacts</Label>
-          <div className="flex flex-wrap gap-2">
-            {contacts.map((c) => {
-              const active = selectedContacts.has(c.id);
-              return (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => toggleContact(c.id)}
-                  className="focus:outline-none"
-                >
-                  <Badge
-                    variant={active ? "default" : "outline"}
-                    className="cursor-pointer transition-opacity hover:opacity-80"
-                  >
-                    {c.name}
-                  </Badge>
-                </button>
-              );
-            })}
-          </div>
-          <p className="text-xs text-[var(--muted-foreground)]">
-            First selected contact becomes the primary; others are linked.
-          </p>
-        </section>
-      )}
 
       {error && (
         <div className="rounded-md border border-[var(--destructive)]/40 bg-[var(--destructive)]/10 px-3 py-2 text-sm text-[var(--destructive)]">

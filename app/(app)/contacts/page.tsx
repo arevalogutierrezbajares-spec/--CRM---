@@ -6,11 +6,16 @@ import { TopBar } from "@/components/layout/top-bar";
 import { Button } from "@/components/ui/button";
 import { DbBanner } from "@/components/db-banner";
 import { ContactsGrid } from "@/components/contacts/contacts-grid";
-import { listContacts, type ContactListItem } from "@/db/queries/contacts";
+import {
+  listContactProjectOptions,
+  listContacts,
+  type ContactListItem,
+  type ContactProjectOption,
+} from "@/db/queries/contacts";
 import { listTags } from "@/db/queries/tags";
 import { safeRead } from "@/lib/db-status";
 
-type SearchParams = Promise<{ archived?: string }>;
+type SearchParams = Promise<{ archived?: string; project?: string }>;
 
 export default async function ContactsPage(props: {
   searchParams: SearchParams;
@@ -18,16 +23,24 @@ export default async function ContactsPage(props: {
   const user = await requireUser();
   const sp = await props.searchParams;
   const archived = sp.archived === "true";
+  const projectId = sp.project || undefined;
 
-  const [res, tagsRes] = await Promise.all([
+  const [res, tagsRes, projectOptionsRes] = await Promise.all([
     safeRead<ContactListItem[]>(
-      () => listContacts({ workspaceId: user.workspaceId, archived }),
+      () => listContacts({ workspaceId: user.workspaceId, archived, projectId }),
       [],
     ),
     safeRead(() => listTags(), []),
+    safeRead<ContactProjectOption[]>(
+      () => listContactProjectOptions({ workspaceId: user.workspaceId, archived }),
+      [],
+    ),
   ]);
 
   const ventureTags = tagsRes.data.filter((t) => t.kind === "venture");
+  const selectedProject = projectId
+    ? projectOptionsRes.data.find((p) => p.id === projectId)
+    : undefined;
 
   return (
     <>
@@ -54,7 +67,11 @@ export default async function ContactsPage(props: {
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Contacts</h1>
             <p className="text-sm text-[var(--muted-foreground)]">
-              {archived ? "Archived contacts." : "People + orgs in your network."}
+              {selectedProject
+                ? `${selectedProject.title} project contacts.`
+                : archived
+                  ? "Archived contacts."
+                  : "People + orgs in your network."}
             </p>
           </div>
           <div className="flex gap-2 text-sm">
@@ -83,12 +100,14 @@ export default async function ContactsPage(props: {
         </header>
 
         {!res.ok && <DbBanner error={res.error} />}
+        {res.ok && !projectOptionsRes.ok && <DbBanner error={projectOptionsRes.error} />}
 
         <Suspense fallback={<div className="text-sm text-[var(--muted-foreground)]">Loading…</div>}>
           <ContactsGrid
             initialContacts={res.data}
             ventureTags={ventureTags}
             allTags={tagsRes.data}
+            projectOptions={projectOptionsRes.data}
             archived={archived}
           />
         </Suspense>

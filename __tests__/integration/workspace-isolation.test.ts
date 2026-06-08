@@ -72,9 +72,17 @@ describe("[integration] cross-workspace data isolation", () => {
   });
 
   it("listProjects does not leak projects across workspaces", async () => {
+    const [ourLob] = await db
+      .insert(schema.linesOfBusiness)
+      .values({ ...ours, title: "Our LoB" })
+      .returning();
+    const [theirLob] = await db
+      .insert(schema.linesOfBusiness)
+      .values({ ...theirs, title: "Their LoB" })
+      .returning();
     await db.insert(schema.projects).values([
-      { ...ours, title: "Our project" },
-      { ...theirs, title: "Their project" },
+      { ...ours, lobId: ourLob.id, title: "Our project" },
+      { ...theirs, lobId: theirLob.id, title: "Their project" },
     ]);
     const ourList = await listProjects({ workspaceId: FAKE_WORKSPACE_ID });
     expect(ourList.find((p) => p.title === "Their project")).toBeUndefined();

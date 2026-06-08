@@ -22,8 +22,8 @@ export async function listTouchesForContact(opts: {
     .limit(50);
 }
 
-export async function listTouchesForProject(opts: {
-  projectId: string;
+export async function listTouchesForLob(opts: {
+  lobId: string;
   workspaceId: string;
 }): Promise<TouchRow[]> {
   return db
@@ -31,7 +31,7 @@ export async function listTouchesForProject(opts: {
     .from(touches)
     .where(
       and(
-        eq(touches.projectId, opts.projectId),
+        eq(touches.lobId, opts.lobId),
         eq(touches.workspaceId, opts.workspaceId),
       ),
     )

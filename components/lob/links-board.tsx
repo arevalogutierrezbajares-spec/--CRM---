@@ -30,7 +30,7 @@ import { Button } from "@/components/ui/button";
 import type {
   ProjectLinkWithAuthor,
   ProjectLinkView,
-} from "@/db/queries/projects";
+} from "@/db/queries/lines-of-business";
 import type { LinkCategory } from "@/lib/project-links/detect-category";
 import { brandForUrl } from "@/lib/project-links/host-brands";
 import { formatBytes } from "@/lib/project-files/limits";
@@ -40,9 +40,9 @@ import {
   deleteFileAction,
   getFileSignedUrlAction,
   reorderLinksAction,
-} from "@/app/(app)/projects/actions";
+} from "@/app/(app)/lob/actions";
 import { formatRelative } from "@/lib/utils";
-import { createDocAction } from "@/app/(app)/projects/docs-actions";
+import { createDocAction } from "@/app/(app)/lob/docs-actions";
 import { AddLinkModal, type LinkModalInitial } from "./add-link-modal";
 import { EditFileModal, type FileEditInitial } from "./edit-file-modal";
 import { FilePreviewModal, type PreviewFile } from "./file-preview-modal";
@@ -112,13 +112,13 @@ const META: Record<
 };
 
 export function LinksBoard({
-  projectId,
+  lobId,
   links,
   currentUserId,
   currentUserRole,
   shareContacts = [],
 }: {
-  projectId: string;
+  lobId: string;
   links: ProjectLinkView[];
   currentUserId: string;
   currentUserRole: "owner" | "admin" | "member";
@@ -197,8 +197,8 @@ export function LinksBoard({
     startTransition(async () => {
       const res =
         l.kind === "file"
-          ? await deleteFileAction({ projectId, linkId: l.id })
-          : await deleteLinkAction({ projectId, linkId: l.id });
+          ? await deleteFileAction({ lobId, linkId: l.id })
+          : await deleteLinkAction({ lobId, linkId: l.id });
       if (res.ok) {
         toast.success(l.kind === "file" ? "File removed" : "Link removed");
         router.refresh();
@@ -218,14 +218,14 @@ export function LinksBoard({
   }
 
   function openDoc(l: ProjectLinkView) {
-    router.push(`/projects/${projectId}/docs/${l.id}`);
+    router.push(`/lob/${lobId}/docs/${l.id}`);
   }
 
   function newDoc(category?: LinkCategory) {
     startTransition(async () => {
-      const res = await createDocAction({ projectId, category });
+      const res = await createDocAction({ lobId, category });
       if (res.ok) {
-        router.push(`/projects/${projectId}/docs/${res.id}`);
+        router.push(`/lob/${lobId}/docs/${res.id}`);
       } else {
         toast.error(res.error);
       }
@@ -265,7 +265,7 @@ export function LinksBoard({
     reordered.splice(target, 0, item);
     startTransition(async () => {
       const res = await reorderLinksAction({
-        projectId,
+        lobId,
         category,
         orderedLinkIds: reordered.map((l) => l.id),
       });
@@ -345,7 +345,7 @@ export function LinksBoard({
 
   return (
     <UploadTray
-      projectId={projectId}
+      lobId={lobId}
       onUploaded={() => router.refresh()}
     >
       <div className="space-y-3">
@@ -388,7 +388,7 @@ export function LinksBoard({
         )}
 
         <AddLinkModal
-          projectId={projectId}
+          lobId={lobId}
           open={modalOpen}
           onOpenChange={setModalOpen}
           initial={editing}
@@ -396,7 +396,7 @@ export function LinksBoard({
         />
 
         <EditFileModal
-          projectId={projectId}
+          lobId={lobId}
           open={fileModalOpen}
           onOpenChange={setFileModalOpen}
           initial={fileEditing}
@@ -422,7 +422,7 @@ export function LinksBoard({
 
         <ShareLinkModal
           key={sharingLink?.id ?? "partner-share"}
-          projectId={projectId}
+          projectId={lobId}
           link={sharingLink}
           contacts={shareContacts}
           open={shareOpen}
