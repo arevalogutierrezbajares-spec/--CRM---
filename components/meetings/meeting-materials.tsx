@@ -1,0 +1,522 @@
+"use client";
+
+import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import {
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Copy,
+  ExternalLink,
+  FileText,
+  Link2,
+  MonitorPlay,
+  Plus,
+  Presentation,
+  Share2,
+  Trash2,
+} from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import {
+  attachMeetingMaterial,
+  detachMeetingMaterial,
+  reorderMeetingMaterialsAction,
+  shareMeetingMaterialsAction,
+} from "@/app/(app)/meetings/actions";
+import type {
+  MeetingMaterial,
+  AttachableMaterial,
+  MaterialKind,
+} from "@/db/queries/meeting-materials";
+
+function kindIcon(kind: MaterialKind) {
+  switch (kind) {
+    case "doc":
+      return <FileText className="h-4 w-4" />;
+    case "file":
+      return <Presentation className="h-4 w-4" />;
+    case "link":
+      return <Link2 className="h-4 w-4" />;
+    default:
+      return <FileText className="h-4 w-4" />;
+  }
+}
+
+export type MeetingAttendee = {
+  id: string;
+  name: string;
+  organization: string | null;
+};
+
+export function MeetingMaterials({
+  meetingId,
+  materials,
+  attachable,
+  attendees,
+}: {
+  meetingId: string;
+  materials: MeetingMaterial[];
+  attachable: AttachableMaterial[];
+  attendees: MeetingAttendee[];
+}) {
+  const router = useRouter();
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [pending, startTransition] = useTransition();
+  // Optimistic local order so reordering feels instant.
+  const [order, setOrder] = useState(materials.map((m) => m.projectLinkId));
+
+  const byId = useMemo(
+    () => new Map(materials.map((m) => [m.projectLinkId, m])),
+    [materials],
+  );
+  const ordered = order
+    .map((id) => byId.get(id))
+    .filter((m): m is MeetingMaterial => Boolean(m));
+
+  function attach(projectLinkId: string) {
+    startTransition(async () => {
+      const res = await attachMeetingMaterial(meetingId, projectLinkId);
+      if (res.ok) {
+        toast.success("Material added");
+        router.refresh();
+      } else {
+        toast.error(res.error);
+      }
+    });
+  }
+
+  function detach(projectLinkId: string) {
+    setOrder((o) => o.filter((id) => id !== projectLinkId));
+    startTransition(async () => {
+      const res = await detachMeetingMaterial(meetingId, projectLinkId);
+      if (res.ok) {
+        toast.success("Material removed");
+        router.refresh();
+      } else {
+        toast.error(res.error);
+        router.refresh();
+      }
+    });
+  }
+
+  function move(index: number, dir: -1 | 1) {
+    const next = [...order];
+    const target = index + dir;
+    if (target < 0 || target >= next.length) return;
+    [next[index], next[target]] = [next[target], next[index]];
+    setOrder(next);
+    startTransition(async () => {
+      await reorderMeetingMaterialsAction(meetingId, next);
+      router.refresh();
+    });
+  }
+
+  const presentHref = `/present/${meetingId}`;
+
+  return (
+    <div className="rounded-lg border border-[var(--border)] bg-[var(--card)]">
+      <div className="flex items-center justify-between gap-2 border-b border-[var(--border)] px-4 py-3">
+        <div className="flex items-center gap-2">
+          <MonitorPlay className="h-4 w-4 text-[var(--muted-foreground)]" />
+          <h2 className="text-sm font-semibold">Materials</h2>
+          {ordered.length > 0 && (
+            <Badge variant="outline">{ordered.length}</Badge>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setPickerOpen(true)}
+            disabled={pending}
+          >
+            <Plus className="h-4 w-4" /> Add
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShareOpen(true)}
+            disabled={ordered.length === 0}
+            title="Send these materials to a client as a private link"
+          >
+            <Share2 className="h-4 w-4" /> Share
+          </Button>
+          <Button
+            asChild
+            size="sm"
+            variant={ordered.length === 0 ? "outline" : "default"}
+            disabled={ordered.length === 0}
+          >
+            <a href={presentHref} target="_blank" rel="noopener noreferrer">
+              <Presentation className="h-4 w-4" /> Present
+            </a>
+          </Button>
+        </div>
+      </div>
+
+      {ordered.length === 0 ? (
+        <div className="px-4 py-8 text-center">
+          <p className="text-sm text-[var(--muted-foreground)]">
+            No materials yet. Add a deck, file, doc, or link to present in this
+            meeting.
+          </p>
+        </div>
+      ) : (
+        <ul className="divide-y divide-[var(--border)]">
+          {ordered.map((m, i) => (
+            <li
+              key={m.projectLinkId}
+              className="flex items-center gap-3 px-4 py-2.5"
+            >
+              <span className="flex h-7 w-7 flex-none items-center justify-center rounded-md bg-[var(--muted)] text-[var(--muted-foreground)]">
+                {kindIcon(m.kind)}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-medium">{m.label}</div>
+                <div className="truncate text-xs text-[var(--muted-foreground)]">
+                  <span className="uppercase tracking-wide">{m.kind}</span>
+                  {m.lobTitle ? ` · ${m.lobTitle}` : ""}
+                </div>
+              </div>
+              <div className="flex flex-none items-center gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => move(i, -1)}
+                  disabled={i === 0 || pending}
+                  className="flex h-7 w-7 items-center justify-center rounded text-[var(--muted-foreground)] hover:bg-[var(--muted)] disabled:opacity-30"
+                  aria-label="Move up"
+                >
+                  <ChevronUp className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => move(i, 1)}
+                  disabled={i === ordered.length - 1 || pending}
+                  className="flex h-7 w-7 items-center justify-center rounded text-[var(--muted-foreground)] hover:bg-[var(--muted)] disabled:opacity-30"
+                  aria-label="Move down"
+                >
+                  <ChevronDown className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => detach(m.projectLinkId)}
+                  disabled={pending}
+                  className="flex h-7 w-7 items-center justify-center rounded text-[var(--muted-foreground)] hover:bg-[var(--destructive)]/10 hover:text-[var(--destructive)] disabled:opacity-30"
+                  aria-label="Remove"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <MaterialPicker
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        attachable={attachable}
+        onAttach={attach}
+      />
+
+      <ShareMaterialsDialog
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+        meetingId={meetingId}
+        attendees={attendees}
+        materialCount={ordered.length}
+      />
+    </div>
+  );
+}
+
+function ShareMaterialsDialog({
+  open,
+  onOpenChange,
+  meetingId,
+  attendees,
+  materialCount,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  meetingId: string;
+  attendees: MeetingAttendee[];
+  materialCount: number;
+}) {
+  const [contactId, setContactId] = useState<string | null>(
+    attendees[0]?.id ?? null,
+  );
+  const [allowDownload, setAllowDownload] = useState(false);
+  const [message, setMessage] = useState("");
+  const [pending, startTransition] = useTransition();
+  const [link, setLink] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  function reset() {
+    setLink(null);
+    setCopied(false);
+    setMessage("");
+  }
+
+  function create() {
+    if (!contactId) return;
+    startTransition(async () => {
+      const res = await shareMeetingMaterialsAction(meetingId, contactId, {
+        allowDownload,
+        message: message.trim() || null,
+      });
+      if (res.ok) {
+        const url = `${window.location.origin}${res.url}`;
+        setLink(url);
+        toast.success(`Shared ${res.count} material${res.count === 1 ? "" : "s"}`);
+      } else {
+        toast.error(res.error);
+      }
+    });
+  }
+
+  async function copy() {
+    if (!link) return;
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      toast.success("Link copied");
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      toast.error("Could not copy");
+    }
+  }
+
+  const selected = attendees.find((a) => a.id === contactId) ?? null;
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        if (!v) reset();
+        onOpenChange(v);
+      }}
+    >
+      <DialogContent className="max-w-md gap-4">
+        <DialogHeader>
+          <DialogTitle>Share with a client</DialogTitle>
+          <DialogDescription>
+            Send {materialCount} material{materialCount === 1 ? "" : "s"} as a
+            private, tracked link they can open on any device.
+          </DialogDescription>
+        </DialogHeader>
+
+        {link ? (
+          <div className="space-y-3">
+            <div className="rounded-md border border-[var(--border)] bg-[var(--muted)] p-2.5">
+              <div className="mb-1 text-xs font-medium text-[var(--muted-foreground)]">
+                Private link{selected ? ` for ${selected.name}` : ""}
+              </div>
+              <div className="flex items-center gap-2">
+                <code className="min-w-0 flex-1 truncate text-xs">{link}</code>
+                <Button size="sm" variant="outline" onClick={copy}>
+                  {copied ? (
+                    <Check className="h-4 w-4 text-[var(--risk-green,#1A5C2A)]" />
+                  ) : (
+                    <Copy className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            </div>
+            <div className="flex items-center justify-between">
+              <Button variant="ghost" size="sm" onClick={reset}>
+                Share with someone else
+              </Button>
+              <Button asChild size="sm">
+                <a href={link} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="h-4 w-4" /> Preview
+                </a>
+              </Button>
+            </div>
+          </div>
+        ) : attendees.length === 0 ? (
+          <p className="py-4 text-center text-sm text-[var(--muted-foreground)]">
+            Add an attendee to this meeting first — the client link is issued to
+            a specific person.
+          </p>
+        ) : (
+          <div className="space-y-4">
+            <div>
+              <div className="mb-1.5 text-xs font-medium text-[var(--muted-foreground)]">
+                Recipient
+              </div>
+              <div className="space-y-1.5">
+                {attendees.map((a) => (
+                  <button
+                    key={a.id}
+                    type="button"
+                    onClick={() => setContactId(a.id)}
+                    className={`flex w-full items-center gap-3 rounded-md border px-3 py-2 text-left transition ${
+                      contactId === a.id
+                        ? "border-[var(--primary)] bg-[var(--primary)]/5"
+                        : "border-[var(--border)] hover:bg-[var(--muted)]"
+                    }`}
+                  >
+                    <span
+                      className={`flex h-4 w-4 flex-none items-center justify-center rounded-full border ${
+                        contactId === a.id
+                          ? "border-[var(--primary)]"
+                          : "border-[var(--border)]"
+                      }`}
+                    >
+                      {contactId === a.id && (
+                        <span className="h-2 w-2 rounded-full bg-[var(--primary)]" />
+                      )}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium">
+                        {a.name}
+                      </span>
+                      {a.organization && (
+                        <span className="block truncate text-xs text-[var(--muted-foreground)]">
+                          {a.organization}
+                        </span>
+                      )}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <Textarea
+              rows={2}
+              placeholder="Optional note shown to the client…"
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+            />
+
+            <label className="flex cursor-pointer items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={allowDownload}
+                onChange={(e) => setAllowDownload(e.target.checked)}
+                className="h-4 w-4 rounded border-[var(--border)]"
+              />
+              Allow the client to download files
+            </label>
+
+            <Button
+              className="w-full"
+              onClick={create}
+              disabled={!contactId || pending}
+            >
+              {pending ? "Creating link…" : "Create client link"}
+            </Button>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function MaterialPicker({
+  open,
+  onOpenChange,
+  attachable,
+  onAttach,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  attachable: AttachableMaterial[];
+  onAttach: (id: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+
+  const groups = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const filtered = attachable.filter(
+      (m) =>
+        !q ||
+        m.label.toLowerCase().includes(q) ||
+        (m.lobTitle ?? "").toLowerCase().includes(q),
+    );
+    const map = new Map<string, AttachableMaterial[]>();
+    for (const m of filtered) {
+      const key = m.lobTitle ?? "Other";
+      const arr = map.get(key) ?? [];
+      arr.push(m);
+      map.set(key, arr);
+    }
+    return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  }, [attachable, query]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[80vh] max-w-xl gap-3 overflow-hidden">
+        <DialogHeader>
+          <DialogTitle>Add material</DialogTitle>
+          <DialogDescription>
+            Attach a deck, file, doc, or link from any line of business.
+          </DialogDescription>
+        </DialogHeader>
+        <Input
+          autoFocus
+          placeholder="Search materials…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        <div className="-mx-2 max-h-[52vh] overflow-y-auto px-2">
+          {groups.length === 0 ? (
+            <p className="py-8 text-center text-sm text-[var(--muted-foreground)]">
+              No materials found.
+            </p>
+          ) : (
+            groups.map(([lob, items]) => (
+              <div key={lob} className="mb-4">
+                <div className="sticky top-0 bg-[var(--background)] py-1 text-xs font-medium uppercase tracking-wide text-[var(--muted-foreground)]">
+                  {lob}
+                </div>
+                <ul className="space-y-1">
+                  {items.map((m) => (
+                    <li key={m.projectLinkId}>
+                      <button
+                        type="button"
+                        disabled={m.attached}
+                        onClick={() => onAttach(m.projectLinkId)}
+                        className="flex w-full items-center gap-3 rounded-md border border-transparent px-2 py-2 text-left hover:border-[var(--border)] hover:bg-[var(--muted)] disabled:cursor-default disabled:opacity-50 disabled:hover:bg-transparent"
+                      >
+                        <span className="flex h-7 w-7 flex-none items-center justify-center rounded-md bg-[var(--muted)] text-[var(--muted-foreground)]">
+                          {kindIcon(m.kind)}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-medium">
+                            {m.label}
+                          </span>
+                          <span className="block truncate text-xs uppercase tracking-wide text-[var(--muted-foreground)]">
+                            {m.kind}
+                          </span>
+                        </span>
+                        {m.attached ? (
+                          <Badge variant="outline">Added</Badge>
+                        ) : (
+                          <Plus className="h-4 w-4 flex-none text-[var(--muted-foreground)]" />
+                        )}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}

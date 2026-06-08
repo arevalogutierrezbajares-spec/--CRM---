@@ -10,6 +10,17 @@ import {
   parseActionItems,
   type MeetingFormInput,
 } from "@/lib/validation/meeting";
+import {
+  addMeetingMaterial,
+  removeMeetingMaterial,
+  reorderMeetingMaterials,
+  listMeetingMaterials,
+} from "@/db/queries/meeting-materials";
+import { createSignedDownloadUrl } from "@/lib/project-files/storage";
+import {
+  createPartnerShare,
+  regeneratePartnerRoomAccessToken,
+} from "@/db/queries/partner-access";
 
 const { meetings, meetingAttendees, touches, milestones, contacts } = schema;
 
@@ -209,4 +220,140 @@ export async function generateMilestonesFromMeeting(meetingId: string) {
   revalidatePath(`/projects/${m.linkedProjectId}`);
   revalidatePath(`/meetings/${m.id}`);
   return { ok: true as const, count: items.length };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MEETING MATERIALS — curate the decks/docs shown in a meeting + present mode
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function attachMeetingMaterial(
+  meetingId: string,
+  projectLinkId: string,
+): Promise<ActionResult> {
+  const user = await requireUser();
+  try {
+    await addMeetingMaterial({
+      meetingId,
+      projectLinkId,
+      workspaceId: user.workspaceId,
+      addedBy: user.id,
+    });
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Failed to attach" };
+  }
+  revalidatePath(`/meetings/${meetingId}`);
+  return { ok: true, id: projectLinkId };
+}
+
+export async function detachMeetingMaterial(
+  meetingId: string,
+  projectLinkId: string,
+): Promise<ActionResult> {
+  const user = await requireUser();
+  await removeMeetingMaterial({
+    meetingId,
+    projectLinkId,
+    workspaceId: user.workspaceId,
+  });
+  revalidatePath(`/meetings/${meetingId}`);
+  return { ok: true, id: projectLinkId };
+}
+
+export async function reorderMeetingMaterialsAction(
+  meetingId: string,
+  orderedLinkIds: string[],
+): Promise<ActionResult> {
+  const user = await requireUser();
+  await reorderMeetingMaterials({
+    meetingId,
+    workspaceId: user.workspaceId,
+    orderedLinkIds,
+  });
+  revalidatePath(`/meetings/${meetingId}`);
+  return { ok: true, id: meetingId };
+}
+
+/**
+ * Short-lived signed URL for a stored material, minted on demand (not at page
+ * load) so present mode and the materials panel can open files securely.
+ */
+export async function getMaterialUrl(
+  storagePath: string,
+): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  await requireUser();
+  if (!storagePath) return { ok: false, error: "No file" };
+  return createSignedDownloadUrl(storagePath);
+}
+
+/**
+ * Share every material in a meeting with one attendee as a curated, tracked
+ * client room (reuses the partner-access system). All materials land in a
+ * single room → one /access/[token] link the client opens on any device.
+ */
+export async function shareMeetingMaterialsAction(
+  meetingId: string,
+  contactId: string,
+  opts?: { allowDownload?: boolean; message?: string | null },
+): Promise<
+  { ok: true; url: string; count: number } | { ok: false; error: string }
+> {
+  const user = await requireUser();
+
+  const materials = await listMeetingMaterials({
+    meetingId,
+    workspaceId: user.workspaceId,
+  });
+  if (materials.length === 0) {
+    return { ok: false, error: "No materials to share yet" };
+  }
+
+  const permissions: Array<"view" | "download"> = opts?.allowDownload
+    ? ["view", "download"]
+    : ["view"];
+
+  let roomId: string | null = null;
+  let accessToken: string | null = null;
+  let shared = 0;
+  let lastError: string | null = null;
+
+  for (const m of materials) {
+    const res = await createPartnerShare({
+      workspaceId: user.workspaceId,
+      actorId: user.id,
+      projectId: m.lobId,
+      projectLinkId: m.projectLinkId,
+      contactId,
+      partnerKind: "client",
+      channel: "meeting",
+      permissions,
+      message: opts?.message ?? null,
+      expiresAt: null,
+    });
+    if (!res.ok) {
+      lastError = res.error;
+      continue;
+    }
+    roomId = res.room.id;
+    if (res.accessToken) accessToken = res.accessToken;
+    shared++;
+  }
+
+  if (!roomId) {
+    return { ok: false, error: lastError ?? "Could not share materials" };
+  }
+
+  // Existing rooms keep a hashed token we can't read back — mint a fresh,
+  // sendable link so the user always walks away with a working URL.
+  if (!accessToken) {
+    const regen = await regeneratePartnerRoomAccessToken({
+      workspaceId: user.workspaceId,
+      actorId: user.id,
+      roomId,
+    });
+    if (!regen.ok) return { ok: false, error: regen.error };
+    accessToken = regen.accessToken;
+  }
+
+  revalidatePath(`/meetings/${meetingId}`);
+  return { ok: true, url: `/access/${accessToken}`, count: shared };
 }

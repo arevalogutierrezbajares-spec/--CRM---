@@ -19,7 +19,12 @@ import { parseActionItems } from "@/lib/validation/meeting"; // used for server-
 import { InlineNotes } from "@/components/meetings/inline-notes";
 import { LiveMeeting } from "@/components/meetings/live-meeting";
 import { PreMeetingBrief } from "@/components/meetings/pre-meeting-brief";
+import { MeetingMaterials } from "@/components/meetings/meeting-materials";
 import { getAttendeeContext } from "@/db/queries/meetings";
+import {
+  listMeetingMaterials,
+  listAttachableMaterials,
+} from "@/db/queries/meeting-materials";
 import {
   generateMilestonesFromMeeting,
 } from "../actions";
@@ -60,6 +65,21 @@ export default async function MeetingDetailPage(props: {
         }),
       )
     : [];
+
+  // Materials shown in this meeting + everything attachable from the workspace.
+  const [materials, attachable] = meeting
+    ? await Promise.all([
+        safeRead(
+          () => listMeetingMaterials({ meetingId: id, workspaceId: user.workspaceId }),
+          [],
+        ).then((r) => r.data),
+        safeRead(
+          () =>
+            listAttachableMaterials({ meetingId: id, workspaceId: user.workspaceId }),
+          [],
+        ).then((r) => r.data),
+      ])
+    : [[], []];
 
   async function spawn() {
     "use server";
@@ -137,6 +157,17 @@ export default async function MeetingDetailPage(props: {
                     {attendeeContexts.length > 0 && (
                       <PreMeetingBrief attendees={attendeeContexts} />
                     )}
+
+                    <MeetingMaterials
+                      meetingId={id}
+                      materials={materials}
+                      attachable={attachable}
+                      attendees={meeting.attendees.map((c) => ({
+                        id: c.id,
+                        name: c.name,
+                        organization: c.organization,
+                      }))}
+                    />
 
                     <Card>
                       <CardHeader>

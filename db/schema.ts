@@ -1317,6 +1317,31 @@ export const meetingAttendees = pgTable(
   }),
 );
 
+// Curated materials shown in a meeting (the "meeting hub" + present mode). The
+// material's content lives in project_links (single source of truth); this join
+// only decides WHICH materials appear in THIS meeting and IN WHAT ORDER. A deck
+// can live under any LoB and still be attached here.
+export const meetingMaterials = pgTable(
+  "meeting_materials",
+  {
+    meetingId: uuid("meeting_id")
+      .notNull()
+      .references(() => meetings.id, { onDelete: "cascade" }),
+    projectLinkId: uuid("project_link_id")
+      .notNull()
+      .references(() => projectLinks.id, { onDelete: "cascade" }),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    sortOrder: integer("sort_order").notNull().default(0),
+    addedBy: uuid("added_by").references(() => users.id),
+    addedAt: timestamp("added_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.meetingId, t.projectLinkId] }),
+  }),
+);
+
 // ─────────────────────────────────────────────────────────────────────────────
 // RELATIONS
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1448,7 +1473,22 @@ export const meetingsRelations = relations(meetings, ({ one, many }) => ({
   }),
   attendees: many(meetingAttendees),
   touches: many(touches),
+  materials: many(meetingMaterials),
 }));
+
+export const meetingMaterialsRelations = relations(
+  meetingMaterials,
+  ({ one }) => ({
+    meeting: one(meetings, {
+      fields: [meetingMaterials.meetingId],
+      references: [meetings.id],
+    }),
+    projectLink: one(projectLinks, {
+      fields: [meetingMaterials.projectLinkId],
+      references: [projectLinks.id],
+    }),
+  }),
+);
 
 export const pipelineTemplatesRelations = relations(
   pipelineTemplates,
@@ -2110,6 +2150,40 @@ export const voiceNotes = pgTable("voice_notes", {
     .defaultNow(),
 });
 
+// Durable record of every call recorded via /record. The transcript is saved
+// here UNCONDITIONALLY (the prior design only persisted it as a side-effect of a
+// unique contact match, so unmatched calls were silently lost). Attaching to a
+// contact is secondary — contactId is set when a unique match is found.
+export const callRecordings = pgTable("call_recordings", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  title: text("title").notNull().default("Call"),
+  transcript: text("transcript").notNull(),
+  // Markdown brief produced by the model; null until extraction completes.
+  brief: text("brief"),
+  language: text("language"),
+  durationSecs: integer("duration_secs"),
+  contactId: uuid("contact_id").references(() => contacts.id, {
+    onDelete: "set null",
+  }),
+  actionItemCount: integer("action_item_count").notNull().default(0),
+  createdBy: uuid("created_by")
+    .notNull()
+    .references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const callRecordingsRelations = relations(callRecordings, ({ one }) => ({
+  contact: one(contacts, {
+    fields: [callRecordings.contactId],
+    references: [contacts.id],
+  }),
+}));
+
 export const actionItems = pgTable("action_items", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   workspaceId: uuid("workspace_id")
@@ -2122,6 +2196,10 @@ export const actionItems = pgTable("action_items", {
   priority: workPriority("priority"),
   // Provenance: which voice note this was extracted from (null for manual).
   voiceNoteId: uuid("voice_note_id").references(() => voiceNotes.id, {
+    onDelete: "set null",
+  }),
+  // Provenance: which recorded call this was extracted from (null otherwise).
+  callRecordingId: uuid("call_recording_id").references(() => callRecordings.id, {
     onDelete: "set null",
   }),
   // Optional links — standalone in v1, attachable later.
