@@ -5,6 +5,7 @@ import { PresenceProvider } from "@/lib/presence/presence-context";
 import { CommandPalette } from "@/components/command/command-palette";
 import { GlobalShortcuts } from "@/components/command/global-shortcuts";
 import { MotionProvider } from "@/components/motion-provider";
+import { AmbientPlayer } from "@/components/ambient/ambient-player";
 import { safeRead } from "@/lib/db-status";
 import { listWorkspaceDocs, type WorkspaceDoc } from "@/db/queries/items";
 import { listLines } from "@/db/queries/lines-of-business";
@@ -45,6 +46,7 @@ export default async function AppLayout({
         <Toaster />
         <CommandPalette />
         <GlobalShortcuts />
+        <AmbientPlayer />
       </div>
       </MotionProvider>
     </PresenceProvider>
