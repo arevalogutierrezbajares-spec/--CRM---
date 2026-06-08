@@ -1,0 +1,83 @@
+Ucaima Avitourism Proposal - Source Notes
+Access date: 2026-06-08
+
+1. Canaima official / protected-area baseline
+- Inparques, "Parque Nacional Canaima"
+  URL: https://www.inparques.gob.ve/parque-nacional-canaima/
+  Used for: official park context, fauna statement, "mas de 587 especies" of birds, harpy eagle/macaw/hummingbird/toucan examples.
+  Relevant page lines from web capture: 81-84.
+
+- UNESCO World Heritage Centre, "Canaima National Park"
+  URL: https://whc.unesco.org/en/list/701/
+  Used for: 3,000,000 ha property size, 65% tepui formations, World Heritage context, 1994 inscription.
+  Relevant page lines from web capture: 331-342 and 418-423.
+
+2. Bird checklist / target species
+- Avibase, "Canaima National Park bird checklist"
+  URL: https://avibase.bsc-eoc.org/checklist.jsp?region=VEbo01
+  Used for: 736 species, 5 globally threatened species, last modified 2026-02-17, and examples of target species in the checklist.
+  Relevant page lines from web capture: 92-99.
+  Example species lines:
+  - Tepui Tinamou, country/region endemic: 113-117.
+  - Tepui Goldenthroat, country/region endemic: 227-230.
+  - Roraiman Barbtail and Tepui Spinetail: 632-634.
+  - Guianan Cock-of-the-rock and White Bellbird: 657-668.
+  Caveat: the deck does not claim these birds are only in Canaima. It uses the safer phrasing "tepui and Guianan Shield specialties" and "route list to be field validated."
+
+3. North America demand proof
+- U.S. Fish and Wildlife Service, 2022 National Survey of Fishing, Hunting, and Wildlife-Associated Recreation
+  URL: https://www.fws.gov/sites/default/files/documents/Final_2022-National-Survey_101223-accessible-single-page.pdf
+  Used for: 96.3M U.S. wild bird observers, 42.6M taking away-from-home trips to observe wild birds, 148.3M wildlife watchers, $250.2B wildlife-watching expenditures.
+  Local PDF extract used page 30 text and expenditure table text.
+
+- U.S. Fish and Wildlife Service, "Birdwatching in America"
+  URL: https://www.fws.gov/story/2024-12/birdwatching-america
+  Used for: birding participation and $107.6B U.S. birding spend summary.
+
+4. Colombia benchmark
+- Colombia Travel, "Birdwatching"
+  URL: https://colombia.travel/en/birdwatching
+  Used for: 1,900+ bird species, 79 endemic species, nearly 170 migratory species, and official tourism positioning that birdwatching can happen any month of the year.
+  Relevant page lines from web capture: 55-68.
+
+- Ministerio de Comercio, Industria y Turismo de Colombia, "Colombia es el mejor pais para pajarear..."
+  URL: https://www.mincit.gov.co/prensa/noticias/turismo/primer-lugar-colombia-en-el-global-big-day-2024
+  Used for: Global Big Day 2024 result, 1,558 species and 12,007 checklists, Colombia positioning as birdwatching leader, and government support for routes/equipment/capacity building.
+  Relevant page lines from web capture: 91-121.
+
+- Presidencia de Colombia, "Colombia rompio nuevo record..."
+  URL: https://www.presidencia.gov.co/prensa/Paginas/Colombia-rompio-nuevo-record-en-turismo-al-recibir-a-cerca-de-67-millones-de-visitantes-no-residentes-en-2024-250121.aspx
+  Used for: 2024 non-resident visitor record and U.S. participation as 26.5% of visitors from that country.
+  Search result captured: "cerca de 6,7 millones" and 1,194,642 visitors from the United States, 26.5%.
+
+5. Seasonality support
+- Colombia Travel, "Birdwatching"
+  URL: https://colombia.travel/en/birdwatching
+  Used for: proof that a birdwatching product can be positioned as year-round when routes and specialized guides are available.
+
+- MondoParks, "Canaima National Park: The Lost World"
+  URL: https://mondoparks.com/parks/canaima/
+  Used only as operational context for dry/rainy season product logic: rainy season June-November, dry season December-April.
+  Caveat: seasonality must be validated with Ucaima/local operators before publication.
+
+6. Image assets
+- Laguna de Canaima image
+  File: assets/laguna-canaima.jpg
+  Source: https://commons.wikimedia.org/wiki/File:Laguna-de-Canaima.jpg
+  Author: Wilfredor
+  License: Creative Commons Attribution-Share Alike 4.0
+  Used for: cover and closing slide background.
+
+- Roraiman Barbtail image
+  File: assets/roraiman-barbtail.jpg
+  Source: https://commons.wikimedia.org/wiki/File:Roraimia_adusta_-_Roraiman_Barbtail;_Gran_Sabana,_Venezuela.jpg
+  Author: J. A. Jacomelli
+  License: Creative Commons Attribution-Share Alike 2.0
+  Used for: target bird slide.
+
+- Harpy Eagle image
+  File: assets/harpy-eagle.jpg
+  Source: https://commons.wikimedia.org/wiki/File:Harpy_Eagle_(Harpia_harpyja).jpg
+  Author: Brian Gratwicke
+  License: Creative Commons Attribution 2.0
+  Used for: evidence / biodiversity slide.

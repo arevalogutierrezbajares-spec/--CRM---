@@ -1,0 +1,137 @@
+{
+  "output": "/Users/tomas/AGB-CRM/outputs/manual-20260608120307-ucaima-birds/presentations/ucaima-avitourism/output/Ucaima-Avitourism-Proposal.pptx",
+  "outputBytes": 17973078,
+  "slideCount": 12,
+  "slideSize": {
+    "width": 1280,
+    "height": 720
+  },
+  "previewDir": "/Users/tomas/AGB-CRM/outputs/manual-20260608120307-ucaima-birds/presentations/ucaima-avitourism/preview",
+  "previewPaths": [
+    "/Users/tomas/AGB-CRM/outputs/manual-20260608120307-ucaima-birds/presentations/ucaima-avitourism/preview/slide-01.png",
+    "/Users/tomas/AGB-CRM/outputs/manual-20260608120307-ucaima-birds/presentations/ucaima-avitourism/preview/slide-02.png",
+    "/Users/tomas/AGB-CRM/outputs/manual-20260608120307-ucaima-birds/presentations/ucaima-avitourism/preview/slide-03.png",
+    "/Users/tomas/AGB-CRM/outputs/manual-20260608120307-ucaima-birds/presentations/ucaima-avitourism/preview/slide-04.png",
+    "/Users/tomas/AGB-CRM/outputs/manual-20260608120307-ucaima-birds/presentations/ucaima-avitourism/preview/slide-05.png",
+    "/Users/tomas/AGB-CRM/outputs/manual-20260608120307-ucaima-birds/presentations/ucaima-avitourism/preview/slide-06.png",
+    "/Users/tomas/AGB-CRM/outputs/manual-20260608120307-ucaima-birds/presentations/ucaima-avitourism/preview/slide-07.png",
+    "/Users/tomas/AGB-CRM/outputs/manual-20260608120307-ucaima-birds/presentations/ucaima-avitourism/preview/slide-08.png",
+    "/Users/tomas/AGB-CRM/outputs/manual-20260608120307-ucaima-birds/presentations/ucaima-avitourism/preview/slide-09.png",
+    "/Users/tomas/AGB-CRM/outputs/manual-20260608120307-ucaima-birds/presentations/ucaima-avitourism/preview/slide-10.png",
+    "/Users/tomas/AGB-CRM/outputs/manual-20260608120307-ucaima-birds/presentations/ucaima-avitourism/preview/slide-11.png",
+    "/Users/tomas/AGB-CRM/outputs/manual-20260608120307-ucaima-birds/presentations/ucaima-avitourism/preview/slide-12.png"
+  ],
+  "layoutDir": "/Users/tomas/AGB-CRM/outputs/manual-20260608120307-ucaima-birds/presentations/ucaima-avitourism/layout",
+  "layoutResults": [
+    {
+      "layoutPath": "/Users/tomas/AGB-CRM/outputs/manual-20260608120307-ucaima-birds/presentations/ucaima-avitourism/layout/slide-01.layout.json"
+    },
+    {
+      "layoutPath": "/Users/tomas/AGB-CRM/outputs/manual-20260608120307-ucaima-birds/presentations/ucaima-avitourism/layout/slide-02.layout.json"
+    },
+    {
+      "layoutPath": "/Users/tomas/AGB-CRM/outputs/manual-20260608120307-ucaima-birds/presentations/ucaima-avitourism/layout/slide-03.layout.json"
+    },
+    {
+      "layoutPath": "/Users/tomas/AGB-CRM/outputs/manual-20260608120307-ucaima-birds/presentations/ucaima-avitourism/layout/slide-04.layout.json"
+    },
+    {
+      "layoutPath": "/Users/tomas/AGB-CRM/outputs/manual-20260608120307-ucaima-birds/presentations/ucaima-avitourism/layout/slide-05.layout.json"
+    },
+    {
+      "layoutPath": "/Users/tomas/AGB-CRM/outputs/manual-20260608120307-ucaima-birds/presentations/ucaima-avitourism/layout/slide-06.layout.json"
+    },
+    {
+      "layoutPath": "/Users/tomas/AGB-CRM/outputs/manual-20260608120307-ucaima-birds/presentations/ucaima-avitourism/layout/slide-07.layout.json"
+    },
+    {
+      "layoutPath": "/Users/tomas/AGB-CRM/outputs/manual-20260608120307-ucaima-birds/presentations/ucaima-avitourism/layout/slide-08.layout.json"
+    },
+    {
+      "layoutPath": "/Users/tomas/AGB-CRM/outputs/manual-20260608120307-ucaima-birds/presentations/ucaima-avitourism/layout/slide-09.layout.json"
+    },
+    {
+      "layoutPath": "/Users/tomas/AGB-CRM/outputs/manual-20260608120307-ucaima-birds/presentations/ucaima-avitourism/layout/slide-10.layout.json"
+    },
+    {
+      "layoutPath": "/Users/tomas/AGB-CRM/outputs/manual-20260608120307-ucaima-birds/presentations/ucaima-avitourism/layout/slide-11.layout.json"
+    },
+    {
+      "layoutPath": "/Users/tomas/AGB-CRM/outputs/manual-20260608120307-ucaima-birds/presentations/ucaima-avitourism/layout/slide-12.layout.json"
+    }
+  ],
+  "slides": [
+    {
+      "index": 1,
+      "requestedSlideNumber": 1,
+      "modulePath": "/Users/tomas/AGB-CRM/outputs/manual-20260608120307-ucaima-birds/presentations/ucaima-avitourism/slides/slide-01.mjs",
+      "exportName": "default"
+    },
+    {
+      "index": 2,
+      "requestedSlideNumber": 2,
+      "modulePath": "/Users/tomas/AGB-CRM/outputs/manual-20260608120307-ucaima-birds/presentations/ucaima-avitourism/slides/slide-02.mjs",
+      "exportName": "default"
+    },
+    {
+      "index": 3,
+      "requestedSlideNumber": 3,
+      "modulePath": "/Users/tomas/AGB-CRM/outputs/manual-20260608120307-ucaima-birds/presentations/ucaima-avitourism/slides/slide-03.mjs",
+      "exportName": "default"
+    },
+    {
+      "index": 4,
+      "requestedSlideNumber": 4,
+      "modulePath": "/Users/tomas/AGB-CRM/outputs/manual-20260608120307-ucaima-birds/presentations/ucaima-avitourism/slides/slide-04.mjs",
+      "exportName": "default"
+    },
+    {
+      "index": 5,
+      "requestedSlideNumber": 5,
+      "modulePath": "/Users/tomas/AGB-CRM/outputs/manual-20260608120307-ucaima-birds/presentations/ucaima-avitourism/slides/slide-05.mjs",
+      "exportName": "default"
+    },
+    {
+      "index": 6,
+      "requestedSlideNumber": 6,
+      "modulePath": "/Users/tomas/AGB-CRM/outputs/manual-20260608120307-ucaima-birds/presentations/ucaima-avitourism/slides/slide-06.mjs",
+      "exportName": "default"
+    },
+    {
+      "index": 7,
+      "requestedSlideNumber": 7,
+      "modulePath": "/Users/tomas/AGB-CRM/outputs/manual-20260608120307-ucaima-birds/presentations/ucaima-avitourism/slides/slide-07.mjs",
+      "exportName": "default"
+    },
+    {
+      "index": 8,
+      "requestedSlideNumber": 8,
+      "modulePath": "/Users/tomas/AGB-CRM/outputs/manual-20260608120307-ucaima-birds/presentations/ucaima-avitourism/slides/slide-08.mjs",
+      "exportName": "default"
+    },
+    {
+      "index": 9,
+      "requestedSlideNumber": 9,
+      "modulePath": "/Users/tomas/AGB-CRM/outputs/manual-20260608120307-ucaima-birds/presentations/ucaima-avitourism/slides/slide-09.mjs",
+      "exportName": "default"
+    },
+    {
+      "index": 10,
+      "requestedSlideNumber": 10,
+      "modulePath": "/Users/tomas/AGB-CRM/outputs/manual-20260608120307-ucaima-birds/presentations/ucaima-avitourism/slides/slide-10.mjs",
+      "exportName": "default"
+    },
+    {
+      "index": 11,
+      "requestedSlideNumber": 11,
+      "modulePath": "/Users/tomas/AGB-CRM/outputs/manual-20260608120307-ucaima-birds/presentations/ucaima-avitourism/slides/slide-11.mjs",
+      "exportName": "default"
+    },
+    {
+      "index": 12,
+      "requestedSlideNumber": 12,
+      "modulePath": "/Users/tomas/AGB-CRM/outputs/manual-20260608120307-ucaima-birds/presentations/ucaima-avitourism/slides/slide-12.mjs",
+      "exportName": "default"
+    }
+  ]
+}

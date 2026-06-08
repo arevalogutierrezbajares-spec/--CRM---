@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ucaima — Avitourism Field Base</title>
+<style>
+  :root{
+    --ink:#0c1a14; --ink-2:#10241b; --moss:#0f766e; --moss-2:#14b8a6;
+    --gold:#c9a24a; --gold-2:#e2c275; --cream:#f3efe4; --cream-dim:rgba(243,239,228,.62);
+    --cream-faint:rgba(243,239,228,.32); --line:rgba(243,239,228,.14);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:#060d0a; color:var(--cream);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Helvetica,Arial,sans-serif;
+    overflow:hidden;
+  }
+  .deck{position:relative;width:100vw;height:100vh}
+  .slide{
+    position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;
+    padding:7vh 9vw; opacity:0; visibility:hidden; transform:translateY(18px);
+    transition:opacity .5s ease, transform .5s ease, visibility .5s;
+    background:linear-gradient(150deg,var(--ink) 0%, var(--ink-2) 100%);
+  }
+  .slide.active{opacity:1;visibility:visible;transform:translateY(0)}
+  .slide.cover, .slide.closing{padding:0;justify-content:flex-end}
+
+  /* eyebrow / labels */
+  .kicker{
+    font-size:13px;letter-spacing:.28em;text-transform:uppercase;color:var(--gold);
+    font-weight:600;margin-bottom:26px;display:flex;align-items:center;gap:12px;
+  }
+  .kicker::before{content:"";width:34px;height:1px;background:var(--gold)}
+  h1{font-size:clamp(34px,5.6vw,74px);line-height:1.02;font-weight:800;letter-spacing:-.02em}
+  h2{font-size:clamp(28px,3.9vw,52px);line-height:1.06;font-weight:800;letter-spacing:-.015em;max-width:18ch}
+  .lede{font-size:clamp(17px,1.9vw,24px);line-height:1.5;color:var(--cream-dim);max-width:46ch;margin-top:26px;font-weight:300}
+  .gold{color:var(--gold-2)}
+  .em{color:var(--cream);font-weight:500}
+
+  /* cover */
+  .cover .bg, .closing .bg{position:absolute;inset:0;z-index:0;
+    background-size:cover;background-position:center;}
+  .cover::after,.closing::after{content:"";position:absolute;inset:0;z-index:1;
+    background:linear-gradient(0deg, rgba(6,13,10,.96) 6%, rgba(6,13,10,.55) 45%, rgba(6,13,10,.25) 100%)}
+  .cover .inner,.closing .inner{position:relative;z-index:2;padding:0 9vw 11vh}
+  .cover h1{max-width:16ch}
+
+  /* stat rows */
+  .stats{display:flex;flex-wrap:wrap;gap:18px;margin-top:42px}
+  .stat{
+    background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:14px;
+    padding:24px 28px;min-width:180px;flex:1 1 180px;
+  }
+  .stat .n{font-size:clamp(30px,3.4vw,46px);font-weight:800;color:var(--gold-2);line-height:1;letter-spacing:-.02em}
+  .stat .l{font-size:14px;color:var(--cream-dim);margin-top:12px;line-height:1.4;font-weight:300}
+
+  /* two-col split with image */
+  .split{display:grid;grid-template-columns:1.1fr .9fr;gap:6vw;align-items:center;height:100%}
+  .split .media{position:relative;border-radius:18px;overflow:hidden;aspect-ratio:4/3;
+    border:1px solid var(--line);box-shadow:0 30px 60px rgba(0,0,0,.4)}
+  .split .media img{width:100%;height:100%;object-fit:cover;display:block}
+  .split .media .cap{position:absolute;left:0;right:0;bottom:0;padding:16px 18px;font-size:12px;
+    color:var(--cream-dim);background:linear-gradient(0deg,rgba(6,13,10,.92),transparent)}
+
+  /* feature list */
+  .list{margin-top:30px;display:grid;gap:14px;max-width:54ch}
+  .list .row{display:flex;gap:16px;align-items:flex-start;font-size:clamp(15px,1.6vw,19px);line-height:1.4}
+  .list .row::before{content:"";flex:none;width:8px;height:8px;border-radius:50%;background:var(--moss-2);margin-top:9px}
+  .list .row b{color:var(--cream);font-weight:600}
+  .list .row span{color:var(--cream-dim);font-weight:300}
+
+  /* calendar grid */
+  .cal{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:38px}
+  .cal .q{border:1px solid var(--line);border-radius:14px;padding:22px;background:rgba(255,255,255,.025)}
+  .cal .q .t{font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);font-weight:600}
+  .cal .q .d{font-size:16px;margin-top:12px;color:var(--cream);font-weight:600}
+  .cal .q .s{font-size:13px;margin-top:8px;color:var(--cream-dim);font-weight:300;line-height:1.4}
+
+  /* math callout */
+  .math{display:flex;align-items:center;gap:22px;flex-wrap:wrap;margin-top:40px}
+  .math .box{border:1px solid var(--line);border-radius:14px;padding:22px 26px;background:rgba(255,255,255,.03)}
+  .math .box .n{font-size:clamp(26px,3vw,40px);font-weight:800;color:var(--gold-2);line-height:1}
+  .math .box .l{font-size:13px;color:var(--cream-dim);margin-top:10px;font-weight:300}
+  .math .op{font-size:30px;color:var(--cream-faint);font-weight:300}
+
+  /* ask list */
+  .ask{margin-top:34px;display:grid;gap:18px;max-width:50ch}
+  .ask .a{display:flex;gap:18px;align-items:flex-start}
+  .ask .a .num{flex:none;width:34px;height:34px;border-radius:50%;border:1px solid var(--gold);
+    color:var(--gold-2);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px}
+  .ask .a p{font-size:clamp(16px,1.7vw,20px);line-height:1.4;color:var(--cream);padding-top:4px}
+  .ask .a p span{color:var(--cream-dim);font-weight:300;display:block;font-size:.85em;margin-top:4px}
+
+  .foot{position:absolute;left:9vw;bottom:4vh;font-size:11.5px;color:var(--cream-faint);max-width:62ch;line-height:1.5;z-index:3}
+  .slide.cover .foot,.slide.closing .foot{left:9vw}
+
+  /* chrome */
+  .chrome{position:fixed;z-index:50;left:0;right:0;bottom:0;height:4px;background:rgba(255,255,255,.06)}
+  .chrome .bar{height:100%;background:linear-gradient(90deg,var(--moss),var(--gold));width:0;transition:width .4s ease}
+  .counter{position:fixed;z-index:50;right:26px;top:24px;font-size:13px;letter-spacing:.12em;
+    color:var(--cream-faint);font-variant-numeric:tabular-nums}
+  .counter b{color:var(--cream)}
+  .nav{position:fixed;z-index:50;right:26px;bottom:26px;display:flex;gap:10px}
+  .nav button{width:42px;height:42px;border-radius:50%;border:1px solid var(--line);
+    background:rgba(255,255,255,.04);color:var(--cream);cursor:pointer;font-size:18px;
+    display:flex;align-items:center;justify-content:center;transition:.2s;backdrop-filter:blur(8px)}
+  .nav button:hover{background:var(--moss);border-color:var(--moss)}
+  .hint{position:fixed;z-index:50;left:26px;bottom:26px;font-size:12px;color:var(--cream-faint)}
+  .brandmark{position:fixed;z-index:50;left:9vw;top:24px;font-size:12px;letter-spacing:.22em;
+    text-transform:uppercase;color:var(--cream-faint);font-weight:600}
+  .slide.cover ~ .brandmark{}
+
+  @media(max-width:820px){
+    .split{grid-template-columns:1fr;gap:28px}
+    .split .media{aspect-ratio:16/9;order:-1}
+    .cal{grid-template-columns:repeat(2,1fr)}
+    .slide{padding:9vh 7vw}
+    .foot{position:static;margin-top:30px}
+  }
+</style>
+</head>
+<body>
+<div class="deck" id="deck">
+
+  <!-- 1 — COVER -->
+  <section class="slide cover active">
+    <div class="bg" style="background-image:url('assets/laguna-canaima.jpg')"></div>
+    <div class="inner">
+      <div class="kicker">A Transformation Proposal · Canaima, Venezuela</div>
+      <h1>Ucaima, the responsible <span class="gold">gateway for birders</span>.</h1>
+      <p class="lede">Not just a place to stay in Canaima — the field base for serious birders, naturalists, scientists, and small groups who want quiet access and local knowledge.</p>
+    </div>
+  </section>
+
+  <!-- 2 — WHY THIS LANE -->
+  <section class="slide">
+    <div class="kicker">The Position</div>
+    <h2>The risk in Canaima isn't tourism. It's tourism without a conservation lane.</h2>
+    <p class="lede">Party and luxury pressure can raise visibility while diluting the quiet and the sacredness that make Canaima singular. <span class="em">Ucaima can choose a different position</span> — and own it before anyone else does.</p>
+  </section>
+
+  <!-- 3 — PROOF OF ASSET -->
+  <section class="slide">
+    <div class="kicker">Proof of Asset</div>
+    <h2>This is not speculative. The birding asset is world-class.</h2>
+    <div class="stats">
+      <div class="stat"><div class="n">736</div><div class="l">bird species recorded for Canaima National Park (Avibase checklist)</div></div>
+      <div class="stat"><div class="n">587+</div><div class="l">bird species cited by Inparques for the park</div></div>
+      <div class="stat"><div class="n">3M ha</div><div class="l">UNESCO World Heritage landscape — 65% tepui formations</div></div>
+      <div class="stat"><div class="n">5</div><div class="l">globally threatened species on the checklist</div></div>
+    </div>
+    <div class="foot">Sources: Avibase, Canaima National Park checklist (736 species, 5 globally threatened). Inparques, Parque Nacional Canaima (587+ species). UNESCO World Heritage Centre, list 701 (3,000,000 ha, inscribed 1994).</div>
+  </section>
+
+  <!-- 4 — WHAT BIRDERS COME FOR -->
+  <section class="slide">
+    <div class="split">
+      <div>
+        <div class="kicker">What Birders Come For</div>
+        <h2>Tepui & Guianan Shield specialties — in a landscape that feels like nowhere else.</h2>
+        <p class="lede">The message isn't "we have birds." It's the targets serious birders cross continents for:</p>
+        <div class="list">
+          <div class="row"><b>Roraiman Barbtail · Tepui Spinetail</b><span> &nbsp;— tepui endemics</span></div>
+          <div class="row"><b>Tepui Tinamou · Tepui Goldenthroat</b><span> &nbsp;— country/region endemic on Avibase</span></div>
+          <div class="row"><b>Guianan Cock-of-the-rock · White Bellbird</b><span> &nbsp;— flagship Shield species</span></div>
+        </div>
+      </div>
+      <div class="media">
+        <img src="assets/roraiman-barbtail.jpg" alt="Roraiman Barbtail">
+        <div class="cap">Roraiman Barbtail · Gran Sabana, Venezuela — photo J. A. Jacomelli (CC BY-SA 2.0)</div>
+      </div>
+    </div>
+    <div class="foot">Target list to be field-validated with local guides and eBird records before publication. Phrasing is "tepui / Guianan Shield specialties," not "Canaima-only endemics."</div>
+  </section>
+
+  <!-- 5 — DEMAND -->
+  <section class="slide">
+    <div class="kicker">The Demand</div>
+    <h2>Birders are not a niche hobby. They are a travel economy.</h2>
+    <div class="stats">
+      <div class="stat"><div class="n">96.3M</div><div class="l">U.S. wild bird observers</div></div>
+      <div class="stat"><div class="n">42.6M</div><div class="l">take away-from-home trips to observe wild birds</div></div>
+      <div class="stat"><div class="n">$107.6B</div><div class="l">U.S. birding spend</div></div>
+      <div class="stat"><div class="n">$250.2B</div><div class="l">total U.S. wildlife-watching expenditures</div></div>
+    </div>
+    <div class="foot">Source: U.S. Fish &amp; Wildlife Service, 2022 National Survey of Fishing, Hunting &amp; Wildlife-Associated Recreation; FWS "Birdwatching in America" (2024).</div>
+  </section>
+
+  <!-- 6 — COLOMBIA BENCHMARK -->
+  <section class="slide">
+    <div class="kicker">The Benchmark</div>
+    <h2>Colombia turned birds into a national reputation engine. The region's proof is next door.</h2>
+    <div class="stats">
+      <div class="stat"><div class="n">1,900+</div><div class="l">bird species — the world's richest list</div></div>
+      <div class="stat"><div class="n">79</div><div class="l">endemic species marketed as a travel product</div></div>
+      <div class="stat"><div class="n">1,558</div><div class="l">species in a single Global Big Day 2024 — a world record</div></div>
+      <div class="stat"><div class="n">Year-round</div><div class="l">official positioning: birding any month of the year</div></div>
+    </div>
+    <div class="foot">Sources: Colombia Travel (1,900+ species, 79 endemics, year-round). MinCIT / Presidencia de Colombia, Global Big Day 2024 (1,558 species, 12,007 checklists).</div>
+  </section>
+
+  <!-- 7 — THE FIELD BASE -->
+  <section class="slide">
+    <div class="kicker">The Product</div>
+    <h2>The product isn't lodging. It's the operating system for a serious field day.</h2>
+    <div class="list" style="grid-template-columns:1fr 1fr;display:grid;column-gap:48px;max-width:none">
+      <div class="row"><b>Early breakfasts &amp; quiet hours</b><span> — built around dawn birding</span></div>
+      <div class="row"><b>Guide coordination &amp; route logistics</b><span> — the right local knowledge</span></div>
+      <div class="row"><b>Checklists, field notes &amp; reporting</b><span> — post-trip data back to guests</span></div>
+      <div class="row"><b>Charging, gear &amp; data station</b><span> — practical field support</span></div>
+      <div class="row"><b>VAV / CaneyCloud back-end</b><span> — CRM, learning, outreach, member tracking</span></div>
+      <div class="row"><b>One coordinated experience</b><span> — not a room and a guess</span></div>
+    </div>
+  </section>
+
+  <!-- 8 — CALENDAR -->
+  <section class="slide">
+    <div class="kicker">Year-Round Calendar</div>
+    <h2>Birding doesn't depend on one peak season. The product changes by month.</h2>
+    <div class="cal">
+      <div class="q"><div class="t">Dry · Dec–Apr</div><div class="d">Trail Weeks</div><div class="s">Drier access, longer field days, route-list departures.</div></div>
+      <div class="q"><div class="t">Green · Jun–Nov</div><div class="d">Waterfall & Photo</div><div class="s">Green-season landscapes and photography blocks.</div></div>
+      <div class="q"><div class="t">Shoulder</div><div class="d">Specialist Weeks</div><div class="s">Targeted tepui & Shield species departures.</div></div>
+      <div class="q"><div class="t">Holidays</div><div class="d">Naturalist Retreats</div><div class="s">Slower, guided natural-history stays.</div></div>
+    </div>
+    <div class="foot">Seasonality framed as product design. Dry/green windows to be validated with Ucaima and local operators before launch.</div>
+  </section>
+
+  <!-- 9 — INFRASTRUCTURE -->
+  <section class="slide">
+    <div class="kicker">What It Takes</div>
+    <h2>The upgrades are practical and fundable.</h2>
+    <div class="list" style="grid-template-columns:1fr 1fr;display:grid;column-gap:48px;max-width:none">
+      <div class="row"><b>Gear room &amp; dawn logistics</b></div>
+      <div class="row"><b>Bird blinds / observation decks</b></div>
+      <div class="row"><b>Guide training program</b></div>
+      <div class="row"><b>Field data station &amp; checklist protocol</b></div>
+      <div class="row"><b>Route signage &amp; field safety</b></div>
+      <div class="row"><b>Data &amp; reporting standards</b></div>
+    </div>
+  </section>
+
+  <!-- 10 — FOUNDING CIRCLE -->
+  <section class="slide">
+    <div class="split">
+      <div>
+        <div class="kicker">The Funding Model</div>
+        <h2>A Founding Circle pre-sells future stays — capital before the occupancy lift.</h2>
+        <p class="lede">Bird clubs, individual patrons, universities, and expedition partners buy credits and benefits now. Ucaima gets working capital up front to build the field base.</p>
+        <div class="list">
+          <div class="row"><b>Bird clubs &amp; Audubon chapters</b></div>
+          <div class="row"><b>Universities &amp; museums</b></div>
+          <div class="row"><b>Expedition networks &amp; conservation donors</b></div>
+        </div>
+      </div>
+      <div class="media">
+        <img src="assets/harpy-eagle.jpg" alt="Harpy Eagle">
+        <div class="cap">Harpy Eagle (Harpia harpyja) — photo Brian Gratwicke (CC BY 2.0)</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 11 — THE MATH -->
+  <section class="slide">
+    <div class="kicker">Measurable Impact</div>
+    <h2>The operating math is simple — and adjustable.</h2>
+    <div class="math">
+      <div class="box"><div class="n">10</div><div class="l">guests</div></div>
+      <div class="op">×</div>
+      <div class="box"><div class="n">6</div><div class="l">nights</div></div>
+      <div class="op">×</div>
+      <div class="box"><div class="n">8</div><div class="l">designed departures</div></div>
+      <div class="op">=</div>
+      <div class="box" style="border-color:var(--gold)"><div class="n gold">480</div><div class="l">room-nights / year</div></div>
+    </div>
+    <p class="lede">Before individual add-on stays, meals, guiding, and transport. Tune the guests, nights, and departures to Ucaima's real capacity.</p>
+    <div class="foot">Scenario math for illustration — not reported performance.</div>
+  </section>
+
+  <!-- 12 — THE ASK / CLOSING -->
+  <section class="slide closing">
+    <div class="bg" style="background-image:url('assets/laguna-canaima.jpg')"></div>
+    <div class="inner">
+      <div class="kicker">The Ask</div>
+      <h1 style="max-width:14ch">Three yeses to <span class="gold">start the lane</span>.</h1>
+      <div class="ask">
+        <div class="a"><div class="num">1</div><p>Approve the position.<span>Ucaima as Canaima's responsible birding gateway.</span></p></div>
+        <div class="a"><div class="num">2</div><p>Validate the route &amp; species list.<span>With local guides, before anything is published.</span></p></div>
+        <div class="a"><div class="num">3</div><p>Allow a founding invitation.<span>Open the Founding Circle to pre-sell future stays.</span></p></div>
+      </div>
+    </div>
+    <div class="foot">A Charles Brewer-Carías-led expedition/event can be explored — to be confirmed only if and when agreed. Operating enablement: VAV / CaneyCloud.</div>
+  </section>
+
+</div>
+
+<div class="brandmark">Ucaima · Avitourism Field Base</div>
+<div class="counter"><b id="cur">1</b> / <span id="tot">12</span></div>
+<div class="nav"><button id="prev" aria-label="Previous">‹</button><button id="next" aria-label="Next">›</button></div>
+<div class="hint">← → arrows · space · click to advance</div>
+<div class="chrome"><div class="bar" id="bar"></div></div>
+
+<script>
+  const slides=[...document.querySelectorAll('.slide')];
+  const total=slides.length;
+  let i=0;
+  document.getElementById('tot').textContent=total;
+  function show(n){
+    i=Math.max(0,Math.min(total-1,n));
+    slides.forEach((s,k)=>s.classList.toggle('active',k===i));
+    document.getElementById('cur').textContent=i+1;
+    document.getElementById('bar').style.width=((i+1)/total*100)+'%';
+  }
+  function next(){show(i+1)} function prev(){show(i-1)}
+  document.getElementById('next').onclick=next;
+  document.getElementById('prev').onclick=prev;
+  document.addEventListener('keydown',e=>{
+    if(['ArrowRight','ArrowDown',' ','PageDown'].includes(e.key)){e.preventDefault();next()}
+    if(['ArrowLeft','ArrowUp','PageUp'].includes(e.key)){e.preventDefault();prev()}
+    if(e.key==='Home')show(0); if(e.key==='End')show(total-1);
+  });
+  document.getElementById('deck').addEventListener('click',e=>{
+    if(e.target.closest('button')||e.target.closest('a'))return;
+    next();
+  });
+  // touch swipe
+  let x0=null;
+  addEventListener('touchstart',e=>x0=e.touches[0].clientX,{passive:true});
+  addEventListener('touchend',e=>{
+    if(x0===null)return; const dx=e.changedTouches[0].clientX-x0;
+    if(Math.abs(dx)>50){dx<0?next():prev()} x0=null;
+  },{passive:true});
+  show(0);
+</script>
+</body>
+</html>

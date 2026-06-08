@@ -56,3 +56,6 @@ _tasks/.next/
 
 # agent worktrees (isolation)
 .claude/worktrees/
+
+# Ignore node_modules at any depth (e.g. generated presentation tooling)
+node_modules/

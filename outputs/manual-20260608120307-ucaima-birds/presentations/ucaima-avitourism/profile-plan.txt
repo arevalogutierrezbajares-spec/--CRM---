@@ -1,0 +1,39 @@
+Task mode: create
+
+Primary deck-profile: consumer-retail
+
+Secondary gates:
+- Strategy-leadership discipline, because this is a transformation proposal.
+- GTM/fundraising discipline, because the deck needs a sellable membership structure and measurable occupancy outcomes.
+
+Required proof objects:
+- Image-led first slide using sourced Canaima photography.
+- Evidence slide for Canaima birding assets.
+- North America demand proof from official U.S. birding/wildlife-watching data.
+- Colombia benchmark showing how avitourism can become a national reputation and travel product.
+- Year-round demand calendar.
+- Membership/future-stay funding model.
+- Infrastructure and operating requirements needed to make Ucaima credible as a birding field base.
+
+Source and asset requirements:
+- Cite all numeric claims in source notes and quiet slide footers.
+- Label launch economics as scenario math, not reported performance.
+- Do not claim "Canaima-only endemic birds" unless confirmed by a species-level source. Use "tepui / Guianan Shield specialties" and "country/region endemic on Avibase" where sourced.
+- Record provenance for every image.
+
+Brand/authenticity constraints:
+- Do not use or recreate Ucaima, VAV, CaneyCloud, Nat Geo, Audubon, The Explorers Club, or other organizational logos unless a verified asset is provided.
+- Mention VAV / CaneyCloud as operating enablement, not as visual brand marks.
+- Mention Charles Brewer-Carias only as "to be confirmed" if used.
+
+QA gates:
+- Deck should pass thumbnail contact-sheet review: distinct slide rhythms, visible proof objects, no generic card grid monotony.
+- Each slide needs one clear claim and one proof object or model.
+- Copy must be pitch-ready and respectful to Ucaima: no blunt "low occupancy" language.
+- All seasonality claims should be framed as product design and validated with Ucaima/local guides before launch.
+
+Known missing inputs:
+- Ucaima current room count, ADR, occupancy by month, current guide network, current route access, and infrastructure budget.
+- Confirmed scientific advisor / expedition host list.
+- Confirmed birding route list around Ucaima and local guide availability.
+- Final Spanish-language preference for Ucaima-facing version.
