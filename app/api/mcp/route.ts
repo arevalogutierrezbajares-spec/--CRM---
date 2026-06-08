@@ -4,7 +4,7 @@ import { requestOrigin } from "@/lib/mcp/origin";
 import { MCP_TOOL_DEFINITIONS, executeMcpTool } from "@/lib/mcp/tools";
 import type { ToolContext } from "@/lib/wa-agent/tools";
 
-const SERVER_INFO = { name: "agb-crm", version: "0.1.0" };
+const SERVER_INFO = { name: "AGB CRM MCP", title: "AGB CRM MCP", version: "0.1.0" };
 const DEFAULT_PROTOCOL = "2025-06-18";
 
 type JsonRpcId = string | number | null;

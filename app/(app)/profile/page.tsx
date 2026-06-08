@@ -34,7 +34,7 @@ export default async function ProfilePage() {
   const profile = profileRes.data;
 
   const origin = requestOrigin(await headers());
-  const mcpCommand = `claude mcp add --transport http agb-crm ${origin}/api/mcp`;
+  const mcpCommand = `claude mcp add --transport http agb-crm-mcp ${origin}/api/mcp`;
   const connectionsRes = await safeRead(() => listMcpConnections(), []);
   const connections = connectionsRes.data ?? [];
 
