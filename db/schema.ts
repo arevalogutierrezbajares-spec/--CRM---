@@ -2836,3 +2836,53 @@ export const mcpAccessTokens = pgTable("mcp_access_tokens", {
   lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SHARED REMINDERS — a workspace-wide bulletin board. Distinct from the
+// per-user WhatsApp `reminders` table above: every member of the workspace sees
+// the same board. Each item can carry tags (global dictionary) and connections
+// to contacts ("people"). Author is `created_by`; `done_at` checks it off.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const sharedReminders = pgTable("shared_reminders", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  body: text("body"),
+  dueAt: timestamp("due_at", { withTimezone: true }),
+  pinned: boolean("pinned").notNull().default(false),
+  doneAt: timestamp("done_at", { withTimezone: true }),
+  createdBy: uuid("created_by")
+    .notNull()
+    .references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const sharedReminderTags = pgTable(
+  "shared_reminder_tags",
+  {
+    reminderId: uuid("reminder_id")
+      .notNull()
+      .references(() => sharedReminders.id, { onDelete: "cascade" }),
+    tagId: uuid("tag_id")
+      .notNull()
+      .references(() => tags.id, { onDelete: "cascade" }),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.reminderId, t.tagId] }) }),
+);
+
+export const sharedReminderContacts = pgTable(
+  "shared_reminder_contacts",
+  {
+    reminderId: uuid("reminder_id")
+      .notNull()
+      .references(() => sharedReminders.id, { onDelete: "cascade" }),
+    contactId: uuid("contact_id")
+      .notNull()
+      .references(() => contacts.id, { onDelete: "cascade" }),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.reminderId, t.contactId] }) }),
+);
