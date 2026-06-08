@@ -37,6 +37,7 @@ import { DbBanner } from "@/components/db-banner";
 import { safeRead } from "@/lib/db-status";
 import {
   dashboardCounts,
+  homeCommandMetrics,
   listActiveProjectsForDashboard,
   listMeetingsThisMonth,
   listMeetingsThisWeek,
@@ -57,6 +58,7 @@ import {
   type DashMeeting,
   type DashProject,
   type DashTask,
+  type HomeCommandMetric,
   type PipelineStageBar,
   type RelationshipRow,
   type TopAccount,
@@ -262,6 +264,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
     members: { userId: string; displayName: string }[];
     pinnedProjects: PinnedProject[];
     recentProjects: { id: string; title: string }[];
+    commandMetrics: HomeCommandMetric[];
   } | null = null;
   let weeklyData: {
     tasks: DashTask[];
@@ -279,12 +282,13 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
   } | null = null;
 
   if (view === "daily") {
-    const [tasks, meetings, actionItems, pinnedProjects, recentProjects] = await Promise.all([
+    const [tasks, meetings, actionItems, pinnedProjects, recentProjects, commandMetrics] = await Promise.all([
       safeRead<DashTask[]>(() => listTasksToday(user.workspaceId, todayStr), []),
       safeRead<DashMeeting[]>(() => listMeetingsToday(user.workspaceId), []),
       safeRead<DashActionItem[]>(() => listOpenActionItems(user.workspaceId, 12, todayStr), []),
       safeRead<PinnedProject[]>(() => listPinnedProjects(user.workspaceId, user.id, todayStr), []),
       safeRead<{ id: string; title: string }[]>(() => listRecentProjects(user.workspaceId, user.id, 8), []),
+      safeRead<HomeCommandMetric[]>(() => homeCommandMetrics(user.workspaceId), []),
     ]);
     dailyData = {
       tasks: tasks.data,
@@ -294,6 +298,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
       members,
       pinnedProjects: pinnedProjects.data,
       recentProjects: recentProjects.data,
+      commandMetrics: commandMetrics.data,
     };
   } else if (view === "weekly") {
     const [tasks, meetings, projects] = await Promise.all([
@@ -350,6 +355,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
       status: t.status,
       isOverdue: t.isOverdue,
       ownerName: null,
+      ownerUserId: null,
     })) ?? [],
     dailyData?.meetings ?? weeklyData?.meetings ?? monthlyData?.meetings ?? [],
     blockedRes.data,
@@ -441,6 +447,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
           feed={feedRes.data}
           initiatives={initiativesRes.data}
           kpis={kpisRes.data}
+          commandMetrics={dailyData.commandMetrics}
           blocked={blockedRes.data}
           briefingBullets={briefing}
           dashboardLayout={layoutRes.data}

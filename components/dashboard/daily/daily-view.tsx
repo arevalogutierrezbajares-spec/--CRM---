@@ -4,6 +4,7 @@ import { ActionItemsCard } from "./action-items-card";
 import { AIAssistPanel } from "./ai-assist-panel";
 import { Scorecard } from "./scorecard";
 import { KpiStrip } from "./kpi-strip";
+import { DynamicKpiStrip } from "./dynamic-kpi-strip";
 import { ActivityCenter } from "@/components/town-hall/activity-center";
 import { RelationshipHealth } from "@/components/dashboard/right/relationship-health";
 import type { ScorecardRow, KpiRow } from "@/db/queries/okrs";
@@ -16,7 +17,7 @@ import type { RefObject } from "@/components/town-hall/types";
 import type { WorkspaceCountdown } from "@/db/queries/workspace-settings";
 import type { FeedItem } from "@/db/queries/town-hall-feed";
 import type { InitiativePick } from "@/db/queries/item-initiatives";
-import type { DashActionItem, DashMeeting, DashTask, RelationshipRow } from "@/db/queries/dashboard";
+import type { DashActionItem, DashMeeting, DashTask, HomeCommandMetric, RelationshipRow } from "@/db/queries/dashboard";
 import type { BlockedProject } from "@/db/queries/this-week";
 import type { DashWidget } from "@/lib/dashboard/layout";
 
@@ -39,6 +40,7 @@ interface DailyViewProps {
   feed: FeedItem[];
   initiatives: InitiativePick[];
   kpis: KpiRow[];
+  commandMetrics: HomeCommandMetric[];
   blocked: BlockedProject[];
   briefingBullets: string[];
   dashboardLayout: DashWidget[];
@@ -64,6 +66,7 @@ export function DailyView({
   feed,
   initiatives,
   kpis,
+  commandMetrics,
   blocked,
   briefingBullets,
   dashboardLayout,
@@ -124,6 +127,8 @@ export function DailyView({
     <>
       {/* Top row: meetings agenda · tasks-due agenda · countdown (Angel Falls) */}
       <TopRow meetings={meetings} tasks={tasks} countdown={countdown} nowMs={nowMs} tz={tz} />
+
+      <DynamicKpiStrip metrics={commandMetrics} />
 
       {/* KPIs — slim, full-width strip (inline-editable) */}
       <KpiStrip kpis={kpis} />

@@ -10,7 +10,10 @@ const {
   projects,
   linesOfBusiness,
   contacts,
+  contactTags,
   pipelineStages,
+  projectLinks,
+  tags,
   touches,
   users,
 } = schema;
@@ -60,6 +63,7 @@ export type DashTask = {
   projectTitle: string;
   status: "pending" | "blocked";
   isOverdue: boolean;
+  ownerUserId: string | null;
   /** Display name of the assigned member (assigneeUserId, else legacy assignedTo). */
   ownerName: string | null;
 };
@@ -77,6 +81,7 @@ async function listTasksDueBy(
       status: milestones.status,
       projectId: projects.id,
       projectTitle: projects.title,
+      ownerUserId: sql<string | null>`coalesce(${milestones.assigneeUserId}, ${milestones.assignedTo})`,
       ownerName: users.displayName,
     })
     .from(milestones)
@@ -100,8 +105,197 @@ async function listTasksDueBy(
     projectTitle: r.projectTitle,
     status: r.status as "pending" | "blocked",
     isOverdue: (r.dueDate as string) < today,
+    ownerUserId: r.ownerUserId ?? null,
     ownerName: r.ownerName ?? null,
   }));
+}
+
+/* ─── Home command KPIs ─────────────────────────────────────────────────── */
+
+export type HomeCommandMetricTone = "blue" | "green" | "amber" | "purple";
+
+export type HomeCommandMetric = {
+  id: "clients" | "vav_launch" | "influencers" | "docs";
+  label: string;
+  value: number;
+  suffix?: string;
+  subline: string;
+  detail: string;
+  href: string;
+  progressPct: number;
+  tone: HomeCommandMetricTone;
+};
+
+function includesAny(value: string | null | undefined, needles: string[]): boolean {
+  const haystack = (value ?? "").toLowerCase();
+  return needles.some((needle) => haystack.includes(needle));
+}
+
+function daysAgo(days: number): Date {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d;
+}
+
+export async function homeCommandMetrics(workspaceId: string): Promise<HomeCommandMetric[]> {
+  const [contactRows, vavRows, latestDocs] = await Promise.all([
+    db
+      .select({
+        id: contacts.id,
+        relationshipType: contacts.relationshipType,
+        organization: contacts.organization,
+        lastTouchAt: contacts.lastTouchAt,
+      })
+      .from(contacts)
+      .where(and(eq(contacts.workspaceId, workspaceId), eq(contacts.archived, false))),
+    db
+      .select({
+        id: linesOfBusiness.id,
+        title: linesOfBusiness.title,
+        status: linesOfBusiness.status,
+        statusText: linesOfBusiness.statusText,
+        updatedAt: linesOfBusiness.updatedAt,
+      })
+      .from(linesOfBusiness)
+      .where(
+        and(
+          eq(linesOfBusiness.workspaceId, workspaceId),
+          sql`concat_ws(' ', ${linesOfBusiness.title}, ${linesOfBusiness.tagline}, ${linesOfBusiness.summary}, ${linesOfBusiness.statusText}, ${linesOfBusiness.primaryUrl}, ${linesOfBusiness.repoUrl}) ILIKE '%vav%'`,
+        ),
+      )
+      .orderBy(desc(linesOfBusiness.updatedAt))
+      .limit(5),
+    db
+      .select({
+        id: projectLinks.id,
+        lobId: projectLinks.lobId,
+        label: projectLinks.label,
+        touchedAt: sql<Date>`coalesce(${projectLinks.updatedAt}, ${projectLinks.createdAt})`,
+      })
+      .from(projectLinks)
+      .where(eq(projectLinks.workspaceId, workspaceId))
+      .orderBy(desc(sql`coalesce(${projectLinks.updatedAt}, ${projectLinks.createdAt})`))
+      .limit(25),
+  ]);
+
+  const contactIds = contactRows.map((c) => c.id);
+  const tagRows = contactIds.length
+    ? await db
+        .select({
+          contactId: contactTags.contactId,
+          tag: tags.name,
+        })
+        .from(contactTags)
+        .innerJoin(tags, eq(tags.id, contactTags.tagId))
+        .where(inArray(contactTags.contactId, contactIds))
+    : [];
+
+  const tagsByContact = new Map<string, string[]>();
+  for (const row of tagRows) {
+    const list = tagsByContact.get(row.contactId) ?? [];
+    list.push(row.tag.toLowerCase());
+    tagsByContact.set(row.contactId, list);
+  }
+
+  const clientWords = ["client", "customer", "buyer", "hospitality", "tourism", "travel"];
+  const influencerWords = ["influencer", "creator", "ambassador", "press", "media", "journalist"];
+  const taggedClientIds = new Set(
+    contactRows
+      .filter((c) => (tagsByContact.get(c.id) ?? []).some((tag) => includesAny(tag, clientWords)))
+      .map((c) => c.id),
+  );
+  const clientRows =
+    taggedClientIds.size > 0
+      ? contactRows.filter((c) => taggedClientIds.has(c.id))
+      : contactRows.filter((c) => c.relationshipType === "lead" || c.relationshipType === "partner");
+  const influencerRows = contactRows.filter((c) => {
+    const tagHit = (tagsByContact.get(c.id) ?? []).some((tag) => includesAny(tag, influencerWords));
+    return tagHit || includesAny(c.organization, influencerWords);
+  });
+  const touchedCutoff = daysAgo(30).getTime();
+  const clientsTouched = clientRows.filter((c) => c.lastTouchAt && c.lastTouchAt.getTime() >= touchedCutoff).length;
+  const influencersTouched = influencerRows.filter((c) => c.lastTouchAt && c.lastTouchAt.getTime() >= touchedCutoff).length;
+
+  let vavProgress = 0;
+  let vavOpenTasks = 0;
+  if (vavRows.length > 0) {
+    const vavIds = vavRows.map((p) => p.id);
+    const childProjects = await db
+      .select({ id: projects.id })
+      .from(projects)
+      .where(inArray(projects.lobId, vavIds));
+    const childIds = childProjects.map((p) => p.id);
+    if (childIds.length > 0) {
+      const taskRows = await db
+        .select({
+          status: milestones.status,
+        })
+        .from(milestones)
+        .where(inArray(milestones.projectId, childIds));
+      const done = taskRows.filter((t) => t.status === "done").length;
+      vavOpenTasks = taskRows.filter((t) => t.status !== "done" && t.status !== "cancelled").length;
+      vavProgress = taskRows.length > 0 ? Math.round((done / taskRows.length) * 100) : 0;
+    }
+    if (vavProgress === 0) {
+      vavProgress = vavRows[0]?.status === "done" ? 100 : vavRows[0]?.status === "waiting" ? 45 : 65;
+    }
+  }
+
+  const docsCutoff = daysAgo(14).getTime();
+  const docsTouched = latestDocs.filter((d) => d.touchedAt && d.touchedAt.getTime() >= docsCutoff).length;
+  const latestDoc = latestDocs[0] ?? null;
+
+  const totalContacts = Math.max(contactRows.length, 1);
+  const clientProgress = Math.round((clientRows.length / totalContacts) * 100);
+  const influencerProgress =
+    influencerRows.length > 0 ? Math.round((influencersTouched / influencerRows.length) * 100) : 0;
+
+  return [
+    {
+      id: "clients",
+      label: "Client motion",
+      value: clientRows.length,
+      subline: `${clientsTouched} touched in 30 days`,
+      detail:
+        taggedClientIds.size > 0
+          ? "Counted from client and customer tags."
+          : "Counted from lead and partner relationships.",
+      href: "/contacts",
+      progressPct: clientProgress,
+      tone: "blue",
+    },
+    {
+      id: "vav_launch",
+      label: "VAV launch",
+      value: vavProgress,
+      suffix: "%",
+      subline: vavRows[0]?.statusText ?? `${vavOpenTasks} open launch tasks`,
+      detail: vavRows[0]?.title ? `${vavRows[0].title} is the active launch record.` : "No VAV project found yet.",
+      href: vavRows[0]?.id ? `/lob/${vavRows[0].id}` : "/lob",
+      progressPct: vavProgress,
+      tone: "green",
+    },
+    {
+      id: "influencers",
+      label: "Influencer engine",
+      value: influencerRows.length,
+      subline: `${influencersTouched} touched in 30 days`,
+      detail: "Counted from influencer, creator, ambassador, press and media signals.",
+      href: "/contacts",
+      progressPct: influencerProgress,
+      tone: "purple",
+    },
+    {
+      id: "docs",
+      label: "Docs moved",
+      value: docsTouched,
+      subline: "updated in 14 days",
+      detail: latestDoc ? `Latest: ${latestDoc.label}` : "No recent document activity.",
+      href: latestDoc ? `/lob/${latestDoc.lobId}` : "/lob",
+      progressPct: Math.min(100, docsTouched * 12),
+      tone: "amber",
+    },
+  ];
 }
 
 export async function listTasksToday(workspaceId: string, today: string = utcToday()) {

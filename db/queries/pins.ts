@@ -8,9 +8,11 @@ export type PinnedDoc = {
   id: string;
   label: string;
   kind: string;
+  category: string;
   url: string | null;
   filename: string | null;
   mime: string | null;
+  updatedAt: string | null;
 };
 export type PinnedTask = { id: string; title: string; status: string; dueDate: string | null };
 export type PinnedActionItem = { id: string; title: string };
@@ -19,12 +21,14 @@ export type PinnedProject = {
   id: string;
   title: string;
   status: string;
+  lastUpdatedAt: string | null;
   progressPct: number;
   openTasks: number;
   totalTasks: number;
   health: "green" | "amber" | "red";
   nextMilestone: { id: string; title: string; dueDate: string | null } | null;
   docs: PinnedDoc[];
+  latestDocs: PinnedDoc[];
   tasks: PinnedTask[];
   actionItems: PinnedActionItem[];
 };
@@ -64,6 +68,7 @@ export async function listPinnedProjects(
       id: schema.linesOfBusiness.id,
       title: schema.linesOfBusiness.title,
       status: schema.linesOfBusiness.status,
+      updatedAt: schema.linesOfBusiness.updatedAt,
     })
     .from(schema.projectPins)
     .innerJoin(
@@ -96,14 +101,17 @@ export async function listPinnedProjects(
         id: schema.projectLinks.id,
         label: schema.projectLinks.label,
         kind: schema.projectLinks.kind,
+        category: schema.projectLinks.category,
         url: schema.projectLinks.url,
         filename: schema.projectLinks.originalFilename,
         mime: schema.projectLinks.mimeType,
+        updatedAt: schema.projectLinks.updatedAt,
+        createdAt: schema.projectLinks.createdAt,
         sortOrder: schema.projectLinks.sortOrder,
       })
       .from(schema.projectLinks)
       .where(inArray(schema.projectLinks.lobId, ids))
-      .orderBy(schema.projectLinks.sortOrder),
+      .orderBy(desc(sql`coalesce(${schema.projectLinks.updatedAt}, ${schema.projectLinks.createdAt})`)),
     childIds.length
       ? db
           .select({
@@ -181,19 +189,35 @@ export async function listPinnedProjects(
     const next = [...openForP].sort((a, b) =>
       (a.dueDate ?? "9999").localeCompare(b.dueDate ?? "9999"),
     )[0];
+    const docsForP = docs
+      .filter((d) => d.lobId === p.id)
+      .map((d) => ({
+        id: d.id,
+        label: d.label,
+        kind: d.kind,
+        category: d.category,
+        url: d.url,
+        filename: d.filename,
+        mime: d.mime,
+        updatedAt: (d.updatedAt ?? d.createdAt)?.toISOString() ?? null,
+      }));
+    const latestDocs = docsForP
+      .slice()
+      .sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""))
+      .slice(0, 3);
+
     return {
       id: p.id,
       title: p.title,
       status: p.status,
+      lastUpdatedAt: latestDocs[0]?.updatedAt ?? p.updatedAt.toISOString(),
       progressPct,
       openTasks: openForP.length,
       totalTasks: total,
       health,
       nextMilestone: next ? { id: next.id, title: next.title, dueDate: next.dueDate } : null,
-      docs: docs
-        .filter((d) => d.lobId === p.id)
-        .slice(0, 8)
-        .map((d) => ({ id: d.id, label: d.label, kind: d.kind, url: d.url, filename: d.filename, mime: d.mime })),
+      docs: docsForP.slice(0, 8),
+      latestDocs,
       tasks: byLob(tasks, p.id, 6).map((t) => ({ id: t.id, title: t.title, status: t.status, dueDate: t.dueDate })),
       actionItems: byLob(actionItems, p.id, 6).map((a) => ({ id: a.id, title: a.title })),
     };
