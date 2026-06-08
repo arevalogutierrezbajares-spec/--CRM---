@@ -752,21 +752,11 @@ describe("email module integration", () => {
         createdBy: owner.id,
       })
       .returning();
-    // `project` is a Line of Business option; milestones attach to a child Project.
-    const [childProject] = await db
-      .insert(schema.projects)
-      .values({
-        workspaceId: owner.workspaceId,
-        lobId: project!.id,
-        title: project!.title,
-        createdBy: owner.id,
-      })
-      .returning();
     const [milestone] = await db
       .insert(schema.milestones)
       .values({
         workspaceId: owner.workspaceId,
-        projectId: childProject.id,
+        projectId: project!.id,
         title: "Confirm shared inbox operating model",
         createdBy: owner.id,
       })

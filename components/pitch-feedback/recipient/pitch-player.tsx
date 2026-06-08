@@ -14,6 +14,7 @@ import {
 import { useMemo, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { SectionVisual } from "@/components/pitch-feedback/recipient/section-visual";
 import type {
   PitchFeedbackPersonalization,
   PitchFeedbackPrompt,
@@ -290,6 +291,7 @@ export function PitchFeedbackPlayer({
                     <h2 className="text-3xl font-semibold tracking-tight text-balance sm:text-5xl">
                       {section.title}
                     </h2>
+                    <SectionVisual visual={section.visual} sectionKey={section.key} />
                     <p className="mt-5 text-base leading-7 text-[var(--muted-foreground)] text-pretty sm:text-lg">
                       {section.body}
                     </p>
@@ -298,6 +300,17 @@ export function PitchFeedbackPlayer({
                         {section.proof}
                       </div>
                     )}
+                  </div>
+
+                  <div className="mt-7 lg:hidden">
+                    <FeedbackPanelContent
+                      contact={contact}
+                      index={index}
+                      invite={invite}
+                      section={section}
+                      answers={answers}
+                      onAnswer={setAnswer}
+                    />
                   </div>
 
                   <div className="mt-auto pt-8">
@@ -345,44 +358,79 @@ export function PitchFeedbackPlayer({
           </div>
 
           {!completed && (
-            <aside className="rounded-xl bg-[var(--card)] p-4 shadow-[inset_0_0_0_1px_var(--border)] lg:min-h-[68vh]">
-              <div className="flex items-center gap-2 text-sm font-semibold">
-                <MessageCircle className="h-4 w-4" />
-                Feedback in context
-              </div>
-              <p className="mt-2 text-xs leading-5 text-[var(--muted-foreground)]">
-                React honestly as you move through the pitch. Short, specific
-                notes are more useful than polished answers.
-              </p>
-
-              {index === 0 && invite.personalization?.welcomeNote && (
-                <div className="mt-4 rounded-lg bg-[var(--ai-bg)] p-3 text-sm leading-6 text-[var(--ai-subtext)] shadow-[inset_0_0_0_1px_var(--ai-border)]">
-                  {invite.personalization.welcomeNote}
-                </div>
-              )}
-
-              <div className="mt-4 space-y-4">
-                {section.prompts.map((prompt) => (
-                  <PromptControl
-                    key={prompt.key}
-                    prompt={prompt}
-                    value={answers[prompt.key]}
-                    onChange={(value) => setAnswer(prompt, value)}
-                  />
-                ))}
-              </div>
-
-              <div className="mt-5 flex items-center justify-between gap-3 rounded-lg bg-[var(--secondary)] p-3 text-xs text-[var(--muted-foreground)]">
-                <span>For</span>
-                <span className="min-w-0 truncate text-right font-medium text-[var(--foreground)]">
-                  {contact.name}
-                </span>
-              </div>
+            <aside className="hidden rounded-xl bg-[var(--card)] p-4 shadow-[inset_0_0_0_1px_var(--border)] lg:block lg:min-h-[68vh]">
+              <FeedbackPanelContent
+                contact={contact}
+                index={index}
+                invite={invite}
+                section={section}
+                answers={answers}
+                onAnswer={setAnswer}
+              />
             </aside>
           )}
         </section>
       </div>
     </main>
+  );
+}
+
+function FeedbackPanelContent({
+  contact,
+  index,
+  invite,
+  section,
+  answers,
+  onAnswer,
+}: {
+  contact: {
+    id: string;
+    name: string;
+    organization: string | null;
+  };
+  index: number;
+  invite: {
+    personalization: PitchFeedbackPersonalization;
+  };
+  section: PitchFeedbackSection;
+  answers: Record<string, Record<string, unknown>>;
+  onAnswer: (prompt: PitchFeedbackPrompt, value: Record<string, unknown>) => void;
+}) {
+  return (
+    <div className="rounded-xl bg-[var(--background)] p-4 shadow-[inset_0_0_0_1px_var(--border)] lg:rounded-none lg:bg-transparent lg:p-0 lg:shadow-none">
+      <div className="flex items-center gap-2 text-sm font-semibold">
+        <MessageCircle className="h-4 w-4" />
+        Feedback in context
+      </div>
+      <p className="mt-2 text-xs leading-5 text-[var(--muted-foreground)]">
+        React honestly as you move through the pitch. Short, specific notes are
+        more useful than polished answers.
+      </p>
+
+      {index === 0 && invite.personalization?.welcomeNote && (
+        <div className="mt-4 rounded-lg bg-[var(--ai-bg)] p-3 text-sm leading-6 text-[var(--ai-subtext)] shadow-[inset_0_0_0_1px_var(--ai-border)]">
+          {invite.personalization.welcomeNote}
+        </div>
+      )}
+
+      <div className="mt-4 space-y-4">
+        {section.prompts.map((prompt) => (
+          <PromptControl
+            key={prompt.key}
+            prompt={prompt}
+            value={answers[prompt.key]}
+            onChange={(value) => onAnswer(prompt, value)}
+          />
+        ))}
+      </div>
+
+      <div className="mt-5 flex items-center justify-between gap-3 rounded-lg bg-[var(--secondary)] p-3 text-xs text-[var(--muted-foreground)]">
+        <span>For</span>
+        <span className="min-w-0 truncate text-right font-medium text-[var(--foreground)]">
+          {contact.name}
+        </span>
+      </div>
+    </div>
   );
 }
 

@@ -1,0 +1,288 @@
+{
+  "name": "CaneyCloud Vision Review",
+  "description": "A private partner walkthrough for pressure-testing the CaneyCloud mission: technology, sustainability, community, and the foundation for Venezuela tourism.",
+  "audience": "partner",
+  "sections": [
+    {
+      "key": "opportunity",
+      "eyebrow": "01 · Opportunity",
+      "title": "Venezuela already has the magic.",
+      "body": "The beaches, tepuis, food, music, people, and culture are already here. The world is traveling again. The missing piece is the system that helps local communities capture the value.",
+      "proof": "UN Tourism estimates 1.5B international tourist arrivals and $1.7T in tourism receipts in 2024. Q1 2025 arrivals grew 5% year over year.",
+      "visual": {
+        "kind": "image",
+        "src": "/videos/angel-falls.jpg",
+        "alt": "Angel Falls in Canaima, Venezuela",
+        "label": "Venezuela",
+        "title": "The destination is not the problem.",
+        "caption": "Opening image. Replace with the strongest CaneyCloud or Canaima photo when the source library is ready."
+      },
+      "prompts": [
+        {
+          "key": "opportunity-reaction",
+          "label": "Does this opening land?",
+          "type": "reaction"
+        }
+      ]
+    },
+    {
+      "key": "foundation-gap",
+      "eyebrow": "02 · Gap",
+      "title": "The missing layer is the foundation.",
+      "body": "Many great operators still depend on WhatsApp, notebooks, payment screenshots, and personal trust. That can survive. It does not scale. Tourism needs bookings, payments, training, market access, connectivity, and proof.",
+      "proof": "The Caney thesis names 6 foundation gaps: connectivity, power, payments, training, market access, and trust.",
+      "visual": {
+        "kind": "placeholder",
+        "label": "Photo placeholder",
+        "title": "Operator desk: WhatsApp bookings, notebooks, receipts, and guest messages.",
+        "caption": "Source a real operator workflow photo or create a staged product shot with WhatsApp, bookings, and payment proof visible."
+      },
+      "prompts": [
+        {
+          "key": "foundation-gap-objection",
+          "label": "What feels missing or overstated?",
+          "type": "objection"
+        }
+      ]
+    },
+    {
+      "key": "local-anchor",
+      "eyebrow": "03 · Community",
+      "title": "The posada is the anchor.",
+      "body": "A posada can create jobs, buy local food, hire guides, support transport, and keep more value in the community. It just needs tools that make that easier to run.",
+      "proof": "Programa Andes Tropicales reports 375+ community microenterprises managed since 1995 across the Andes, Gran Sabana, and other regions.",
+      "visual": {
+        "kind": "image",
+        "src": "/caney.png",
+        "alt": "CaneyCloud hospitality placeholder image",
+        "label": "Local anchor",
+        "title": "One small business can connect the whole visitor economy.",
+        "caption": "Use a real posada, caney, or community hospitality image for this slide."
+      },
+      "prompts": [
+        {
+          "key": "local-anchor-score",
+          "label": "How strong is this community framing?",
+          "type": "score"
+        }
+      ]
+    },
+    {
+      "key": "vision",
+      "eyebrow": "04 · Vision",
+      "title": "Our vision is simple.",
+      "body": "A trusted tourism economy, built by Venezuelan communities and powered by technology they can actually use.",
+      "proof": "This expands the live CRM mission thread beyond posada efficiency into education, knowledge, technology access, and community impact.",
+      "visual": {
+        "kind": "brand",
+        "src": "/logos/caneycloud.svg",
+        "label": "Vision",
+        "title": "Community-owned tourism. Modern tools. Visible impact.",
+        "stat": "Simple enough to say in one sentence. Strong enough to guide the whole deck."
+      },
+      "prompts": [
+        {
+          "key": "vision-reaction",
+          "label": "Does this vision feel clear?",
+          "type": "reaction"
+        }
+      ]
+    },
+    {
+      "key": "mission",
+      "eyebrow": "05 · Mission",
+      "title": "Our mission is to build the digital foundation.",
+      "body": "CaneyCloud gives operators the tools to run, measure, and grow. Not just software. Access to knowledge, demand, financing, and proof.",
+      "proof": "Mission draft: build the digital foundation that lets Venezuelan tourism communities operate, grow, and benefit from the country's comeback.",
+      "visual": {
+        "kind": "metric",
+        "label": "Mission",
+        "stat": "3 jobs",
+        "title": "Run the business. Measure the business. Grow the business.",
+        "metrics": [
+          {
+            "value": "Run",
+            "label": "Bookings, guests, payments, operations"
+          },
+          {
+            "value": "Measure",
+            "label": "Revenue, occupancy, sourcing, training"
+          },
+          {
+            "value": "Grow",
+            "label": "Demand, standards, financing, partners"
+          }
+        ]
+      },
+      "prompts": [
+        {
+          "key": "mission-language",
+          "label": "Which words should get sharper?",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "key": "platform",
+      "eyebrow": "06 · Platform",
+      "title": "One platform, five pieces.",
+      "body": "Stays. Restaurants. WhatsApp Concierge. Academy. Community. Each piece solves a real gap in the tourism foundation.",
+      "proof": "Current CRM status: 3 CaneyCloud modules active. Stays is at 92/155 tasks. WA Concierge has been production-proven on VAV since April 2026 with 243 tests.",
+      "visual": {
+        "kind": "system",
+        "label": "Hospitality OS",
+        "title": "The platform should feel like infrastructure, not another app to learn.",
+        "points": [
+          "Stays",
+          "Restaurants",
+          "WhatsApp Concierge",
+          "Academy",
+          "Community",
+          "Partner data layer"
+        ]
+      },
+      "prompts": [
+        {
+          "key": "platform-clarity",
+          "label": "Is the platform simple enough?",
+          "type": "reaction"
+        }
+      ]
+    },
+    {
+      "key": "measured-posada",
+      "eyebrow": "07 · Trust",
+      "title": "Measured businesses can grow.",
+      "body": "When bookings, revenue, guests, payments, training, and local sourcing are visible, a posada becomes easier to support, finance, and improve.",
+      "proof": "The internal Caney thesis says: a posada running on CaneyCloud is a measured posada, and measured posadas are the only ones you can lend against.",
+      "visual": {
+        "kind": "metric",
+        "label": "Trust layer",
+        "stat": "7 signals",
+        "title": "A small operator becomes legible to partners, funders, and communities.",
+        "metrics": [
+          {
+            "value": "Bookings",
+            "label": "Demand and seasonality"
+          },
+          {
+            "value": "Revenue",
+            "label": "Cash flow and growth"
+          },
+          {
+            "value": "Sourcing",
+            "label": "Local value retained"
+          }
+        ]
+      },
+      "prompts": [
+        {
+          "key": "measured-posada-score",
+          "label": "How convincing is this trust layer?",
+          "type": "score"
+        }
+      ]
+    },
+    {
+      "key": "sustainability",
+      "eyebrow": "08 · Sustainability",
+      "title": "Impact should be visible.",
+      "body": "Sustainability cannot just be a claim. We should track local sourcing, jobs, wages, people trained, projects funded, conservation activity, and leakage avoided.",
+      "proof": "The Caney impact framework tracks occupancy, ADR, RevPAR, jobs, wages, local sourcing, procurement, training, and community outcomes.",
+      "visual": {
+        "kind": "impact",
+        "label": "Impact dashboard",
+        "title": "Measure the things that prove tourism is helping people and places.",
+        "metrics": [
+          {
+            "value": "Jobs",
+            "label": "Local people employed"
+          },
+          {
+            "value": "Wages",
+            "label": "Income created locally"
+          },
+          {
+            "value": "Training",
+            "label": "People certified and promoted"
+          },
+          {
+            "value": "Leakage",
+            "label": "Money kept in the community"
+          }
+        ]
+      },
+      "prompts": [
+        {
+          "key": "sustainability-missing",
+          "label": "What impact metric would you add?",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "key": "lighthouse",
+      "eyebrow": "09 · First step",
+      "title": "Start with lighthouse communities.",
+      "body": "Do not start everywhere. Start with trusted operators and places that can prove the model. Then use the proof to bring in more partners, better standards, and more capital.",
+      "proof": "Current targets include 5 paying posadas, 100 verified VAV providers, Anabella's Circulo de Excelencia intro, and Ucaima as a potential lighthouse partner.",
+      "visual": {
+        "kind": "map",
+        "label": "Lighthouse rollout",
+        "title": "Start focused. Prove it. Expand with trust.",
+        "points": [
+          "Canaima / Ucaima",
+          "Los Roques",
+          "Andes",
+          "Caracas",
+          "First 5 posadas"
+        ],
+        "caption": "Map is a placeholder. Replace with a real Venezuela route/community map once the first lighthouse list is locked."
+      },
+      "prompts": [
+        {
+          "key": "lighthouse-intros",
+          "label": "Who should be in the first lighthouse network?",
+          "type": "intro"
+        }
+      ]
+    },
+    {
+      "key": "about-us",
+      "eyebrow": "10 · About us",
+      "title": "We are building for the long term.",
+      "body": "Tomas Gutierrez. Joe Arevalo. Charles Brewer. A builder-led team working across the tourism stack: marketplace, operations, concierge, training, transport, community capital, and partner relationships.",
+      "proof": "The active ecosystem includes CaneyCloud, VAV, WA Concierge, RUTA, Caney Academy, live CRM relationships, posada leads, and community action items.",
+      "visual": {
+        "kind": "people",
+        "label": "About us",
+        "title": "Three names. No titles yet. One long-term Venezuela thesis.",
+        "points": [
+          "Tomas Gutierrez",
+          "Joe Arevalo",
+          "Charles Brewer"
+        ],
+        "caption": "Last slide only. Add portraits later if the team wants a more personal version."
+      },
+      "prompts": [
+        {
+          "key": "final-confidence",
+          "label": "Overall confidence",
+          "type": "score",
+          "required": true
+        },
+        {
+          "key": "final-feedback",
+          "label": "Most important feedback",
+          "type": "final",
+          "required": true
+        },
+        {
+          "key": "next-person",
+          "label": "Who else should see this?",
+          "type": "intro"
+        }
+      ]
+    }
+  ]
+}
