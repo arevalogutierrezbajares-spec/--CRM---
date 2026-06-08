@@ -12,6 +12,7 @@ import {
   time,
   primaryKey,
   uniqueIndex,
+  index,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 
@@ -341,6 +342,7 @@ export type PitchFeedbackSectionSnapshot = Array<{
 export const emailProviderKind = pgEnum("email_provider_kind", [
   "sandbox",
   "microsoft_365",
+  "zoho_mail",
 ]);
 
 export const emailConnectionStatus = pgEnum("email_connection_status", [
@@ -360,6 +362,21 @@ export const emailMailboxStatus = pgEnum("email_mailbox_status", [
   "paused",
   "error",
   "deactivated",
+]);
+
+export const emailProvisioningKind = pgEnum("email_provisioning_kind", [
+  "import_existing",
+  "shared_mailbox",
+  "team_member",
+]);
+
+export const emailProvisioningStatus = pgEnum("email_provisioning_status", [
+  "requested",
+  "provider_pending",
+  "provider_ready",
+  "completed",
+  "failed",
+  "cancelled",
 ]);
 
 export const emailThreadStatus = pgEnum("email_thread_status", [
@@ -2286,6 +2303,8 @@ export const emailMailboxes = pgTable(
         sendAsDeniedUserIds?: string[];
         folders?: string[];
         lastDeltaToken?: string;
+        zohoAccountId?: string;
+        zohoInboxFolderId?: string;
       }>()
       .notNull()
       .default({}),
@@ -2342,6 +2361,89 @@ export const emailMailboxAccess = pgTable(
     uniqMailboxUser: uniqueIndex("email_mailbox_access_mailbox_user_uniq").on(
       t.mailboxId,
       t.userId,
+    ),
+  }),
+);
+
+export const emailProvisioningRequests = pgTable(
+  "email_provisioning_requests",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    providerConnectionId: uuid("provider_connection_id").references(
+      () => emailProviderConnections.id,
+      { onDelete: "set null" },
+    ),
+    kind: emailProvisioningKind("kind").notNull(),
+    status: emailProvisioningStatus("status").notNull().default("requested"),
+    targetEmail: text("target_email").notNull(),
+    displayName: text("display_name").notNull(),
+    targetUserId: uuid("target_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    targetMailboxId: uuid("target_mailbox_id").references(() => emailMailboxes.id, {
+      onDelete: "set null",
+    }),
+    requestedBy: uuid("requested_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    completedBy: uuid("completed_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    desiredAccess: jsonb("desired_access")
+      .$type<
+        Array<{
+          userId: string;
+          userEmail?: string;
+          fullAccess: boolean;
+          sendAs: boolean;
+          rights: {
+            canView: boolean;
+            canReply: boolean;
+            canSendAs: boolean;
+            canAssign: boolean;
+            canManageAccess: boolean;
+            canManageSettings: boolean;
+          };
+        }>
+      >()
+      .notNull()
+      .default([]),
+    providerPlan: jsonb("provider_plan")
+      .$type<{
+        provider?: "sandbox" | "microsoft_365" | "zoho_mail";
+        mode?: "automatic" | "manual" | "hybrid";
+        manualSteps?: string[];
+        notes?: string[];
+      }>()
+      .notNull()
+      .default({}),
+    providerResult: jsonb("provider_result")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default({}),
+    providerError: text("provider_error"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+    nextCheckAt: timestamp("next_check_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    workspaceStatusIdx: index("email_provisioning_requests_workspace_status_idx").on(
+      t.workspaceId,
+      t.status,
+      t.createdAt,
+    ),
+    workspaceTargetIdx: index("email_provisioning_requests_workspace_target_idx").on(
+      t.workspaceId,
+      t.targetEmail,
     ),
   }),
 );
