@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ExternalLink, FileText, ImageOff } from "lucide-react";
 import { materialType } from "@/lib/materials/material-type";
 import type { PresentMaterial } from "./present-stage";
@@ -34,9 +34,11 @@ export function MaterialRenderer({ material }: { material: PresentMaterial }) {
     }
     if (type.key === "html") {
       // Served via our proxy so the Content-Type is text/html (Supabase stores
-      // it as text/plain, which renders as source). Falls back to the raw URL.
+      // it as text/plain, which renders as source). Rendered on a fixed 1280×720
+      // canvas scaled to fit — decks built for a desktop stage (fixed-width,
+      // center-origin) otherwise mis-center and clip on narrow/phone viewports.
       return (
-        <Frame
+        <DeckFrame
           src={`/api/materials/${material.id}/view`}
           title={material.label}
           fallbackHref={material.fileUrl}
@@ -74,6 +76,80 @@ export function MaterialRenderer({ material }: { material: PresentMaterial }) {
 
   // doc / note → typographic card (no inline editor in present mode).
   return <TextCard material={material} />;
+}
+
+/**
+ * HTML decks on a fixed 1280×720 canvas, CSS-scaled to fit the available space.
+ * Decks are typically built for a desktop stage (fixed-width #stage, center
+ * transform-origin); on a narrow/phone viewport they mis-center and clip. By
+ * always giving the iframe a 1280×720 viewport and scaling the element, the deck
+ * renders correctly everywhere — full and centered on laptop, a clean
+ * width-filling slide on phone.
+ */
+const DECK_W = 1280;
+const DECK_H = 720;
+
+function DeckFrame({
+  src,
+  title,
+  fallbackHref,
+}: {
+  src: string;
+  title: string;
+  fallbackHref?: string;
+}) {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(0);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    // ResizeObserver fires once on observe + on every resize. setState here is
+    // in an async callback (not the effect body), so it's lint-safe.
+    const ro = new ResizeObserver(() => {
+      const { width, height } = el.getBoundingClientRect();
+      const s = Math.min(width / DECK_W, height / DECK_H);
+      setScale(s > 0 && Number.isFinite(s) ? s : 0);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  return (
+    <div ref={wrapRef} className="relative h-full w-full overflow-hidden">
+      {(!loaded || scale === 0) && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-neutral-900">
+          <div className="h-7 w-7 animate-spin rounded-full border-2 border-white/20 border-t-white/80" />
+        </div>
+      )}
+      {scale > 0 && (
+        <iframe
+          src={src}
+          title={title}
+          onLoad={() => setLoaded(true)}
+          className="absolute left-1/2 top-1/2 border-0 bg-white"
+          style={{
+            width: DECK_W,
+            height: DECK_H,
+            transform: `translate(-50%, -50%) scale(${scale})`,
+            transformOrigin: "center center",
+          }}
+          sandbox="allow-scripts allow-popups allow-forms"
+        />
+      )}
+      {fallbackHref && (
+        <a
+          href={fallbackHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="absolute right-4 top-4 z-20 flex items-center gap-1.5 rounded-md bg-black/70 px-3 py-1.5 text-xs font-medium text-white backdrop-blur hover:bg-black/90"
+        >
+          <ExternalLink className="h-3.5 w-3.5" /> Open if blank
+        </a>
+      )}
+    </div>
+  );
 }
 
 /** Sandboxed iframe with a load shimmer so material switches feel instant. */
