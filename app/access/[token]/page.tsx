@@ -214,7 +214,7 @@ function ShareAction({
             // text/plain). Works even for view-only shares.
             <Button asChild variant="outline" size="sm">
               <a
-                href={`/access/${token}/view/${share.id}`}
+                href={`/access/${token}/deck/${share.id}`}
                 target="_blank"
                 rel="noopener noreferrer"
               >
