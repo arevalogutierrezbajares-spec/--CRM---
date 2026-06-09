@@ -11,5 +11,7 @@ export default async function StageLayout({
   children: React.ReactNode;
 }) {
   await requireUser();
-  return <div className="min-h-screen bg-black text-white">{children}</div>;
+  // Definite viewport height (dvh tracks mobile browser chrome) so the present
+  // stage's h-full chain resolves — otherwise iframes collapse to a thin band.
+  return <div className="h-dvh overflow-hidden bg-black text-white">{children}</div>;
 }

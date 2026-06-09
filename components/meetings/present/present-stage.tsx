@@ -155,12 +155,13 @@ export function PresentStage({
 
   return (
     <div
-      className="relative flex min-h-screen flex-col overflow-hidden bg-black"
+      className="relative flex h-full flex-col overflow-hidden bg-black"
       onMouseMove={nudgeControls}
       onTouchStart={nudgeControls}
     >
-      {/* Stage */}
-      <div className="flex flex-1 items-center justify-center overflow-hidden p-4 sm:p-8">
+      {/* Stage — min-h-0 lets this flex child take a definite height so the
+          inner h-full (and the deck iframe) fill it instead of collapsing. */}
+      <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden p-3 sm:p-6">
         <div
           className={
             device === "phone"
