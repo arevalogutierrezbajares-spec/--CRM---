@@ -16,6 +16,7 @@ import {
   type PublicPartnerRoom,
 } from "@/db/queries/partner-access";
 import { partnerKindLabel } from "@/lib/partner-access";
+import { materialType } from "@/lib/materials/material-type";
 
 export const dynamic = "force-dynamic";
 
@@ -196,23 +197,47 @@ function ShareAction({
     );
   }
 
-  if (
-    share.kindSnapshot === "file" &&
-    share.storagePath &&
-    share.permissions.includes("download")
-  ) {
-    return (
-      <Button asChild size="sm" className="shrink-0">
-        <a
-          href={`/access/${token}/download/${share.id}`}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Download className="h-4 w-4" />
-          Download
-        </a>
-      </Button>
-    );
+  if (share.kindSnapshot === "file" && share.storagePath) {
+    const isHtmlDeck =
+      materialType(
+        share.kindSnapshot,
+        share.mimeType,
+        share.originalFilename ?? share.labelSnapshot,
+      ).key === "html";
+    const canDownload = share.permissions.includes("download");
+
+    if (isHtmlDeck || canDownload) {
+      return (
+        <div className="flex shrink-0 items-center gap-2">
+          {isHtmlDeck && (
+            // Renders the deck as a page via our proxy (Supabase stores it as
+            // text/plain). Works even for view-only shares.
+            <Button asChild variant="outline" size="sm">
+              <a
+                href={`/access/${token}/view/${share.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <ArrowUpRight className="h-4 w-4" />
+                View deck
+              </a>
+            </Button>
+          )}
+          {canDownload && (
+            <Button asChild size="sm">
+              <a
+                href={`/access/${token}/download/${share.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <Download className="h-4 w-4" />
+                Download
+              </a>
+            </Button>
+          )}
+        </div>
+      );
+    }
   }
 
   return (
