@@ -13,17 +13,16 @@ export type DashWidget = { id: string; hidden: boolean; size: WidgetSize };
  *        the right rail (no longer a grid widget).
  *   v3 — Tasks/AI/Scorecard full-width stacked (no leftover grid gaps); Pinned
  *        pairs with Relationships on its row, Tasks sits full-width beneath.
+ *   v4 — Relationships moved off Home; KPI motion absorbs the separate KPI box.
  */
-export const LAYOUT_VERSION = 3;
+export const LAYOUT_VERSION = 4;
 
 /** Canonical widgets + default order/size. New widgets append here.
  *  NOTE: `action_items` intentionally lives in the right rail now, not the grid.
- *  Sizes chosen so every row fills cleanly (no empty trailing cells):
- *  Pinned(8)+Relationships(4) share a row; Tasks/AI/Scorecard each span full. */
+ *  Sizes chosen so every row fills cleanly after Relationship Health left Home. */
 export const DEFAULT_WIDGETS: DashWidget[] = [
   { id: "town_hall", hidden: false, size: "full" },
-  { id: "pinned", hidden: false, size: "wide" },
-  { id: "relationships", hidden: false, size: "standard" },
+  { id: "pinned", hidden: false, size: "full" },
   { id: "tasks", hidden: false, size: "full" },
   { id: "ai", hidden: false, size: "full" },
   { id: "scorecard", hidden: false, size: "full" },
@@ -33,7 +32,6 @@ export const WIDGET_LABELS: Record<string, string> = {
   town_hall: "Town Hall",
   pinned: "Pinned projects",
   tasks: "Tasks",
-  relationships: "Relationships",
   scorecard: "Scorecard",
   ai: "AI assistant",
 };

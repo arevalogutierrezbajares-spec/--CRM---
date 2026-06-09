@@ -5,12 +5,11 @@ import Link from "next/link";
 import {
   Activity,
   ArrowUpRight,
-  FileText,
   Flag,
-  Megaphone,
   PersonStanding,
+  Radio,
   Rocket,
-  type LucideIcon,
+  UserRound,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DashCard } from "../shared/dash-card";
@@ -20,12 +19,12 @@ import type { HomeCommandMetric } from "@/db/queries/dashboard";
 
 const FALLBACK_METRICS: HomeCommandMetric[] = [
   {
-    id: "clients",
-    label: "Client motion",
+    id: "beta_customers",
+    label: "Beta customers",
     value: 0,
-    subline: "CRM read unavailable",
-    detail: "Client signal data did not load. Check the Home database warning.",
-    href: "/contacts",
+    subline: "KPI read unavailable",
+    detail: "Beta customers data did not load. Check the Home database warning.",
+    href: "/priorities",
     progressPct: 0,
     tone: "blue",
   },
@@ -42,23 +41,13 @@ const FALLBACK_METRICS: HomeCommandMetric[] = [
   },
   {
     id: "influencers",
-    label: "Influencer engine",
+    label: "Influencers in pipeline",
     value: 0,
-    subline: "CRM read unavailable",
-    detail: "Influencer signal data did not load. Check the Home database warning.",
-    href: "/contacts",
+    subline: "KPI read unavailable",
+    detail: "Influencer pipeline data did not load. Check the Home database warning.",
+    href: "/priorities",
     progressPct: 0,
     tone: "purple",
-  },
-  {
-    id: "docs",
-    label: "Docs moved",
-    value: 0,
-    subline: "doc read unavailable",
-    detail: "Document activity did not load. Check the Home database warning.",
-    href: "/lob",
-    progressPct: 0,
-    tone: "amber",
   },
 ];
 
@@ -121,11 +110,30 @@ function Scene({ metric, color }: { metric: HomeCommandMetric; color: string }) 
     const dots = Math.max(0, Math.min(metric.value, CAP));
     const overflow = Math.max(0, metric.value - dots);
     return (
-      <div className="mt-3 flex h-9 items-center gap-1.5" aria-hidden>
-        <Megaphone
-          size={20}
-          style={{ color, animation: "home-kpi-pulse 1.5s ease-in-out infinite" }}
-        />
+      <div className="mt-3 flex h-9 items-center gap-2.5" aria-hidden>
+        {/* Broadcasting beacon: the radio "transmits" with expanding signal rings. */}
+        <span className="relative inline-flex h-5 w-5 items-center justify-center">
+          <span
+            className="absolute inset-0 rounded-full"
+            style={{
+              border: `1.5px solid ${color}`,
+              animation: "home-kpi-broadcast 1.8s ease-out infinite",
+            }}
+          />
+          <span
+            className="absolute inset-0 rounded-full"
+            style={{
+              border: `1.5px solid ${color}`,
+              animation: "home-kpi-broadcast 1.8s ease-out infinite",
+              animationDelay: "0.9s",
+            }}
+          />
+          <Radio
+            size={20}
+            className="relative"
+            style={{ color, animation: "home-kpi-pulse 1.5s ease-in-out infinite" }}
+          />
+        </span>
         <div className="flex items-center gap-1">
           {Array.from({ length: dots }).map((_, i) => (
             <span
@@ -148,9 +156,7 @@ function Scene({ metric, color }: { metric: HomeCommandMetric; color: string }) 
     );
   }
 
-  // clients (walking figures) + docs (page stack) share a row-of-icons scene.
-  const Icon: LucideIcon = metric.id === "clients" ? PersonStanding : FileText;
-  const anim = metric.id === "clients" ? "home-kpi-walk" : "home-kpi-tick";
+  // Beta customers keep the old Client Motion walking-figure language.
   const n = Math.max(0, Math.min(metric.value, CAP));
   const overflow = Math.max(0, metric.value - n);
   return (
@@ -159,12 +165,12 @@ function Scene({ metric, color }: { metric: HomeCommandMetric; color: string }) 
         <span className="text-[12px] text-text-tertiary">—</span>
       ) : (
         Array.from({ length: n }).map((_, i) => (
-          <Icon
+          <PersonStanding
             key={i}
-            size={metric.id === "clients" ? 19 : 16}
+            size={19}
             style={{
               color,
-              animation: `${anim} 1.25s ease-in-out infinite`,
+              animation: "home-kpi-walk 1.25s ease-in-out infinite",
               animationDelay: `${i * 0.1}s`,
             }}
           />
@@ -204,18 +210,35 @@ export function DynamicKpiStrip({
   return (
     <DashCard className="home-kpi-motion overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <SectionLabel icon={Activity}>Home motion</SectionLabel>
+        <div className="flex items-center gap-2">
+          <SectionLabel icon={Activity}>KPIs</SectionLabel>
+          {/* Placeholder "client" — peeks in and out, pixar-style squash & stretch. */}
+          <span
+            className="inline-flex h-5 w-5 items-center justify-center"
+            aria-hidden
+            title="client (placeholder)"
+          >
+            <UserRound
+              size={16}
+              style={{
+                color: "var(--purple-text)",
+                transformOrigin: "bottom center",
+                animation: "home-client-peek 3.6s ease-in-out infinite",
+              }}
+            />
+          </span>
+        </div>
         <span className="rounded-full bg-surface px-2 py-1 text-tiny text-text-tertiary">
-          {showingFallback ? "CRM signal fallback" : "Live CRM signals"}
+          {showingFallback ? "KPI fallback" : "Live KPI motion"}
         </span>
       </div>
       {showingFallback && (
         <p className="-mt-1 mb-2 text-[12px] text-text-secondary">
-          Showing the KPI scene shell while the CRM signal query recovers.
+          Showing the KPI scene shell while the KPI query recovers.
         </p>
       )}
 
-      <div className="mt-2.5 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-2.5 grid gap-2 md:grid-cols-3">
         {visibleMetrics.map((metric) => {
           const tone = TONE[metric.tone];
           const isSelected = selected.id === metric.id;
@@ -284,7 +307,7 @@ export function DynamicKpiStrip({
           className="inline-flex min-h-[40px] shrink-0 items-center justify-center gap-1.5 rounded-md border px-3 text-[12px] font-medium text-text-primary transition-colors hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
           style={{ borderColor: "var(--border-default)" }}
         >
-          Open source <ArrowUpRight size={13} />
+          Open KPI <ArrowUpRight size={13} />
         </Link>
       </div>
 
@@ -327,13 +350,44 @@ export function DynamicKpiStrip({
             transform: scale(1.15);
           }
         }
-        @keyframes home-kpi-tick {
-          0%,
-          100% {
-            transform: translateY(0);
+        /* Expanding signal rings for the influencer "broadcast" beacon. */
+        @keyframes home-kpi-broadcast {
+          0% {
+            opacity: 0.6;
+            transform: scale(0.45);
           }
-          50% {
-            transform: translateY(-3px);
+          100% {
+            opacity: 0;
+            transform: scale(2);
+          }
+        }
+        /* Peek-a-boo client: pops in with an overshoot, settles, pops back out. */
+        @keyframes home-client-peek {
+          0%,
+          10% {
+            opacity: 0;
+            transform: translateY(7px) scale(0.2);
+          }
+          20% {
+            opacity: 1;
+            transform: translateY(-2px) scale(1.18);
+          }
+          28% {
+            transform: translateY(1px) scale(0.92);
+          }
+          36%,
+          68% {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+          80% {
+            opacity: 1;
+            transform: translateY(-2px) scale(1.12);
+          }
+          92%,
+          100% {
+            opacity: 0;
+            transform: translateY(7px) scale(0.2);
           }
         }
         @media (prefers-reduced-motion: reduce) {

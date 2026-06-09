@@ -10,10 +10,9 @@ const {
   projects,
   linesOfBusiness,
   contacts,
-  contactTags,
+  keyResults,
+  objectives,
   pipelineStages,
-  projectLinks,
-  tags,
   touches,
   users,
 } = schema;
@@ -115,7 +114,7 @@ async function listTasksDueBy(
 export type HomeCommandMetricTone = "blue" | "green" | "amber" | "purple";
 
 export type HomeCommandMetric = {
-  id: "clients" | "vav_launch" | "influencers" | "docs";
+  id: "beta_customers" | "vav_launch" | "influencers";
   label: string;
   value: number;
   suffix?: string;
@@ -126,189 +125,108 @@ export type HomeCommandMetric = {
   tone: HomeCommandMetricTone;
 };
 
-function includesAny(value: string | null | undefined, needles: string[]): boolean {
-  const haystack = (value ?? "").toLowerCase();
-  return needles.some((needle) => haystack.includes(needle));
+type HomeMotionKpiRow = {
+  title: string;
+  objectiveTitle: string;
+  startValue: number;
+  target: number;
+  current: number;
+  unit: string | null;
+  direction: "higher" | "lower";
+};
+
+function kpiProgress(kpi: HomeMotionKpiRow | null): number {
+  if (!kpi) return 0;
+  const span =
+    kpi.direction === "higher"
+      ? kpi.target - kpi.startValue
+      : kpi.startValue - kpi.target;
+  const moved =
+    kpi.direction === "higher"
+      ? kpi.current - kpi.startValue
+      : kpi.startValue - kpi.current;
+  if (span === 0) return kpi.current === kpi.target ? 1 : 0;
+  return Math.max(0, Math.min(1, moved / span));
 }
 
-function daysAgo(days: number): Date {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  return d;
+function findKpi(rows: HomeMotionKpiRow[], match: RegExp): HomeMotionKpiRow | null {
+  return rows.find((row) => match.test(row.title.toLowerCase())) ?? null;
 }
 
-function timeMs(value: Date | string | null | undefined): number | null {
-  if (!value) return null;
-  const ms = value instanceof Date ? value.getTime() : Date.parse(value);
-  return Number.isFinite(ms) ? ms : null;
+function whole(value: number): number {
+  return Math.round(value);
+}
+
+function targetSubline(kpi: HomeMotionKpiRow | null, fallbackUnit: string): string {
+  if (!kpi) return "KPI not configured";
+  return `${whole(kpi.target)} target ${kpi.unit ?? fallbackUnit}`;
+}
+
+function kpiDetail(kpi: HomeMotionKpiRow | null, fallback: string): string {
+  if (!kpi) return fallback;
+  return `${kpi.title} under ${kpi.objectiveTitle}.`;
 }
 
 export async function homeCommandMetrics(workspaceId: string): Promise<HomeCommandMetric[]> {
-  const [contactRows, vavRows, latestDocs] = await Promise.all([
-    db
-      .select({
-        id: contacts.id,
-        relationshipType: contacts.relationshipType,
-        organization: contacts.organization,
-        lastTouchAt: contacts.lastTouchAt,
-      })
-      .from(contacts)
-      .where(and(eq(contacts.workspaceId, workspaceId), eq(contacts.archived, false))),
-    db
-      .select({
-        id: linesOfBusiness.id,
-        title: linesOfBusiness.title,
-        status: linesOfBusiness.status,
-        statusText: linesOfBusiness.statusText,
-        updatedAt: linesOfBusiness.updatedAt,
-      })
-      .from(linesOfBusiness)
-      .where(
-        and(
-          eq(linesOfBusiness.workspaceId, workspaceId),
-          sql`concat_ws(' ', ${linesOfBusiness.title}, ${linesOfBusiness.tagline}, ${linesOfBusiness.summary}, ${linesOfBusiness.statusText}, ${linesOfBusiness.primaryUrl}, ${linesOfBusiness.repoUrl}) ILIKE '%vav%'`,
-        ),
-      )
-      .orderBy(desc(linesOfBusiness.updatedAt))
-      .limit(5),
-    db
-      .select({
-        id: projectLinks.id,
-        lobId: projectLinks.lobId,
-        label: projectLinks.label,
-        touchedAt: sql<Date>`coalesce(${projectLinks.updatedAt}, ${projectLinks.createdAt})`,
-      })
-      .from(projectLinks)
-      .where(eq(projectLinks.workspaceId, workspaceId))
-      .orderBy(desc(sql`coalesce(${projectLinks.updatedAt}, ${projectLinks.createdAt})`))
-      .limit(25),
-  ]);
-
-  const contactIds = contactRows.map((c) => c.id);
-  const tagRows = contactIds.length
-    ? await db
-        .select({
-          contactId: contactTags.contactId,
-          tag: tags.name,
-        })
-        .from(contactTags)
-        .innerJoin(tags, eq(tags.id, contactTags.tagId))
-        .where(inArray(contactTags.contactId, contactIds))
-    : [];
-
-  const tagsByContact = new Map<string, string[]>();
-  for (const row of tagRows) {
-    const list = tagsByContact.get(row.contactId) ?? [];
-    list.push(row.tag.toLowerCase());
-    tagsByContact.set(row.contactId, list);
-  }
-
-  const clientWords = ["client", "customer", "buyer", "hospitality", "tourism", "travel"];
-  const influencerWords = ["influencer", "creator", "ambassador", "press", "media", "journalist"];
-  const taggedClientIds = new Set(
-    contactRows
-      .filter((c) => (tagsByContact.get(c.id) ?? []).some((tag) => includesAny(tag, clientWords)))
-      .map((c) => c.id),
-  );
-  const clientRows =
-    taggedClientIds.size > 0
-      ? contactRows.filter((c) => taggedClientIds.has(c.id))
-      : contactRows.filter((c) => c.relationshipType === "lead" || c.relationshipType === "partner");
-  const influencerRows = contactRows.filter((c) => {
-    const tagHit = (tagsByContact.get(c.id) ?? []).some((tag) => includesAny(tag, influencerWords));
-    return tagHit || includesAny(c.organization, influencerWords);
-  });
-  const touchedCutoff = daysAgo(30).getTime();
-  const clientsTouched = clientRows.filter((c) => {
-    const touchedAt = timeMs(c.lastTouchAt);
-    return touchedAt !== null && touchedAt >= touchedCutoff;
-  }).length;
-  const influencersTouched = influencerRows.filter((c) => {
-    const touchedAt = timeMs(c.lastTouchAt);
-    return touchedAt !== null && touchedAt >= touchedCutoff;
-  }).length;
-
-  let vavProgress = 0;
-  let vavOpenTasks = 0;
-  if (vavRows.length > 0) {
-    const vavIds = vavRows.map((p) => p.id);
-    const childProjects = await db
-      .select({ id: projects.id })
-      .from(projects)
-      .where(inArray(projects.lobId, vavIds));
-    const childIds = childProjects.map((p) => p.id);
-    if (childIds.length > 0) {
-      const taskRows = await db
-        .select({
-          status: milestones.status,
-        })
-        .from(milestones)
-        .where(inArray(milestones.projectId, childIds));
-      const done = taskRows.filter((t) => t.status === "done").length;
-      vavOpenTasks = taskRows.filter((t) => t.status !== "done" && t.status !== "cancelled").length;
-      vavProgress = taskRows.length > 0 ? Math.round((done / taskRows.length) * 100) : 0;
-    }
-    if (vavProgress === 0) {
-      vavProgress = vavRows[0]?.status === "done" ? 100 : vavRows[0]?.status === "waiting" ? 45 : 65;
-    }
-  }
-
-  const docsCutoff = daysAgo(14).getTime();
-  const docsTouched = latestDocs.filter((d) => {
-    const touchedAt = timeMs(d.touchedAt);
-    return touchedAt !== null && touchedAt >= docsCutoff;
-  }).length;
-  const latestDoc = latestDocs[0] ?? null;
-
-  const totalContacts = Math.max(contactRows.length, 1);
-  const clientProgress = Math.round((clientRows.length / totalContacts) * 100);
-  const influencerProgress =
-    influencerRows.length > 0 ? Math.round((influencersTouched / influencerRows.length) * 100) : 0;
+  const kpis: HomeMotionKpiRow[] = await db
+    .select({
+      title: keyResults.title,
+      objectiveTitle: objectives.title,
+      startValue: keyResults.startValue,
+      target: keyResults.target,
+      current: keyResults.current,
+      unit: keyResults.unit,
+      direction: keyResults.direction,
+    })
+    .from(keyResults)
+    .innerJoin(objectives, eq(objectives.id, keyResults.objectiveId))
+    .where(and(eq(keyResults.workspaceId, workspaceId), eq(keyResults.isKpi, true)))
+    .orderBy(asc(keyResults.sortOrder))
+    .limit(8)
+    .then((rows) =>
+      rows.map((row) => ({
+        ...row,
+        direction: row.direction as "higher" | "lower",
+      })),
+    );
+  const betaCustomers = findKpi(kpis, /beta customer/);
+  const vavLaunch = findKpi(kpis, /vav/);
+  const influencers = findKpi(kpis, /influencer/);
+  const betaPct = Math.round(kpiProgress(betaCustomers) * 100);
+  const vavPct = Math.round(kpiProgress(vavLaunch) * 100);
+  const influencerPct = Math.round(kpiProgress(influencers) * 100);
 
   return [
     {
-      id: "clients",
-      label: "Client motion",
-      value: clientRows.length,
-      subline: `${clientsTouched} touched in 30 days`,
-      detail:
-        taggedClientIds.size > 0
-          ? "Counted from client and customer tags."
-          : "Counted from lead and partner relationships.",
-      href: "/contacts",
-      progressPct: clientProgress,
+      id: "beta_customers",
+      label: "Beta customers",
+      value: whole(betaCustomers?.current ?? 0),
+      subline: targetSubline(betaCustomers, "customers"),
+      detail: kpiDetail(betaCustomers, "Add the beta customers KPI in Workspace settings."),
+      href: betaCustomers ? "/priorities" : "/workspace",
+      progressPct: betaPct,
       tone: "blue",
     },
     {
       id: "vav_launch",
       label: "VAV launch",
-      value: vavProgress,
+      value: vavPct,
       suffix: "%",
-      subline: vavRows[0]?.statusText ?? `${vavOpenTasks} open launch tasks`,
-      detail: vavRows[0]?.title ? `${vavRows[0].title} is the active launch record.` : "No VAV project found yet.",
-      href: vavRows[0]?.id ? `/lob/${vavRows[0].id}` : "/lob",
-      progressPct: vavProgress,
+      subline: vavPct >= 100 ? "soft launch complete" : "soft launch pending",
+      detail: kpiDetail(vavLaunch, "Add the VAV launch KPI in Workspace settings."),
+      href: vavLaunch ? "/priorities" : "/workspace",
+      progressPct: vavPct,
       tone: "green",
     },
     {
       id: "influencers",
-      label: "Influencer engine",
-      value: influencerRows.length,
-      subline: `${influencersTouched} touched in 30 days`,
-      detail: "Counted from influencer, creator, ambassador, press and media signals.",
-      href: "/contacts",
-      progressPct: influencerProgress,
+      label: "Influencers in pipeline",
+      value: whole(influencers?.current ?? 0),
+      subline: targetSubline(influencers, "influencers"),
+      detail: kpiDetail(influencers, "Add the influencers in pipeline KPI in Workspace settings."),
+      href: influencers ? "/priorities" : "/workspace",
+      progressPct: influencerPct,
       tone: "purple",
-    },
-    {
-      id: "docs",
-      label: "Docs moved",
-      value: docsTouched,
-      subline: "updated in 14 days",
-      detail: latestDoc ? `Latest: ${latestDoc.label}` : "No recent document activity.",
-      href: latestDoc ? `/lob/${latestDoc.lobId}` : "/lob",
-      progressPct: Math.min(100, docsTouched * 12),
-      tone: "amber",
     },
   ];
 }

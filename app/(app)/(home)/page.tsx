@@ -28,7 +28,7 @@ import { DEFAULT_TOWN_HALL_FEED_LIMIT, listTownHallFeed, type FeedItem } from "@
 import { getWorkspaceCountdown, type WorkspaceCountdown } from "@/db/queries/workspace-settings";
 import { listInitiativesForPicker, type InitiativePick } from "@/db/queries/item-initiatives";
 import { listPinnedProjects, listRecentProjects, type PinnedProject } from "@/db/queries/pins";
-import { listScorecard, listKpis, quarterOf, type ScorecardRow, type KpiRow } from "@/db/queries/okrs";
+import { listScorecard, quarterOf, type ScorecardRow } from "@/db/queries/okrs";
 import { getDashboardLayout } from "@/db/queries/dashboard-layout";
 import { DEFAULT_WIDGETS, type DashWidget } from "@/lib/dashboard/layout";
 import { WeeklyView } from "@/components/dashboard/weekly/weekly-view";
@@ -49,7 +49,6 @@ import {
   meetingDaysThisMonth,
   monthStats,
   pipelineSnapshot,
-  relationshipHealth,
   startOfMonth,
   startOfWeek,
   topAccountsThisMonth,
@@ -60,7 +59,6 @@ import {
   type DashTask,
   type HomeCommandMetric,
   type PipelineStageBar,
-  type RelationshipRow,
   type TopAccount,
 } from "@/db/queries/dashboard";
 import { listBlockedProjects, type BlockedProject, type DueItem } from "@/db/queries/this-week";
@@ -104,12 +102,12 @@ const EMPTY_MONTH_STATS = {
 
 const FALLBACK_COMMAND_METRICS: HomeCommandMetric[] = [
   {
-    id: "clients",
-    label: "Client motion",
+    id: "beta_customers",
+    label: "Beta customers",
     value: 0,
-    subline: "CRM read unavailable",
-    detail: "Client signal data did not load. Check the database warning.",
-    href: "/contacts",
+    subline: "KPI read unavailable",
+    detail: "Beta customers data did not load. Check the database warning.",
+    href: "/priorities",
     progressPct: 0,
     tone: "blue",
   },
@@ -126,23 +124,13 @@ const FALLBACK_COMMAND_METRICS: HomeCommandMetric[] = [
   },
   {
     id: "influencers",
-    label: "Influencer engine",
+    label: "Influencers in pipeline",
     value: 0,
-    subline: "CRM read unavailable",
-    detail: "Influencer signal data did not load. Check the database warning.",
-    href: "/contacts",
+    subline: "KPI read unavailable",
+    detail: "Influencer pipeline data did not load. Check the database warning.",
+    href: "/priorities",
     progressPct: 0,
     tone: "purple",
-  },
-  {
-    id: "docs",
-    label: "Docs moved",
-    value: 0,
-    subline: "doc read unavailable",
-    detail: "Document activity did not load. Check the database warning.",
-    href: "/lob",
-    progressPct: 0,
-    tone: "amber",
   },
 ];
 
@@ -238,7 +226,6 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
   const [
     countsRes,
     pipelineRes,
-    relRes,
     eventDaysRes,
     blockedRes,
     treasuryRes,
@@ -250,14 +237,12 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
     docsRes,
     countdownRes,
     initiativesRes,
-    kpisRes,
     aiSpendRes,
     techSpendRes,
     layoutRes,
   ] = await Promise.all([
     safeRead<DashCounts>(() => dashboardCounts(user.workspaceId, todayStr), EMPTY_COUNTS),
     safeRead<PipelineStageBar[]>(() => pipelineSnapshot(user.workspaceId), []),
-    safeRead<RelationshipRow[]>(() => relationshipHealth(user.workspaceId, 6), []),
     safeRead<string[]>(() => meetingDaysThisMonth(user.workspaceId), []),
     safeRead<BlockedProject[]>(() => listBlockedProjects(user.workspaceId), []),
     safeRead<TreasurySnapshot>(
@@ -282,7 +267,6 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
     safeRead<RefObject[]>(() => listWorkspaceDocs(user.workspaceId), []),
     safeRead<WorkspaceCountdown | null>(() => getWorkspaceCountdown(user.workspaceId), null),
     safeRead<InitiativePick[]>(() => listInitiativesForPicker(user.workspaceId), []),
-    safeRead<KpiRow[]>(() => listKpis(user.workspaceId, nowMs), []),
     safeRead<AnthropicSpend>(() => getAnthropicSpendToday(user.workspaceId), EMPTY_AI_SPEND),
     safeRead<TechSpendSummary>(
       () => techSpendSummary(user.workspaceId),
@@ -413,13 +397,11 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
   const dbError =
     !countsRes.ok ||
     !pipelineRes.ok ||
-    !relRes.ok ||
     !eventDaysRes.ok ||
     Boolean(dailyData?.commandMetricsError);
   const dbErrorMessage =
     (countsRes as { error?: string }).error ??
     (pipelineRes as { error?: string }).error ??
-    (relRes as { error?: string }).error ??
     (eventDaysRes as { error?: string }).error ??
     dailyData?.commandMetricsError ??
     "Database error";
@@ -493,7 +475,6 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
           pinnedProjects={dailyData.pinnedProjects}
           recentProjects={dailyData.recentProjects}
           docs={docsRes.data}
-          relationship={relRes.data}
           scorecard={scorecardRes.data}
           nowMs={nowMs}
           tz={user.timezone}
@@ -502,7 +483,6 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
           countdown={countdownRes.data}
           feed={feedRes.data}
           initiatives={initiativesRes.data}
-          kpis={kpisRes.data}
           commandMetrics={dailyData.commandMetrics}
           commandMetricsError={dailyData.commandMetricsError}
           blocked={blockedRes.data}

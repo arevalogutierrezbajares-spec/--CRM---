@@ -115,20 +115,60 @@ export function Sidebar({
       )}
       style={{ borderColor: "var(--border-default)" }}
     >
-      <Link
-        href="/"
-        className={cn(
-          "flex h-14 items-center gap-2 border-b transition-colors hover:bg-surface/40",
-          rail ? "justify-center px-2" : "px-4",
-        )}
-        style={{ borderColor: "var(--border-default)" }}
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/logos/crm.svg" alt="AGB CRM" width={28} height={28} className="shrink-0 dark:hidden" />
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/logos/crm-light.svg" alt="" aria-hidden width={28} height={28} className="shrink-0 hidden dark:block" />
-        {!rail && <span className="text-[13px] font-medium tracking-tight text-text-primary">AGB CRM</span>}
-      </Link>
+      {rail ? (
+        <div
+          className="flex min-h-14 flex-col items-center justify-center gap-1.5 border-b px-2 py-2"
+          style={{ borderColor: "var(--border-default)" }}
+        >
+          <Link
+            href="/"
+            title="Home"
+            aria-label="Home"
+            className="flex items-center justify-center rounded transition-opacity hover:opacity-80"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logos/crm.svg" alt="AGB CRM" width={26} height={26} className="shrink-0 dark:hidden" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logos/crm-light.svg" alt="" aria-hidden width={26} height={26} className="shrink-0 hidden dark:block" />
+          </Link>
+          <button
+            type="button"
+            onClick={toggleRail}
+            title="Expand sidebar"
+            aria-label="Expand sidebar"
+            aria-pressed={rail}
+            className="flex h-8 w-8 items-center justify-center rounded-md text-text-tertiary transition-colors hover:bg-surface hover:text-text-secondary active:scale-[0.96]"
+          >
+            <ChevronsRight size={18} className="shrink-0" />
+          </button>
+        </div>
+      ) : (
+        <div
+          className="flex h-14 items-center justify-between gap-2 border-b px-3"
+          style={{ borderColor: "var(--border-default)" }}
+        >
+          <Link
+            href="/"
+            className="flex min-w-0 items-center gap-2 rounded transition-opacity hover:opacity-80"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logos/crm.svg" alt="AGB CRM" width={28} height={28} className="shrink-0 dark:hidden" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logos/crm-light.svg" alt="" aria-hidden width={28} height={28} className="shrink-0 hidden dark:block" />
+            <span className="truncate text-[13px] font-medium tracking-tight text-text-primary">AGB CRM</span>
+          </Link>
+          <button
+            type="button"
+            onClick={toggleRail}
+            title="Collapse sidebar"
+            aria-label="Collapse sidebar"
+            aria-pressed={rail}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-text-tertiary transition-colors hover:bg-surface hover:text-text-secondary active:scale-[0.96]"
+          >
+            <ChevronsLeft size={16} className="shrink-0" />
+          </button>
+        </div>
+      )}
 
       {rail ? (
         <nav aria-label="Primary" className="flex flex-1 flex-col gap-0.5 overflow-y-auto p-2">
@@ -188,20 +228,6 @@ export function Sidebar({
         {NAV_FOOTER.map((item) => (
           <NavRow key={item.href} item={item} pathname={pathname} rail={rail} />
         ))}
-        <button
-          type="button"
-          onClick={toggleRail}
-          title={rail ? "Expand sidebar" : "Collapse sidebar"}
-          aria-label={rail ? "Expand sidebar" : "Collapse sidebar"}
-          aria-pressed={rail}
-          className={cn(
-            "mt-1 flex w-full items-center rounded-md text-tiny text-text-tertiary transition-colors hover:bg-surface hover:text-text-secondary active:scale-[0.96]",
-            rail ? "h-10 justify-center px-0 py-0" : "min-h-10 gap-2 px-2.5 py-1.5",
-          )}
-        >
-          {rail ? <ChevronsRight size={18} className="shrink-0" /> : <ChevronsLeft size={16} className="shrink-0" />}
-          {!rail && <span>Collapse</span>}
-        </button>
       </div>
     </aside>
   );

@@ -3,11 +3,9 @@ import { TasksCard } from "./tasks-card";
 import { ActionItemsCard } from "./action-items-card";
 import { AIAssistPanel } from "./ai-assist-panel";
 import { Scorecard } from "./scorecard";
-import { KpiStrip } from "./kpi-strip";
 import { DynamicKpiStrip } from "./dynamic-kpi-strip";
 import { ActivityCenter } from "@/components/town-hall/activity-center";
-import { RelationshipHealth } from "@/components/dashboard/right/relationship-health";
-import type { ScorecardRow, KpiRow } from "@/db/queries/okrs";
+import type { ScorecardRow } from "@/db/queries/okrs";
 import { PinnedProjects } from "../pinned-projects";
 import type { PinnedProject } from "@/db/queries/pins";
 import { BriefingCard } from "./briefing-card";
@@ -17,7 +15,7 @@ import type { RefObject } from "@/components/town-hall/types";
 import type { WorkspaceCountdown } from "@/db/queries/workspace-settings";
 import type { FeedItem } from "@/db/queries/town-hall-feed";
 import type { InitiativePick } from "@/db/queries/item-initiatives";
-import type { DashActionItem, DashMeeting, DashTask, HomeCommandMetric, RelationshipRow } from "@/db/queries/dashboard";
+import type { DashActionItem, DashMeeting, DashTask, HomeCommandMetric } from "@/db/queries/dashboard";
 import type { BlockedProject } from "@/db/queries/this-week";
 import type { DashWidget } from "@/lib/dashboard/layout";
 
@@ -30,7 +28,6 @@ interface DailyViewProps {
   docs: RefObject[];
   pinnedProjects: PinnedProject[];
   recentProjects: { id: string; title: string }[];
-  relationship: RelationshipRow[];
   scorecard: ScorecardRow[];
   nowMs: number;
   tz: string;
@@ -39,7 +36,6 @@ interface DailyViewProps {
   countdown: WorkspaceCountdown | null;
   feed: FeedItem[];
   initiatives: InitiativePick[];
-  kpis: KpiRow[];
   commandMetrics: HomeCommandMetric[];
   commandMetricsError?: string | null;
   blocked: BlockedProject[];
@@ -57,7 +53,6 @@ export function DailyView({
   docs,
   pinnedProjects,
   recentProjects,
-  relationship,
   scorecard,
   nowMs,
   tz,
@@ -66,7 +61,6 @@ export function DailyView({
   countdown,
   feed,
   initiatives,
-  kpis,
   commandMetrics,
   commandMetricsError,
   blocked,
@@ -112,10 +106,6 @@ export function DailyView({
       node: <PinnedProjects pinned={pinnedProjects} allProjects={pickerProjects} recent={recentProjects} nowMs={nowMs} />,
     },
     {
-      id: "relationships",
-      node: <RelationshipHealth rows={relationship} />,
-    },
-    {
       id: "ai",
       node: <AIAssistPanel scope="daily" />,
     },
@@ -131,9 +121,6 @@ export function DailyView({
       <TopRow meetings={meetings} tasks={tasks} countdown={countdown} nowMs={nowMs} tz={tz} />
 
       <DynamicKpiStrip metrics={commandMetrics} error={commandMetricsError} />
-
-      {/* KPIs — slim, full-width strip (inline-editable) */}
-      <KpiStrip kpis={kpis} />
 
       <BriefingCard
         bullets={briefingBullets}
