@@ -15,6 +15,8 @@ export type AllowedType = {
 
 export const ALLOWED_TYPES: AllowedType[] = [
   { ext: ".pdf", mimes: ["application/pdf"], chip: "PDF" },
+  { ext: ".html", mimes: ["text/html"], chip: "HTML" },
+  { ext: ".htm", mimes: ["text/html"], chip: "HTML" },
   {
     ext: ".docx",
     mimes: ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
@@ -46,7 +48,7 @@ export const ACCEPT_ATTR = ALLOWED_TYPES.map((t) => t.ext)
   .join(",");
 
 export const REJECT_MESSAGE =
-  "File type not allowed. Allowed: PDF, Office docs, images, text.";
+  "File type not allowed. Allowed: HTML decks, PDF, Office docs, images, text.";
 
 function extOf(filename: string): string {
   const i = filename.lastIndexOf(".");
@@ -79,6 +81,7 @@ export function canonicalMime(filename: string, declared: string): string {
 /**
  * How a file can be previewed in-app (FR-DOC viewer).
  *  - "pdf"    → native browser render in an <iframe>
+ *  - "html"   → HTML deck rendered in a sandboxed <iframe>
  *  - "image"  → <img>
  *  - "text"   → text/plain|md|csv render natively in an <iframe>
  *  - "office" → docx/xlsx/pptx via the Microsoft Office web viewer
@@ -86,6 +89,7 @@ export function canonicalMime(filename: string, declared: string): string {
  */
 export type PreviewKind =
   | "pdf"
+  | "html"
   | "image"
   | "text"
   | "markdown"
@@ -94,6 +98,8 @@ export type PreviewKind =
 
 const PREVIEW_BY_EXT: Record<string, PreviewKind> = {
   ".pdf": "pdf",
+  ".html": "html",
+  ".htm": "html",
   ".png": "image",
   ".jpg": "image",
   ".jpeg": "image",

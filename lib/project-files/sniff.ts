@@ -84,7 +84,9 @@ export function sniffConsistent(filename: string, bytes: Uint8Array): SniffResul
     case ".txt":
     case ".md":
     case ".csv":
-      // Text files have no signature; only reject if it's clearly an executable.
+    case ".html":
+    case ".htm":
+      // Text/markup files have no signature; only reject clear executables.
       return isExecutable(bytes)
         ? { ok: false, reason: "Executable content rejected." }
         : { ok: true };

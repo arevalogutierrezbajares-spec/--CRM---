@@ -157,6 +157,18 @@ function PreviewBody({
     return <iframe src={url} title={label} className="h-full w-full" />;
   }
 
+  if (kind === "html") {
+    // HTML decks may include scripts; sandbox them like present mode does.
+    return (
+      <iframe
+        src={url}
+        title={label}
+        className="h-full w-full bg-white"
+        sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+      />
+    );
+  }
+
   if (kind === "office") {
     const viewer = `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(
       url,
