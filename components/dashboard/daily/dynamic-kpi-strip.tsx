@@ -9,7 +9,6 @@ import {
   PersonStanding,
   Radio,
   Rocket,
-  UserRound,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DashCard } from "../shared/dash-card";
@@ -162,7 +161,15 @@ function Scene({ metric, color }: { metric: HomeCommandMetric; color: string }) 
   return (
     <div className="mt-3 flex h-9 items-end gap-0.5" aria-hidden>
       {n === 0 ? (
-        <span className="text-[12px] text-text-tertiary">—</span>
+        // Placeholder client — peeks in and out, pixar-style squash & stretch.
+        <PersonStanding
+          size={20}
+          style={{
+            color,
+            transformOrigin: "bottom center",
+            animation: "home-client-peek 3.6s ease-in-out infinite",
+          }}
+        />
       ) : (
         Array.from({ length: n }).map((_, i) => (
           <PersonStanding
@@ -210,24 +217,7 @@ export function DynamicKpiStrip({
   return (
     <DashCard className="home-kpi-motion overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <SectionLabel icon={Activity}>KPIs</SectionLabel>
-          {/* Placeholder "client" — peeks in and out, pixar-style squash & stretch. */}
-          <span
-            className="inline-flex h-5 w-5 items-center justify-center"
-            aria-hidden
-            title="client (placeholder)"
-          >
-            <UserRound
-              size={16}
-              style={{
-                color: "var(--purple-text)",
-                transformOrigin: "bottom center",
-                animation: "home-client-peek 3.6s ease-in-out infinite",
-              }}
-            />
-          </span>
-        </div>
+        <SectionLabel icon={Activity}>KPIs</SectionLabel>
         <span className="rounded-full bg-surface px-2 py-1 text-tiny text-text-tertiary">
           {showingFallback ? "KPI fallback" : "Live KPI motion"}
         </span>
