@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronLeft, ListChecks, Pencil, Radio } from "lucide-react";
+import { ChevronLeft, ListChecks, Radio } from "lucide-react";
 import { requireUser } from "@/lib/current-user";
 import { TopBar } from "@/components/layout/top-bar";
 import { Button } from "@/components/ui/button";
@@ -14,13 +14,19 @@ import {
 import { DbBanner } from "@/components/db-banner";
 import { getMeeting } from "@/db/queries/meetings";
 import { safeRead } from "@/lib/db-status";
-import { formatMeetingDateTime } from "@/lib/date/meeting-time";
 import { parseActionItems } from "@/lib/validation/meeting"; // used for server-side spawn button count
 import { InlineNotes } from "@/components/meetings/inline-notes";
 import { LiveMeeting } from "@/components/meetings/live-meeting";
 import { PreMeetingBrief } from "@/components/meetings/pre-meeting-brief";
 import { MeetingMaterials } from "@/components/meetings/meeting-materials";
-import { getAttendeeContext } from "@/db/queries/meetings";
+import { MeetingHeaderEditor } from "@/components/meetings/meeting-header-editor";
+import { MeetingAttendeesEditor } from "@/components/meetings/meeting-attendees-editor";
+import {
+  getAttendeeContext,
+  listRecentTouchesForContacts,
+} from "@/db/queries/meetings";
+import { listProjects } from "@/db/queries/projects";
+import { listContacts } from "@/db/queries/contacts";
 import {
   listMeetingMaterials,
   listAttachableMaterials,
@@ -81,6 +87,37 @@ export default async function MeetingDetailPage(props: {
       ])
     : [[], []];
 
+  // Inline-edit + dynamic-attendee data: projects (linked-project select), all
+  // contacts (attendee search), and each attendee's recent CRM activity (pulled
+  // into the meeting for two-way context).
+  const attendeeIds = meeting?.attendees.map((c) => c.id) ?? [];
+  const [projects, allContacts, recentTouches] = meeting
+    ? await Promise.all([
+        safeRead(() => listProjects({ workspaceId: user.workspaceId }), [] as Awaited<ReturnType<typeof listProjects>>).then((r) => r.data),
+        safeRead(() => listContacts({ workspaceId: user.workspaceId }), [] as Awaited<ReturnType<typeof listContacts>>).then((r) => r.data),
+        attendeeIds.length
+          ? safeRead(
+              () =>
+                listRecentTouchesForContacts({
+                  contactIds: attendeeIds,
+                  workspaceId: user.workspaceId,
+                  excludeMeetingId: id,
+                  perContactLimit: 3,
+                }),
+              [] as Awaited<ReturnType<typeof listRecentTouchesForContacts>>,
+            ).then((r) => r.data)
+          : [],
+      ])
+    : [[], [], []];
+
+  const recentByContact: Record<
+    string,
+    Awaited<ReturnType<typeof listRecentTouchesForContacts>>
+  > = {};
+  for (const t of recentTouches) {
+    (recentByContact[t.contactId] ??= []).push(t);
+  }
+
   async function spawn() {
     "use server";
     await generateMilestonesFromMeeting(id);
@@ -94,18 +131,11 @@ export default async function MeetingDetailPage(props: {
         email={user.email}
         displayName={user.displayName}
         action={
-          <div className="flex items-center gap-2">
-            <Button asChild variant="outline" size="sm">
-              <Link href={`/meetings/${id}?live=1`}>
-                <Radio className="h-4 w-4" /> Go Live
-              </Link>
-            </Button>
-            <Button asChild variant="outline" size="sm">
-              <Link href={`/meetings/${id}/edit`}>
-                <Pencil className="h-4 w-4" /> Edit
-              </Link>
-            </Button>
-          </div>
+          <Button asChild variant="outline" size="sm">
+            <Link href={`/meetings/${id}?live=1`}>
+              <Radio className="h-4 w-4" /> Go Live
+            </Link>
+          </Button>
         }
       />
       <main className="mx-auto w-full max-w-4xl flex-1 px-6 py-8">
@@ -139,18 +169,16 @@ export default async function MeetingDetailPage(props: {
               </div>
             ) : (
               <>
-                <header className="mt-4 mb-6">
-                  <h1 className="text-2xl font-semibold tracking-tight">
-                    {meeting.title}
-                  </h1>
-                  <div className="mt-1 flex flex-wrap gap-3 text-sm text-[var(--muted-foreground)]">
-                    <span>{formatMeetingDateTime(meeting.scheduledAt)}</span>
-                    {meeting.location && <span>· {meeting.location}</span>}
-                    {meeting.projectTitle && (
-                      <span>· {meeting.projectTitle}</span>
-                    )}
-                  </div>
-                </header>
+                <MeetingHeaderEditor
+                  meetingId={id}
+                  initialTitle={meeting.title}
+                  initialScheduledInput={toLocalInput(meeting.scheduledAt)}
+                  initialLocation={meeting.location}
+                  initialType={meeting.type}
+                  initialLinkedProjectId={meeting.linkedProjectId}
+                  initialMetAtTag={meeting.metAtTag}
+                  projects={projects.map((p) => ({ id: p.id, title: p.title }))}
+                />
 
                 <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
                   <div className="space-y-6">
@@ -215,28 +243,21 @@ export default async function MeetingDetailPage(props: {
                         <CardTitle>Attendees</CardTitle>
                       </CardHeader>
                       <CardContent>
-                        {meeting.attendees.length === 0 ? (
-                          <p className="text-sm text-[var(--muted-foreground)]">
-                            None.
-                          </p>
-                        ) : (
-                          <ul className="space-y-2">
-                            {meeting.attendees.map((c) => (
-                              <li key={c.id} className="text-sm">
-                                <Link
-                                  href={`/contacts/${c.id}`}
-                                  className="font-medium hover:underline"
-                                >
-                                  {c.name}
-                                </Link>
-                                <div className="text-xs text-[var(--muted-foreground)]">
-                                  {c.relationshipType}
-                                  {c.organization ? ` · ${c.organization}` : ""}
-                                </div>
-                              </li>
-                            ))}
-                          </ul>
-                        )}
+                        <MeetingAttendeesEditor
+                          meetingId={id}
+                          attendees={meeting.attendees.map((c) => ({
+                            id: c.id,
+                            name: c.name,
+                            organization: c.organization,
+                            relationshipType: c.relationshipType,
+                          }))}
+                          allContacts={allContacts.map((c) => ({
+                            id: c.id,
+                            name: c.name,
+                            organization: c.organization,
+                          }))}
+                          recentByContact={recentByContact}
+                        />
                       </CardContent>
                     </Card>
 
@@ -279,6 +300,13 @@ export default async function MeetingDetailPage(props: {
       </main>
     </>
   );
+}
+
+/** Date → datetime-local input value (mirrors the meeting edit page). */
+function toLocalInput(d: Date | string): string {
+  const date = typeof d === "string" ? new Date(d) : d;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {

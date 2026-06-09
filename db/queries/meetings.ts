@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 
 const {
@@ -149,6 +149,129 @@ export async function listMeetingsForContact(opts: {
     attendeeCount: allAttendees.filter((a) => a.meetingId === m.id).length,
     openActionItems: openMilestones.filter((ms) => ms.meetingId === m.id).length,
   }));
+}
+
+/** Composed body for the meeting's entry on an attendee's contact timeline. */
+export function meetingTouchBody(title: string, minutes: string | null): string {
+  const trimmed = (minutes ?? "").trim();
+  return trimmed ? `Meeting: ${title}\n\n${trimmed}` : `Meeting: ${title}`;
+}
+
+/**
+ * Two-way sync (meeting → contact): upsert one "meeting" touch per attendee
+ * carrying the meeting's minutes, so the meeting + its notes appear on each
+ * attendee's contact timeline (and update when the minutes are edited). One
+ * touch per (meeting, contact, channel='meeting') — matched, never duplicated.
+ */
+export async function syncMeetingNotesToContacts(opts: {
+  meetingId: string;
+  workspaceId: string;
+  createdBy: string;
+}): Promise<void> {
+  const [m] = await db
+    .select({ title: meetings.title, minutes: meetings.minutes })
+    .from(meetings)
+    .where(
+      and(
+        eq(meetings.id, opts.meetingId),
+        eq(meetings.workspaceId, opts.workspaceId),
+      ),
+    )
+    .limit(1);
+  if (!m) return;
+
+  const att = await db
+    .select({ contactId: meetingAttendees.contactId })
+    .from(meetingAttendees)
+    .where(eq(meetingAttendees.meetingId, opts.meetingId));
+  if (att.length === 0) return;
+
+  const body = meetingTouchBody(m.title, m.minutes);
+  const now = new Date();
+  for (const a of att) {
+    const [existing] = await db
+      .select({ id: touches.id })
+      .from(touches)
+      .where(
+        and(
+          eq(touches.meetingId, opts.meetingId),
+          eq(touches.contactId, a.contactId),
+          eq(touches.channel, "meeting"),
+        ),
+      )
+      .limit(1);
+    if (existing) {
+      await db.update(touches).set({ body }).where(eq(touches.id, existing.id));
+    } else {
+      await db.insert(touches).values({
+        meetingId: opts.meetingId,
+        contactId: a.contactId,
+        channel: "meeting",
+        body,
+        workspaceId: opts.workspaceId,
+        createdBy: opts.createdBy,
+      });
+    }
+    await db
+      .update(contacts)
+      .set({ lastTouchAt: now, updatedAt: now })
+      .where(eq(contacts.id, a.contactId));
+  }
+}
+
+export type ContactTouchItem = {
+  id: string;
+  contactId: string;
+  channel: string;
+  body: string;
+  createdAt: Date;
+};
+
+/**
+ * Two-way sync (contact → meeting): recent timeline touches for a set of
+ * contacts, so a meeting can surface each attendee's CRM history. Excludes this
+ * meeting's own touches (keeps unrelated null-meeting touches). Top N per contact.
+ */
+export async function listRecentTouchesForContacts(opts: {
+  contactIds: string[];
+  workspaceId: string;
+  excludeMeetingId?: string;
+  perContactLimit?: number;
+}): Promise<ContactTouchItem[]> {
+  if (opts.contactIds.length === 0) return [];
+  const rows = await db
+    .select({
+      id: touches.id,
+      contactId: touches.contactId,
+      channel: touches.channel,
+      body: touches.body,
+      createdAt: touches.createdAt,
+    })
+    .from(touches)
+    .where(
+      and(
+        inArray(touches.contactId, opts.contactIds),
+        eq(touches.workspaceId, opts.workspaceId),
+        opts.excludeMeetingId
+          ? or(
+              isNull(touches.meetingId),
+              ne(touches.meetingId, opts.excludeMeetingId),
+            )
+          : undefined,
+      ),
+    )
+    .orderBy(desc(touches.createdAt));
+
+  const limit = opts.perContactLimit ?? 3;
+  const perContact = new Map<string, number>();
+  const out: ContactTouchItem[] = [];
+  for (const r of rows) {
+    const n = perContact.get(r.contactId) ?? 0;
+    if (n >= limit) continue;
+    perContact.set(r.contactId, n + 1);
+    out.push(r);
+  }
+  return out;
 }
 
 /** Lightweight query used by pre-meeting brief: context for each attendee. */

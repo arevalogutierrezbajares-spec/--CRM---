@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "@/db";
 import { getCurrentUser } from "@/lib/current-user";
+import { syncMeetingNotesToContacts } from "@/db/queries/meetings";
 import { revalidatePath } from "next/cache";
 
 const { meetings } = schema;
@@ -34,6 +35,15 @@ export async function PATCH(req: NextRequest, props: { params: Params }) {
     .returning({ id: meetings.id });
 
   if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  // Two-way sync: minutes flow onto each attendee's contact timeline.
+  if (field === "minutes") {
+    await syncMeetingNotesToContacts({
+      meetingId: id,
+      workspaceId: user.workspaceId,
+      createdBy: user.id,
+    }).catch(() => {});
+  }
 
   revalidatePath(`/meetings/${id}`);
   return NextResponse.json({ ok: true });

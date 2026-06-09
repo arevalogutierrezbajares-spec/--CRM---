@@ -18,10 +18,14 @@ import {
 } from "@/db/queries/meeting-materials";
 import { createSignedDownloadUrl } from "@/lib/project-files/storage";
 import { wallClockToDate } from "@/lib/date/meeting-time";
+import { syncMeetingNotesToContacts } from "@/db/queries/meetings";
 import {
   createPartnerShare,
   regeneratePartnerRoomAccessToken,
 } from "@/db/queries/partner-access";
+
+type RelationshipType = "friend" | "lead" | "partner" | "prospect";
+type MeetingTypeValue = "one_on_one" | "group" | "event" | "call";
 
 const { meetings, meetingAttendees, touches, milestones, contacts } = schema;
 
@@ -227,6 +231,209 @@ export async function generateMilestonesFromMeeting(meetingId: string) {
   revalidatePath(`/projects/${m.linkedProjectId}`);
   revalidatePath(`/meetings/${m.id}`);
   return { ok: true as const, count: items.length };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INLINE EDIT — edit meeting fields directly from the detail page (no edit page)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function updateMeetingFieldsAction(
+  meetingId: string,
+  patch: {
+    title?: string;
+    scheduledAt?: string; // wall-clock "YYYY-MM-DDTHH:mm"
+    location?: string;
+    type?: MeetingTypeValue;
+    linkedProjectId?: string | null;
+    metAtTag?: string;
+  },
+): Promise<ActionResult> {
+  const user = await requireUser();
+  const set: Partial<typeof schema.meetings.$inferInsert> = {};
+  if (patch.title !== undefined) {
+    const t = patch.title.trim();
+    if (!t) return { ok: false, error: "Title can't be empty" };
+    set.title = t;
+  }
+  if (patch.scheduledAt !== undefined) {
+    const d = wallClockToDate(patch.scheduledAt);
+    if (!d) return { ok: false, error: "Invalid date + time" };
+    set.scheduledAt = d;
+  }
+  if (patch.location !== undefined) set.location = patch.location.trim() || null;
+  if (patch.type !== undefined) set.type = patch.type;
+  if (patch.linkedProjectId !== undefined)
+    set.linkedProjectId = patch.linkedProjectId || null;
+  if (patch.metAtTag !== undefined) set.metAtTag = patch.metAtTag.trim() || null;
+  if (Object.keys(set).length === 0) return { ok: true, id: meetingId };
+
+  const [updated] = await db
+    .update(meetings)
+    .set(set)
+    .where(
+      and(eq(meetings.id, meetingId), eq(meetings.workspaceId, user.workspaceId)),
+    )
+    .returning({ id: meetings.id });
+  if (!updated) return { ok: false, error: "Meeting not found" };
+
+  // Title is part of the synced timeline entry — refresh it when it changes.
+  if (patch.title !== undefined) {
+    await syncMeetingNotesToContacts({
+      meetingId,
+      workspaceId: user.workspaceId,
+      createdBy: user.id,
+    });
+  }
+  revalidatePath("/meetings");
+  revalidatePath(`/meetings/${meetingId}`);
+  return { ok: true, id: updated.id };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ATTENDEES — add/remove CRM contacts dynamically; create + attach non-CRM people
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function addMeetingAttendeeAction(
+  meetingId: string,
+  contactId: string,
+): Promise<ActionResult> {
+  const user = await requireUser();
+  const [m] = await db
+    .select({ id: meetings.id })
+    .from(meetings)
+    .where(and(eq(meetings.id, meetingId), eq(meetings.workspaceId, user.workspaceId)))
+    .limit(1);
+  if (!m) return { ok: false, error: "Meeting not found" };
+  const [c] = await db
+    .select({ id: contacts.id })
+    .from(contacts)
+    .where(and(eq(contacts.id, contactId), eq(contacts.workspaceId, user.workspaceId)))
+    .limit(1);
+  if (!c) return { ok: false, error: "Contact not found" };
+
+  await db
+    .insert(meetingAttendees)
+    .values({ meetingId, contactId })
+    .onConflictDoNothing();
+  // Drop the meeting (+ its notes) onto the new attendee's contact timeline.
+  await syncMeetingNotesToContacts({
+    meetingId,
+    workspaceId: user.workspaceId,
+    createdBy: user.id,
+  });
+  revalidatePath(`/meetings/${meetingId}`);
+  revalidatePath(`/contacts/${contactId}`);
+  return { ok: true, id: contactId };
+}
+
+export async function removeMeetingAttendeeAction(
+  meetingId: string,
+  contactId: string,
+): Promise<ActionResult> {
+  const user = await requireUser();
+  const [m] = await db
+    .select({ id: meetings.id })
+    .from(meetings)
+    .where(and(eq(meetings.id, meetingId), eq(meetings.workspaceId, user.workspaceId)))
+    .limit(1);
+  if (!m) return { ok: false, error: "Meeting not found" };
+
+  await db
+    .delete(meetingAttendees)
+    .where(
+      and(
+        eq(meetingAttendees.meetingId, meetingId),
+        eq(meetingAttendees.contactId, contactId),
+      ),
+    );
+  // Remove the auto meeting-touch from their timeline (keeps it tidy/in sync).
+  await db
+    .delete(touches)
+    .where(
+      and(
+        eq(touches.meetingId, meetingId),
+        eq(touches.contactId, contactId),
+        eq(touches.channel, "meeting"),
+      ),
+    );
+  revalidatePath(`/meetings/${meetingId}`);
+  revalidatePath(`/contacts/${contactId}`);
+  return { ok: true, id: contactId };
+}
+
+export type AttendeeContactResult =
+  | {
+      ok: true;
+      contact: {
+        id: string;
+        name: string;
+        organization: string | null;
+        relationshipType: RelationshipType;
+      };
+    }
+  | { ok: false; error: string };
+
+/** Create a brand-new CRM contact AND attach them to the meeting (the "add this
+ *  person to your CRM?" path for non-CRM attendees). */
+export async function createContactForMeetingAction(
+  meetingId: string,
+  input: {
+    name: string;
+    email?: string;
+    organization?: string;
+    relationshipType?: RelationshipType;
+  },
+): Promise<AttendeeContactResult> {
+  const user = await requireUser();
+  const name = input.name.trim();
+  if (!name) return { ok: false, error: "Name required" };
+  const [m] = await db
+    .select({ id: meetings.id })
+    .from(meetings)
+    .where(and(eq(meetings.id, meetingId), eq(meetings.workspaceId, user.workspaceId)))
+    .limit(1);
+  if (!m) return { ok: false, error: "Meeting not found" };
+
+  const [inserted] = await db
+    .insert(contacts)
+    .values({
+      name,
+      type: "person",
+      organization: input.organization?.trim() || null,
+      relationshipType: input.relationshipType ?? "prospect",
+      workspaceId: user.workspaceId,
+      createdBy: user.id,
+    })
+    .returning({
+      id: contacts.id,
+      name: contacts.name,
+      organization: contacts.organization,
+      relationshipType: contacts.relationshipType,
+    });
+
+  const email = input.email?.trim();
+  if (email) {
+    await db.insert(schema.contactChannels).values({
+      contactId: inserted.id,
+      kind: "email",
+      value: email,
+      isPrimary: true,
+    });
+  }
+
+  await db
+    .insert(meetingAttendees)
+    .values({ meetingId, contactId: inserted.id })
+    .onConflictDoNothing();
+  await syncMeetingNotesToContacts({
+    meetingId,
+    workspaceId: user.workspaceId,
+    createdBy: user.id,
+  });
+
+  revalidatePath(`/meetings/${meetingId}`);
+  revalidatePath("/contacts");
+  return { ok: true, contact: inserted };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
