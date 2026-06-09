@@ -196,6 +196,11 @@ export default async function ContactDetailPage(props: { params: Params }) {
                                 {formatDateTime(m.scheduledAt)}
                                 {m.attendeeCount > 1 && ` · ${m.attendeeCount} attendees`}
                               </div>
+                              {m.minutes?.trim() && (
+                                <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-xs text-[var(--muted-foreground)]">
+                                  {m.minutes.trim()}
+                                </p>
+                              )}
                             </div>
                             {m.openActionItems > 0 && (
                               <span className="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">

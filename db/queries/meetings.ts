@@ -97,9 +97,49 @@ export type ContactMeetingItem = {
   title: string;
   scheduledAt: Date;
   type: "one_on_one" | "group" | "event" | "call";
+  minutes: string | null;
   attendeeCount: number;
   openActionItems: number;
 };
+
+export type PriorMeetingNote = {
+  id: string;
+  title: string;
+  scheduledAt: Date;
+  minutes: string | null;
+};
+
+/**
+ * Prior meetings any of these contacts attended (newest first), with their
+ * notes — so a new meeting can link to and surface the history with the same
+ * people. Excludes the current meeting; dedupes across shared attendees.
+ */
+export async function listPriorMeetingsForContacts(opts: {
+  contactIds: string[];
+  workspaceId: string;
+  excludeMeetingId: string;
+  limit?: number;
+}): Promise<PriorMeetingNote[]> {
+  if (opts.contactIds.length === 0) return [];
+  return db
+    .selectDistinct({
+      id: meetings.id,
+      title: meetings.title,
+      scheduledAt: meetings.scheduledAt,
+      minutes: meetings.minutes,
+    })
+    .from(meetingAttendees)
+    .innerJoin(meetings, eq(meetings.id, meetingAttendees.meetingId))
+    .where(
+      and(
+        inArray(meetingAttendees.contactId, opts.contactIds),
+        eq(meetings.workspaceId, opts.workspaceId),
+        ne(meetings.id, opts.excludeMeetingId),
+      ),
+    )
+    .orderBy(desc(meetings.scheduledAt))
+    .limit(opts.limit ?? 8);
+}
 
 /** All meetings a contact attended, newest first, with open action-item count. */
 export async function listMeetingsForContact(opts: {
@@ -146,6 +186,7 @@ export async function listMeetingsForContact(opts: {
     title: m.title,
     scheduledAt: m.scheduledAt,
     type: m.type,
+    minutes: m.minutes,
     attendeeCount: allAttendees.filter((a) => a.meetingId === m.id).length,
     openActionItems: openMilestones.filter((ms) => ms.meetingId === m.id).length,
   }));

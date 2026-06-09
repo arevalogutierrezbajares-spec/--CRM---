@@ -14,6 +14,7 @@ import {
 import { DbBanner } from "@/components/db-banner";
 import { getMeeting } from "@/db/queries/meetings";
 import { safeRead } from "@/lib/db-status";
+import { formatMeetingDateTime } from "@/lib/date/meeting-time";
 import { parseActionItems } from "@/lib/validation/meeting"; // used for server-side spawn button count
 import { InlineNotes } from "@/components/meetings/inline-notes";
 import { LiveMeeting } from "@/components/meetings/live-meeting";
@@ -24,6 +25,7 @@ import { MeetingAttendeesEditor } from "@/components/meetings/meeting-attendees-
 import {
   getAttendeeContext,
   listRecentTouchesForContacts,
+  listPriorMeetingsForContacts,
 } from "@/db/queries/meetings";
 import { listProjects } from "@/db/queries/projects";
 import { listContacts } from "@/db/queries/contacts";
@@ -91,7 +93,7 @@ export default async function MeetingDetailPage(props: {
   // contacts (attendee search), and each attendee's recent CRM activity (pulled
   // into the meeting for two-way context).
   const attendeeIds = meeting?.attendees.map((c) => c.id) ?? [];
-  const [projects, allContacts, recentTouches] = meeting
+  const [projects, allContacts, recentTouches, priorMeetings] = meeting
     ? await Promise.all([
         safeRead(() => listProjects({ workspaceId: user.workspaceId }), [] as Awaited<ReturnType<typeof listProjects>>).then((r) => r.data),
         safeRead(() => listContacts({ workspaceId: user.workspaceId }), [] as Awaited<ReturnType<typeof listContacts>>).then((r) => r.data),
@@ -107,8 +109,20 @@ export default async function MeetingDetailPage(props: {
               [] as Awaited<ReturnType<typeof listRecentTouchesForContacts>>,
             ).then((r) => r.data)
           : [],
+        attendeeIds.length
+          ? safeRead(
+              () =>
+                listPriorMeetingsForContacts({
+                  contactIds: attendeeIds,
+                  workspaceId: user.workspaceId,
+                  excludeMeetingId: id,
+                  limit: 8,
+                }),
+              [] as Awaited<ReturnType<typeof listPriorMeetingsForContacts>>,
+            ).then((r) => r.data)
+          : [],
       ])
-    : [[], [], []];
+    : [[], [], [], []];
 
   const recentByContact: Record<
     string,
@@ -196,6 +210,41 @@ export default async function MeetingDetailPage(props: {
                         organization: c.organization,
                       }))}
                     />
+
+                    {priorMeetings.length > 0 && (
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>Previous meetings</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                          {priorMeetings.map((pm) => (
+                            <div
+                              key={pm.id}
+                              className="border-l-2 border-[var(--border)] pl-3"
+                            >
+                              <Link
+                                href={`/meetings/${pm.id}`}
+                                className="text-sm font-medium hover:underline"
+                              >
+                                {pm.title}
+                              </Link>
+                              <div className="text-xs text-[var(--muted-foreground)]">
+                                {formatMeetingDateTime(pm.scheduledAt)}
+                              </div>
+                              {pm.minutes?.trim() ? (
+                                <p className="mt-1 line-clamp-4 whitespace-pre-wrap text-xs text-[var(--muted-foreground)]">
+                                  {pm.minutes.trim()}
+                                </p>
+                              ) : (
+                                <p className="mt-1 text-xs italic text-[var(--muted-foreground)]">
+                                  No notes recorded.
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </CardContent>
+                      </Card>
+                    )}
 
                     <Card>
                       <CardHeader>
