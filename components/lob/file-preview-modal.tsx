@@ -85,7 +85,7 @@ export function FilePreviewModal({
           )}
 
           {url && !loading && file && (
-            <PreviewBody kind={kind} url={url} label={file.label} />
+            <PreviewBody kind={kind} url={url} label={file.label} linkId={file.linkId} />
           )}
         </div>
 
@@ -139,10 +139,12 @@ function PreviewBody({
   kind,
   url,
   label,
+  linkId,
 }: {
   kind: ReturnType<typeof previewKind>;
   url: string;
   label: string;
+  linkId: string;
 }) {
   if (kind === "image") {
     // eslint-disable-next-line @next/next/no-img-element
@@ -158,13 +160,14 @@ function PreviewBody({
   }
 
   if (kind === "html") {
-    // HTML decks may include scripts; sandbox them like present mode does.
+    // Served via our proxy so the Content-Type is text/html (Supabase stores it
+    // as text/plain, which renders as source). Sandboxed like present mode.
     return (
       <iframe
-        src={url}
+        src={`/api/materials/${linkId}/view`}
         title={label}
         className="h-full w-full bg-white"
-        sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+        sandbox="allow-scripts allow-popups allow-forms"
       />
     );
   }

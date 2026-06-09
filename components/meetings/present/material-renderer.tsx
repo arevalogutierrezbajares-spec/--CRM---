@@ -32,7 +32,18 @@ export function MaterialRenderer({ material }: { material: PresentMaterial }) {
         />
       );
     }
-    if (type.key === "html" || type.key === "pdf") {
+    if (type.key === "html") {
+      // Served via our proxy so the Content-Type is text/html (Supabase stores
+      // it as text/plain, which renders as source). Falls back to the raw URL.
+      return (
+        <Frame
+          src={`/api/materials/${material.id}/view`}
+          title={material.label}
+          fallbackHref={material.fileUrl}
+        />
+      );
+    }
+    if (type.key === "pdf") {
       return <Frame src={material.fileUrl} title={material.label} />;
     }
     if (type.key === "pptx") {
