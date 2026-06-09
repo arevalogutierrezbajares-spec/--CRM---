@@ -44,17 +44,13 @@ export async function uploadProjectFile(opts: {
   });
   if (!signed.ok) return { ok: false, error: signed.error };
 
-  // Browsers report .html as text/plain or "", and @supabase/storage-js
-  // uploadToSignedUrl puts a Blob into FormData and stores it with the Blob's
-  // OWN .type (the contentType option is ignored for Blob bodies). So Supabase
-  // served HTML decks as text/plain (+ nosniff) and they rendered as source.
-  // Re-wrap the file with the canonical content-type derived from its extension
-  // so the stored object is served correctly (text/html → renders as a page).
+  // Content-type matters: a .html stored as text/plain (+nosniff) renders as
+  // source, not a page. @supabase/storage-js sends Blob/File bodies as multipart
+  // FormData, and Supabase ignores the part's content-type (stores text/plain).
+  // Only the RAW-body path honors the contentType option — so upload an
+  // ArrayBuffer (not a Blob) with the canonical type derived from the extension.
   const contentType = canonicalMime(opts.file.name, opts.file.type);
-  const body =
-    opts.file.type === contentType
-      ? opts.file
-      : new File([opts.file], opts.file.name, { type: contentType });
+  const body = await opts.file.arrayBuffer();
 
   const supabase = createClient();
   const { error: uploadError } = await supabase.storage
