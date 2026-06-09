@@ -11,7 +11,7 @@ import {
   createUploadUrlAction,
   finalizeFileUploadAction,
 } from "@/app/(app)/lob/actions";
-import { isAllowedUpload, REJECT_MESSAGE } from "./allowed-types";
+import { canonicalMime, isAllowedUpload, REJECT_MESSAGE } from "./allowed-types";
 import { maxUploadBytes, tooLargeMessage } from "./limits";
 import { PROJECT_FILES_BUCKET } from "./constants";
 
@@ -48,7 +48,10 @@ export async function uploadProjectFile(opts: {
   const { error: uploadError } = await supabase.storage
     .from(PROJECT_FILES_BUCKET)
     .uploadToSignedUrl(signed.path, signed.token, opts.file, {
-      contentType: opts.file.type || undefined,
+      // Browsers report .html as text/plain or "" — which makes Supabase serve
+      // it as text/plain (+ nosniff), so the deck renders as source instead of
+      // a page. Derive the content-type from the extension so it always renders.
+      contentType: canonicalMime(opts.file.name, opts.file.type),
     });
   if (uploadError) {
     return { ok: false, error: uploadError.message || "Upload failed" };
