@@ -7,8 +7,8 @@ import {
   ArrowUpRight,
   Flag,
   PersonStanding,
-  Radio,
   Rocket,
+  Star,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DashCard } from "../shared/dash-card";
@@ -109,29 +109,36 @@ function Scene({ metric, color }: { metric: HomeCommandMetric; color: string }) 
     const dots = Math.max(0, Math.min(metric.value, CAP));
     const overflow = Math.max(0, metric.value - dots);
     return (
-      <div className="mt-3 flex h-9 items-center gap-2.5" aria-hidden>
-        {/* Broadcasting beacon: the radio "transmits" with expanding signal rings. */}
-        <span className="relative inline-flex h-5 w-5 items-center justify-center">
+      <div
+        className="relative mt-3 flex h-9 items-center gap-2.5 overflow-hidden"
+        aria-hidden
+      >
+        {/* Radiating, twinkling star. */}
+        <span className="relative inline-flex h-6 w-6 items-center justify-center">
           <span
             className="absolute inset-0 rounded-full"
             style={{
-              border: `1.5px solid ${color}`,
-              animation: "home-kpi-broadcast 1.8s ease-out infinite",
+              background: `radial-gradient(circle, ${color} 0%, transparent 68%)`,
+              animation: "home-kpi-radiate 1.8s ease-in-out infinite",
             }}
           />
-          <span
-            className="absolute inset-0 rounded-full"
-            style={{
-              border: `1.5px solid ${color}`,
-              animation: "home-kpi-broadcast 1.8s ease-out infinite",
-              animationDelay: "0.9s",
-            }}
-          />
-          <Radio
+          <Star
             size={20}
+            fill="currentColor"
             className="relative"
-            style={{ color, animation: "home-kpi-pulse 1.5s ease-in-out infinite" }}
+            style={{ color, animation: "home-kpi-twinkle 1.6s ease-in-out infinite" }}
           />
+        </span>
+        {/* Shooting star: a small star trailing a streak, flying across the card. */}
+        <span
+          className="pointer-events-none absolute h-2.5 w-2.5"
+          style={{ animation: "home-kpi-shoot 3.4s ease-in infinite" }}
+        >
+          <span
+            className="absolute right-1.5 top-1/2 h-px w-5 -translate-y-1/2 rounded-full"
+            style={{ background: `linear-gradient(to left, ${color}, transparent)` }}
+          />
+          <Star size={10} fill="currentColor" style={{ color }} />
         </span>
         <div className="flex items-center gap-1">
           {Array.from({ length: dots }).map((_, i) => (
@@ -320,15 +327,6 @@ export function DynamicKpiStrip({
             transform: translateY(-4px) rotate(-2deg);
           }
         }
-        @keyframes home-kpi-pulse {
-          0%,
-          100% {
-            transform: scale(1) rotate(-3deg);
-          }
-          50% {
-            transform: scale(1.1) rotate(3deg);
-          }
-        }
         @keyframes home-kpi-blip {
           0%,
           100% {
@@ -340,15 +338,48 @@ export function DynamicKpiStrip({
             transform: scale(1.15);
           }
         }
-        /* Expanding signal rings for the influencer "broadcast" beacon. */
-        @keyframes home-kpi-broadcast {
+        /* Influencer star: a soft radiating halo + a twinkle on the star itself. */
+        @keyframes home-kpi-radiate {
+          0%,
+          100% {
+            opacity: 0.15;
+            transform: scale(0.7);
+          }
+          50% {
+            opacity: 0.45;
+            transform: scale(1.15);
+          }
+        }
+        @keyframes home-kpi-twinkle {
+          0%,
+          100% {
+            opacity: 0.85;
+            transform: scale(1) rotate(0deg);
+          }
+          50% {
+            opacity: 1;
+            transform: scale(1.18) rotate(15deg);
+          }
+        }
+        /* Shooting star streaks diagonally across the card, then resets. */
+        @keyframes home-kpi-shoot {
           0% {
-            opacity: 0.6;
-            transform: scale(0.45);
+            opacity: 0;
+            left: -20%;
+            top: 0px;
+            transform: rotate(-16deg) scale(0.5);
+          }
+          12% {
+            opacity: 1;
+          }
+          55% {
+            opacity: 1;
           }
           100% {
             opacity: 0;
-            transform: scale(2);
+            left: 115%;
+            top: 26px;
+            transform: rotate(-16deg) scale(1);
           }
         }
         /* Peek-a-boo client: pops in with an overshoot, settles, pops back out. */
