@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { ExternalLink, FileText, ImageOff } from "lucide-react";
 import { materialType } from "@/lib/materials/material-type";
+import { useDeckFit, DECK_W, DECK_H } from "@/lib/decks/use-deck-fit";
 import type { PresentMaterial } from "./present-stage";
 
 /** Microsoft Office Online embed URL for a publicly-fetchable file URL. */
@@ -80,15 +81,11 @@ export function MaterialRenderer({ material }: { material: PresentMaterial }) {
 
 /**
  * HTML decks on a fixed 1280×720 canvas, CSS-scaled to fit the available space.
- * Decks are typically built for a desktop stage (fixed-width #stage, center
- * transform-origin); on a narrow/phone viewport they mis-center and clip. By
- * always giving the iframe a 1280×720 viewport and scaling the element, the deck
- * renders correctly everywhere — full and centered on laptop, a clean
- * width-filling slide on phone.
+ * Decks are built for a desktop stage (fixed-width #stage, center origin); on a
+ * narrow/phone viewport they mis-center and clip. We give the iframe a 1280×720
+ * viewport and scale the element — and on a portrait phone we rotate it 90° so a
+ * landscape deck fills the screen instead of sitting as a tiny band.
  */
-const DECK_W = 1280;
-const DECK_H = 720;
-
 function DeckFrame({
   src,
   title,
@@ -98,23 +95,8 @@ function DeckFrame({
   title: string;
   fallbackHref?: string;
 }) {
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(0);
+  const { ref: wrapRef, scale, rotate } = useDeckFit();
   const [loaded, setLoaded] = useState(false);
-
-  useEffect(() => {
-    const el = wrapRef.current;
-    if (!el) return;
-    // ResizeObserver fires once on observe + on every resize. setState here is
-    // in an async callback (not the effect body), so it's lint-safe.
-    const ro = new ResizeObserver(() => {
-      const { width, height } = el.getBoundingClientRect();
-      const s = Math.min(width / DECK_W, height / DECK_H);
-      setScale(s > 0 && Number.isFinite(s) ? s : 0);
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
 
   return (
     <div ref={wrapRef} className="relative h-full w-full overflow-hidden">
@@ -132,7 +114,7 @@ function DeckFrame({
           style={{
             width: DECK_W,
             height: DECK_H,
-            transform: `translate(-50%, -50%) scale(${scale})`,
+            transform: `translate(-50%, -50%) rotate(${rotate ? 90 : 0}deg) scale(${scale})`,
             transformOrigin: "center center",
           }}
           sandbox="allow-scripts allow-popups allow-forms"

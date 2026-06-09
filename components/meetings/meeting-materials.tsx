@@ -80,31 +80,93 @@ export function MeetingMaterials({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [pending, startTransition] = useTransition();
-  // Optimistic local order so reordering feels instant.
-  const [order, setOrder] = useState(materials.map((m) => m.projectLinkId));
-
-  const byId = useMemo(
-    () => new Map(materials.map((m) => [m.projectLinkId, m])),
-    [materials],
+  // Optimistic id order + optimistic add/remove sets, all reconciled with the
+  // live `materials` prop on every render. This makes attach/detach/reorder feel
+  // instant AND ensures a server refresh (router.refresh) surfaces changes
+  // without a full page reload — the old code seeded `order` from props once and
+  // never reconciled, so newly-attached materials never showed until reload.
+  const [order, setOrder] = useState<string[]>(() =>
+    materials.map((m) => m.projectLinkId),
   );
-  const ordered = order
-    .map((id) => byId.get(id))
-    .filter((m): m is MeetingMaterial => Boolean(m));
+  const [pendingAdds, setPendingAdds] = useState<MeetingMaterial[]>([]);
+  const [removedIds, setRemovedIds] = useState<Set<string>>(() => new Set());
 
-  function attach(projectLinkId: string) {
+  // Live rows + optimistic rows the server hasn't returned yet (live wins).
+  const byId = useMemo(() => {
+    const m = new Map(materials.map((mm) => [mm.projectLinkId, mm]));
+    for (const p of pendingAdds) if (!m.has(p.projectLinkId)) m.set(p.projectLinkId, p);
+    return m;
+  }, [materials, pendingAdds]);
+
+  // Render order: optimistic order first, then any material in props not yet in
+  // `order` (server-added after a refresh), minus anything optimistically removed.
+  const ordered = useMemo(() => {
+    const seen = new Set<string>();
+    const out: MeetingMaterial[] = [];
+    const push = (id: string) => {
+      if (seen.has(id) || removedIds.has(id)) return;
+      const m = byId.get(id);
+      if (m) {
+        out.push(m);
+        seen.add(id);
+      }
+    };
+    for (const id of order) push(id);
+    for (const id of byId.keys()) push(id);
+    return out;
+  }, [order, byId, removedIds]);
+
+  const attachedIds = useMemo(
+    () => new Set(ordered.map((m) => m.projectLinkId)),
+    [ordered],
+  );
+
+  function attach(material: AttachableMaterial) {
+    const id = material.projectLinkId;
+    if (attachedIds.has(id)) return;
+    // Render it immediately; the refresh reconciles with the real server row.
+    const optimisticRow: MeetingMaterial = {
+      projectLinkId: id,
+      sortOrder: order.length,
+      kind: material.kind,
+      label: material.label,
+      url: material.url,
+      description: null,
+      category: material.category,
+      storagePath: null,
+      mimeType: material.mimeType,
+      sizeBytes: null,
+      originalFilename: material.originalFilename,
+      lobId: material.lobId,
+      lobTitle: material.lobTitle,
+    };
+    setRemovedIds((s) => {
+      if (!s.has(id)) return s;
+      const n = new Set(s);
+      n.delete(id);
+      return n;
+    });
+    setPendingAdds((p) =>
+      p.some((x) => x.projectLinkId === id) ? p : [...p, optimisticRow],
+    );
+    setOrder((o) => (o.includes(id) ? o : [...o, id]));
     startTransition(async () => {
-      const res = await attachMeetingMaterial(meetingId, projectLinkId);
+      const res = await attachMeetingMaterial(meetingId, id);
       if (res.ok) {
         toast.success("Material added");
         router.refresh();
       } else {
         toast.error(res.error);
+        setOrder((o) => o.filter((x) => x !== id));
+        setPendingAdds((p) => p.filter((x) => x.projectLinkId !== id));
       }
     });
   }
 
   function detach(projectLinkId: string) {
+    setRemovedIds((s) => new Set(s).add(projectLinkId));
     setOrder((o) => o.filter((id) => id !== projectLinkId));
+    setPendingAdds((p) => p.filter((x) => x.projectLinkId !== projectLinkId));
     startTransition(async () => {
       const res = await detachMeetingMaterial(meetingId, projectLinkId);
       if (res.ok) {
@@ -112,19 +174,24 @@ export function MeetingMaterials({
         router.refresh();
       } else {
         toast.error(res.error);
+        setRemovedIds((s) => {
+          const n = new Set(s);
+          n.delete(projectLinkId);
+          return n;
+        });
         router.refresh();
       }
     });
   }
 
   function move(index: number, dir: -1 | 1) {
-    const next = [...order];
+    const ids = ordered.map((m) => m.projectLinkId);
     const target = index + dir;
-    if (target < 0 || target >= next.length) return;
-    [next[index], next[target]] = [next[target], next[index]];
-    setOrder(next);
+    if (target < 0 || target >= ids.length) return;
+    [ids[index], ids[target]] = [ids[target], ids[index]];
+    setOrder(ids);
     startTransition(async () => {
-      await reorderMeetingMaterialsAction(meetingId, next);
+      await reorderMeetingMaterialsAction(meetingId, ids);
       router.refresh();
     });
   }
@@ -236,6 +303,7 @@ export function MeetingMaterials({
         open={pickerOpen}
         onOpenChange={setPickerOpen}
         attachable={attachable}
+        attachedIds={attachedIds}
         onAttach={attach}
       />
 
@@ -438,12 +506,14 @@ function MaterialPicker({
   open,
   onOpenChange,
   attachable,
+  attachedIds,
   onAttach,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   attachable: AttachableMaterial[];
-  onAttach: (id: string) => void;
+  attachedIds: Set<string>;
+  onAttach: (material: AttachableMaterial) => void;
 }) {
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<MaterialTypeKey | "all">("all");
@@ -537,12 +607,15 @@ function MaterialPicker({
                   {lob}
                 </div>
                 <ul className="space-y-1">
-                  {items.map((m) => (
+                  {items.map((m) => {
+                    const isAttached =
+                      m.attached || attachedIds.has(m.projectLinkId);
+                    return (
                     <li key={m.projectLinkId}>
                       <button
                         type="button"
-                        disabled={m.attached}
-                        onClick={() => onAttach(m.projectLinkId)}
+                        disabled={isAttached}
+                        onClick={() => onAttach(m)}
                         className="flex w-full items-center gap-3 rounded-md border border-transparent px-2 py-2 text-left hover:border-[var(--border)] hover:bg-[var(--muted)] disabled:cursor-default disabled:opacity-50 disabled:hover:bg-transparent"
                       >
                         <span className="flex h-7 w-7 flex-none items-center justify-center rounded-md bg-[var(--muted)] text-[var(--muted-foreground)]">
@@ -556,14 +629,15 @@ function MaterialPicker({
                             {m.type.label}
                           </span>
                         </span>
-                        {m.attached ? (
+                        {isAttached ? (
                           <Badge variant="outline">Added</Badge>
                         ) : (
                           <Plus className="h-4 w-4 flex-none text-[var(--muted-foreground)]" />
                         )}
                       </button>
                     </li>
-                  ))}
+                    );
+                  })}
                 </ul>
               </div>
             ))

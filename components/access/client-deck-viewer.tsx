@@ -1,17 +1,15 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { ArrowLeft, ExternalLink } from "lucide-react";
+import { useDeckFit, DECK_W, DECK_H } from "@/lib/decks/use-deck-fit";
 
 /**
  * Full-screen client-facing HTML deck viewer. Decks are built for a fixed
- * 1280×720 desktop stage (center transform-origin, no flex-centered body), so on
- * a phone they mis-center and clip. Render the deck on a fixed 1280×720 logical
- * canvas and CSS-scale it to fit the viewport — full and centered on any device.
+ * 1280×720 desktop stage (center origin, no flex-centered body), so on a phone
+ * they mis-center and clip. Render on a fixed 1280×720 canvas, scaled to fit —
+ * and rotate 90° on a portrait phone so a landscape deck fills the screen.
  */
-const DECK_W = 1280;
-const DECK_H = 720;
-
 export function ClientDeckViewer({
   src,
   title,
@@ -21,23 +19,8 @@ export function ClientDeckViewer({
   title: string;
   backHref: string;
 }) {
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(0);
+  const { ref: wrapRef, scale, rotate } = useDeckFit();
   const [loaded, setLoaded] = useState(false);
-
-  useEffect(() => {
-    const el = wrapRef.current;
-    if (!el) return;
-    // ResizeObserver fires on observe + every resize; setState here is in an
-    // async callback (not the effect body), so it's lint-safe.
-    const ro = new ResizeObserver(() => {
-      const { width, height } = el.getBoundingClientRect();
-      const s = Math.min(width / DECK_W, height / DECK_H);
-      setScale(s > 0 && Number.isFinite(s) ? s : 0);
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
 
   return (
     <main className="fixed inset-0 flex flex-col bg-black text-white">
@@ -73,7 +56,7 @@ export function ClientDeckViewer({
             style={{
               width: DECK_W,
               height: DECK_H,
-              transform: `translate(-50%, -50%) scale(${scale})`,
+              transform: `translate(-50%, -50%) rotate(${rotate ? 90 : 0}deg) scale(${scale})`,
               transformOrigin: "center center",
             }}
             sandbox="allow-scripts allow-popups allow-forms"
