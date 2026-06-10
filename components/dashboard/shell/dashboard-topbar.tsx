@@ -3,7 +3,6 @@ import { MobileNav } from "@/components/layout/mobile-nav";
 import { NotificationBell } from "@/components/town-hall/notification-bell";
 import { MobileTownHallButton } from "@/components/town-hall/mobile-townhall-button";
 import { CommandSearchButton } from "@/components/command/command-search-button";
-import { BrandWidget } from "@/components/brand/brand-widget";
 import { ViewToggle } from "./view-toggle";
 import type { ReactNode } from "react";
 
@@ -29,7 +28,6 @@ export function DashboardTopbar({ email, displayName, header }: DashboardTopbarP
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
-        <BrandWidget />
         <div className="hidden md:block">
           <ViewToggle />
         </div>

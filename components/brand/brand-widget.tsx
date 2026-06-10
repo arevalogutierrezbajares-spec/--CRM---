@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { BrandPillars } from "./brand-pillars";
 
-/** Dispatching this on window plays the widget (e.g. the sidebar logo click). */
+/** Dispatching this on window plays the widget (e.g. a programmatic replay). */
 export const BRAND_INTRO_REPLAY_EVENT = "agb:brand-intro-replay";
 const SEEN_KEY = "agb_brand_intro_seen_v1";
 
@@ -74,18 +74,19 @@ const outerVariants = {
 };
 
 function phaseLabel(phase: Phase): "hidden" | "shown" | "culled" {
-  if (phase === "spell") return "shown"; // letters fly in
+  if (phase === "spell") return "shown";
   if (phase === "hold") return "shown";
-  return "culled"; // cull / settle / idle render the survivors
+  return "culled";
 }
 
 /**
- * Inline, tappable brand widget for the top-right of the top bar. Tap (or a
+ * Animated brand lockup for the sidebar header (top-left). Tap (or a
  * BRAND_INTRO_REPLAY_EVENT) plays the choreography IN PLACE — "ArevaloGutierrez-
- * Brewer Technologies" spells out and folds down to "AGB Technologies" — anchored
- * to its right edge so it grows left into the bar's empty middle, never a popup.
+ * Brewer Technologies" spells out and folds down to "AGB Technologies". The
+ * animated full name overlays so it can spill right over the content for the
+ * brief animation without shoving the sidebar layout. `rail` = icon-only.
  */
-export function BrandWidget() {
+export function BrandWidget({ rail = false }: { rail?: boolean }) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [runKey, setRunKey] = useState(0);
   const reduced = useReducedMotion();
@@ -97,7 +98,6 @@ export function BrandWidget() {
     setPhase("spell");
   }, [reduced]);
 
-  // Advance the phase timeline.
   useEffect(() => {
     if (phase === "idle") return;
     const { next, ms } = PHASE_AFTER[phase];
@@ -114,70 +114,94 @@ export function BrandWidget() {
       return;
     }
     if (reduced) return;
-    const t = setTimeout(play, 400);
+    const t = setTimeout(play, 500);
     return () => clearTimeout(t);
   }, [play, reduced]);
 
-  // Replay on demand (sidebar logo click dispatches this).
   useEffect(() => {
     const onReplay = () => play();
     window.addEventListener(BRAND_INTRO_REPLAY_EVENT, onReplay);
     return () => window.removeEventListener(BRAND_INTRO_REPLAY_EVENT, onReplay);
   }, [play]);
 
-  return (
-    <div className="relative hidden h-9 items-center sm:flex">
-      {/* Spacer holds the compact footprint in the bar's flow. */}
-      <span className="invisible flex items-center gap-1.5 whitespace-nowrap text-[14px]">
-        <span style={{ width: 22 }} />
-        <span className="font-semibold">AGB</span>&nbsp;Technologies
-      </span>
+  const letters = (
+    <motion.span
+      key={runKey}
+      aria-label="ArevaloGutierrezBrewer Technologies"
+      className="whitespace-nowrap text-[15px] leading-none tracking-tight"
+      initial="hidden"
+      animate={phaseLabel(phase)}
+    >
+      {Array.from(FULL_NAME).map((ch, i) => {
+        const ctx: LetterCtx = {
+          i,
+          keep: KEEP.has(i) || i >= WORD_START,
+          squash: SQUASHED.has(i),
+          rank: CULL_RANK[i] ?? 0,
+        };
+        return (
+          <motion.span key={i} aria-hidden custom={ctx} variants={outerVariants} className="inline-block overflow-visible">
+            <motion.span
+              custom={ctx}
+              variants={innerVariants}
+              className={`inline-block ${KEEP.has(i) ? "font-bold" : i >= WORD_START ? "font-medium" : ""}`}
+              style={{ transformOrigin: ctx.squash ? "50% 100%" : "50% 50%" }}
+            >
+              {ch === " " ? " " : ch}
+            </motion.span>
+          </motion.span>
+        );
+      })}
+    </motion.span>
+  );
 
-      {/* Real content — right-anchored so growth spills left, never rightward
-          over the email/bell/avatar icons. */}
+  // Rail (collapsed sidebar): just the mark; tap plays, and the name spills to
+  // the right over the content during the brief fold.
+  if (rail) {
+    return (
       <button
         type="button"
         onClick={play}
-        aria-label="AGB Technologies — play brand animation"
+        aria-label="AGB Technologies"
         title="AGB Technologies"
-        className="absolute right-0 top-1/2 z-10 flex -translate-y-1/2 items-center gap-1.5 rounded-md text-text-primary transition-opacity hover:opacity-80 active:scale-[0.98]"
+        className="relative flex items-center justify-center text-text-primary transition-opacity hover:opacity-80 active:scale-[0.96]"
       >
-        <BrandPillars key={runKey} size={22} play={playing} settle={phase === "settle"} className="shrink-0 text-text-primary" />
-        <motion.span
-          key={runKey}
-          aria-label="AGB Technologies"
-          className="whitespace-nowrap text-[14px] leading-none tracking-tight"
-          initial="hidden"
-          animate={phaseLabel(phase)}
-        >
-          {playing ? (
-            Array.from(FULL_NAME).map((ch, i) => {
-              const ctx: LetterCtx = {
-                i,
-                keep: KEEP.has(i) || i >= WORD_START,
-                squash: SQUASHED.has(i),
-                rank: CULL_RANK[i] ?? 0,
-              };
-              return (
-                <motion.span key={i} aria-hidden custom={ctx} variants={outerVariants} className="inline-block overflow-visible">
-                  <motion.span
-                    custom={ctx}
-                    variants={innerVariants}
-                    className={`inline-block ${KEEP.has(i) ? "font-bold" : i >= WORD_START ? "font-medium" : ""}`}
-                    style={{ transformOrigin: ctx.squash ? "50% 100%" : "50% 50%" }}
-                  >
-                    {ch === " " ? " " : ch}
-                  </motion.span>
-                </motion.span>
-              );
-            })
-          ) : (
-            <span aria-hidden>
-              <span className="font-bold">AGB</span>&nbsp;<span className="font-medium">Technologies</span>
-            </span>
-          )}
-        </motion.span>
+        <BrandPillars key={runKey} size={24} play={playing} settle={phase === "settle"} className="shrink-0 text-text-primary" />
+        {playing && (
+          <span className="pointer-events-none absolute left-full top-1/2 z-30 ml-2 -translate-y-1/2 rounded-md bg-[var(--bg-page)] px-2 py-1 shadow-md">
+            {letters}
+          </span>
+        )}
       </button>
-    </div>
+    );
+  }
+
+  // Expanded sidebar header (top-left): logo + the name.
+  return (
+    <button
+      type="button"
+      onClick={play}
+      aria-label="AGB Technologies — reproducir animación"
+      title="AGB Technologies"
+      className="flex min-w-0 items-center gap-2 text-text-primary transition-opacity hover:opacity-80 active:scale-[0.98]"
+    >
+      <BrandPillars key={runKey} size={24} play={playing} settle={phase === "settle"} className="shrink-0 text-text-primary" />
+      <span className="relative inline-block">
+        {/* Resting lockup — sets the slot width; fades out while animating. */}
+        <span
+          className={`whitespace-nowrap text-[15px] leading-none tracking-tight ${playing ? "opacity-0" : ""}`}
+          aria-hidden={playing}
+        >
+          <span className="font-bold">AGB</span>&nbsp;<span className="font-medium">Technologies</span>
+        </span>
+        {/* Animated full name — absolute so it spills right over the content
+            instead of shoving the collapse button; subtle plate for legibility. */}
+        {playing && (
+          <span className="pointer-events-none absolute left-0 top-1/2 z-30 -translate-y-1/2 rounded-md bg-[var(--bg-page)] pr-2 shadow-md">
+            {letters}
+          </span>
+        )}
+      </span>
+    </button>
   );
 }
