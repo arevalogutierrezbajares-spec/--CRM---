@@ -22,7 +22,7 @@ export function PartnerCommentThread({
   comments,
   onSubmit,
   onDelete,
-  ownerLabel = "Team",
+  ownerLabel = "El equipo",
 }: {
   comments: RepoComment[];
   onSubmit: (body: string) => Promise<RepoComment | null>;
@@ -72,14 +72,14 @@ export function PartnerCommentThread({
             <div key={c.id} className="group text-sm">
               <div className="flex items-center gap-2 text-[11px] text-[var(--muted-foreground)]">
                 <span className="font-medium text-[var(--foreground)]">
-                  {c.authorName ?? (c.authorKind === "owner" ? ownerLabel : "Guest")}
+                  {c.authorName ?? (c.authorKind === "owner" ? ownerLabel : "Invitado")}
                 </span>
                 {formatRelative(c.createdAt)}
                 {onDelete && (
                   <button
                     type="button"
                     onClick={() => void onDelete(c.id)}
-                    aria-label="Delete comment"
+                    aria-label="Eliminar comentario"
                     className="opacity-0 transition group-hover:opacity-70 hover:!opacity-100"
                   >
                     <Trash2 className="h-3 w-3" />
@@ -109,7 +109,7 @@ export function PartnerCommentThread({
               type="button"
               onClick={send}
               disabled={busy || !draft.trim()}
-              aria-label="Send comment"
+              aria-label="Enviar comentario"
               className="grid h-11 w-11 shrink-0 place-items-center rounded-md bg-[var(--primary)] text-[var(--primary-foreground)] transition hover:opacity-90 disabled:opacity-50"
             >
               <Send className="h-3.5 w-3.5" />

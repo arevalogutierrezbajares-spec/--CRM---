@@ -101,7 +101,7 @@ export default async function PublicAccessRoomPage({
     ]);
 
   const mentionCandidates = [
-    "Team",
+    "Equipo",
     ...participants.map((p) => p.displayName).filter((n): n is string => Boolean(n)),
   ];
 

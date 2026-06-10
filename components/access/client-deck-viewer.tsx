@@ -29,7 +29,7 @@ export function ClientDeckViewer({
           href={backHref}
           className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm text-white/70 transition-colors hover:text-white"
         >
-          <ArrowLeft className="h-4 w-4" /> Back
+          <ArrowLeft className="h-4 w-4" /> Volver
         </a>
         <div className="truncate text-sm font-medium text-white/80">{title}</div>
         <a

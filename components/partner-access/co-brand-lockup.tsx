@@ -27,7 +27,7 @@ export function CoBrandLockup({
         <LogoCircle
           src={clientLogoUrl as string}
           srcDark={null}
-          label={clientName ? `${clientName} logo` : "Client logo"}
+          label={clientName ? `${clientName} logo` : "Logo del cliente"}
           size={size}
           ring
           fill

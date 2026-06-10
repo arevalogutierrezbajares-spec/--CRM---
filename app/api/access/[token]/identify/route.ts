@@ -59,7 +59,7 @@ export async function POST(req: NextRequest, props: { params: Params }) {
   if (!result.ok) {
     if (result.error === "seat_full") {
       return NextResponse.json(
-        { error: "La sala está llena. Pide al anfitrión que agregue un lugar." },
+        { error: "La sala está llena. Pide al anfitrión que agregue un cupo." },
         { status: 403 },
       );
     }

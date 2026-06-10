@@ -25,9 +25,9 @@ export default async function ClientDeckPage({ params }: { params: Params }) {
   if (!row || row.share.kindSnapshot !== "file" || !row.storagePath) {
     return (
       <main className="flex min-h-dvh flex-col items-center justify-center gap-3 bg-black px-6 text-center text-white">
-        <p className="text-lg font-medium">This deck isn’t available.</p>
+        <p className="text-lg font-medium">Esta presentación no está disponible.</p>
         <a href={`/access/${token}`} className="text-sm text-white/60 underline">
-          Back to your room
+          Volver a tu sala
         </a>
       </main>
     );
@@ -36,7 +36,7 @@ export default async function ClientDeckPage({ params }: { params: Params }) {
   return (
     <ClientDeckViewer
       src={`/access/${token}/view/${shareId}`}
-      title={row.share.labelSnapshot ?? "Deck"}
+      title={row.share.labelSnapshot ?? "Presentación"}
       backHref={`/access/${token}`}
     />
   );

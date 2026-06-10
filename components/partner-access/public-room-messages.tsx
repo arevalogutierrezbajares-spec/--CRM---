@@ -67,10 +67,10 @@ export function PublicRoomMessages({
         setDraft("");
       } else {
         const data = (await res.json().catch(() => ({}))) as { error?: string };
-        setError(data.error ?? "Message didn't send. Try again.");
+        setError(data.error ?? "No se pudo enviar. Inténtalo de nuevo.");
       }
     } catch {
-      setError("Message didn't send. Check your connection and try again.");
+      setError("No se pudo enviar. Revisa tu conexión e inténtalo de nuevo.");
     } finally {
       setSending(false);
     }
@@ -103,7 +103,7 @@ export function PublicRoomMessages({
                     }`}
                   >
                     {mine
-                      ? message.authorName ?? "You"
+                      ? message.authorName ?? "Tú"
                       : message.authorName ?? ownerLabel}{" "}
                     · {formatRelative(message.createdAt)}
                   </div>
@@ -130,13 +130,13 @@ export function PublicRoomMessages({
           onSubmit={() => void send()}
           candidates={mentionCandidates}
           placeholder="Escribe un mensaje… @ para mencionar"
-          ariaLabel="Message to the team"
+          ariaLabel="Mensaje para el equipo"
           className="min-h-[44px] w-full resize-none rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[var(--ring)]"
         />
         <button
           type="submit"
           disabled={sending || !draft.trim()}
-          aria-label="Send message"
+          aria-label="Enviar mensaje"
           className="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-md bg-[var(--primary)] text-[var(--primary-foreground)] transition hover:opacity-90 disabled:opacity-50"
         >
           <Send className="h-4 w-4" />

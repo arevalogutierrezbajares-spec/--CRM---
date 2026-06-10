@@ -289,7 +289,7 @@ function PinStep({
           maxLength={4}
           disabled={checking || locked || ok}
           placeholder="••••"
-          aria-label="4-digit access code"
+          aria-label="Código de acceso de 4 dígitos"
           aria-invalid={Boolean(error)}
           aria-describedby={error ? "pin-error" : undefined}
           className="w-40 rounded-lg border border-white/15 bg-white/5 px-4 py-3 text-center font-mono text-2xl tracking-[0.5em] text-white outline-none focus:ring-2 focus:ring-[#D4A855]/60 disabled:opacity-50"
@@ -364,7 +364,7 @@ function IdentityStep({
         <p className="mt-1 text-sm text-white/70">
           Confirma quién eres para entrar.
           {seatsLeft !== null && seatsLeft <= 3 && seatsLeft > 0 && (
-            <span className="text-white/40"> {seatsLeft} {seatsLeft === 1 ? "lugar" : "lugares"} disponible{seatsLeft === 1 ? "" : "s"}.</span>
+            <span className="text-white/40"> {seatsLeft} {seatsLeft === 1 ? "cupo disponible" : "cupos disponibles"}.</span>
           )}
         </p>
       </div>
@@ -376,11 +376,11 @@ function IdentityStep({
               setMemberId(e.target.value);
               setError(null);
             }}
-            aria-label="Choose your name"
+            aria-label="Elige tu nombre"
             className="w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:ring-2 focus:ring-[#D4A855]/60"
           >
             <option value="" className="bg-neutral-900">
-              I&rsquo;m not listed…
+              No estoy en la lista…
             </option>
             {claimableMembers.map((m) => (
               <option key={m.id} value={m.id} className="bg-neutral-900">
@@ -407,8 +407,8 @@ function IdentityStep({
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          placeholder="you@company.com"
-          aria-label="Your email"
+          placeholder="nombre@empresa.com"
+          aria-label="Tu correo"
           className="w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2.5 text-sm text-white placeholder-white/30 outline-none focus:ring-2 focus:ring-[#D4A855]/60"
         />
 

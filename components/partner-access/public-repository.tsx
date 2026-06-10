@@ -199,7 +199,7 @@ export function PublicRepository({
                       <div className="min-w-0">
                         <h3 className="text-sm font-medium">{share.title}</h3>
                         <p className="text-xs text-[var(--muted-foreground)]">
-                          {share.projectTitle ?? "Project"} · {kindLabel(share.kindSnapshot)}
+                          {share.projectTitle ?? "Proyecto"} · {kindLabel(share.kindSnapshot)}
                           {share.sizeBytes ? ` · ${formatBytes(share.sizeBytes)}` : ""}
                         </p>
                       </div>

@@ -14,7 +14,7 @@ import {
 } from "@/lib/partner-room-gate.server";
 
 const Body = z.object({
-  body: z.string().trim().min(1, "Write a message first").max(4000),
+  body: z.string().trim().min(1, "Escribe un mensaje primero").max(4000),
 });
 
 // Soft flood guard for the unauthenticated composer.
@@ -28,23 +28,23 @@ export async function POST(req: NextRequest, props: { params: Params }) {
   const room = await resolvePartnerRoomByToken(token).catch(() => null);
   if (!room) {
     return NextResponse.json(
-      { error: "Room not found or access expired" },
+      { error: "Sala no encontrada o acceso expirado" },
       { status: 404 },
     );
   }
   if (!(await isPartnerRoomUnlocked(room))) {
-    return NextResponse.json({ error: "Room is locked" }, { status: 401 });
+    return NextResponse.json({ error: "La sala está bloqueada" }, { status: 401 });
   }
 
   let json: unknown;
   try {
     json = await req.json();
   } catch {
-    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+    return NextResponse.json({ error: "Solicitud inválida" }, { status: 400 });
   }
   const parsed = Body.safeParse(json);
   if (!parsed.success) {
-    return NextResponse.json({ error: "Write a message first" }, { status: 400 });
+    return NextResponse.json({ error: "Escribe un mensaje primero" }, { status: 400 });
   }
 
   const recent = await countRecentPartnerMessages({
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest, props: { params: Params }) {
   }).catch(() => 0);
   if (recent >= RATE_MAX_IN_WINDOW) {
     return NextResponse.json(
-      { error: "You're sending messages too fast. Try again in a moment." },
+      { error: "Estás enviando mensajes muy rápido. Espera un momento." },
       { status: 429 },
     );
   }
@@ -73,7 +73,7 @@ export async function POST(req: NextRequest, props: { params: Params }) {
   });
 
   if (!message) {
-    return NextResponse.json({ error: "Write a message first" }, { status: 400 });
+    return NextResponse.json({ error: "Escribe un mensaje primero" }, { status: 400 });
   }
 
   return NextResponse.json({
