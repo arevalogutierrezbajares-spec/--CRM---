@@ -1384,23 +1384,60 @@ export async function listShareableDocsForRoom(input: {
   }));
 }
 
-/** Set or clear a contact's brand logo URL (used for co-branded rooms). */
-export async function setContactLogoUrl(input: {
+/**
+ * Set/clear a contact's brand logo. Returns the previously-uploaded object path
+ * (if any) so the caller can clean up storage. `logoStoragePath` is set only for
+ * uploads; a pasted URL stores logoUrl and clears the path.
+ */
+export async function updateContactLogo(input: {
   workspaceId: string;
   contactId: string;
   logoUrl: string | null;
+  logoStoragePath: string | null;
 }) {
-  const [updated] = await db
-    .update(schema.contacts)
-    .set({ logoUrl: input.logoUrl, updatedAt: new Date() })
-    .where(
-      and(
-        eq(schema.contacts.id, input.contactId),
-        eq(schema.contacts.workspaceId, input.workspaceId),
-      ),
-    )
-    .returning({ id: schema.contacts.id });
-  return updated ?? null;
+  return db.transaction(async (tx) => {
+    const [existing] = await tx
+      .select({ logoStoragePath: schema.contacts.logoStoragePath })
+      .from(schema.contacts)
+      .where(
+        and(
+          eq(schema.contacts.id, input.contactId),
+          eq(schema.contacts.workspaceId, input.workspaceId),
+        ),
+      )
+      .limit(1);
+    if (!existing) return null;
+
+    await tx
+      .update(schema.contacts)
+      .set({
+        logoUrl: input.logoUrl,
+        logoStoragePath: input.logoStoragePath,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(schema.contacts.id, input.contactId),
+          eq(schema.contacts.workspaceId, input.workspaceId),
+        ),
+      );
+
+    const previousPath =
+      existing.logoStoragePath && existing.logoStoragePath !== input.logoStoragePath
+        ? existing.logoStoragePath
+        : null;
+    return { previousPath };
+  });
+}
+
+/** Public read: a contact's uploaded-logo storage path, by id (no workspace fence). */
+export async function getContactLogoStoragePath(contactId: string) {
+  const [row] = await db
+    .select({ logoStoragePath: schema.contacts.logoStoragePath })
+    .from(schema.contacts)
+    .where(eq(schema.contacts.id, contactId))
+    .limit(1);
+  return row?.logoStoragePath ?? null;
 }
 
 /** Light room fetch for action-layer checks (workspace-fenced). */

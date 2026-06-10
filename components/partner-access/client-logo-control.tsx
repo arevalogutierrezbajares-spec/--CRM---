@@ -1,17 +1,21 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ImageIcon, X } from "lucide-react";
+import { ImageIcon, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { setRoomClientLogoAction } from "@/app/(app)/partner-access/actions";
+import { createClient } from "@/lib/supabase/client";
+import { PROJECT_FILES_BUCKET } from "@/lib/project-files/constants";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { BrandLogo } from "@/db/queries/partner-access";
 
+const MAX_LOGO_BYTES = 5 * 1024 * 1024;
+
 /**
- * Owner control for a room's co-branding: shows which project logos auto-appear
- * (your side, derived from shared docs) and lets you set the client's logo URL.
+ * Owner control for a room's co-branding: shows the auto-derived project logos
+ * (your side) and lets you set the client's logo by drag-and-drop upload or URL.
  */
 export function ClientLogoControl({
   roomId,
@@ -28,7 +32,10 @@ export function ClientLogoControl({
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [value, setValue] = useState(clientLogoUrl ?? "");
+  const [value, setValue] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   if (!contactId) {
     return (
@@ -37,16 +44,14 @@ export function ClientLogoControl({
       </p>
     );
   }
+  const cid = contactId;
 
-  function save(next: string | null) {
+  function saveUrl(next: string | null) {
     startTransition(async () => {
-      const res = await setRoomClientLogoAction({
-        roomId,
-        contactId: contactId as string,
-        logoUrl: next,
-      });
+      const res = await setRoomClientLogoAction({ roomId, contactId: cid, logoUrl: next });
       if (res.ok) {
         toast.success(next ? "Client logo updated" : "Client logo removed");
+        setValue("");
         router.refresh();
       } else {
         toast.error(res.error);
@@ -54,11 +59,60 @@ export function ClientLogoControl({
     });
   }
 
-  const trimmed = value.trim();
-  const dirty = trimmed !== (clientLogoUrl ?? "");
+  async function upload(file: File) {
+    if (!file.type.startsWith("image/")) {
+      toast.error("Pick an image file (PNG, JPG, WEBP, SVG)");
+      return;
+    }
+    if (file.size > MAX_LOGO_BYTES) {
+      toast.error("Image must be under 5 MB");
+      return;
+    }
+    setUploading(true);
+    try {
+      const signRes = await fetch(`/api/contact-logo/${cid}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "sign",
+          filename: file.name,
+          mimeType: file.type,
+          sizeBytes: file.size,
+        }),
+      });
+      if (!signRes.ok) {
+        const { error } = (await signRes.json().catch(() => ({}))) as { error?: string };
+        throw new Error(error || "Could not prepare upload");
+      }
+      const { path, token } = (await signRes.json()) as { path: string; token: string };
+
+      const supabase = createClient();
+      const bytes = await file.arrayBuffer();
+      const { error: upErr } = await supabase.storage
+        .from(PROJECT_FILES_BUCKET)
+        .uploadToSignedUrl(path, token, bytes, { contentType: file.type });
+      if (upErr) throw new Error(upErr.message);
+
+      const finRes = await fetch(`/api/contact-logo/${cid}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "finalize", storagePath: path }),
+      });
+      if (!finRes.ok) throw new Error("Saved file but could not finalize");
+
+      toast.success("Logo uploaded");
+      router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  const busy = pending || uploading;
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div>
         <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted-foreground)]">
           Your projects
@@ -77,11 +131,7 @@ export function ClientLogoControl({
                 title={logo.title}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={logo.logoUrl}
-                  alt={`${logo.title} logo`}
-                  className="max-h-full max-w-full object-contain"
-                />
+                <img src={logo.logoUrl} alt={`${logo.title} logo`} className="max-h-full max-w-full object-contain" />
               </span>
             ))}
           </div>
@@ -92,61 +142,108 @@ export function ClientLogoControl({
         <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted-foreground)]">
           {contactName ? `${contactName}'s logo` : "Client logo"}
         </p>
-        <div className="mt-1.5 flex items-center gap-2">
-          <span className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-md border border-[var(--border)] bg-[var(--card)]">
+
+        {/* Dropzone */}
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => inputRef.current?.click()}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragOver(true);
+          }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragOver(false);
+            const file = e.dataTransfer.files?.[0];
+            if (file) void upload(file);
+          }}
+          className={`mt-1.5 flex w-full items-center gap-3 rounded-lg border border-dashed p-3 text-left transition disabled:opacity-60 ${
+            dragOver
+              ? "border-[var(--primary)] bg-[var(--secondary)]"
+              : "border-[var(--border)] hover:bg-[var(--secondary)]"
+          }`}
+        >
+          <span className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-md border border-[var(--border)] bg-[var(--card)]">
             {clientLogoUrl ? (
               /* eslint-disable-next-line @next/next/no-img-element */
-              <img
-                src={clientLogoUrl}
-                alt="Client logo"
-                className="max-h-full max-w-full object-contain p-1"
-              />
+              <img src={clientLogoUrl} alt="Client logo" className="max-h-full max-w-full object-contain p-1" />
             ) : (
-              <ImageIcon className="h-4 w-4 text-[var(--muted-foreground)]" />
+              <ImageIcon className="h-5 w-5 text-[var(--muted-foreground)]" />
             )}
           </span>
+          <span className="min-w-0 flex-1 text-sm">
+            <span className="flex items-center gap-1.5 font-medium">
+              <Upload className="h-3.5 w-3.5" />
+              {uploading ? "Uploading…" : clientLogoUrl ? "Replace logo" : "Upload a logo"}
+            </span>
+            <span className="mt-0.5 block text-xs text-[var(--muted-foreground)]">
+              Drag &amp; drop or click — PNG, JPG, WEBP, SVG up to 5 MB
+            </span>
+          </span>
+          {clientLogoUrl && (
+            <span
+              role="button"
+              tabIndex={0}
+              aria-label="Remove client logo"
+              onClick={(e) => {
+                e.stopPropagation();
+                saveUrl(null);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  saveUrl(null);
+                }
+              }}
+              className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-[var(--muted-foreground)] transition hover:bg-[var(--background)] hover:text-[var(--destructive)]"
+            >
+              <X className="h-4 w-4" />
+            </span>
+          )}
+        </button>
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) void upload(file);
+            e.target.value = "";
+          }}
+        />
+
+        {/* URL fallback */}
+        <div className="mt-2 flex items-center gap-2">
           <Input
             value={value}
-            onChange={(event) => setValue(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                if (dirty) save(trimmed || null);
+            onChange={(e) => setValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                if (value.trim()) saveUrl(value.trim());
               }
             }}
-            placeholder="https://… or /logos/client.svg"
+            placeholder="…or paste an image URL"
             aria-label="Client logo URL"
             className="font-mono text-xs"
           />
-          {clientLogoUrl && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              disabled={pending}
-              onClick={() => {
-                setValue("");
-                save(null);
-              }}
-              aria-label="Remove client logo"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          )}
-        </div>
-        <div className="mt-2 flex items-center gap-2">
           <Button
             type="button"
             size="sm"
-            disabled={pending || !dirty}
-            onClick={() => save(trimmed || null)}
+            variant="outline"
+            disabled={busy || !value.trim()}
+            onClick={() => saveUrl(value.trim())}
           >
-            {pending ? "Saving…" : "Save logo"}
+            Use URL
           </Button>
-          <p className="text-xs text-[var(--muted-foreground)]">
-            Paste an image URL. Shown to {contactName ?? "the client"} in every room.
-          </p>
         </div>
+        <p className="mt-1.5 text-xs text-[var(--muted-foreground)]">
+          Shown to {contactName ?? "the client"} in every room.
+        </p>
       </div>
     </div>
   );

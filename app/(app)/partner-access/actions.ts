@@ -21,7 +21,7 @@ import {
   recordPartnerShareTracking,
   regeneratePartnerRoomAccessToken,
   removeRoomMember,
-  setContactLogoUrl,
+  updateContactLogo,
   setPartnerRoomPasscode,
   setPartnerRoomSeatLimit,
   updatePartnerRoomDetails,
@@ -298,12 +298,16 @@ export async function setRoomClientLogoAction(opts: {
     if (url.length > 2048) return { ok: false, error: "That URL is too long" };
   }
 
-  const updated = await setContactLogoUrl({
+  const updated = await updateContactLogo({
     workspaceId: user.workspaceId,
     contactId: opts.contactId,
     logoUrl: url,
+    logoStoragePath: null,
   });
   if (!updated) return { ok: false, error: "Contact not found" };
+  if (updated.previousPath) {
+    await removeObjects([updated.previousPath]).catch(() => {});
+  }
 
   revalidatePath(`/partner-access/rooms/${opts.roomId}`);
   revalidatePath(`/contacts/${opts.contactId}`);

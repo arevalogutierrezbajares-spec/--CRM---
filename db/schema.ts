@@ -532,7 +532,8 @@ export const contacts = pgTable("contacts", {
   name: text("name").notNull(),
   type: contactType("type").notNull().default("person"),
   organization: text("organization"),
-  logoUrl: text("logo_url"), // client/company brand logo for co-branded rooms
+  logoUrl: text("logo_url"), // client/company brand logo for co-branded rooms (URL or proxy path)
+  logoStoragePath: text("logo_storage_path"), // set when the logo was uploaded (served via proxy)
   primaryOrgId: uuid("primary_org_id"),
   relationshipType: relationshipType("relationship_type")
     .notNull()
