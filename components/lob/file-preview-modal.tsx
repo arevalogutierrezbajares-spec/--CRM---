@@ -80,7 +80,10 @@ export function FilePreviewModal({
 
         <div
           className={`relative w-full overflow-hidden rounded-md border border-[var(--border)] bg-surface ${
-            isDeck ? "h-[84vh]" : "h-[72vh]"
+            // Cap deck height so header + footer + 84vh can never push the
+            // dialog past the viewport on short screens (which clipped the
+            // preview bottom).
+            isDeck ? "h-[min(84vh,calc(100vh-170px))]" : "h-[72vh]"
           }`}
         >
           {loading && (
