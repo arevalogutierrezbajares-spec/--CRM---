@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { ChevronRight, ChevronsLeft, ChevronsRight, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NAV_GROUPS, NAV_FOOTER, type NavLeaf } from "./nav-groups";
+import { BrandMark } from "@/components/brand/brand-mark";
 import { ExplorerTree } from "./explorer-tree";
 import { PresenceDots } from "@/components/presence/presence-dots";
 import type { WorkspaceDoc } from "@/db/queries/items";
@@ -120,17 +121,7 @@ export function Sidebar({
           className="flex min-h-14 flex-col items-center justify-center gap-1.5 border-b px-2 py-2"
           style={{ borderColor: "var(--border-default)" }}
         >
-          <Link
-            href="/"
-            title="Home"
-            aria-label="Home"
-            className="flex items-center justify-center rounded transition-opacity hover:opacity-80"
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logos/crm.svg" alt="AGB CRM" width={26} height={26} className="shrink-0 dark:hidden" />
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logos/crm-light.svg" alt="" aria-hidden width={26} height={26} className="shrink-0 hidden dark:block" />
-          </Link>
+          <BrandMark rail />
           <button
             type="button"
             onClick={toggleRail}
@@ -147,16 +138,7 @@ export function Sidebar({
           className="flex h-14 items-center justify-between gap-2 border-b px-3"
           style={{ borderColor: "var(--border-default)" }}
         >
-          <Link
-            href="/"
-            className="flex min-w-0 items-center gap-2 rounded transition-opacity hover:opacity-80"
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logos/crm.svg" alt="AGB CRM" width={28} height={28} className="shrink-0 dark:hidden" />
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logos/crm-light.svg" alt="" aria-hidden width={28} height={28} className="shrink-0 hidden dark:block" />
-            <span className="truncate text-[13px] font-medium tracking-tight text-text-primary">AGB CRM</span>
-          </Link>
+          <BrandMark />
           <button
             type="button"
             onClick={toggleRail}

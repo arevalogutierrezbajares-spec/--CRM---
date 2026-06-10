@@ -16,7 +16,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AGB CRM",
+  title: "AGB Technologies",
   description:
     "Enterprise chief-of-staff platform for the AGB portfolio.",
 };

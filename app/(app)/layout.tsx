@@ -5,6 +5,7 @@ import { PresenceProvider } from "@/lib/presence/presence-context";
 import { CommandPalette } from "@/components/command/command-palette";
 import { GlobalShortcuts } from "@/components/command/global-shortcuts";
 import { MotionProvider } from "@/components/motion-provider";
+import { BrandIntro } from "@/components/brand/brand-intro";
 import { AmbientPlayer } from "@/components/ambient/ambient-player";
 import { safeRead } from "@/lib/db-status";
 import { listWorkspaceDocs, type WorkspaceDoc } from "@/db/queries/items";
@@ -47,6 +48,7 @@ export default async function AppLayout({
         <CommandPalette />
         <GlobalShortcuts />
         <AmbientPlayer />
+        <BrandIntro />
       </div>
       </MotionProvider>
     </PresenceProvider>
