@@ -40,13 +40,11 @@ export function RoomParticipants({
                   <span className="ml-1 text-xs text-[var(--muted-foreground)]">(you)</span>
                 )}
               </div>
-              <div className="truncate text-xs text-[var(--muted-foreground)]">
-                {p.roleLabel
-                  ? p.roleLabel
-                  : p.lastViewedAt
-                    ? `active ${formatRelative(p.lastViewedAt)}`
-                    : ""}
-              </div>
+              {(p.roleLabel || p.lastViewedAt) && (
+                <div className="truncate text-xs text-[var(--muted-foreground)]">
+                  {p.roleLabel ?? `active ${formatRelative(p.lastViewedAt as Date)}`}
+                </div>
+              )}
             </div>
           </li>
         ))}

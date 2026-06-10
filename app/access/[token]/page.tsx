@@ -206,8 +206,22 @@ export default async function PublicAccessRoomPage({
           </div>
         </header>
 
+        {/* Team leads on mobile (warmth + who's looking after you), then folds
+            into the desktop sidebar. */}
+        {access.team.length > 0 && (
+          <div className="lg:hidden">
+            <RoomTeamDisplay
+              team={access.team.map((t) => ({
+                id: t.id,
+                displayName: t.displayName,
+                title: t.title,
+              }))}
+            />
+          </div>
+        )}
+
         <section className="grid gap-4 lg:grid-cols-[1fr_320px]">
-          <div className="space-y-4">
+          <div className="space-y-4 lg:order-1">
             <PublicRepository
               token={token}
               shares={repoShares}
@@ -277,15 +291,18 @@ export default async function PublicAccessRoomPage({
             </div>
           </div>
 
-          <aside className="space-y-4">
-            <RoomTeamDisplay
-              team={access.team.map((t) => ({
-                id: t.id,
-                displayName: t.displayName,
-                email: t.email,
-                title: t.title,
-              }))}
-            />
+          {/* On mobile the aside leads (team + next steps first); on desktop it
+              returns to the right column. */}
+          <aside className="space-y-4 lg:order-2">
+            <div className="hidden lg:block">
+              <RoomTeamDisplay
+                team={access.team.map((t) => ({
+                  id: t.id,
+                  displayName: t.displayName,
+                  title: t.title,
+                }))}
+              />
+            </div>
 
             <RoomParticipants participants={participants} youId={member?.id ?? null} />
 
@@ -296,10 +313,9 @@ export default async function PublicAccessRoomPage({
                 {access.contact.organization && (
                   <RoomRow label="Org" value={access.contact.organization} />
                 )}
-                <RoomRow
-                  label="Projects"
-                  value={projects.length > 0 ? projects.join(", ") : "Shared context"}
-                />
+                {projects.length > 0 && (
+                  <RoomRow label="Projects" value={projects.join(", ")} />
+                )}
                 <RoomRow label="Access" value="Active" />
               </div>
             </div>
@@ -320,6 +336,14 @@ export default async function PublicAccessRoomPage({
             </div>
           </aside>
         </section>
+
+        <footer className="mt-2 flex flex-col items-center gap-1 border-t border-[var(--border)] pt-5 text-center text-xs text-[var(--muted-foreground)]">
+          <span className="inline-flex items-center gap-1.5">
+            <Lock className="h-3 w-3" />
+            Private &amp; confidential — shared only with you.
+          </span>
+          <span>This room is monitored for your security. Please don&rsquo;t forward the link.</span>
+        </footer>
       </div>
     </main>
   );

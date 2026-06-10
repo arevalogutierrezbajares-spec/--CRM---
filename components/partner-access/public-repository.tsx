@@ -45,6 +45,16 @@ function mediaKind(mime: string | null): "image" | "video" | "none" {
   return "none";
 }
 
+const KIND_LABEL: Record<string, string> = {
+  file: "Document",
+  link: "Link",
+  doc: "Document",
+  note: "Note",
+};
+function kindLabel(kind: string) {
+  return KIND_LABEL[kind] ?? "Document";
+}
+
 export function PublicRepository({
   token,
   shares,
@@ -189,7 +199,7 @@ export function PublicRepository({
                       <div className="min-w-0">
                         <h3 className="text-sm font-medium">{share.title}</h3>
                         <p className="text-xs text-[var(--muted-foreground)]">
-                          {share.projectTitle ?? "Project"} · {share.kindSnapshot}
+                          {share.projectTitle ?? "Project"} · {kindLabel(share.kindSnapshot)}
                           {share.sizeBytes ? ` · ${formatBytes(share.sizeBytes)}` : ""}
                         </p>
                       </div>

@@ -37,22 +37,44 @@ export function RoomSignIn({
 }) {
   const router = useRouter();
   const audioRef = useRef<HTMLAudioElement>(null);
-  const [muted, setMuted] = useState(false);
+  // `playing` reflects whether sound is ACTUALLY audible (browsers block
+  // un-gestured autoplay), so the control never lies about its state.
+  const [playing, setPlaying] = useState(false);
   const [step, setStep] = useState<"intro" | "pin" | "identity" | "done">("intro");
 
-  // Play the sting + hold the intro, then advance to the first required step.
+  // Attempt the sting once, hold the intro, then advance + stop the audio so it
+  // never outlives the screen (WCAG 1.4.2 — audio doesn't exceed the moment).
   useEffect(() => {
     if (step !== "intro") return;
-    if (!muted) audioRef.current?.play().catch(() => {});
+    const el = audioRef.current;
+    el?.play().then(() => setPlaying(true)).catch(() => setPlaying(false));
     const id = setTimeout(() => {
+      const a = audioRef.current;
+      if (a) {
+        a.pause();
+        a.currentTime = 0;
+      }
+      setPlaying(false);
       setStep(needsPin ? "pin" : needsIdentity ? "identity" : "done");
-    }, 2600);
+    }, 2800);
     return () => clearTimeout(id);
-  }, [step, muted, needsPin, needsIdentity]);
+  }, [step, needsPin, needsIdentity]);
 
   useEffect(() => {
     if (step === "done") router.refresh();
   }, [step, router]);
+
+  function toggleSound() {
+    const el = audioRef.current;
+    if (!el) return;
+    if (playing) {
+      el.pause();
+      setPlaying(false);
+    } else {
+      el.currentTime = 0;
+      el.play().then(() => setPlaying(true)).catch(() => setPlaying(false));
+    }
+  }
 
   function afterPin() {
     setStep(needsIdentity ? "identity" : "done");
@@ -60,7 +82,12 @@ export function RoomSignIn({
 
   return (
     <main className="relative grid min-h-dvh place-items-center overflow-hidden bg-neutral-950 px-5 text-white">
-      <audio ref={audioRef} src={SIGN_IN_AUDIO} preload="auto" />
+      <audio
+        ref={audioRef}
+        src={SIGN_IN_AUDIO}
+        preload="auto"
+        onEnded={() => setPlaying(false)}
+      />
 
       {/* Ambient gradient wash */}
       <div
@@ -72,21 +99,16 @@ export function RoomSignIn({
         }}
       />
 
-      <button
-        type="button"
-        onClick={() => {
-          setMuted((m) => {
-            const next = !m;
-            if (next) audioRef.current?.pause();
-            else audioRef.current?.play().catch(() => {});
-            return next;
-          });
-        }}
-        aria-label={muted ? "Unmute" : "Mute"}
-        className="absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-full bg-white/10 text-white/70 transition hover:bg-white/20"
-      >
-        {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-      </button>
+      {step === "intro" && (
+        <button
+          type="button"
+          onClick={toggleSound}
+          aria-label={playing ? "Mute sound" : "Play sound"}
+          className="absolute right-4 top-4 grid h-11 w-11 place-items-center rounded-full bg-white/10 text-white/70 transition hover:bg-white/20"
+        >
+          {playing ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+        </button>
+      )}
 
       <div className="relative w-full max-w-md">
         <AnimatePresence mode="wait">
@@ -243,7 +265,7 @@ function PinStep({
           <Lock className="h-5 w-5 text-white/70" />
         </div>
         <h1 className="mt-4 text-lg font-semibold">{roomName}</h1>
-        <p className="mt-1 text-sm text-white/50">Enter your 4-digit access code.</p>
+        <p className="mt-1 text-sm text-white/70">Enter your 4-digit access code.</p>
       </div>
       <form
         className="mt-5 text-center"
@@ -268,15 +290,17 @@ function PinStep({
           disabled={checking || locked || ok}
           placeholder="••••"
           aria-label="4-digit access code"
+          aria-invalid={Boolean(error)}
+          aria-describedby={error ? "pin-error" : undefined}
           className="w-40 rounded-lg border border-white/15 bg-white/5 px-4 py-3 text-center font-mono text-2xl tracking-[0.5em] text-white outline-none focus:ring-2 focus:ring-[#D4A855]/60 disabled:opacity-50"
         />
         {error && (
-          <p role="alert" className="mt-3 text-sm text-red-400">
+          <p id="pin-error" role="alert" className="mt-3 text-sm text-red-400">
             {error}
           </p>
         )}
         {(checking || ok) && (
-          <p className="mt-3 text-sm text-white/50">{ok ? "Unlocked…" : "Checking…"}</p>
+          <p className="mt-3 text-sm text-white/70">{ok ? "Unlocked…" : "Checking…"}</p>
         )}
       </form>
     </Card>
@@ -337,7 +361,7 @@ function IdentityStep({
     <Card>
       <div className="text-center">
         <h1 className="text-lg font-semibold">{roomName}</h1>
-        <p className="mt-1 text-sm text-white/50">
+        <p className="mt-1 text-sm text-white/70">
           Confirm who you are to enter.
           {seatsLeft !== null && seatsLeft <= 3 && seatsLeft > 0 && (
             <span className="text-white/40"> {seatsLeft} seat{seatsLeft === 1 ? "" : "s"} left.</span>

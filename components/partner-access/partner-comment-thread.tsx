@@ -57,10 +57,13 @@ export function PartnerCommentThread({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex items-center gap-1.5 text-xs text-[var(--muted-foreground)] transition hover:text-[var(--foreground)]"
+        aria-expanded={open}
+        className="inline-flex items-center gap-1.5 rounded-md text-xs text-[var(--muted-foreground)] transition hover:text-[var(--foreground)]"
       >
         <MessageSquare className="h-3.5 w-3.5" />
-        {merged.length > 0 ? `${merged.length} comment${merged.length === 1 ? "" : "s"}` : "Comment"}
+        {merged.length > 0
+          ? `${merged.length} comment${merged.length === 1 ? "" : "s"}`
+          : "Add comment"}
       </button>
 
       {open && (
@@ -107,7 +110,7 @@ export function PartnerCommentThread({
               onClick={send}
               disabled={busy || !draft.trim()}
               aria-label="Send comment"
-              className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-[var(--primary)] text-[var(--primary-foreground)] transition hover:opacity-90 disabled:opacity-50"
+              className="grid h-11 w-11 shrink-0 place-items-center rounded-md bg-[var(--primary)] text-[var(--primary-foreground)] transition hover:opacity-90 disabled:opacity-50"
             >
               <Send className="h-3.5 w-3.5" />
             </button>

@@ -282,7 +282,6 @@ export default async function PartnerRoomPreviewPage({ params }: { params: Param
               team={detail.team.map((t) => ({
                 id: t.id,
                 displayName: t.displayName,
-                email: t.email,
                 title: t.title,
               }))}
             />

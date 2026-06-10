@@ -75,6 +75,13 @@ export function MentionTextarea({
         rows={rows}
         placeholder={placeholder}
         aria-label={ariaLabel}
+        role="combobox"
+        aria-expanded={open && matches.length > 0}
+        aria-controls={open && matches.length > 0 ? "mention-listbox" : undefined}
+        aria-activedescendant={
+          open && matches.length > 0 ? `mention-opt-${active}` : undefined
+        }
+        aria-autocomplete="list"
         className={className}
         onChange={(e) => {
           onChange(e.target.value);
@@ -109,9 +116,13 @@ export function MentionTextarea({
         }}
       />
       {open && matches.length > 0 && (
-        <ul className="absolute bottom-full z-10 mb-1 w-56 overflow-hidden rounded-md border border-[var(--border)] bg-[var(--card)] shadow-md">
+        <ul
+          id="mention-listbox"
+          role="listbox"
+          className="absolute bottom-full z-10 mb-1 w-56 overflow-hidden rounded-md border border-[var(--border)] bg-[var(--card)] shadow-md"
+        >
           {matches.map((name, i) => (
-            <li key={name}>
+            <li key={name} id={`mention-opt-${i}`} role="option" aria-selected={i === active}>
               <button
                 type="button"
                 onMouseDown={(e) => {
