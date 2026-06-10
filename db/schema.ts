@@ -795,6 +795,8 @@ export const partnerRooms = pgTable("partner_rooms", {
   passcodeHash: text("passcode_hash"),
   passcodeFailedCount: integer("passcode_failed_count").notNull().default(0),
   passcodeLockedUntil: timestamp("passcode_locked_until", { withTimezone: true }),
+  // Max distinct guests who may claim a seat (enter email at the gate). Null = unlimited.
+  seatLimit: integer("seat_limit"),
   createdBy: uuid("created_by")
     .notNull()
     .references(() => users.id),
@@ -821,10 +823,13 @@ export const partnerRoomMembers = pgTable(
     contactId: uuid("contact_id").references(() => contacts.id, {
       onDelete: "set null",
     }),
-    email: text("email").notNull(),
+    // Nullable: an owner can pre-add an expected guest by name; the guest
+    // "claims" the seat by entering their email on first sign-in.
+    email: text("email"),
     displayName: text("display_name"),
     roleLabel: text("role_label"),
     invitedAt: timestamp("invited_at", { withTimezone: true }),
+    claimedAt: timestamp("claimed_at", { withTimezone: true }),
     lastViewedAt: timestamp("last_viewed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()

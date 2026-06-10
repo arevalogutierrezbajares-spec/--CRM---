@@ -14,8 +14,10 @@ import { Button } from "@/components/ui/button";
 import { formatBytes } from "@/lib/project-files/limits";
 import { formatRelative } from "@/lib/utils";
 import {
+  countClaimedSeats,
   getPartnerRoomMember,
   getPublicPartnerRoomByToken,
+  listClaimableRoomMembers,
   recordPublicPartnerRoomView,
   type PublicPartnerRoom,
 } from "@/db/queries/partner-access";
@@ -30,9 +32,8 @@ import {
 import { materialType } from "@/lib/materials/material-type";
 import { PublicUploadForm } from "@/components/partner-access/public-upload-form";
 import { PublicNextSteps } from "@/components/partner-access/public-next-steps";
-import { PublicIdentify } from "@/components/partner-access/public-identify";
 import { PublicRoomMessages } from "@/components/partner-access/public-room-messages";
-import { RoomGate } from "@/components/partner-access/room-gate";
+import { RoomSignIn } from "@/components/partner-access/room-sign-in";
 import { CoBrandLockup } from "@/components/partner-access/co-brand-lockup";
 
 export const dynamic = "force-dynamic";
@@ -48,10 +49,7 @@ export default async function PublicAccessRoomPage({
   const access = await getPublicPartnerRoomByToken({ token }).catch(() => null);
   if (!access) return <UnavailableRoom />;
 
-  if (!(await isPartnerRoomUnlocked(access.room))) {
-    return <RoomGate token={token} roomName={access.room.name} />;
-  }
-
+  const unlocked = await isPartnerRoomUnlocked(access.room);
   const memberId = await getPartnerMemberIdFromCookies(access.room.id);
   const member = memberId
     ? await getPartnerRoomMember({
@@ -59,6 +57,35 @@ export default async function PublicAccessRoomPage({
         memberId,
       }).catch(() => null)
     : null;
+
+  // Managed rooms (a seat limit is set) require the guest to sign in; a passcode
+  // adds a PIN step. Both happen on the branded sign-in screen.
+  const needsPin = Boolean(access.room.passcodeHash) && !unlocked;
+  const needsIdentity = access.room.seatLimit !== null && !member;
+  if (needsPin || needsIdentity) {
+    const [claimable, claimed] = await Promise.all([
+      needsIdentity
+        ? listClaimableRoomMembers({ roomId: access.room.id }).catch(() => [])
+        : Promise.resolve([]),
+      access.room.seatLimit !== null
+        ? countClaimedSeats({ roomId: access.room.id }).catch(() => 0)
+        : Promise.resolve(0),
+    ]);
+    const seatsLeft =
+      access.room.seatLimit !== null
+        ? Math.max(0, access.room.seatLimit - claimed)
+        : null;
+    return (
+      <RoomSignIn
+        token={token}
+        roomName={access.room.name}
+        needsPin={needsPin}
+        needsIdentity={needsIdentity}
+        claimableMembers={claimable}
+        seatsLeft={seatsLeft}
+      />
+    );
+  }
 
   await recordPublicPartnerRoomView({
     roomId: access.room.id,
@@ -249,13 +276,6 @@ export default async function PublicAccessRoomPage({
           </div>
 
           <aside className="space-y-4">
-            <PublicIdentify
-              token={token}
-              identifiedAs={
-                member ? { email: member.email, name: member.displayName } : null
-              }
-            />
-
             <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
               <h2 className="text-base font-semibold">Room Status</h2>
               <div className="mt-3 space-y-3 text-sm">

@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import {
-  countPartnerRoomMembers,
-  getPartnerMemberByEmail,
-  identifyPartnerRoomMember,
+  claimPartnerRoomSeat,
   resolvePartnerRoomByToken,
 } from "@/db/queries/partner-access";
 import {
@@ -12,11 +10,10 @@ import {
   partnerMemberCookieName,
 } from "@/lib/partner-room-gate.server";
 
-const MAX_MEMBERS_PER_ROOM = 200;
-
 const Body = z.object({
   email: z.string().trim().toLowerCase().email().max(255),
   name: z.string().trim().max(120).optional(),
+  memberId: z.string().uuid().optional(),
 });
 
 type Params = Promise<{ token: string }>;
@@ -30,6 +27,7 @@ export async function POST(req: NextRequest, props: { params: Params }) {
       { status: 404 },
     );
   }
+  // PIN must be cleared before a seat can be claimed.
   if (!(await isPartnerRoomUnlocked(room))) {
     return NextResponse.json({ error: "Room is locked" }, { status: 401 });
   }
@@ -45,38 +43,37 @@ export async function POST(req: NextRequest, props: { params: Params }) {
     return NextResponse.json({ error: "Enter a valid email" }, { status: 400 });
   }
 
-  // Cap unbounded member growth from scripted submissions — existing members
-  // (re-identifying) are always allowed through.
-  const existing = await getPartnerMemberByEmail({
-    roomId: room.id,
-    email: parsed.data.email,
-  }).catch(() => null);
-  if (!existing) {
-    const count = await countPartnerRoomMembers({ roomId: room.id }).catch(() => 0);
-    if (count >= MAX_MEMBERS_PER_ROOM) {
-      return NextResponse.json(
-        { error: "This room is not accepting new sign-ins right now." },
-        { status: 429 },
-      );
-    }
-  }
-
-  const member = await identifyPartnerRoomMember({
+  const result = await claimPartnerRoomSeat({
     workspaceId: room.workspaceId,
     roomId: room.id,
     contactId: room.primaryContactId,
     email: parsed.data.email,
-    displayName: parsed.data.name ?? null,
-  });
+    name: parsed.data.name ?? null,
+    memberId: parsed.data.memberId ?? null,
+    seatLimit: room.seatLimit,
+  }).catch(() => null);
+
+  if (!result) {
+    return NextResponse.json({ error: "Could not sign you in" }, { status: 500 });
+  }
+  if (!result.ok) {
+    if (result.error === "seat_full") {
+      return NextResponse.json(
+        { error: "This room is full. Ask the host to add a seat." },
+        { status: 403 },
+      );
+    }
+    return NextResponse.json({ error: "Please enter your name" }, { status: 400 });
+  }
 
   const res = NextResponse.json({
     ok: true,
-    email: member.email,
-    name: member.displayName,
+    email: result.member.email,
+    name: result.member.displayName,
   });
   res.cookies.set(
     partnerMemberCookieName(room.id),
-    member.id,
+    result.member.id,
     PARTNER_GATE_COOKIE_OPTIONS,
   );
   return res;

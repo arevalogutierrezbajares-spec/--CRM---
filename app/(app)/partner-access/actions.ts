@@ -13,14 +13,17 @@ import {
   type PartnerShareChannel,
 } from "@/lib/partner-access";
 import {
+  addExpectedGuest,
   createPartnerRoomForContact,
   createPartnerShare,
   getPartnerRoomBasic,
   listShareableDocsForRoom,
   recordPartnerShareTracking,
   regeneratePartnerRoomAccessToken,
+  removeRoomMember,
   setContactLogoUrl,
   setPartnerRoomPasscode,
+  setPartnerRoomSeatLimit,
   updatePartnerRoomDetails,
   updatePartnerRoomStatus,
   updatePartnerSharePermissions,
@@ -304,6 +307,67 @@ export async function setRoomClientLogoAction(opts: {
 
   revalidatePath(`/partner-access/rooms/${opts.roomId}`);
   revalidatePath(`/contacts/${opts.contactId}`);
+  return { ok: true };
+}
+
+export async function setRoomSeatLimitAction(opts: {
+  roomId: string;
+  seatLimit: number | null;
+}): Promise<PartnerRoomActionResult> {
+  const user = await requireUser();
+
+  const seatLimit = opts.seatLimit;
+  if (seatLimit !== null) {
+    if (!Number.isInteger(seatLimit) || seatLimit < 1 || seatLimit > 1000) {
+      return { ok: false, error: "Enter a seat count between 1 and 1000" };
+    }
+  }
+
+  const updated = await setPartnerRoomSeatLimit({
+    workspaceId: user.workspaceId,
+    roomId: opts.roomId,
+    seatLimit,
+  });
+  if (!updated) return { ok: false, error: "Room not found" };
+
+  revalidatePath(`/partner-access/rooms/${opts.roomId}`);
+  return { ok: true, id: opts.roomId };
+}
+
+export async function addExpectedGuestAction(opts: {
+  roomId: string;
+  name: string;
+  roleLabel?: string | null;
+}): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  const user = await requireUser();
+  const name = opts.name.trim();
+  if (!name) return { ok: false, error: "Enter a name" };
+
+  const room = await getPartnerRoomBasic({
+    workspaceId: user.workspaceId,
+    roomId: opts.roomId,
+  });
+  if (!room) return { ok: false, error: "Room not found" };
+
+  const row = await addExpectedGuest({
+    workspaceId: user.workspaceId,
+    roomId: opts.roomId,
+    name,
+    roleLabel: opts.roleLabel,
+  });
+  if (!row) return { ok: false, error: "Could not add guest" };
+
+  revalidatePath(`/partner-access/rooms/${opts.roomId}`);
+  return { ok: true, id: row.id };
+}
+
+export async function removeRoomMemberAction(opts: {
+  roomId: string;
+  memberId: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const user = await requireUser();
+  await removeRoomMember({ workspaceId: user.workspaceId, memberId: opts.memberId });
+  revalidatePath(`/partner-access/rooms/${opts.roomId}`);
   return { ok: true };
 }
 

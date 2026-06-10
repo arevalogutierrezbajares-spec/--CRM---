@@ -21,6 +21,7 @@ import { DbBanner } from "@/components/db-banner";
 import { SectionLabel } from "@/components/dashboard/shared/section-label";
 import { AddDocsDialog } from "@/components/partner-access/add-docs-dialog";
 import { ClientLogoControl } from "@/components/partner-access/client-logo-control";
+import { RoomGuestsManager } from "@/components/partner-access/room-guests-manager";
 import { RoomAccessLinkActions } from "@/components/partner-access/room-access-link-actions";
 import { RoomDetailsForm } from "@/components/partner-access/room-details-form";
 import { RoomMessagesManager } from "@/components/partner-access/room-messages-manager";
@@ -431,7 +432,7 @@ export default async function PartnerAccessRoomPage(props: { params: Params }) {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <UsersRound className="h-4 w-4" />
-                  People in this room
+                  Guests &amp; seats
                   {detail.members.length > 0 && (
                     <Badge variant="secondary" className="ml-auto">
                       {detail.members.length}
@@ -440,31 +441,18 @@ export default async function PartnerAccessRoomPage(props: { params: Params }) {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {detail.members.length === 0 ? (
-                  <p className="text-sm text-[var(--muted-foreground)]">
-                    No one has introduced themselves yet. Visitors can leave
-                    their email on the room page.
-                  </p>
-                ) : (
-                  <ul className="space-y-2">
-                    {detail.members.map((member) => (
-                      <li
-                        key={member.id}
-                        className="rounded-md border border-[var(--border)] p-2.5"
-                      >
-                        <div className="truncate text-sm font-medium">
-                          {member.displayName ?? member.email}
-                        </div>
-                        <div className="truncate text-xs text-[var(--muted-foreground)]">
-                          {member.displayName ? `${member.email} · ` : ""}
-                          {member.lastViewedAt
-                            ? `last seen ${formatRelative(member.lastViewedAt)}`
-                            : "never viewed"}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                <RoomGuestsManager
+                  roomId={room.id}
+                  seatLimit={room.seatLimit}
+                  members={detail.members.map((m) => ({
+                    id: m.id,
+                    displayName: m.displayName,
+                    email: m.email,
+                    roleLabel: m.roleLabel,
+                    claimedAt: m.claimedAt?.toISOString() ?? null,
+                    lastViewedAt: m.lastViewedAt?.toISOString() ?? null,
+                  }))}
+                />
               </CardContent>
             </Card>
 

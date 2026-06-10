@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, inArray, isNull, ne, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import {
   createPartnerAccessToken,
@@ -995,60 +995,224 @@ export async function verifyPartnerRoomPasscode(input: {
   };
 }
 
-/** Upsert a self-identified room visitor into partner_room_members. */
-export async function identifyPartnerRoomMember(input: {
+/** Members who have claimed a seat (entered an email). */
+export async function countClaimedSeats(input: { roomId: string }) {
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(schema.partnerRoomMembers)
+    .where(
+      and(
+        eq(schema.partnerRoomMembers.roomId, input.roomId),
+        isNotNull(schema.partnerRoomMembers.email),
+      ),
+    );
+  return row?.count ?? 0;
+}
+
+/** Pre-added, not-yet-claimed guest names for the sign-in dropdown. */
+export async function listClaimableRoomMembers(input: { roomId: string }) {
+  return db
+    .select({
+      id: schema.partnerRoomMembers.id,
+      displayName: schema.partnerRoomMembers.displayName,
+      roleLabel: schema.partnerRoomMembers.roleLabel,
+    })
+    .from(schema.partnerRoomMembers)
+    .where(
+      and(
+        eq(schema.partnerRoomMembers.roomId, input.roomId),
+        isNull(schema.partnerRoomMembers.email),
+      ),
+    )
+    .orderBy(asc(schema.partnerRoomMembers.displayName));
+}
+
+export type ClaimSeatResult =
+  | { ok: true; member: typeof schema.partnerRoomMembers.$inferSelect; reentry: boolean }
+  | { ok: false; error: "seat_full" | "name_required" };
+
+/**
+ * Claim a seat in a room: a returning email re-enters freely; a new email
+ * claims a pre-added name (memberId) or creates a fresh member — both subject
+ * to the room's seat_limit. Atomic seat check inside the transaction.
+ */
+export async function claimPartnerRoomSeat(input: {
   workspaceId: string;
   roomId: string;
   contactId: string | null;
   email: string;
-  displayName?: string | null;
-}) {
+  name?: string | null;
+  memberId?: string | null;
+  seatLimit: number | null;
+}): Promise<ClaimSeatResult> {
   const email = input.email.trim().toLowerCase();
-  const displayName = input.displayName?.trim() || null;
+  const name = input.name?.trim() || null;
   const now = new Date();
 
-  const member = await db.transaction(async (tx) => {
-    // Upsert on (roomId, email) so a double-submit / retried fetch can't throw
-    // a unique-violation 500. onConflict counts as "already a member".
-    const [row] = await tx
+  return db.transaction(async (tx) => {
+    // Returning visitor (same email already on the room): always allowed.
+    const [byEmail] = await tx
+      .select()
+      .from(schema.partnerRoomMembers)
+      .where(
+        and(
+          eq(schema.partnerRoomMembers.roomId, input.roomId),
+          eq(schema.partnerRoomMembers.email, email),
+        ),
+      )
+      .limit(1);
+    if (byEmail) {
+      const [updated] = await tx
+        .update(schema.partnerRoomMembers)
+        .set({ lastViewedAt: now, displayName: byEmail.displayName ?? name })
+        .where(eq(schema.partnerRoomMembers.id, byEmail.id))
+        .returning();
+      return { ok: true as const, member: updated, reentry: true };
+    }
+
+    // New claim — enforce the seat cap on claimed (email-bearing) members.
+    if (input.seatLimit !== null) {
+      const [{ claimed }] = await tx
+        .select({ claimed: sql<number>`count(*)::int` })
+        .from(schema.partnerRoomMembers)
+        .where(
+          and(
+            eq(schema.partnerRoomMembers.roomId, input.roomId),
+            isNotNull(schema.partnerRoomMembers.email),
+          ),
+        );
+      if (claimed >= input.seatLimit) {
+        return { ok: false as const, error: "seat_full" as const };
+      }
+    }
+
+    let member: typeof schema.partnerRoomMembers.$inferSelect;
+    if (input.memberId) {
+      // Claim a pre-added name (must be unclaimed + in this room).
+      const [pre] = await tx
+        .select()
+        .from(schema.partnerRoomMembers)
+        .where(
+          and(
+            eq(schema.partnerRoomMembers.id, input.memberId),
+            eq(schema.partnerRoomMembers.roomId, input.roomId),
+            isNull(schema.partnerRoomMembers.email),
+          ),
+        )
+        .limit(1);
+      if (!pre) {
+        // Name taken / invalid — fall through to a fresh insert below.
+      } else {
+        [member] = await tx
+          .update(schema.partnerRoomMembers)
+          .set({
+            email,
+            displayName: name ?? pre.displayName,
+            claimedAt: now,
+            lastViewedAt: now,
+          })
+          .where(eq(schema.partnerRoomMembers.id, pre.id))
+          .returning();
+        await logClaim(tx, input, email, member.displayName);
+        return { ok: true as const, member, reentry: false };
+      }
+    }
+
+    if (!name) return { ok: false as const, error: "name_required" as const };
+
+    [member] = await tx
       .insert(schema.partnerRoomMembers)
       .values({
         workspaceId: input.workspaceId,
         roomId: input.roomId,
         contactId: input.contactId,
         email,
-        displayName,
+        displayName: name,
+        claimedAt: now,
         lastViewedAt: now,
       })
-      .onConflictDoUpdate({
-        target: [
-          schema.partnerRoomMembers.roomId,
-          schema.partnerRoomMembers.email,
-        ],
-        set: {
-          displayName: sql`coalesce(${displayName ?? null}, ${schema.partnerRoomMembers.displayName})`,
-          lastViewedAt: now,
-        },
-      })
       .returning();
+    await logClaim(tx, input, email, member.displayName);
+    return { ok: true as const, member, reentry: false };
+  });
+}
 
-    await tx.insert(schema.partnerAccessEvents).values({
+async function logClaim(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  input: { workspaceId: string; roomId: string; contactId: string | null },
+  email: string,
+  displayName: string | null,
+) {
+  const now = new Date();
+  await tx.insert(schema.partnerAccessEvents).values({
+    workspaceId: input.workspaceId,
+    roomId: input.roomId,
+    contactId: input.contactId,
+    eventType: "member_identified",
+    metadata: { email, displayName },
+  });
+  await tx
+    .update(schema.partnerRooms)
+    .set({ lastActivityAt: now, updatedAt: now })
+    .where(eq(schema.partnerRooms.id, input.roomId));
+}
+
+/** Owner: set/clear the seat cap on a room. */
+export async function setPartnerRoomSeatLimit(input: {
+  workspaceId: string;
+  roomId: string;
+  seatLimit: number | null;
+}) {
+  const [updated] = await db
+    .update(schema.partnerRooms)
+    .set({ seatLimit: input.seatLimit, updatedAt: new Date() })
+    .where(
+      and(
+        eq(schema.partnerRooms.workspaceId, input.workspaceId),
+        eq(schema.partnerRooms.id, input.roomId),
+      ),
+    )
+    .returning({ id: schema.partnerRooms.id });
+  return updated ?? null;
+}
+
+/** Owner: pre-add an expected guest by name (no email until they claim). */
+export async function addExpectedGuest(input: {
+  workspaceId: string;
+  roomId: string;
+  name: string;
+  roleLabel?: string | null;
+}) {
+  const name = input.name.trim();
+  if (!name) return null;
+  const [row] = await db
+    .insert(schema.partnerRoomMembers)
+    .values({
       workspaceId: input.workspaceId,
       roomId: input.roomId,
-      contactId: input.contactId,
-      eventType: "member_identified",
-      metadata: { email, displayName },
-    });
+      displayName: name,
+      roleLabel: input.roleLabel?.trim() || null,
+      invitedAt: new Date(),
+    })
+    .returning();
+  return row;
+}
 
-    await tx
-      .update(schema.partnerRooms)
-      .set({ lastActivityAt: now, updatedAt: now })
-      .where(eq(schema.partnerRooms.id, input.roomId));
-
-    return row;
-  });
-
-  return member;
+/** Owner: remove a member/guest from a room (workspace-fenced). */
+export async function removeRoomMember(input: {
+  workspaceId: string;
+  memberId: string;
+}) {
+  const [deleted] = await db
+    .delete(schema.partnerRoomMembers)
+    .where(
+      and(
+        eq(schema.partnerRoomMembers.id, input.memberId),
+        eq(schema.partnerRoomMembers.workspaceId, input.workspaceId),
+      ),
+    )
+    .returning({ id: schema.partnerRoomMembers.id });
+  return deleted ?? null;
 }
 
 export async function countPartnerRoomMembers(input: { roomId: string }) {
