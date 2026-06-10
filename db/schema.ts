@@ -240,6 +240,8 @@ export const partnerAccessEventType = pgEnum("partner_access_event_type", [
   "passcode_set",
   "passcode_removed",
   "share_updated",
+  "item_added",
+  "item_commented",
 ]);
 
 /* ─── Pitch feedback module enums ─────────────────────────────────────── */
@@ -951,6 +953,50 @@ export const partnerRoomMessages = pgTable("partner_room_messages", {
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
+});
+
+export const partnerRoomItems = pgTable("partner_room_items", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  roomId: uuid("room_id")
+    .notNull()
+    .references(() => partnerRooms.id, { onDelete: "cascade" }),
+  kind: text("kind").notNull().default("link"),
+  title: text("title").notNull(),
+  description: text("description"),
+  url: text("url"),
+  storagePath: text("storage_path"),
+  mimeType: text("mime_type"),
+  sizeBytes: integer("size_bytes"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  addedBy: uuid("added_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const partnerItemComments = pgTable("partner_item_comments", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  roomId: uuid("room_id")
+    .notNull()
+    .references(() => partnerRooms.id, { onDelete: "cascade" }),
+  targetKind: text("target_kind").notNull(),
+  targetId: uuid("target_id").notNull(),
+  authorKind: text("author_kind").notNull().default("owner"),
+  authorUserId: uuid("author_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  authorMemberId: uuid("author_member_id").references(
+    () => partnerRoomMembers.id,
+    { onDelete: "set null" },
+  ),
+  authorName: text("author_name"),
+  body: text("body").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const partnerNextSteps = pgTable("partner_next_steps", {

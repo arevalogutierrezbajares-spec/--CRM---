@@ -1,17 +1,5 @@
-import {
-  ArrowUpRight,
-  CalendarClock,
-  CheckSquare,
-  Download,
-  FileText,
-  Lock,
-  MessageSquare,
-  ShieldCheck,
-  Upload,
-} from "lucide-react";
+import { CheckSquare, FileText, Lock, MessageSquare, Upload } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { formatBytes } from "@/lib/project-files/limits";
 import { formatRelative } from "@/lib/utils";
 import {
   countClaimedSeats,
@@ -19,11 +7,11 @@ import {
   getPublicPartnerRoomByToken,
   listClaimableRoomMembers,
   recordPublicPartnerRoomView,
-  type PublicPartnerRoom,
 } from "@/db/queries/partner-access";
 import { listPartnerNextStepsByRoom } from "@/db/queries/partner-next-steps";
 import { listPartnerUploadsByRoom } from "@/db/queries/partner-uploads";
 import { listPartnerRoomMessages } from "@/db/queries/partner-messages";
+import { listRoomItems, listRoomComments } from "@/db/queries/partner-repository";
 import { partnerKindLabel } from "@/lib/partner-access";
 import {
   getPartnerMemberIdFromCookies,
@@ -35,6 +23,12 @@ import { PublicNextSteps } from "@/components/partner-access/public-next-steps";
 import { PublicRoomMessages } from "@/components/partner-access/public-room-messages";
 import { RoomSignIn } from "@/components/partner-access/room-sign-in";
 import { CoBrandLockup } from "@/components/partner-access/co-brand-lockup";
+import {
+  PublicRepository,
+  type RepoShare as RepoShareView,
+  type RepoItem as RepoItemView,
+} from "@/components/partner-access/public-repository";
+import type { RepoComment as RepoCommentView } from "@/components/partner-access/partner-comment-thread";
 
 export const dynamic = "force-dynamic";
 
@@ -95,11 +89,14 @@ export default async function PublicAccessRoomPage({
     memberEmail: member?.email ?? null,
   }).catch(() => {});
 
-  const [nextSteps, partnerUploads, messages] = await Promise.all([
-    listPartnerNextStepsByRoom({ roomId: access.room.id }).catch(() => []),
-    listPartnerUploadsByRoom({ roomId: access.room.id }).catch(() => []),
-    listPartnerRoomMessages({ roomId: access.room.id }).catch(() => []),
-  ]);
+  const [nextSteps, partnerUploads, messages, repoItems, repoComments] =
+    await Promise.all([
+      listPartnerNextStepsByRoom({ roomId: access.room.id }).catch(() => []),
+      listPartnerUploadsByRoom({ roomId: access.room.id }).catch(() => []),
+      listPartnerRoomMessages({ roomId: access.room.id }).catch(() => []),
+      listRoomItems({ roomId: access.room.id }).catch(() => []),
+      listRoomComments({ roomId: access.room.id }).catch(() => []),
+    ]);
 
   const shares = access.shares;
   const projects = Array.from(
@@ -107,6 +104,55 @@ export default async function PublicAccessRoomPage({
   );
   const lastShared = shares[0]?.sharedAt ?? access.room.updatedAt;
   const openSteps = nextSteps.filter((s) => !s.completedAt);
+
+  const commentsByTarget: Record<string, RepoCommentView[]> = {};
+  for (const c of repoComments) {
+    const key = `${c.targetKind}:${c.targetId}`;
+    (commentsByTarget[key] ??= []).push({
+      id: c.id,
+      body: c.body,
+      authorKind: c.authorKind,
+      authorName: c.authorName,
+      createdAt: c.createdAt.toISOString(),
+    });
+  }
+
+  const repoShares: RepoShareView[] = shares.map((share) => {
+    const isHtmlDeck =
+      share.kindSnapshot === "file" &&
+      Boolean(share.storagePath) &&
+      materialType(
+        share.kindSnapshot,
+        share.mimeType,
+        share.originalFilename ?? share.labelSnapshot,
+      ).key === "html";
+    return {
+      id: share.id,
+      title: share.liveLabel ?? share.labelSnapshot,
+      description: share.description,
+      projectTitle: share.projectTitle,
+      kindSnapshot: share.kindSnapshot,
+      permissions: share.permissions,
+      sizeBytes: share.sizeBytes,
+      isHtmlDeck,
+      isLink: share.kindSnapshot === "link" && Boolean(share.urlSnapshot),
+      urlSnapshot: share.urlSnapshot,
+      canDownload:
+        share.kindSnapshot === "file" &&
+        Boolean(share.storagePath) &&
+        share.permissions.includes("download"),
+    };
+  });
+
+  const repoItemViews: RepoItemView[] = repoItems.map((item) => ({
+    id: item.id,
+    title: item.title,
+    description: item.description,
+    kind: item.kind,
+    url: item.url,
+    mimeType: item.mimeType,
+    sizeBytes: item.sizeBytes,
+  }));
 
   return (
     <main className="min-h-screen bg-[var(--bg-page)]">
@@ -145,75 +191,13 @@ export default async function PublicAccessRoomPage({
 
         <section className="grid gap-4 lg:grid-cols-[1fr_320px]">
           <div className="space-y-4">
-            <div className="rounded-xl border border-[var(--border)] bg-[var(--card)]">
-              <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] px-4 py-3">
-                <div>
-                  <h2 className="text-base font-semibold">Shared Materials</h2>
-                  <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">
-                    Only the items explicitly shared for this room are visible.
-                  </p>
-                </div>
-                <Badge variant="secondary">{shares.length}</Badge>
-              </div>
-
-              {shares.length === 0 ? (
-                <div className="p-5">
-                  <EmptyState
-                    title="No materials are active"
-                    body="The owner has not shared any active files or links in this room yet."
-                  />
-                </div>
-              ) : (
-                <ul className="divide-y divide-[var(--border)]">
-                  {shares.map((share) => (
-                    <li key={share.id} className="p-4">
-                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-[var(--secondary)]">
-                              <FileText className="h-4 w-4 text-[var(--muted-foreground)]" />
-                            </span>
-                            <div className="min-w-0">
-                              <h3 className="truncate text-sm font-medium">
-                                {share.liveLabel ?? share.labelSnapshot}
-                              </h3>
-                              <p className="text-xs text-[var(--muted-foreground)]">
-                                {share.projectTitle ?? "Project"} · {share.kindSnapshot}
-                                {share.sizeBytes ? ` · ${formatBytes(share.sizeBytes)}` : ""}
-                              </p>
-                            </div>
-                          </div>
-                          {share.description && (
-                            <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted-foreground)]">
-                              {share.description}
-                            </p>
-                          )}
-                          <div className="mt-2 flex flex-wrap gap-1.5">
-                            {share.permissions.map((permission) => (
-                              <span
-                                key={permission}
-                                className="inline-flex items-center gap-1 rounded-md bg-[var(--secondary)] px-2 py-1 text-[11px] text-[var(--secondary-foreground)]"
-                              >
-                                <ShieldCheck className="h-3 w-3" />
-                                {permission}
-                              </span>
-                            ))}
-                            {share.expiresAt && (
-                              <span className="inline-flex items-center gap-1 rounded-md bg-[var(--amber-bg)] px-2 py-1 text-[11px] text-[var(--amber-text)]">
-                                <CalendarClock className="h-3 w-3" />
-                                expires {formatRelative(share.expiresAt)}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        <ShareAction token={token} share={share} />
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
+            <PublicRepository
+              token={token}
+              shares={repoShares}
+              items={repoItemViews}
+              commentsByTarget={commentsByTarget}
+              ownerLabel="The team"
+            />
             {/* Messages section */}
             <div className="rounded-xl border border-[var(--border)] bg-[var(--card)]">
               <div className="flex items-center gap-2 border-b border-[var(--border)] px-4 py-3">
@@ -312,78 +296,6 @@ export default async function PublicAccessRoomPage({
   );
 }
 
-function ShareAction({
-  token,
-  share,
-}: {
-  token: string;
-  share: PublicPartnerRoom["shares"][number];
-}) {
-  if (share.kindSnapshot === "link" && share.urlSnapshot) {
-    return (
-      <Button asChild variant="outline" size="sm" className="shrink-0">
-        <a
-          href={`/access/${token}/open/${share.id}`}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <ArrowUpRight className="h-4 w-4" />
-          Open
-        </a>
-      </Button>
-    );
-  }
-
-  if (share.kindSnapshot === "file" && share.storagePath) {
-    const isHtmlDeck =
-      materialType(
-        share.kindSnapshot,
-        share.mimeType,
-        share.originalFilename ?? share.labelSnapshot,
-      ).key === "html";
-    const canDownload = share.permissions.includes("download");
-
-    if (isHtmlDeck || canDownload) {
-      return (
-        <div className="flex shrink-0 items-center gap-2">
-          {isHtmlDeck && (
-            // Renders the deck as a page via our proxy (Supabase stores it as
-            // text/plain). Works even for view-only shares.
-            <Button asChild variant="outline" size="sm">
-              <a
-                href={`/access/${token}/deck/${share.id}`}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <ArrowUpRight className="h-4 w-4" />
-                View deck
-              </a>
-            </Button>
-          )}
-          {canDownload && (
-            <Button asChild size="sm">
-              <a
-                href={`/access/${token}/download/${share.id}`}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <Download className="h-4 w-4" />
-                Download
-              </a>
-            </Button>
-          )}
-        </div>
-      );
-    }
-  }
-
-  return (
-    <Button type="button" variant="outline" size="sm" disabled className="shrink-0">
-      View only
-    </Button>
-  );
-}
-
 function Fact({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="rounded-lg border border-[var(--border)] bg-[var(--background)] p-3">
@@ -402,17 +314,6 @@ function RoomRow({ label, value }: { label: string; value: string }) {
         {label}
       </span>
       <span className="max-w-[190px] text-right">{value}</span>
-    </div>
-  );
-}
-
-function EmptyState({ title, body }: { title: string; body: string }) {
-  return (
-    <div className="rounded-lg border border-dashed border-[var(--border)] p-5">
-      <h2 className="text-sm font-medium">{title}</h2>
-      <p className="mt-1 max-w-prose text-sm text-[var(--muted-foreground)]">
-        {body}
-      </p>
     </div>
   );
 }

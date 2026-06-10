@@ -9,6 +9,7 @@ import {
   Eye,
   FileText,
   FileUp,
+  FolderOpen,
   Image as ImageIcon,
   MessageSquare,
   UsersRound,
@@ -22,6 +23,8 @@ import { SectionLabel } from "@/components/dashboard/shared/section-label";
 import { AddDocsDialog } from "@/components/partner-access/add-docs-dialog";
 import { ClientLogoControl } from "@/components/partner-access/client-logo-control";
 import { RoomGuestsManager } from "@/components/partner-access/room-guests-manager";
+import { RepositoryManager } from "@/components/partner-access/repository-manager";
+import { listRoomItems, listRoomComments } from "@/db/queries/partner-repository";
 import { RoomAccessLinkActions } from "@/components/partner-access/room-access-link-actions";
 import { RoomDetailsForm } from "@/components/partner-access/room-details-form";
 import { RoomMessagesManager } from "@/components/partner-access/room-messages-manager";
@@ -85,13 +88,17 @@ export default async function PartnerAccessRoomPage(props: { params: Params }) {
 
   const detail = roomRes.data;
 
-  const [nextStepsRes, uploadsRes, messagesRes] = detail
+  const [nextStepsRes, uploadsRes, messagesRes, itemsRes, commentsRes] = detail
     ? await Promise.all([
         safeRead(() => listPartnerNextSteps({ workspaceId: user.workspaceId, roomId: id }), []),
         safeRead(() => listPartnerUploads({ workspaceId: user.workspaceId, roomId: id }), []),
         safeRead(() => listPartnerRoomMessages({ roomId: id }), []),
+        safeRead(() => listRoomItems({ roomId: id }), []),
+        safeRead(() => listRoomComments({ roomId: id }), []),
       ])
     : [
+        { ok: true as const, data: [] },
+        { ok: true as const, data: [] },
         { ok: true as const, data: [] },
         { ok: true as const, data: [] },
         { ok: true as const, data: [] },
@@ -113,6 +120,22 @@ export default async function PartnerAccessRoomPage(props: { params: Params }) {
     detail.shares.filter((share) => !share.revokedAt),
   );
   const activeShares = detail.shares.filter((share) => !share.revokedAt);
+
+  const commentsByTarget: Record<
+    string,
+    Array<{ id: string; body: string; authorKind: string; authorName: string | null; createdAt: string }>
+  > = {};
+  for (const c of commentsRes.data) {
+    const key = `${c.targetKind}:${c.targetId}`;
+    (commentsByTarget[key] ??= []).push({
+      id: c.id,
+      body: c.body,
+      authorKind: c.authorKind,
+      authorName: c.authorName,
+      createdAt: c.createdAt.toISOString(),
+    });
+  }
+  const totalComments = commentsRes.data.length;
   const viewedShares = detail.shares.filter((share) => share.viewedAt);
   const downloadedShares = detail.shares.filter((share) => share.downloadedAt);
 
@@ -287,6 +310,44 @@ export default async function PartnerAccessRoomPage(props: { params: Params }) {
                     </table>
                   </div>
                 )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FolderOpen className="h-4 w-4" />
+                  Repository
+                  {totalComments > 0 && (
+                    <Badge variant="secondary" className="ml-auto">
+                      {totalComments} comment{totalComments === 1 ? "" : "s"}
+                    </Badge>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <RepositoryManager
+                  roomId={room.id}
+                  partnerLabel={detail.contact.name ?? "your client"}
+                  items={itemsRes.data.map((it) => ({
+                    id: it.id,
+                    kind: it.kind,
+                    title: it.title,
+                    description: it.description,
+                    url: it.url,
+                    mimeType: it.mimeType,
+                    sizeBytes: it.sizeBytes,
+                  }))}
+                  shares={activeShares.map((s) => ({
+                    id: s.id,
+                    title: s.liveLabel ?? s.labelSnapshot,
+                    projectTitle: s.projectTitle,
+                    kindSnapshot: s.kindSnapshot,
+                    sizeBytes: null,
+                    description: null,
+                  }))}
+                  commentsByTarget={commentsByTarget}
+                />
               </CardContent>
             </Card>
 

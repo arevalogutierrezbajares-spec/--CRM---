@@ -33,6 +33,13 @@ import {
   createPartnerRoomMessage,
   deletePartnerRoomMessage,
 } from "@/db/queries/partner-messages";
+import {
+  addItemComment,
+  createRoomItem,
+  deleteItemComment,
+  deleteRoomItem,
+  updateRoomItem,
+} from "@/db/queries/partner-repository";
 import { isValidPartnerPasscode } from "@/lib/partner-room-gate.server";
 import {
   createPartnerNextStep,
@@ -371,6 +378,123 @@ export async function removeRoomMemberAction(opts: {
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const user = await requireUser();
   await removeRoomMember({ workspaceId: user.workspaceId, memberId: opts.memberId });
+  revalidatePath(`/partner-access/rooms/${opts.roomId}`);
+  return { ok: true };
+}
+
+export async function addRoomLinkAction(opts: {
+  roomId: string;
+  title: string;
+  url: string;
+  description?: string | null;
+}): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  const user = await requireUser();
+  const title = opts.title.trim();
+  const url = opts.url.trim();
+  if (!title) return { ok: false, error: "Add a title" };
+  if (!/^https?:\/\//i.test(url)) return { ok: false, error: "Enter a valid URL (https://…)" };
+
+  const room = await getPartnerRoomBasic({ workspaceId: user.workspaceId, roomId: opts.roomId });
+  if (!room) return { ok: false, error: "Room not found" };
+
+  const item = await createRoomItem({
+    workspaceId: user.workspaceId,
+    roomId: opts.roomId,
+    kind: "link",
+    title,
+    url,
+    description: opts.description ?? null,
+    addedBy: user.id,
+  });
+  revalidatePath(`/partner-access/rooms/${opts.roomId}`);
+  return { ok: true, id: item.id };
+}
+
+export async function updateRoomItemAction(opts: {
+  roomId: string;
+  itemId: string;
+  title?: string;
+  description?: string | null;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const user = await requireUser();
+  if (opts.title !== undefined && !opts.title.trim()) {
+    return { ok: false, error: "Title can't be empty" };
+  }
+  const row = await updateRoomItem({
+    workspaceId: user.workspaceId,
+    itemId: opts.itemId,
+    title: opts.title,
+    description: opts.description,
+  });
+  if (!row) return { ok: false, error: "Item not found" };
+  revalidatePath(`/partner-access/rooms/${opts.roomId}`);
+  return { ok: true };
+}
+
+export async function deleteRoomItemAction(opts: {
+  roomId: string;
+  itemId: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const user = await requireUser();
+  const row = await deleteRoomItem({ workspaceId: user.workspaceId, itemId: opts.itemId });
+  if (row?.storagePath) await removeObjects([row.storagePath]).catch(() => {});
+  revalidatePath(`/partner-access/rooms/${opts.roomId}`);
+  return { ok: true };
+}
+
+export async function addRoomCommentAction(opts: {
+  roomId: string;
+  targetKind: "share" | "item";
+  targetId: string;
+  body: string;
+}): Promise<
+  | {
+      ok: true;
+      comment: {
+        id: string;
+        body: string;
+        authorKind: string;
+        authorName: string | null;
+        createdAt: string;
+      };
+    }
+  | { ok: false; error: string }
+> {
+  const user = await requireUser();
+  const room = await getPartnerRoomBasic({ workspaceId: user.workspaceId, roomId: opts.roomId });
+  if (!room) return { ok: false, error: "Room not found" };
+
+  const comment = await addItemComment({
+    workspaceId: user.workspaceId,
+    roomId: opts.roomId,
+    targetKind: opts.targetKind,
+    targetId: opts.targetId,
+    authorKind: "owner",
+    authorUserId: user.id,
+    authorName: user.displayName ?? user.email,
+    body: opts.body,
+  });
+  if (!comment) return { ok: false, error: "Write a comment first" };
+
+  revalidatePath(`/partner-access/rooms/${opts.roomId}`);
+  return {
+    ok: true,
+    comment: {
+      id: comment.id,
+      body: comment.body,
+      authorKind: comment.authorKind,
+      authorName: comment.authorName,
+      createdAt: comment.createdAt.toISOString(),
+    },
+  };
+}
+
+export async function deleteRoomCommentAction(opts: {
+  roomId: string;
+  commentId: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const user = await requireUser();
+  await deleteItemComment({ workspaceId: user.workspaceId, commentId: opts.commentId });
   revalidatePath(`/partner-access/rooms/${opts.roomId}`);
   return { ok: true };
 }
