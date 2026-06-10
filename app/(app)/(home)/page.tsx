@@ -389,6 +389,8 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
       isOverdue: t.isOverdue,
       ownerName: null,
       ownerUserId: null,
+      initiativeId: null,
+      initiativeTitle: null,
     })) ?? [],
     dailyData?.meetings ?? weeklyData?.meetings ?? monthlyData?.meetings ?? [],
     blockedRes.data,

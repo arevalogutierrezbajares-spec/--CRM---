@@ -4,16 +4,15 @@ import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
-import { initiatives, milestones } from "@/db/schema";
+import { actionItemInitiatives, actionItems, initiatives, milestones } from "@/db/schema";
 import { requireUser } from "@/lib/current-user";
 import {
   buildCopyForAiPayload,
   diffRoadmap,
   generateRoadmapMd,
   parseRoadmapMd,
+  resolveSnapshotTokens,
   type RoadmapDiff,
-  type RoadmapInitiativeNode,
-  type RoadmapTaskNode,
 } from "@/lib/roadmap-md";
 import {
   buildOwnerMaps,
@@ -78,7 +77,7 @@ export async function previewRoadmapImport(text: string): Promise<ImportPreview>
     if (baseRow) {
       const baseParsed = parseRoadmapMd(baseRow.snapshotMd);
       // Snapshot md round-trips: resolve its tokens to full ids for diffing.
-      base = resolveTokensToIds(baseParsed.initiatives, current);
+      base = resolveSnapshotTokens(baseParsed.initiatives, current);
     }
   }
 
@@ -93,42 +92,6 @@ export async function previewRoadmapImport(text: string): Promise<ImportPreview>
     currentVersion,
     stale:
       parsed.basePlanVersion !== null && parsed.basePlanVersion < currentVersion,
-  };
-}
-
-/** The stored base snapshot carries tokens (it IS an export). Map them back to
- *  full ids using the current snapshot so the differ compares like with like. */
-function resolveTokensToIds(
-  baseInits: RoadmapInitiativeNode[],
-  current: { initiatives: RoadmapInitiativeNode[] },
-): { initiatives: RoadmapInitiativeNode[] } {
-  const allCurrentIds: string[] = [];
-  for (const ci of current.initiatives) {
-    if (ci.id) allCurrentIds.push(ci.id);
-    const walk = (ts: RoadmapTaskNode[]) => {
-      for (const t of ts) {
-        if (t.id) allCurrentIds.push(t.id);
-        walk(t.children);
-      }
-    };
-    walk(ci.tasks);
-  }
-  const byPrefix = (token: string | null) =>
-    token
-      ? (allCurrentIds.find((id) => id.replace(/-/g, "").startsWith(token)) ?? null)
-      : null;
-
-  const mapTask = (t: RoadmapTaskNode): RoadmapTaskNode => ({
-    ...t,
-    id: t.id ?? byPrefix(t.token),
-    children: t.children.map(mapTask),
-  });
-  return {
-    initiatives: baseInits.map((bi) => ({
-      ...bi,
-      id: bi.id ?? byPrefix(bi.token),
-      tasks: bi.tasks.map(mapTask),
-    })),
   };
 }
 
@@ -416,6 +379,252 @@ export async function applyRoadmapImport(input: {
   revalidatePath("/initiatives");
   revalidatePath("/work");
   return { ok: true, applied: { creates, updates, archives }, version };
+}
+
+/* ─── Inline plan editing (FR-RVW-1, roadmap module only per INV-7) ───── */
+
+const initiativePatchSchema = z
+  .object({
+    title: z.string().min(1).max(200).optional(),
+    status: z.enum(["planning", "active", "paused", "done", "cancelled"]).optional(),
+    healthColor: z.enum(["green", "amber", "red"]).optional(),
+    startDate: z.string().nullable().optional(),
+    targetEndDate: z.string().nullable().optional(),
+    goal: z.string().nullable().optional(),
+    successCriteria: z.string().nullable().optional(),
+    ownerUserId: z.string().uuid().nullable().optional(),
+  })
+  .strict();
+
+export async function updateInitiativeFields(
+  id: string,
+  patch: z.infer<typeof initiativePatchSchema>,
+): Promise<void> {
+  const user = await requireUser();
+  const parsed = initiativePatchSchema.safeParse(patch);
+  if (!parsed.success) throw new Error("Invalid initiative patch");
+  const set: Record<string, unknown> = { ...parsed.data, updatedAt: new Date() };
+  if (parsed.data.status === "done")
+    set.actualEndDate = new Date().toISOString().slice(0, 10);
+  await db
+    .update(initiatives)
+    .set(set)
+    .where(and(eq(initiatives.id, id), eq(initiatives.workspaceId, user.workspaceId)));
+  revalidatePath("/roadmap");
+  revalidatePath("/initiatives");
+  revalidatePath(`/initiatives/${id}`);
+}
+
+const taskPatchSchema = z
+  .object({
+    title: z.string().min(1).max(300).optional(),
+    dueDate: z.string().nullable().optional(),
+    assigneeUserId: z.string().uuid().nullable().optional(),
+  })
+  .strict();
+
+export async function updateRoadmapTask(
+  id: string,
+  patch: z.infer<typeof taskPatchSchema>,
+): Promise<void> {
+  const user = await requireUser();
+  const parsed = taskPatchSchema.safeParse(patch);
+  if (!parsed.success) throw new Error("Invalid task patch");
+  await db
+    .update(milestones)
+    .set(parsed.data)
+    .where(and(eq(milestones.id, id), eq(milestones.workspaceId, user.workspaceId)));
+  revalidatePath("/roadmap");
+  revalidatePath("/work");
+}
+
+/** FR-UNI-1 made tangible: the same row the home box checks off. */
+export async function toggleRoadmapTask(id: string, done: boolean): Promise<void> {
+  const user = await requireUser();
+  await db
+    .update(milestones)
+    .set({
+      status: done ? "done" : "pending",
+      completedAt: done ? new Date() : null,
+    })
+    .where(and(eq(milestones.id, id), eq(milestones.workspaceId, user.workspaceId)));
+  revalidatePath("/roadmap");
+  revalidatePath("/work");
+  revalidatePath("/");
+}
+
+export async function createRoadmapTask(opts: {
+  initiativeId: string;
+  title: string;
+  parentTaskId?: string | null;
+  dueDate?: string | null;
+}): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireUser();
+  const title = (opts.title ?? "").trim();
+  if (!title) return { ok: false, error: "Title required" };
+  const [owned] = await db
+    .select({ id: initiatives.id })
+    .from(initiatives)
+    .where(
+      and(
+        eq(initiatives.id, opts.initiativeId),
+        eq(initiatives.workspaceId, user.workspaceId),
+      ),
+    )
+    .limit(1);
+  if (!owned) return { ok: false, error: "Initiative not found" };
+  const projectId = await resolveProjectForInitiative({
+    workspaceId: user.workspaceId,
+    initiativeId: opts.initiativeId,
+    createdBy: user.id,
+  });
+  await db.insert(milestones).values({
+    workspaceId: user.workspaceId,
+    projectId,
+    initiativeId: opts.initiativeId,
+    parentMilestoneId: opts.parentTaskId ?? null,
+    title,
+    dueDate: opts.dueDate ?? null,
+    createdBy: user.id,
+  });
+  revalidatePath("/roadmap");
+  revalidatePath("/work");
+  return { ok: true };
+}
+
+/* ─── Planning session (FR-PLN-1/2/3/4) ───────────────────────────────── */
+
+export async function commitPlan(note: string): Promise<{ version: number }> {
+  const user = await requireUser();
+  const snapshot = await buildRoadmapSnapshot(user.workspaceId);
+  const version = await nextPlanVersionNumber(user.workspaceId);
+  const md = generateRoadmapMd(snapshot, { planVersion: version });
+  await createPlanVersion({
+    workspaceId: user.workspaceId,
+    version,
+    source: "commit",
+    snapshotMd: md,
+    note: note.trim() || null,
+    summary: { initiatives: snapshot.initiatives.length },
+    createdBy: user.id,
+  });
+  revalidatePath("/roadmap");
+  revalidatePath("/roadmap/plan");
+  revalidatePath("/roadmap/plans");
+  return { version };
+}
+
+export async function linkActionItemToInitiative(
+  actionItemId: string,
+  initiativeId: string,
+): Promise<void> {
+  const user = await requireUser();
+  const [item] = await db
+    .select({ id: actionItems.id })
+    .from(actionItems)
+    .where(
+      and(eq(actionItems.id, actionItemId), eq(actionItems.workspaceId, user.workspaceId)),
+    )
+    .limit(1);
+  const [init] = await db
+    .select({ id: initiatives.id })
+    .from(initiatives)
+    .where(
+      and(eq(initiatives.id, initiativeId), eq(initiatives.workspaceId, user.workspaceId)),
+    )
+    .limit(1);
+  if (!item || !init) throw new Error("Not found");
+  await db
+    .insert(actionItemInitiatives)
+    .values({ actionItemId, initiativeId })
+    .onConflictDoNothing();
+  revalidatePath("/roadmap/plan");
+}
+
+/** FR-AIT-3: promote — new task carries the item's fields; the action item
+ *  closes with two-way provenance. */
+export async function promoteActionItem(
+  actionItemId: string,
+  initiativeId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireUser();
+  const [item] = await db
+    .select()
+    .from(actionItems)
+    .where(
+      and(eq(actionItems.id, actionItemId), eq(actionItems.workspaceId, user.workspaceId)),
+    )
+    .limit(1);
+  if (!item) return { ok: false, error: "Action item not found" };
+  const [init] = await db
+    .select({ id: initiatives.id })
+    .from(initiatives)
+    .where(
+      and(eq(initiatives.id, initiativeId), eq(initiatives.workspaceId, user.workspaceId)),
+    )
+    .limit(1);
+  if (!init) return { ok: false, error: "Initiative not found" };
+
+  const projectId = await resolveProjectForInitiative({
+    workspaceId: user.workspaceId,
+    initiativeId,
+    createdBy: user.id,
+  });
+  const [task] = await db
+    .insert(milestones)
+    .values({
+      workspaceId: user.workspaceId,
+      projectId,
+      initiativeId,
+      title: item.title,
+      description: item.description,
+      dueDate: item.dueDate,
+      assigneeUserId: item.assigneeUserId,
+      createdBy: user.id,
+    })
+    .returning({ id: milestones.id });
+  await db
+    .update(actionItems)
+    .set({ status: "done", completedAt: new Date(), milestoneId: task.id })
+    .where(eq(actionItems.id, actionItemId));
+
+  revalidatePath("/roadmap");
+  revalidatePath("/roadmap/plan");
+  revalidatePath("/work");
+  return { ok: true };
+}
+
+/** FR-PLN-2 dismiss: stays an ordinary open action item, leaves the queue. */
+export async function dismissActionItemFromPlanning(actionItemId: string): Promise<void> {
+  const user = await requireUser();
+  await db
+    .update(actionItems)
+    .set({ planReviewedAt: new Date() })
+    .where(
+      and(eq(actionItems.id, actionItemId), eq(actionItems.workspaceId, user.workspaceId)),
+    );
+  revalidatePath("/roadmap/plan");
+}
+
+/** FR-PLN-4: three buttons, optional note, never blocks completion. */
+export async function recordSuccessOutcome(
+  initiativeId: string,
+  outcome: "met" | "partial" | "missed",
+  note?: string,
+): Promise<void> {
+  const user = await requireUser();
+  await db
+    .update(initiatives)
+    .set({
+      successOutcome: outcome,
+      successOutcomeNote: note?.trim() || null,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(eq(initiatives.id, initiativeId), eq(initiatives.workspaceId, user.workspaceId)),
+    );
+  revalidatePath("/roadmap/plan");
+  revalidatePath(`/initiatives/${initiativeId}`);
 }
 
 /* ─── Success criteria inline edit (FR-PRG-2, roadmap module only) ────── */

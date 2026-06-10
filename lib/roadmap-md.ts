@@ -68,6 +68,42 @@ function matchesToken(id: string, token: string): boolean {
   return id.replace(/-/g, "").startsWith(token);
 }
 
+/** A stored snapshot md carries tokens, not full ids. Resolve them against a
+ *  live snapshot's ids so snapshot-vs-snapshot comparisons work on ids. */
+export function resolveSnapshotTokens(
+  parsedInits: RoadmapInitiativeNode[],
+  current: RoadmapSnapshot,
+): RoadmapSnapshot {
+  const allCurrentIds: string[] = [];
+  const walkIds = (ts: RoadmapTaskNode[]) => {
+    for (const t of ts) {
+      if (t.id) allCurrentIds.push(t.id);
+      walkIds(t.children);
+    }
+  };
+  for (const ci of current.initiatives) {
+    if (ci.id) allCurrentIds.push(ci.id);
+    walkIds(ci.tasks);
+  }
+  const byPrefix = (token: string | null) =>
+    token
+      ? (allCurrentIds.find((id) => id.replace(/-/g, "").startsWith(token)) ?? null)
+      : null;
+
+  const mapTask = (t: RoadmapTaskNode): RoadmapTaskNode => ({
+    ...t,
+    id: t.id ?? byPrefix(t.token),
+    children: t.children.map(mapTask),
+  });
+  return {
+    initiatives: parsedInits.map((bi) => ({
+      ...bi,
+      id: bi.id ?? byPrefix(bi.token),
+      tasks: bi.tasks.map(mapTask),
+    })),
+  };
+}
+
 /* ─── Generator (FR-RMD-1) ────────────────────────────────────────────── */
 
 export type GenerateOptions = {

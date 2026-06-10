@@ -428,15 +428,28 @@ The FRs above state WHAT round-trips; this section pins HOW it is encoded, becau
 
 ---
 
-## §13 — Open Decisions (recommendations pre-filled — confirm or override)
+## §13 — Open Decisions (LOCKED 2026-06-10 — operator accepted recommendations via /goal continue)
 
-| # | Question | GigaRico recommendation |
-|---|----------|------------------------|
-| OD-1 | Should the export include open action items as a read-only appendix ("captured since last plan")? | **No** for the working export (keeps the contract small); **yes** inside the Wave-3 status-report flavor only |
-| OD-2 | Archive semantics for milestones proposed-archived by import — archive flag vs `cancelled` status? | Use existing status machinery (`cancelled`-equivalent) for milestones; `archived` boolean for initiatives — avoid adding a second archival concept |
-| OD-3 | `plan_versions.snapshot` storage shape — generated md text, JSON, or both? | Store the md text (it IS the artifact users saw) + a small JSON summary for fast diffs; revisit only if diff perf misses NFR-R1 |
-| OD-4 | Do Wave-1 imports create tasks under projects too (milestones require `project_id` today), or do roadmap-only tasks get a default/holding project per initiative? | Auto-provision one lightweight project per initiative for roadmap-born tasks; revisit if it confuses the project list |
-| OD-5 | Who can Commit Plan — any workspace member or owner-role only? | Any member (team of 2-3, simplicity rule); add a role gate only if it's ever abused |
+| # | Question | Locked decision |
+|---|----------|-----------------|
+| OD-1 | Export include open action items? | **No** in working export; yes only in the Wave-3 status-report flavor |
+| OD-2 | Archive semantics | `cancelled` status for milestones AND initiatives (schema has no `archived` column on initiatives — adapted to avoid a new archival concept; import excludes cancelled both ways) |
+| OD-3 | `plan_versions.snapshot` shape | md text (the artifact users saw) + JSON summary counts |
+| OD-4 | Project for roadmap-born tasks | Resolution chain: majority project of the initiative's existing tasks → find-or-create project under the initiative's LoB → find-or-create visible "General" LoB |
+| OD-5 | Who can Commit Plan | Any workspace member |
+
+## §14 — Implementation Notes & Deviations (as-built, 2026-06-10)
+
+Built: Waves 1+2 (commits on `feat/roadmap-module-wave1`). Verified: 323 unit tests (incl. 20 round-trip/drift), tsc+eslint clean, production build green, live-DB smoke (AGB workspace: 5 initiatives/26 tasks round-trip identity OK; 19 unassigned tasks + 30 unlinked action items populate the new lanes). Canary: `scripts/smoke-roadmap.ts` (read-mostly, self-cleaning).
+
+| FR | Deviation |
+|----|-----------|
+| FR-UNI-4 | Count badge lives on the Unassigned lane on /roadmap, not the global nav (nav is a shared client component without data; revisit if drift goes unnoticed) |
+| FR-UNI-5 | No creation-time picker added to every form; the quarantine path (Unassigned lane + one-click assign, plus /work assignment) covers the flow without touching every capture surface |
+| FR-RVW-5 | Last-write-wins is in effect; per-field activity trail NOT built — attribution via plan-version ledger + `updatedAt`. Gap accepted for a 2-3 person team; revisit if "who changed this" ever matters mid-month |
+| FR-RVW-6 | (COULD) Drag-reschedule not built; inline date inputs in the plan document cover rescheduling |
+| FR-RVW-1 | Sub-task creation in the doc view is import-only for now (UI add-task creates top-level tasks; nesting renders fine) |
+| FR-PLN-5 / SHR-* | Wave 3 — not built (as planned) |
 
 ---
 

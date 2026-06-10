@@ -4,6 +4,7 @@ import { ListChecks } from "lucide-react";
 import { DashCard } from "../shared/dash-card";
 import { SectionLabel } from "../shared/section-label";
 import { useItemDrawer } from "../item-drawer";
+import { InitiativeChip } from "@/components/roadmap/initiative-chip";
 import type { DashTask } from "@/db/queries/dashboard";
 
 function fmtDue(iso: string, tz: string): string {
@@ -52,6 +53,15 @@ export function TasksDueAgenda({ tasks, tz }: { tasks: DashTask[]; tz: string })
               >
                 {t.title}
               </button>
+              {t.initiativeId && t.initiativeTitle && (
+                <span className="hidden shrink-0 sm:inline">
+                  <InitiativeChip
+                    initiativeId={t.initiativeId}
+                    title={t.initiativeTitle}
+                    size="xs"
+                  />
+                </span>
+              )}
               {t.ownerName && (
                 <span className="hidden shrink-0 truncate text-tiny text-text-tertiary sm:inline" title={`Owner: ${t.ownerName}`}>
                   {t.ownerName.split(/\s+/)[0]}

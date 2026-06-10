@@ -14,6 +14,7 @@ import {
   InitiativeStatusBadge,
 } from "@/components/work/priority-badge";
 import { ThemeChips } from "@/components/work/theme-chips";
+import { InitiativeChip } from "@/components/roadmap/initiative-chip";
 import { DashCard } from "@/components/dashboard/shared/dash-card";
 import { SectionLabel } from "@/components/dashboard/shared/section-label";
 import { safeRead } from "@/lib/db-status";
@@ -339,10 +340,18 @@ export default async function WorkPage(props: { searchParams: SearchParams }) {
                         >
                           {t.title}
                         </Link>
-                        <div className="text-tiny text-text-tertiary truncate">
-                          {t.projectTitle}
-                          {t.initiativeTitle && ` · ${t.initiativeTitle}`}
-                          {t.dueDate && ` · ${shortDate(t.dueDate)}`}
+                        <div className="flex items-center gap-1.5 text-tiny text-text-tertiary">
+                          <span className="truncate">
+                            {t.projectTitle}
+                            {t.dueDate && ` · ${shortDate(t.dueDate)}`}
+                          </span>
+                          {t.initiativeId && t.initiativeTitle && (
+                            <InitiativeChip
+                              initiativeId={t.initiativeId}
+                              title={t.initiativeTitle}
+                              size="xs"
+                            />
+                          )}
                         </div>
                       </div>
                       {t.assigneeName && (

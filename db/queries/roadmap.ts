@@ -1,6 +1,8 @@
-import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
+  actionItemInitiatives,
+  actionItems,
   initiatives,
   linesOfBusiness,
   milestones,
@@ -223,6 +225,217 @@ export async function getPlanVersion(
     )
     .limit(1);
   return row ?? null;
+}
+
+export async function getLastCommittedPlan(
+  workspaceId: string,
+): Promise<PlanVersionRow | null> {
+  const [row] = await db
+    .select()
+    .from(planVersions)
+    .where(
+      and(eq(planVersions.workspaceId, workspaceId), eq(planVersions.source, "commit")),
+    )
+    .orderBy(desc(planVersions.version))
+    .limit(1);
+  return row ?? null;
+}
+
+/* ─── Planning-session triage (FR-PLN-2) ──────────────────────────────── */
+
+export type UnlinkedActionItem = {
+  id: string;
+  title: string;
+  description: string | null;
+  dueDate: string | null;
+  createdAt: Date;
+  origin: "voice note" | "call" | "manual";
+};
+
+/** Open action items with no initiative link, no task link, not yet dismissed
+ *  in a planning session — the "unplanned work" triage queue. */
+export async function listUnlinkedActionItems(
+  workspaceId: string,
+): Promise<UnlinkedActionItem[]> {
+  const rows = await db
+    .select({
+      id: actionItems.id,
+      title: actionItems.title,
+      description: actionItems.description,
+      dueDate: actionItems.dueDate,
+      createdAt: actionItems.createdAt,
+      voiceNoteId: actionItems.voiceNoteId,
+      callRecordingId: actionItems.callRecordingId,
+      linkedInitiativeId: actionItemInitiatives.initiativeId,
+    })
+    .from(actionItems)
+    .leftJoin(
+      actionItemInitiatives,
+      eq(actionItemInitiatives.actionItemId, actionItems.id),
+    )
+    .where(
+      and(
+        eq(actionItems.workspaceId, workspaceId),
+        eq(actionItems.status, "open"),
+        isNull(actionItems.milestoneId),
+        isNull(actionItems.planReviewedAt),
+      ),
+    )
+    .orderBy(desc(actionItems.createdAt))
+    .limit(100);
+
+  return rows
+    .filter((r) => r.linkedInitiativeId === null)
+    .map((r) => ({
+      id: r.id,
+      title: r.title,
+      description: r.description,
+      dueDate: r.dueDate,
+      createdAt: r.createdAt,
+      origin: r.voiceNoteId ? "voice note" : r.callRecordingId ? "call" : "manual",
+    }));
+}
+
+/** Done initiatives with success criteria but no recorded outcome (FR-PLN-4). */
+export async function listInitiativesNeedingOutcome(workspaceId: string) {
+  return db
+    .select({
+      id: initiatives.id,
+      title: initiatives.title,
+      successCriteria: initiatives.successCriteria,
+    })
+    .from(initiatives)
+    .where(
+      and(
+        eq(initiatives.workspaceId, workspaceId),
+        eq(initiatives.status, "done"),
+        isNotNull(initiatives.successCriteria),
+        isNull(initiatives.successOutcome),
+      ),
+    );
+}
+
+/** Open tasks with no initiative — the Unassigned lane (FR-UNI-3). */
+export async function listUnassignedTasks(workspaceId: string) {
+  return db
+    .select({
+      id: milestones.id,
+      title: milestones.title,
+      dueDate: milestones.dueDate,
+      projectTitle: projects.title,
+    })
+    .from(milestones)
+    .innerJoin(projects, eq(projects.id, milestones.projectId))
+    .where(
+      and(
+        eq(milestones.workspaceId, workspaceId),
+        isNull(milestones.initiativeId),
+        inArray(milestones.status, ["pending", "in_progress", "in_review", "blocked"]),
+      ),
+    )
+    .orderBy(desc(milestones.createdAt))
+    .limit(200);
+}
+
+/* ─── Plan document data (FR-RVW-1) ───────────────────────────────────── */
+
+export type PlanDocTask = {
+  id: string;
+  title: string;
+  done: boolean;
+  status: string;
+  dueDate: string | null;
+  assigneeUserId: string | null;
+  children: PlanDocTask[];
+};
+
+export type PlanDocInitiative = {
+  id: string;
+  title: string;
+  status: string;
+  healthColor: string;
+  startDate: string | null;
+  targetEndDate: string | null;
+  goal: string | null;
+  successCriteria: string | null;
+  successOutcome: string | null;
+  ownerUserId: string | null;
+  tasks: PlanDocTask[];
+};
+
+export type PlanDocData = {
+  initiatives: PlanDocInitiative[];
+  members: Array<{ id: string; displayName: string }>;
+};
+
+export async function getPlanDocData(workspaceId: string): Promise<PlanDocData> {
+  const [inits, members] = await Promise.all([
+    db
+      .select()
+      .from(initiatives)
+      .where(
+        and(eq(initiatives.workspaceId, workspaceId), ne(initiatives.status, "cancelled")),
+      )
+      .orderBy(asc(initiatives.createdAt)),
+    db
+      .select({ id: users.id, displayName: users.displayName })
+      .from(workspaceMembers)
+      .innerJoin(users, eq(users.id, workspaceMembers.userId))
+      .where(eq(workspaceMembers.workspaceId, workspaceId)),
+  ]);
+
+  const initIds = inits.map((i) => i.id);
+  const taskRows = initIds.length
+    ? await db
+        .select()
+        .from(milestones)
+        .where(
+          and(
+            inArray(milestones.initiativeId, initIds),
+            ne(milestones.status, "cancelled"),
+          ),
+        )
+        .orderBy(asc(milestones.order), asc(milestones.createdAt))
+    : [];
+
+  return {
+    members,
+    initiatives: inits.map((init) => {
+      const mine = taskRows.filter((t) => t.initiativeId === init.id);
+      const byId = new Map<string, PlanDocTask>();
+      for (const t of mine) {
+        byId.set(t.id, {
+          id: t.id,
+          title: t.title,
+          done: t.status === "done",
+          status: t.status,
+          dueDate: t.dueDate,
+          assigneeUserId: t.assigneeUserId ?? t.assignedTo,
+          children: [],
+        });
+      }
+      const roots: PlanDocTask[] = [];
+      for (const t of mine) {
+        const node = byId.get(t.id)!;
+        const parent = t.parentMilestoneId ? byId.get(t.parentMilestoneId) : null;
+        if (parent) parent.children.push(node);
+        else roots.push(node);
+      }
+      return {
+        id: init.id,
+        title: init.title,
+        status: init.status,
+        healthColor: init.healthColor,
+        startDate: init.startDate,
+        targetEndDate: init.targetEndDate,
+        goal: init.goal,
+        successCriteria: init.successCriteria,
+        successOutcome: init.successOutcome,
+        ownerUserId: init.ownerUserId,
+        tasks: roots,
+      };
+    }),
+  };
 }
 
 /* ─── Holding project for roadmap-born tasks (OD-4) ───────────────────── */

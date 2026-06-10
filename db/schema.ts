@@ -2103,6 +2103,9 @@ export const initiatives = pgTable("initiatives", {
   notes: text("notes"),
   // FR-PRG-2 — shown on the initiative card, round-trips through Roadmap-MD.
   successCriteria: text("success_criteria"),
+  // FR-PLN-4 — outcome recorded at completion: met / partial / missed.
+  successOutcome: text("success_outcome"),
+  successOutcomeNote: text("success_outcome_note"),
   createdBy: uuid("created_by")
     .notNull()
     .references(() => users.id),
@@ -2456,6 +2459,8 @@ export const actionItems = pgTable("action_items", {
   milestoneId: uuid("milestone_id").references(() => milestones.id, {
     onDelete: "set null",
   }),
+  // FR-PLN-2: stamped when triaged (dismissed) in a planning session.
+  planReviewedAt: timestamp("plan_reviewed_at", { withTimezone: true }),
   // FR-PMO: who's responsible (a workspace user). Distinct from contactId.
   assigneeUserId: uuid("assignee_user_id").references(() => users.id),
   createdBy: uuid("created_by")

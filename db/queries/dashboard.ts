@@ -10,6 +10,7 @@ const {
   projects,
   linesOfBusiness,
   contacts,
+  initiatives,
   keyResults,
   objectives,
   pipelineStages,
@@ -65,6 +66,9 @@ export type DashTask = {
   ownerUserId: string | null;
   /** Display name of the assigned member (assigneeUserId, else legacy assignedTo). */
   ownerName: string | null;
+  /** FR-UNI-2: the roadmap thread — same chip on every task surface. */
+  initiativeId: string | null;
+  initiativeTitle: string | null;
 };
 
 async function listTasksDueBy(
@@ -82,9 +86,12 @@ async function listTasksDueBy(
       projectTitle: projects.title,
       ownerUserId: sql<string | null>`coalesce(${milestones.assigneeUserId}, ${milestones.assignedTo})`,
       ownerName: users.displayName,
+      initiativeId: milestones.initiativeId,
+      initiativeTitle: initiatives.title,
     })
     .from(milestones)
     .innerJoin(projects, eq(projects.id, milestones.projectId))
+    .leftJoin(initiatives, eq(initiatives.id, milestones.initiativeId))
     .leftJoin(users, eq(users.id, sql`coalesce(${milestones.assigneeUserId}, ${milestones.assignedTo})`))
     .where(
       and(
@@ -106,6 +113,8 @@ async function listTasksDueBy(
     isOverdue: (r.dueDate as string) < today,
     ownerUserId: r.ownerUserId ?? null,
     ownerName: r.ownerName ?? null,
+    initiativeId: r.initiativeId ?? null,
+    initiativeTitle: r.initiativeTitle ?? null,
   }));
 }
 
