@@ -25,6 +25,11 @@ import {
   listProjectsForPicker,
   projectExistsInWorkspace,
 } from "@/db/queries/items";
+import {
+  DEFAULT_TOWN_HALL_FEED_LIMIT,
+  listTownHallFeed,
+  type FeedItem,
+} from "@/db/queries/town-hall-feed";
 import { sendWhatsAppText } from "@/lib/whatsapp";
 import {
   extractMentionHandles,
@@ -63,6 +68,17 @@ export type CreatePostResult =
 export async function loadRecentPostsAction(): Promise<PostView[]> {
   const user = await requireUser();
   return listPosts({ workspaceId: user.workspaceId, viewerId: user.id, limit: 40 });
+}
+
+/** Lightweight refresh for the Home Town Hall card — just the feed, so a new
+ *  post/reaction never re-runs the ~20 dashboard queries via router.refresh(). */
+export async function fetchTownHallFeedAction(): Promise<FeedItem[]> {
+  const user = await requireUser();
+  return listTownHallFeed({
+    workspaceId: user.workspaceId,
+    viewerId: user.id,
+    limit: DEFAULT_TOWN_HALL_FEED_LIMIT,
+  });
 }
 
 export async function createPostAction(input: {
@@ -176,8 +192,9 @@ export async function createPostAction(input: {
     }
   }
 
+  // Home's Town Hall card refetches its feed client-side (fetchTownHallFeedAction),
+  // so no revalidatePath("/") — that re-ran every dashboard query per post.
   revalidatePath("/town-hall");
-  revalidatePath("/");
   return { ok: true, postId, notified: mentioned.size, waSent };
 }
 
@@ -196,7 +213,6 @@ export async function toggleReactionAction(opts: {
   });
   if (!res.ok) return { ok: false, error: "Post not found" };
   revalidatePath("/town-hall");
-  revalidatePath("/");
   return { ok: true, on: res.on };
 }
 
