@@ -67,7 +67,7 @@ export function ProjectForm({
     >
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1.5 sm:col-span-2">
-          <Label htmlFor="lobId">Line of business</Label>
+          <Label htmlFor="lobId">Belongs to</Label>
           {lobLocked ? (
             <Input
               value={lobs.find((l) => l.id === lobId)?.title ?? "—"}
@@ -76,7 +76,7 @@ export function ProjectForm({
           ) : (
             <Select value={lobId || undefined} onValueChange={setLobId}>
               <SelectTrigger id="lobId">
-                <SelectValue placeholder="Choose a line of business…" />
+                <SelectValue placeholder="Choose a business or project…" />
               </SelectTrigger>
               <SelectContent>
                 {lobs.map((l) => (

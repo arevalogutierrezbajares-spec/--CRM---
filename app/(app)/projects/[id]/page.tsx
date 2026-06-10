@@ -207,9 +207,9 @@ export default async function ProjectDetailPage(props: { params: Params; searchP
               </CardHeader>
               <CardContent>
                 <p className="py-3 text-tiny text-text-tertiary">
-                  Docs, files, and links for this project live on the{" "}
+                  Docs, files, and links for this workstream live on{" "}
                   <Link href={`/lob/${project.lobId}`} className="underline hover:text-text-primary">
-                    line of business page
+                    its parent&apos;s page
                   </Link>
                   .
                 </p>

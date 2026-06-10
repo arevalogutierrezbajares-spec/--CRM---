@@ -19,7 +19,13 @@ export default async function AppLayout({
   const user = await requireUser();
   const [projectsRes, favoritesRes, docsRes] = await Promise.all([
     safeRead<{ id: string; title: string }[]>(
-      () => listLines({ workspaceId: user.workspaceId, topLevelOnly: false }),
+      // Businesses sort ahead of projects in the sidebar explorer tree.
+      () =>
+        listLines({ workspaceId: user.workspaceId, topLevelOnly: false }).then((rows) =>
+          [...rows].sort((a, b) =>
+            a.kind === b.kind ? 0 : a.kind === "business" ? -1 : 1,
+          ),
+        ),
       [],
     ),
     safeRead<{ id: string; title: string }[]>(() => listFavoriteProjects(user.workspaceId, user.id), []),

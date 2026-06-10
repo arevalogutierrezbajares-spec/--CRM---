@@ -252,7 +252,7 @@ export default async function ProjectDetailPage(props: {
           href="/lob"
           className="inline-flex items-center gap-1 text-[13px] text-text-secondary hover:text-text-primary"
         >
-          <ChevronLeft className="h-4 w-4" /> All lines of business
+          <ChevronLeft className="h-4 w-4" /> All businesses & projects
         </Link>
 
         <div
@@ -477,21 +477,21 @@ export default async function ProjectDetailPage(props: {
             <Card>
               <CardHeader>
                 <CardTitle>
-                  Projects
+                  Workstreams
                   <span className="ml-2 text-tiny text-text-tertiary font-normal tabular-nums">
                     {childProjects.length}
                   </span>
                 </CardTitle>
                 <Button asChild variant="outline" size="sm">
                   <Link href={`/projects/new?lob=${displayed.id}`}>
-                    New project
+                    New workstream
                   </Link>
                 </Button>
               </CardHeader>
               <CardContent>
                 {childProjects.length === 0 ? (
                   <p className="text-[13px] text-text-secondary py-2">
-                    No projects under this line of business yet.
+                    No workstreams here yet.
                   </p>
                 ) : (
                   <ul className="space-y-2">

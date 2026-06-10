@@ -197,7 +197,7 @@ export async function advanceLobStage(opts: {
       ),
     )
     .limit(1);
-  if (!lob) return { ok: false, error: "Line of business not found" };
+  if (!lob) return { ok: false, error: "Business or project not found" };
   if (!lob.templateId) return { ok: false, error: "No pipeline template" };
 
   const [stage] = await db
@@ -270,7 +270,7 @@ export async function createLinkAction(opts: {
   const user = await requireUser();
 
   if (!(await assertLobInWorkspace(opts.lobId, user.workspaceId))) {
-    return { ok: false, error: "Line of business not found" };
+    return { ok: false, error: "Business or project not found" };
   }
 
   const validation = validateLinkUrl(opts.url);
@@ -371,7 +371,7 @@ export async function reorderLinksAction(opts: {
   const user = await requireUser();
 
   if (!(await assertLobInWorkspace(opts.lobId, user.workspaceId))) {
-    return { ok: false, error: "Line of business not found" };
+    return { ok: false, error: "Business or project not found" };
   }
   if (!LINK_CATEGORIES.includes(opts.category as ProjectLinkCategory)) {
     return { ok: false, error: "Invalid category" };
@@ -404,7 +404,7 @@ export async function createUploadUrlAction(opts: {
   const user = await requireUser();
 
   if (!(await assertLobInWorkspace(opts.lobId, user.workspaceId))) {
-    return { ok: false, error: "Line of business not found" };
+    return { ok: false, error: "Business or project not found" };
   }
   if (!isAllowedUpload(opts.filename, opts.mime)) {
     return { ok: false, error: REJECT_MESSAGE };
@@ -439,7 +439,7 @@ export async function finalizeFileUploadAction(opts: {
 
   if (!(await assertLobInWorkspace(opts.lobId, user.workspaceId))) {
     await removeObjects([opts.storagePath]);
-    return { ok: false, error: "Line of business not found" };
+    return { ok: false, error: "Business or project not found" };
   }
   // Path must live under this workspace's prefix — guards against a forged path.
   if (!opts.storagePath.startsWith(`${user.workspaceId}/${opts.lobId}/`)) {

@@ -53,11 +53,11 @@ export default async function NewProjectPage() {
           href="/lob"
           className="inline-flex items-center gap-1 text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
         >
-          <ChevronLeft className="h-4 w-4" /> Back to lines of business
+          <ChevronLeft className="h-4 w-4" /> Back to Business
         </Link>
         <header className="mt-4 mb-6">
           <h1 className="text-2xl font-semibold tracking-tight">
-            New line of business
+            New project
           </h1>
           <p className="text-sm text-[var(--muted-foreground)]">
             Pick a pipeline template — its stages drive the venture pipeline.

@@ -110,16 +110,20 @@ export default async function ProjectsPage(props: {
         action={
           <Button asChild size="sm">
             <Link href="/lob/new">
-              <Plus className="h-4 w-4" /> New line of business
+              <Plus className="h-4 w-4" /> New project
             </Link>
           </Button>
         }
       />
       <main className="mx-auto w-full max-w-7xl flex-1 px-6 py-6 space-y-4">
         <header>
-          <h1 className="text-[22px] font-medium tracking-tight">Lines of Business</h1>
+          <h1 className="text-[22px] font-medium tracking-tight">Business</h1>
           <p className="text-[13px] text-text-secondary">
-            {allRes.data.length} venture{allRes.data.length === 1 ? "" : "s"} in your portfolio · each LoB groups its projects, links, docs &amp; contacts.
+            {allRes.data.filter((p) => p.kind === "business").length} business
+            {allRes.data.filter((p) => p.kind === "business").length === 1 ? "" : "es"} ·{" "}
+            {allRes.data.filter((p) => p.kind === "project").length} project
+            {allRes.data.filter((p) => p.kind === "project").length === 1 ? "" : "s"} — each
+            groups its workstreams, links, docs &amp; contacts.
           </p>
         </header>
 
@@ -139,13 +143,13 @@ export default async function ProjectsPage(props: {
           >
             <p className="text-[13px] text-text-secondary">
               {allRes.data.length === 0
-                ? "No lines of business yet."
-                : "No lines of business match these filters."}
+                ? "No businesses or projects yet."
+                : "No businesses or projects match these filters."}
             </p>
             {allRes.data.length === 0 && (
               <Button asChild size="sm" className="mt-3">
                 <Link href="/lob/new">
-                  <Plus className="h-4 w-4" /> New line of business
+                  <Plus className="h-4 w-4" /> New project
                 </Link>
               </Button>
             )}

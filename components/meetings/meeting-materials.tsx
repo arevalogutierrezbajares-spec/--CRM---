@@ -564,7 +564,7 @@ function MaterialPicker({
         <DialogHeader>
           <DialogTitle>Add material</DialogTitle>
           <DialogDescription>
-            Attach a deck, file, doc, or link from any line of business.
+            Attach a deck, file, doc, or link from any business or project.
           </DialogDescription>
         </DialogHeader>
         <Input

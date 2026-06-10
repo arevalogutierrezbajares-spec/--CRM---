@@ -61,7 +61,7 @@ export default async function EditProjectPage(props: { params: Params }) {
           href={`/lob/${id}`}
           className="inline-flex items-center gap-1 text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
         >
-          <ChevronLeft className="h-4 w-4" /> Back to line of business
+          <ChevronLeft className="h-4 w-4" /> Back
         </Link>
         <header className="mt-4 mb-6">
           <h1 className="text-2xl font-semibold tracking-tight">

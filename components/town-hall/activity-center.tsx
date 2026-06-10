@@ -299,7 +299,12 @@ export function ActivityCenter({
   // Live feed: starts from the server snapshot; new posts/reactions refetch just
   // the feed (server action) instead of router.refresh()'s full-page re-query.
   const [feed, setFeed] = useState<FeedItem[]>(initialFeed);
-  useEffect(() => setFeed(initialFeed), [initialFeed]); // a real server refresh still wins
+  // A real server refresh still wins: adopt a new snapshot when the prop changes.
+  const [prevInitialFeed, setPrevInitialFeed] = useState(initialFeed);
+  if (initialFeed !== prevInitialFeed) {
+    setPrevInitialFeed(initialFeed);
+    setFeed(initialFeed);
+  }
   const channelRef = useRef<RealtimeChannel | null>(null);
   const refreshing = useRef(false);
   const refreshQueued = useRef(false);
