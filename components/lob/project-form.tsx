@@ -23,6 +23,7 @@ export type TemplateOption = {
   stageCount?: number;
 };
 export type ContactOption = { id: string; name: string };
+export type BusinessOption = { id: string; title: string; coverEmoji?: string | null };
 
 export type ProjectFormInitial = {
   id?: string;
@@ -30,6 +31,7 @@ export type ProjectFormInitial = {
   status?: Status;
   templateId?: string | null;
   contactIds?: string[];
+  businessIds?: string[];
   dueDate?: string | null;
   waitingOn?: string | null;
   expectedUnblockDate?: string | null;
@@ -43,6 +45,7 @@ export function ProjectForm({
   action,
   templates,
   contacts,
+  businesses,
   submitLabel = "Save",
   templateLocked = false,
 }: {
@@ -50,6 +53,8 @@ export function ProjectForm({
   action: Action;
   templates: TemplateOption[];
   contacts: ContactOption[];
+  /** Linkable businesses — pass only when editing a kind='project' venture. */
+  businesses?: BusinessOption[];
   submitLabel?: string;
   templateLocked?: boolean;
 }) {
@@ -60,12 +65,24 @@ export function ProjectForm({
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(
     new Set(initial?.contactIds ?? []),
   );
+  const [selectedBusinesses, setSelectedBusinesses] = useState<Set<string>>(
+    new Set(initial?.businessIds ?? []),
+  );
   const [templateId, setTemplateId] = useState<string>(
     initial?.templateId ?? "",
   );
 
   function toggleContact(id: string) {
     setSelectedContacts((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleBusiness(id: string) {
+    setSelectedBusinesses((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -82,6 +99,8 @@ export function ProjectForm({
         else formData.delete("templateId");
         formData.delete("contactId");
         for (const id of selectedContacts) formData.append("contactId", id);
+        formData.delete("businessId");
+        for (const id of selectedBusinesses) formData.append("businessId", id);
         startTransition(async () => {
           try {
             await action(formData);
@@ -200,6 +219,37 @@ export function ProjectForm({
           />
         </div>
       </div>
+
+      {businesses && businesses.length > 0 && (
+        <section className="space-y-3">
+          <Label>Linked businesses</Label>
+          <div className="flex flex-wrap gap-2">
+            {businesses.map((b) => {
+              const active = selectedBusinesses.has(b.id);
+              return (
+                <button
+                  key={b.id}
+                  type="button"
+                  onClick={() => toggleBusiness(b.id)}
+                  className="focus:outline-none"
+                  aria-pressed={active}
+                >
+                  <Badge
+                    variant={active ? "default" : "outline"}
+                    className="cursor-pointer transition-opacity hover:opacity-80"
+                  >
+                    {b.coverEmoji ? `${b.coverEmoji} ` : ""}
+                    {b.title}
+                  </Badge>
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-xs text-[var(--muted-foreground)]">
+            A project can roll up to one business, both, or stand alone.
+          </p>
+        </section>
+      )}
 
       {contacts.length > 0 && (
         <section className="space-y-3">

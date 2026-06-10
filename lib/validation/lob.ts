@@ -8,6 +8,8 @@ export const projectFormSchema = z
     status: projectStatusEnum.default("active"),
     templateId: z.string().min(1).optional().nullable(),
     contactIds: z.array(z.string().uuid()).default([]),
+    /** Businesses this (kind='project') venture rolls up to; ignored for businesses. */
+    businessIds: z.array(z.string().uuid()).default([]),
     dueDate: z
       .string()
       .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD")
@@ -39,6 +41,7 @@ export function parseProjectFormData(fd: FormData): ProjectFormInput {
     status: (fd.get("status") as string) || "active",
     templateId: emptyToNull(fd.get("templateId")),
     contactIds: fd.getAll("contactId").map(String).filter(Boolean),
+    businessIds: fd.getAll("businessId").map(String).filter(Boolean),
     dueDate: emptyToNull(fd.get("dueDate")),
     waitingOn: emptyToNull(fd.get("waitingOn")),
     expectedUnblockDate: emptyToNull(fd.get("expectedUnblockDate")),

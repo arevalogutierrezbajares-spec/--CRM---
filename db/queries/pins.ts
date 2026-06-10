@@ -36,7 +36,9 @@ export type PinnedProject = {
 // Pins/visits operate on Lines of Business (the venture). Tasks/action items
 // roll up from the LoB's child Projects; docs live directly on the LoB.
 
-/** A user's pinned LoBs, id + title only — for the sidebar Favorites list. */
+/** A user's pinned businesses, id + title only — for the sidebar Favorites list.
+ *  Favorites are businesses-only by design; stale project pins keep their rows
+ *  but stop rendering. */
 export async function listFavoriteProjects(
   workspaceId: string,
   userId: string,
@@ -52,12 +54,13 @@ export async function listFavoriteProjects(
       and(
         eq(schema.projectPins.userId, userId),
         eq(schema.projectPins.workspaceId, workspaceId),
+        eq(schema.linesOfBusiness.kind, "business"),
       ),
     )
     .orderBy(desc(schema.projectPins.createdAt));
 }
 
-/** A user's pinned LoBs, each with its docs/links + open tasks + open action items. */
+/** A user's pinned businesses, each with its docs/links + open tasks + open action items. */
 export async function listPinnedProjects(
   workspaceId: string,
   userId: string,
@@ -79,6 +82,7 @@ export async function listPinnedProjects(
       and(
         eq(schema.projectPins.userId, userId),
         eq(schema.projectPins.workspaceId, workspaceId),
+        eq(schema.linesOfBusiness.kind, "business"),
       ),
     )
     .orderBy(desc(schema.projectPins.createdAt));
@@ -241,12 +245,17 @@ export async function togglePin(
       .where(and(eq(schema.projectPins.userId, userId), eq(schema.projectPins.lobId, lobId)));
     return false;
   }
-  // Only pin an LoB that belongs to the user's workspace.
+  // Only pin a BUSINESS that belongs to the user's workspace (Favorites are
+  // businesses-only; projects aren't pinnable).
   const [lob] = await db
     .select({ id: schema.linesOfBusiness.id })
     .from(schema.linesOfBusiness)
     .where(
-      and(eq(schema.linesOfBusiness.id, lobId), eq(schema.linesOfBusiness.workspaceId, workspaceId)),
+      and(
+        eq(schema.linesOfBusiness.id, lobId),
+        eq(schema.linesOfBusiness.workspaceId, workspaceId),
+        eq(schema.linesOfBusiness.kind, "business"),
+      ),
     )
     .limit(1);
   if (!lob) return false;

@@ -11,6 +11,10 @@ export function getDb(): DB {
   if (_db) return _db;
   const connectionString = getDatabaseUrl();
   const client = postgres(connectionString, {
+    // DATABASE_URL points at the Supabase transaction-mode pooler (pgbouncer,
+    // port 6543), where server-side prepared statements are NOT safe — every
+    // query may land on a different backend connection. Only flip this if the
+    // URL moves to session mode / direct Postgres (port 5432).
     prepare: false,
     ssl: isSupabaseDatabaseUrl(connectionString) ? "require" : undefined,
     // Supabase forces an empty search_path for the postgres role. Tell every

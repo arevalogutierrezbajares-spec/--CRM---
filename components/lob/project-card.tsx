@@ -18,11 +18,13 @@ import { cn } from "@/lib/utils";
 import { HealthBadge } from "@/components/ui/health-badge";
 import { DashBadge } from "@/components/dashboard/shared/badge";
 import { ProgressBar } from "@/components/dashboard/shared/progress-bar";
-import type { LobListItem } from "@/db/queries/lines-of-business";
+import type { BusinessRef, LobListItem } from "@/db/queries/lines-of-business";
 
 interface ProjectCardProps {
   project: LobListItem;
   variant?: "featured" | "default" | "muted";
+  /** Businesses this project rolls up to (kind='project' cards only). */
+  businesses?: BusinessRef[];
 }
 
 const STATUS_VARIANT: Record<
@@ -58,7 +60,7 @@ const CATEGORY_ORDER = [
   "other",
 ];
 
-export function ProjectCard({ project: p, variant = "default" }: ProjectCardProps) {
+export function ProjectCard({ project: p, variant = "default", businesses = [] }: ProjectCardProps) {
   const [hovered, setHovered] = useState(false);
   const accent = p.coverColor ?? "var(--text-tertiary)";
   const isFeatured = variant === "featured";
@@ -117,6 +119,17 @@ export function ProjectCard({ project: p, variant = "default" }: ProjectCardProp
                 </DashBadge>
               )}
               <HealthBadge health={p.computedHealth} short />
+              {businesses.map((b) => (
+                <span
+                  key={b.id}
+                  className="inline-flex items-center gap-1 rounded-full border px-1.5 py-px text-[10px] text-text-secondary"
+                  style={{ borderColor: b.coverColor ?? "var(--border-default)" }}
+                  title={`Rolls up to ${b.title}`}
+                >
+                  {b.coverEmoji && <span aria-hidden>{b.coverEmoji}</span>}
+                  {b.title}
+                </span>
+              ))}
             </div>
             {p.tagline && (
               <p

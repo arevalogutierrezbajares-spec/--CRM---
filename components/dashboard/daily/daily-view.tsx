@@ -3,7 +3,6 @@ import { TasksCard } from "./tasks-card";
 import { ActionItemsCard } from "./action-items-card";
 import { AIAssistPanel } from "./ai-assist-panel";
 import { Scorecard } from "./scorecard";
-import { DynamicKpiStrip } from "./dynamic-kpi-strip";
 import { ActivityCenter } from "@/components/town-hall/activity-center";
 import type { ScorecardRow } from "@/db/queries/okrs";
 import { PinnedProjects } from "../pinned-projects";
@@ -15,7 +14,7 @@ import type { RefObject } from "@/components/town-hall/types";
 import type { WorkspaceCountdown } from "@/db/queries/workspace-settings";
 import type { FeedItem } from "@/db/queries/town-hall-feed";
 import type { InitiativePick } from "@/db/queries/item-initiatives";
-import type { DashActionItem, DashMeeting, DashTask, HomeCommandMetric } from "@/db/queries/dashboard";
+import type { DashActionItem, DashMeeting, DashTask } from "@/db/queries/dashboard";
 import type { BlockedProject } from "@/db/queries/this-week";
 import type { DashWidget } from "@/lib/dashboard/layout";
 
@@ -28,6 +27,8 @@ interface DailyViewProps {
   docs: RefObject[];
   pinnedProjects: PinnedProject[];
   recentProjects: { id: string; title: string }[];
+  /** Favorites are businesses-only; this feeds the pin picker. */
+  pinnableBusinesses: { id: string; title: string }[];
   scorecard: ScorecardRow[];
   nowMs: number;
   tz: string;
@@ -36,8 +37,6 @@ interface DailyViewProps {
   countdown: WorkspaceCountdown | null;
   feed: FeedItem[];
   initiatives: InitiativePick[];
-  commandMetrics: HomeCommandMetric[];
-  commandMetricsError?: string | null;
   blocked: BlockedProject[];
   briefingBullets: string[];
   dashboardLayout: DashWidget[];
@@ -53,6 +52,7 @@ export function DailyView({
   docs,
   pinnedProjects,
   recentProjects,
+  pinnableBusinesses,
   scorecard,
   nowMs,
   tz,
@@ -61,8 +61,6 @@ export function DailyView({
   countdown,
   feed,
   initiatives,
-  commandMetrics,
-  commandMetricsError,
   blocked,
   briefingBullets,
   dashboardLayout,
@@ -98,12 +96,8 @@ export function DailyView({
       ),
     },
     {
-      id: "tasks",
-      node: <TasksCard tasks={tasks} scope="today" sources={mentionSources} />,
-    },
-    {
       id: "pinned",
-      node: <PinnedProjects pinned={pinnedProjects} allProjects={pickerProjects} recent={recentProjects} nowMs={nowMs} />,
+      node: <PinnedProjects pinned={pinnedProjects} allProjects={pinnableBusinesses} recent={recentProjects} nowMs={nowMs} />,
     },
     {
       id: "ai",
@@ -120,7 +114,9 @@ export function DailyView({
       {/* Top row: meetings agenda · tasks-due agenda · countdown (Angel Falls) */}
       <TopRow meetings={meetings} tasks={tasks} countdown={countdown} nowMs={nowMs} tz={tz} />
 
-      <DynamicKpiStrip metrics={commandMetrics} error={commandMetricsError} />
+      {/* Today's tasks sit fixed here (where the KPI strip lived — KPIs moved to
+          the weekly view); no longer part of the customizable grid. */}
+      <TasksCard tasks={tasks} scope="today" sources={mentionSources} />
 
       <BriefingCard
         bullets={briefingBullets}

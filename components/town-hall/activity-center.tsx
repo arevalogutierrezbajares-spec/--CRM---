@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
@@ -29,6 +28,7 @@ import {
 import { Composer } from "./composer";
 import { PostBody } from "./post-body";
 import { PostReactions } from "./post-reactions";
+import { fetchTownHallFeedAction } from "@/app/(app)/town-hall/actions";
 import type { MemberOption, RefObject } from "./types";
 import type { FeedItem } from "@/db/queries/town-hall-feed";
 import type { ActivityEntity, ActivityEvent } from "@/db/queries/activity";
@@ -293,32 +293,61 @@ export function ActivityCenter({
   todayKey: string;
   nowMs: number;
 }) {
-  const router = useRouter();
   const [type, setType] = useState<FeedType>("all");
   const [person, setPerson] = useState<string>("all");
   const [initiative, setInitiative] = useState<string>("all");
+  // Live feed: starts from the server snapshot; new posts/reactions refetch just
+  // the feed (server action) instead of router.refresh()'s full-page re-query.
+  const [feed, setFeed] = useState<FeedItem[]>(initialFeed);
+  // A real server refresh still wins: adopt a new snapshot when the prop changes.
+  const [prevInitialFeed, setPrevInitialFeed] = useState(initialFeed);
+  if (initialFeed !== prevInitialFeed) {
+    setPrevInitialFeed(initialFeed);
+    setFeed(initialFeed);
+  }
   const channelRef = useRef<RealtimeChannel | null>(null);
+  const refreshing = useRef(false);
+  const refreshQueued = useRef(false);
+
+  const refreshFeed = useCallback(async () => {
+    // Coalesce: one in-flight refetch; events landing meanwhile trigger one more.
+    if (refreshing.current) {
+      refreshQueued.current = true;
+      return;
+    }
+    refreshing.current = true;
+    try {
+      do {
+        refreshQueued.current = false;
+        setFeed(await fetchTownHallFeedAction());
+      } while (refreshQueued.current);
+    } catch {
+      /* keep the current feed on a failed refetch */
+    } finally {
+      refreshing.current = false;
+    }
+  }, []);
 
   useEffect(() => {
     const supabase = createClient();
     const channel = supabase.channel(`town-hall:${workspaceId}`, { config: { broadcast: { self: false } } });
-    channel.on("broadcast", { event: "new-post" }, () => router.refresh());
+    channel.on("broadcast", { event: "new-post" }, () => void refreshFeed());
     channel.subscribe();
     channelRef.current = channel;
     return () => {
       void supabase.removeChannel(channel);
       channelRef.current = null;
     };
-  }, [workspaceId, router]);
+  }, [workspaceId, refreshFeed]);
 
   function onPosted() {
     channelRef.current?.send({ type: "broadcast", event: "new-post", payload: {} });
-    router.refresh();
+    void refreshFeed();
   }
 
   const filtered = useMemo(
     () =>
-      initialFeed.filter((i) => {
+      feed.filter((i) => {
         if (type !== "all" && feedType(i) !== type) return false;
         if (person !== "all" && actorId(i) !== person) return false;
         if (initiative !== "all") {
@@ -327,16 +356,16 @@ export function ActivityCenter({
         }
         return true;
       }),
-    [initialFeed, type, person, initiative],
+    [feed, type, person, initiative],
   );
 
   const groups = useMemo(() => groupFeed(filtered, todayKey, tz), [filtered, todayKey, tz]);
   const filtersActive = type !== "all" || person !== "all" || initiative !== "all";
   const countLabel = filtersActive
-    ? `${filtered.length}/${initialFeed.length} shown`
-    : initialFeed.length >= feedLimit
+    ? `${filtered.length}/${feed.length} shown`
+    : feed.length >= feedLimit
       ? `Latest ${feedLimit} items`
-      : `${initialFeed.length} items`;
+      : `${feed.length} items`;
 
   return (
     <DashCard>
@@ -434,7 +463,7 @@ export function ActivityCenter({
                               <PostReactions
                                 postId={run.items[0].post.id}
                                 reactions={run.items[0].post.reactions}
-                                onChanged={() => router.refresh()}
+                                onChanged={() => void refreshFeed()}
                               />
                             </>
                           )}

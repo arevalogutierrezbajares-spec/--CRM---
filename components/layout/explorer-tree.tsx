@@ -126,7 +126,7 @@ export function ExplorerTree({ projects, docs }: { projects: Proj[]; docs: Works
           }`}
         >
           {rootOpen ? <FolderOpen size={13} className="shrink-0 text-text-tertiary" /> : <Folder size={13} className="shrink-0 text-text-tertiary" />}
-          <span>Lines of Business</span>
+          <span>Business</span>
           <span className="ml-auto text-tiny tabular-nums text-text-tertiary">{projects.length}</span>
         </Link>
       </div>

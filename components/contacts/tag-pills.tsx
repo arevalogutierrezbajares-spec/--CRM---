@@ -77,11 +77,13 @@ function TagPill({
       {isVenture && (
         <span
           aria-hidden
-          className="h-1.5 w-1.5 rounded-full"
+          className="h-1.5 w-1.5 shrink-0 rounded-full"
           style={{ backgroundColor: tag.color! }}
         />
       )}
-      {tag.name}
+      <span className="max-w-[120px] truncate" title={tag.name}>
+        {tag.name}
+      </span>
     </>
   );
   if (onClick) {

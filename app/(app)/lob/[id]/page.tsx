@@ -27,6 +27,8 @@ import {
   getLob,
   listProjectLinks,
   listLines,
+  listBusinessLinks,
+  type BusinessRef,
   type LobListItem,
   type ProjectLinkWithAuthor,
   type ProjectLinkView,
@@ -127,7 +129,7 @@ export default async function ProjectDetailPage(props: {
     );
   }
 
-  const [touchesRes, linksRes, researchRes, shareContactsRes, childProjectsRes] =
+  const [touchesRes, linksRes, researchRes, shareContactsRes, childProjectsRes, businessLinksRes] =
     await Promise.all([
       safeRead(
         () =>
@@ -164,8 +166,17 @@ export default async function ProjectDetailPage(props: {
           }),
         [],
       ),
+      // Businesses this project rolls up to (kind='project' only; businesses get []).
+      safeRead<BusinessRef[]>(
+        () =>
+          displayed.kind === "project"
+            ? listBusinessLinks(displayed.id, user.workspaceId)
+            : Promise.resolve([]),
+        [],
+      ),
     ]);
   const childProjects = childProjectsRes.data;
+  const linkedBusinesses = businessLinksRes.data;
 
   // Flag links whose target is actually reachable so the board can grey out
   // files whose storage object was lost and notes/links with nothing behind them.
@@ -241,7 +252,7 @@ export default async function ProjectDetailPage(props: {
           href="/lob"
           className="inline-flex items-center gap-1 text-[13px] text-text-secondary hover:text-text-primary"
         >
-          <ChevronLeft className="h-4 w-4" /> All lines of business
+          <ChevronLeft className="h-4 w-4" /> All businesses & projects
         </Link>
 
         <div
@@ -309,6 +320,18 @@ export default async function ProjectDetailPage(props: {
                   {displayed.status}
                 </DashBadge>
                 <HealthBadge health={health} short />
+                {linkedBusinesses.map((b) => (
+                  <Link
+                    key={b.id}
+                    href={`/lob/${b.id}`}
+                    className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] text-text-secondary transition-colors hover:text-text-primary"
+                    style={{ borderColor: b.coverColor ?? "var(--border-default)" }}
+                    title={`Rolls up to ${b.title}`}
+                  >
+                    {b.coverEmoji && <span aria-hidden>{b.coverEmoji}</span>}
+                    {b.title}
+                  </Link>
+                ))}
               </div>
               {displayed.tagline && (
                 <p className="text-[13px] text-text-secondary mt-1">
@@ -454,21 +477,21 @@ export default async function ProjectDetailPage(props: {
             <Card>
               <CardHeader>
                 <CardTitle>
-                  Projects
+                  Workstreams
                   <span className="ml-2 text-tiny text-text-tertiary font-normal tabular-nums">
                     {childProjects.length}
                   </span>
                 </CardTitle>
                 <Button asChild variant="outline" size="sm">
                   <Link href={`/projects/new?lob=${displayed.id}`}>
-                    New project
+                    New workstream
                   </Link>
                 </Button>
               </CardHeader>
               <CardContent>
                 {childProjects.length === 0 ? (
                   <p className="text-[13px] text-text-secondary py-2">
-                    No projects under this line of business yet.
+                    No workstreams here yet.
                   </p>
                 ) : (
                   <ul className="space-y-2">

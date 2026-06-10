@@ -26,13 +26,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { MultiSelect } from "@/components/ui/multi-select";
 import { ColumnHeader } from "@/components/grid/column-header";
 import { FilterBar } from "@/components/grid/filter-bar";
 import { SavedViews } from "@/components/grid/saved-views";
@@ -50,7 +44,7 @@ import {
   bulkArchiveContacts,
   bulkAddTagToContacts,
 } from "@/app/(app)/contacts/actions";
-import type { ContactListItem, ContactProjectOption } from "@/db/queries/contacts";
+import type { ContactProjectOption } from "@/db/queries/contacts";
 import {
   parseSort,
   parseFilter,
@@ -69,8 +63,24 @@ type Tag = {
   color?: string | null;
 };
 
+/** The trimmed per-row payload the grid actually renders. The server page maps
+ *  ContactListItem down to this so the RSC payload skips notes, intro chains,
+ *  channel ids, workspace/creator ids, etc. */
+export type ContactGridRow = {
+  id: string;
+  name: string;
+  type: "person" | "org";
+  organization: string | null;
+  relationshipType: "friend" | "lead" | "partner" | "prospect";
+  lastTouchAt: Date | string | null;
+  updatedAt: Date | string;
+  channels: { kind: string; value: string; isPrimary?: boolean | null }[];
+  tags: Tag[];
+  projects: { id: string; title: string; parentTitle: string | null }[];
+};
+
 type Props = {
-  initialContacts: ContactListItem[];
+  initialContacts: ContactGridRow[];
   ventureTags: Tag[];
   allTags: Tag[];
   projectOptions: ContactProjectOption[];
@@ -80,24 +90,42 @@ type Props = {
 // ─── virtual list item types ────────────────────────────────────────────────
 type VRow =
   | { kind: "group-header"; label: string; count: number }
-  | { kind: "contact"; contact: ContactListItem; rowIdx: number };
+  | { kind: "contact"; contact: ContactGridRow; rowIdx: number };
 
 const ROW_H = 52;       // contact row height estimate
 const GROUP_H = 28;     // group header height estimate
 const TABLE_MAX_H = 640; // px — viewport-like scroll container
 
-const FILTER_OPTIONS = [
-  {
-    col: "relationship",
-    label: "Relationship",
-    values: [
-      { value: "friend", label: "Friend" },
-      { value: "lead", label: "Lead" },
-      { value: "partner", label: "Partner" },
-      { value: "prospect", label: "Prospect" },
-    ],
-  },
+const RELATIONSHIP_OPTIONS = [
+  { value: "friend", label: "Friend" },
+  { value: "lead", label: "Lead" },
+  { value: "partner", label: "Partner" },
+  { value: "prospect", label: "Prospect" },
 ];
+
+/** What renders when no explicit relationship filter is set: prospects hidden. */
+const DEFAULT_RELATIONSHIPS = "friend,lead,partner";
+const ALL_RELATIONSHIPS = "friend,lead,partner,prospect";
+
+/** Split a comma-list filter value into clean entries. */
+function splitList(v: string | null | undefined): string[] {
+  return (v ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/** Latest of two date-ish values (for the displayed "last touch" recency). */
+function latestOf(
+  a: Date | string | null | undefined,
+  b: Date | string | null | undefined,
+): Date | null {
+  const ad = a ? new Date(a) : null;
+  const bd = b ? new Date(b) : null;
+  if (!ad) return bd;
+  if (!bd) return ad;
+  return ad.getTime() >= bd.getTime() ? ad : bd;
+}
 
 const GROUP_OPTIONS = [
   { value: "relationship", label: "Relationship" },
@@ -122,17 +150,32 @@ export function ContactsGrid({
   const [, startTransition] = useTransition();
 
   const q = (sp.get("q") ?? "").trim().toLowerCase();
-  const tag = sp.get("tag");
+  // ?tag= is a comma list (multi-select; ANY-of semantics).
+  const tagParam = sp.get("tag");
+  const tagNames = useMemo(() => splitList(tagParam), [tagParam]);
   const projectId = sp.get("project");
   const leadView = sp.get("leadView") ?? "direct";
-  const filters = parseFilter(sp.get("filter"));
+  const rawFilters = useMemo(() => parseFilter(sp.get("filter")), [sp]);
+  // Default view hides prospects: absence of a `relationship` key means
+  // "everything except prospect". Selecting all four (or any explicit set)
+  // writes the key, so saved views replay exactly what was visible.
+  const prospectsHiddenByDefault = !("relationship" in rawFilters);
+  const filters = useMemo<Filters>(
+    () =>
+      prospectsHiddenByDefault
+        ? { ...rawFilters, relationship: DEFAULT_RELATIONSHIPS }
+        : rawFilters,
+    [rawFilters, prospectsHiddenByDefault],
+  );
   const sort = parseSort(sp.get("sort"));
   const group = sp.get("group") ?? undefined;
 
   // ── filtered + sorted list ─────────────────────────────────────────────
   const sorted = useMemo(() => {
     let rows = initialContacts;
-    if (tag) rows = rows.filter((c) => c.tags.some((t) => t.name === tag));
+    if (tagNames.length > 0) {
+      rows = rows.filter((c) => c.tags.some((t) => tagNames.includes(t.name)));
+    }
     if (q) {
       rows = rows.filter((c) => {
         if (c.name.toLowerCase().includes(q)) return true;
@@ -143,25 +186,27 @@ export function ContactsGrid({
         return false;
       });
     }
-    rows = applyFilters<ContactListItem>(rows, filters, {
-      relationship: (r, v) => r.relationshipType === v,
+    rows = applyFilters<ContactGridRow>(rows, filters, {
+      // Comma-list values → set membership (multi-select filters).
+      relationship: (r, v) => splitList(v).includes(r.relationshipType),
       type: (r, v) => r.type === v,
       org: (r, v) =>
         (r.organization ?? "").toLowerCase().includes(v.toLowerCase()),
-      project: (r, v) => r.projects.some((p) => p.id === v),
+      project: (r, v) => r.projects.some((p) => splitList(v).includes(p.id)),
     });
-    return applySort<ContactListItem>(rows, sort, {
+    return applySort<ContactGridRow>(rows, sort, {
       name: (r) => r.name.toLowerCase(),
       relationship: (r) => r.relationshipType,
       organization: (r) => (r.organization ?? "").toLowerCase(),
-      lastTouch: (r) => (r.lastTouchAt ? new Date(r.lastTouchAt) : null),
+      // Sort by what the column displays: latest of touch vs profile edit.
+      lastTouch: (r) => latestOf(r.lastTouchAt, r.updatedAt),
       updated: (r) => new Date(r.updatedAt),
     });
-  }, [initialContacts, q, tag, filters, sort]);
+  }, [initialContacts, q, tagNames, filters, sort]);
 
   const grouped = useMemo(
     () =>
-      groupBy<ContactListItem>(sorted, group, (r) => {
+      groupBy<ContactGridRow>(sorted, group, (r) => {
         if (group === "relationship") return r.relationshipType;
         if (group === "type") return r.type;
         if (group === "org") return r.organization ?? "—";
@@ -267,9 +312,9 @@ export function ContactsGrid({
         router.push("/contacts/new");
       } else if (e.key === "t") {
         e.preventDefault();
-        const cur = (filters.type as "person" | "org" | undefined) ?? "all";
+        const cur = (rawFilters.type as "person" | "org" | undefined) ?? "all";
         const next = TYPE_CYCLE[(TYPE_CYCLE.indexOf(cur) + 1) % TYPE_CYCLE.length];
-        const nf: Filters = { ...filters };
+        const nf: Filters = { ...rawFilters };
         if (next === "all") delete nf.type;
         else nf.type = next;
         startTransition(() => {
@@ -305,7 +350,7 @@ export function ContactsGrid({
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [router, pathname, sp, filters, contactRows, focusedIdx, selectionCount]);
+  }, [router, pathname, sp, rawFilters, contactRows, focusedIdx, selectionCount]);
 
   // Scroll focused row into view inside virtual container.
   useEffect(() => {
@@ -346,11 +391,38 @@ export function ContactsGrid({
     setBulkPending(false);
   }
 
-  // ── tag click → filter ────────────────────────────────────────────────
+  // ── filter setters (multi-select → URL params) ────────────────────────
+  const setRelationships = useCallback(
+    (values: string[]) => {
+      const nf: Filters = { ...rawFilters };
+      // No selection = back to the default (prospects hidden).
+      if (values.length === 0) delete nf.relationship;
+      else nf.relationship = values.join(",");
+      startTransition(() => {
+        router.push(buildHref(pathname, new URLSearchParams(sp.toString()), { filters: nf }));
+      });
+    },
+    [router, pathname, sp, rawFilters],
+  );
+
+  const setTagFilter = useCallback(
+    (values: string[]) => {
+      const next = new URLSearchParams(sp.toString());
+      if (values.length > 0) next.set("tag", values.join(","));
+      else next.delete("tag");
+      const s = next.toString();
+      startTransition(() => router.push(s ? `${pathname}?${s}` : pathname));
+    },
+    [router, pathname, sp],
+  );
+
+  // ── tag click → add to the tag filter ────────────────────────────────
   const handleTagClick = useCallback(
     (t: Tag) => {
       const next = new URLSearchParams(sp.toString());
-      next.set("tag", t.name);
+      const current = splitList(next.get("tag"));
+      if (!current.includes(t.name)) current.push(t.name);
+      next.set("tag", current.join(","));
       if (t.name.toLowerCase() === LINKEDIN_LEAD_TAG_NAME) {
         next.set("leadView", "leads");
       }
@@ -363,8 +435,9 @@ export function ContactsGrid({
   const matchedCount = sorted.length;
   const hasActiveQuery =
     q.length > 0 ||
-    Object.keys(filters).length > 0 ||
-    !!tag ||
+    Object.keys(rawFilters).length > 0 ||
+    prospectsHiddenByDefault ||
+    tagNames.length > 0 ||
     !!projectId ||
     leadView !== "direct";
 
@@ -383,8 +456,20 @@ export function ContactsGrid({
         <VenturePillBar tags={ventureTags} />
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="flex flex-wrap items-end gap-3">
+            <MultiSelect
+              label="Relationship"
+              options={RELATIONSHIP_OPTIONS}
+              selected={splitList(filters.relationship)}
+              onChange={setRelationships}
+            />
+            <MultiSelect
+              label="Tags"
+              options={allTags.map((t) => ({ value: t.name, label: t.name, color: t.color }))}
+              selected={tagNames}
+              onChange={setTagFilter}
+            />
             <ProjectFilter options={projectOptions} />
-            <FilterBar options={FILTER_OPTIONS} groupOptions={GROUP_OPTIONS} />
+            <FilterBar options={[]} groupOptions={GROUP_OPTIONS} />
           </div>
           <div className="flex items-center gap-2">
             <ExportButton endpoint="/api/export/contacts" />
@@ -540,20 +625,31 @@ export function ContactsGrid({
                         <td className="px-2 py-3">
                           <ContactAvatar name={c.name} type={c.type as "person" | "org"} />
                         </td>
-                        <td className="px-4 py-3">
-                          <Link href={`/contacts/${c.id}`} className="font-medium hover:underline">
+                        <td className="max-w-[240px] px-4 py-3">
+                          <Link
+                            href={`/contacts/${c.id}`}
+                            className="block max-w-full truncate font-medium hover:underline"
+                            title={c.name}
+                          >
                             {c.name}
                           </Link>
                           {c.organization && (
-                            <div className="text-xs text-[var(--muted-foreground)]">{c.organization}</div>
+                            <div
+                              className="max-w-full truncate text-xs text-[var(--muted-foreground)]"
+                              title={c.organization}
+                            >
+                              {c.organization}
+                            </div>
                           )}
                           <ProjectPills projects={c.projects} className="mt-1" />
                         </td>
                         <td className="px-4 py-3">
                           <Badge variant="outline">{c.relationshipType}</Badge>
                         </td>
-                        <td className="px-4 py-3 text-sm text-[var(--muted-foreground)]">
-                          {c.organization ?? "—"}
+                        <td className="max-w-[180px] px-4 py-3 text-sm text-[var(--muted-foreground)]">
+                          <span className="block truncate" title={c.organization ?? undefined}>
+                            {c.organization ?? "—"}
+                          </span>
                         </td>
                         <td className="px-4 py-3">
                           <TagPills tags={c.tags} onTagClick={handleTagClick} />
@@ -562,7 +658,7 @@ export function ContactsGrid({
                           <ReachIcons channels={c.channels} />
                         </td>
                         <td className="px-4 py-3">
-                          <LastTouchCell value={c.lastTouchAt} />
+                          <LastTouchCell touchedAt={c.lastTouchAt} editedAt={c.updatedAt} />
                         </td>
                       </tr>
                     );
@@ -623,21 +719,19 @@ export function ContactsGrid({
   );
 }
 
-// ─── project filter ─────────────────────────────────────────────────────────
+// ─── project filter (multi-select on the ?project= comma list) ──────────────
 function ProjectFilter({ options }: { options: ContactProjectOption[] }) {
   const router = useRouter();
   const pathname = usePathname();
   const sp = useSearchParams();
-  const projectId = sp.get("project") ?? "";
-  const hasSelectedOption = options.some((p) => p.id === projectId);
-  const selectedValue = projectId && hasSelectedOption ? projectId : "_all";
+  const selectedIds = splitList(sp.get("project"));
   const ucaima = options.find((p) => p.title.toLowerCase() === "ucaima transformation");
 
   if (options.length === 0) return null;
 
-  function setProject(nextProjectId: string | null) {
+  function setProjects(ids: string[]) {
     const next = new URLSearchParams(sp.toString());
-    if (nextProjectId) next.set("project", nextProjectId);
+    if (ids.length > 0) next.set("project", ids.join(","));
     else next.delete("project");
     const s = next.toString();
     router.push(s ? `${pathname}?${s}` : pathname);
@@ -645,48 +739,28 @@ function ProjectFilter({ options }: { options: ContactProjectOption[] }) {
 
   return (
     <div className="flex flex-wrap items-end gap-2">
-      <div className="space-y-1">
-        <label className="text-xs uppercase tracking-wide text-[var(--muted-foreground)]">
-          Project
-        </label>
-        <Select
-          value={selectedValue}
-          onValueChange={(v) => setProject(v === "_all" ? null : v)}
-        >
-          <SelectTrigger className="h-8 w-64 text-xs">
-            <SelectValue placeholder="All projects" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="_all">All projects</SelectItem>
-            {options.map((project) => (
-              <SelectItem key={project.id} value={project.id}>
-                {project.title} ({project.contactCount})
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      {ucaima && ucaima.id !== projectId && (
+      <MultiSelect
+        label="Project"
+        options={options.map((p) => ({
+          value: p.id,
+          label: p.title,
+          hint: String(p.contactCount),
+        }))}
+        selected={selectedIds.filter((id) => options.some((p) => p.id === id))}
+        onChange={setProjects}
+        placeholder="All projects"
+        triggerClassName="w-64"
+      />
+      {ucaima && !selectedIds.includes(ucaima.id) && (
         <Button
           type="button"
           variant="outline"
           size="sm"
           className="h-8 max-w-full gap-1.5 px-2 text-xs"
-          onClick={() => setProject(ucaima.id)}
+          onClick={() => setProjects([...selectedIds, ucaima.id])}
         >
           <FolderOpen className="h-3.5 w-3.5" />
           Ucaima Transformation
-        </Button>
-      )}
-      {projectId && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-8 px-2 text-xs"
-          onClick={() => setProject(null)}
-        >
-          Clear
         </Button>
       )}
     </div>
@@ -697,7 +771,7 @@ function ProjectPills({
   projects,
   className,
 }: {
-  projects: ContactListItem["projects"];
+  projects: ContactGridRow["projects"];
   className?: string;
 }) {
   if (projects.length === 0) return null;
@@ -737,7 +811,7 @@ function MobileCard({
   onToggle,
   onTagClick,
 }: {
-  contact: ContactListItem;
+  contact: ContactGridRow;
   selected: boolean;
   onToggle: () => void;
   onTagClick: (t: Tag) => void;
@@ -766,14 +840,17 @@ function MobileCard({
         <div className="flex items-start justify-between gap-2">
           <Link
             href={`/contacts/${c.id}`}
-            className="font-medium leading-tight hover:underline"
+            className="min-w-0 truncate font-medium leading-tight hover:underline"
+            title={c.name}
           >
             {c.name}
           </Link>
-          <LastTouchCell value={c.lastTouchAt} />
+          <LastTouchCell touchedAt={c.lastTouchAt} editedAt={c.updatedAt} />
         </div>
         {c.organization && (
-          <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">{c.organization}</p>
+          <p className="mt-0.5 truncate text-xs text-[var(--muted-foreground)]" title={c.organization}>
+            {c.organization}
+          </p>
         )}
         <ProjectPills projects={c.projects} className="mt-1.5" />
         <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2">

@@ -6,7 +6,12 @@ import { TopBar } from "@/components/layout/top-bar";
 import { Card, CardContent } from "@/components/ui/card";
 import { ProjectForm } from "@/components/lob/project-form";
 import { DbBanner } from "@/components/db-banner";
-import { getLob, listTemplates } from "@/db/queries/lines-of-business";
+import {
+  getLob,
+  listBusinesses,
+  listBusinessLinks,
+  listTemplates,
+} from "@/db/queries/lines-of-business";
 import { listContacts } from "@/db/queries/contacts";
 import { safeRead } from "@/lib/db-status";
 import { updateLob } from "../../actions";
@@ -17,7 +22,7 @@ export default async function EditProjectPage(props: { params: Params }) {
   const user = await requireUser();
   const { id } = await props.params;
 
-  const [projectRes, templatesRes, contactsRes] = await Promise.all([
+  const [projectRes, templatesRes, contactsRes, businessesRes, linkedRes] = await Promise.all([
     safeRead(() => getLob({ id, workspaceId: user.workspaceId }), null),
     safeRead(
       () => listTemplates(),
@@ -27,10 +32,21 @@ export default async function EditProjectPage(props: { params: Params }) {
       () => listContacts({ workspaceId: user.workspaceId }),
       [] as Awaited<ReturnType<typeof listContacts>>,
     ),
+    safeRead(
+      () => listBusinesses(user.workspaceId),
+      [] as Awaited<ReturnType<typeof listBusinesses>>,
+    ),
+    safeRead(
+      () => listBusinessLinks(id, user.workspaceId),
+      [] as Awaited<ReturnType<typeof listBusinessLinks>>,
+    ),
   ]);
 
   if (projectRes.ok && !projectRes.data) notFound();
   const project = projectRes.data;
+  // Business linking applies only to projects (the businesses themselves
+  // don't roll up to anything).
+  const isProject = project?.kind === "project";
 
   async function action(formData: FormData) {
     "use server";
@@ -45,7 +61,7 @@ export default async function EditProjectPage(props: { params: Params }) {
           href={`/lob/${id}`}
           className="inline-flex items-center gap-1 text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
         >
-          <ChevronLeft className="h-4 w-4" /> Back to line of business
+          <ChevronLeft className="h-4 w-4" /> Back
         </Link>
         <header className="mt-4 mb-6">
           <h1 className="text-2xl font-semibold tracking-tight">
@@ -69,6 +85,15 @@ export default async function EditProjectPage(props: { params: Params }) {
                 description: t.description,
               }))}
               contacts={contactsRes.data.map((c) => ({ id: c.id, name: c.name }))}
+              businesses={
+                isProject
+                  ? businessesRes.data.map((b) => ({
+                      id: b.id,
+                      title: b.title,
+                      coverEmoji: b.coverEmoji,
+                    }))
+                  : undefined
+              }
               initial={
                 project
                   ? {
@@ -77,6 +102,7 @@ export default async function EditProjectPage(props: { params: Params }) {
                       status: project.status,
                       templateId: project.templateId,
                       contactIds: project.contacts.map((c) => c.id),
+                      businessIds: linkedRes.data.map((b) => b.id),
                       dueDate: project.dueDate,
                       waitingOn: project.waitingOn,
                       expectedUnblockDate: project.expectedUnblockDate,

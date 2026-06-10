@@ -60,7 +60,7 @@ describe("[integration] contacts queries", () => {
 
     const vavOnly = await listContacts({
       workspaceId: FAKE_WORKSPACE_ID,
-      tagName: "vav",
+      tagNames: ["vav"],
     });
     expect(vavOnly).toHaveLength(1);
     expect(vavOnly[0].name).toBe("VAV person");

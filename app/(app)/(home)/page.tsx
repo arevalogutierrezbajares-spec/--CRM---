@@ -28,6 +28,7 @@ import { DEFAULT_TOWN_HALL_FEED_LIMIT, listTownHallFeed, type FeedItem } from "@
 import { getWorkspaceCountdown, type WorkspaceCountdown } from "@/db/queries/workspace-settings";
 import { listInitiativesForPicker, type InitiativePick } from "@/db/queries/item-initiatives";
 import { listPinnedProjects, listRecentProjects, type PinnedProject } from "@/db/queries/pins";
+import { listBusinesses } from "@/db/queries/lines-of-business";
 import { listScorecard, quarterOf, type ScorecardRow } from "@/db/queries/okrs";
 import { getDashboardLayout } from "@/db/queries/dashboard-layout";
 import { DEFAULT_WIDGETS, type DashWidget } from "@/lib/dashboard/layout";
@@ -292,14 +293,15 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
     members: { userId: string; displayName: string }[];
     pinnedProjects: PinnedProject[];
     recentProjects: { id: string; title: string }[];
-    commandMetrics: HomeCommandMetric[];
-    commandMetricsError: string | null;
+    pinnableBusinesses: { id: string; title: string }[];
   } | null = null;
   let weeklyData: {
     tasks: DashTask[];
     meetings: DashMeeting[];
     projects: DashProject[];
     weekStart: Date;
+    commandMetrics: HomeCommandMetric[];
+    commandMetricsError: string | null;
   } | null = null;
   let monthlyData: {
     meetings: DashMeeting[];
@@ -311,15 +313,16 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
   } | null = null;
 
   if (view === "daily") {
-    const [tasks, meetings, actionItems, pinnedProjects, recentProjects, commandMetrics] = await Promise.all([
+    const [tasks, meetings, actionItems, pinnedProjects, recentProjects, businesses] = await Promise.all([
       safeRead<DashTask[]>(() => listTasksToday(user.workspaceId, todayStr), []),
       safeRead<DashMeeting[]>(() => listMeetingsToday(user.workspaceId), []),
       safeRead<DashActionItem[]>(() => listOpenActionItems(user.workspaceId, 12, todayStr), []),
       safeRead<PinnedProject[]>(() => listPinnedProjects(user.workspaceId, user.id, todayStr), []),
       safeRead<{ id: string; title: string }[]>(() => listRecentProjects(user.workspaceId, user.id, 8), []),
-      safeRead<HomeCommandMetric[]>(
-        () => homeCommandMetrics(user.workspaceId),
-        FALLBACK_COMMAND_METRICS,
+      // Favorites are businesses-only — the pin picker offers just these.
+      safeRead<{ id: string; title: string }[]>(
+        () => listBusinesses(user.workspaceId).then((bs) => bs.map((b) => ({ id: b.id, title: b.title }))),
+        [],
       ),
     ]);
     dailyData = {
@@ -330,20 +333,25 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
       members,
       pinnedProjects: pinnedProjects.data,
       recentProjects: recentProjects.data,
-      commandMetrics: commandMetrics.data,
-      commandMetricsError: commandMetrics.ok ? null : commandMetrics.error,
+      pinnableBusinesses: businesses.data,
     };
   } else if (view === "weekly") {
-    const [tasks, meetings, projects] = await Promise.all([
+    const [tasks, meetings, projects, commandMetrics] = await Promise.all([
       safeRead<DashTask[]>(() => listTasksThisWeek(user.workspaceId, todayStr), []),
       safeRead<DashMeeting[]>(() => listMeetingsThisWeek(user.workspaceId), []),
       safeRead<DashProject[]>(() => listActiveProjectsForDashboard(user.workspaceId, 6, todayStr), []),
+      safeRead<HomeCommandMetric[]>(
+        () => homeCommandMetrics(user.workspaceId),
+        FALLBACK_COMMAND_METRICS,
+      ),
     ]);
     weeklyData = {
       tasks: tasks.data,
       meetings: meetings.data,
       projects: projects.data,
       weekStart: startOfWeek(),
+      commandMetrics: commandMetrics.data,
+      commandMetricsError: commandMetrics.ok ? null : commandMetrics.error,
     };
   } else {
     const [meetings, projects, overdueTasks, top, stats] = await Promise.all([
@@ -400,12 +408,12 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
     !countsRes.ok ||
     !pipelineRes.ok ||
     !eventDaysRes.ok ||
-    Boolean(dailyData?.commandMetricsError);
+    Boolean(weeklyData?.commandMetricsError);
   const dbErrorMessage =
     (countsRes as { error?: string }).error ??
     (pipelineRes as { error?: string }).error ??
     (eventDaysRes as { error?: string }).error ??
-    dailyData?.commandMetricsError ??
+    weeklyData?.commandMetricsError ??
     "Database error";
 
   // Greeting persona (+ first-greeting swap) and period, computed once.
@@ -476,6 +484,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
           members={dailyData.members}
           pinnedProjects={dailyData.pinnedProjects}
           recentProjects={dailyData.recentProjects}
+          pinnableBusinesses={dailyData.pinnableBusinesses}
           docs={docsRes.data}
           scorecard={scorecardRes.data}
           nowMs={nowMs}
@@ -485,8 +494,6 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
           countdown={countdownRes.data}
           feed={feedRes.data}
           initiatives={initiativesRes.data}
-          commandMetrics={dailyData.commandMetrics}
-          commandMetricsError={dailyData.commandMetricsError}
           blocked={blockedRes.data}
           briefingBullets={briefing}
           dashboardLayout={layoutRes.data}
@@ -501,6 +508,8 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
           meetings={weeklyData.meetings}
           projects={weeklyData.projects}
           weekStart={weeklyData.weekStart}
+          commandMetrics={weeklyData.commandMetrics}
+          commandMetricsError={weeklyData.commandMetricsError}
         />
       )}
 

@@ -13,15 +13,18 @@ export async function GET(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const archived = req.nextUrl.searchParams.get("archived") === "true";
-  const tag = req.nextUrl.searchParams.get("tag") ?? undefined;
-  const projectId = req.nextUrl.searchParams.get("project") ?? undefined;
+  // ?tag= and ?project= accept comma lists (matches the grid's multi-select filters).
+  const splitList = (v: string | null) =>
+    (v ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  const tagNames = splitList(req.nextUrl.searchParams.get("tag"));
+  const projectIds = splitList(req.nextUrl.searchParams.get("project"));
   const leadMode = parseLeadMode(req.nextUrl.searchParams.get("leadView"));
 
   const rows = await listContacts({
     workspaceId: user.workspaceId,
     archived,
-    tagName: tag,
-    projectId,
+    tagNames,
+    projectIds,
     leadMode,
   });
 

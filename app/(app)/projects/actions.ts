@@ -61,7 +61,7 @@ export async function createProject(
   }
 
   const lob = await lobInWorkspace(parsed.lobId, user.workspaceId);
-  if (!lob) return { ok: false, error: "Line of business not found" };
+  if (!lob) return { ok: false, error: "Business or project not found" };
 
   const [inserted] = await db
     .insert(projects)
@@ -107,7 +107,7 @@ export async function updateProject(
   }
 
   if (!(await lobInWorkspace(parsed.lobId, user.workspaceId))) {
-    return { ok: false, error: "Line of business not found" };
+    return { ok: false, error: "Business or project not found" };
   }
 
   const [updated] = await db

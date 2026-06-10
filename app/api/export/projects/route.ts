@@ -20,6 +20,7 @@ export async function GET(req: NextRequest) {
     [
       "id",
       "title",
+      "kind",
       "status",
       "health",
       "computedHealth",
@@ -36,6 +37,7 @@ export async function GET(req: NextRequest) {
     rows.map((p) => ({
       id: p.id,
       title: p.title,
+      kind: p.kind,
       status: p.status,
       health: p.healthColor,
       computedHealth: p.computedHealth,

@@ -17,6 +17,7 @@ import {
   createProjectFile,
   getProjectLinkById,
   recordLinkAudit,
+  setBusinessLinks,
   type ProjectLinkCategory,
 } from "@/db/queries/lines-of-business";
 import { validateLinkUrl } from "@/lib/project-links/validate";
@@ -118,6 +119,14 @@ export async function createLob(
     .returning({ id: linesOfBusiness.id });
 
   await syncContactLinks(inserted.id, parsed.contactIds);
+  // New LoBs default kind='project'; link them to the chosen businesses.
+  if (parsed.businessIds.length > 0) {
+    await setBusinessLinks({
+      workspaceId: user.workspaceId,
+      projectLobId: inserted.id,
+      businessIds: parsed.businessIds,
+    });
+  }
 
   revalidatePath("/lob");
   redirect(`/lob/${inserted.id}`);
@@ -152,9 +161,19 @@ export async function updateLob(
     )
     .returning({ id: linesOfBusiness.id });
 
-  if (!updated) return { ok: false, error: "Line of business not found" };
+  if (!updated) return { ok: false, error: "Business or project not found" };
 
   await syncContactLinks(updated.id, parsed.contactIds);
+  // Replace-set business links; setBusinessLinks no-ops with an error for
+  // kind='business' rows (the form only offers the checkboxes for projects).
+  const linkRes = await setBusinessLinks({
+    workspaceId: user.workspaceId,
+    projectLobId: updated.id,
+    businessIds: parsed.businessIds,
+  });
+  if (!linkRes.ok && parsed.businessIds.length > 0) {
+    return { ok: false, error: linkRes.error };
+  }
 
   revalidatePath("/lob");
   revalidatePath(`/lob/${id}`);
@@ -178,7 +197,7 @@ export async function advanceLobStage(opts: {
       ),
     )
     .limit(1);
-  if (!lob) return { ok: false, error: "Line of business not found" };
+  if (!lob) return { ok: false, error: "Business or project not found" };
   if (!lob.templateId) return { ok: false, error: "No pipeline template" };
 
   const [stage] = await db
@@ -251,7 +270,7 @@ export async function createLinkAction(opts: {
   const user = await requireUser();
 
   if (!(await assertLobInWorkspace(opts.lobId, user.workspaceId))) {
-    return { ok: false, error: "Line of business not found" };
+    return { ok: false, error: "Business or project not found" };
   }
 
   const validation = validateLinkUrl(opts.url);
@@ -352,7 +371,7 @@ export async function reorderLinksAction(opts: {
   const user = await requireUser();
 
   if (!(await assertLobInWorkspace(opts.lobId, user.workspaceId))) {
-    return { ok: false, error: "Line of business not found" };
+    return { ok: false, error: "Business or project not found" };
   }
   if (!LINK_CATEGORIES.includes(opts.category as ProjectLinkCategory)) {
     return { ok: false, error: "Invalid category" };
@@ -385,7 +404,7 @@ export async function createUploadUrlAction(opts: {
   const user = await requireUser();
 
   if (!(await assertLobInWorkspace(opts.lobId, user.workspaceId))) {
-    return { ok: false, error: "Line of business not found" };
+    return { ok: false, error: "Business or project not found" };
   }
   if (!isAllowedUpload(opts.filename, opts.mime)) {
     return { ok: false, error: REJECT_MESSAGE };
@@ -420,7 +439,7 @@ export async function finalizeFileUploadAction(opts: {
 
   if (!(await assertLobInWorkspace(opts.lobId, user.workspaceId))) {
     await removeObjects([opts.storagePath]);
-    return { ok: false, error: "Line of business not found" };
+    return { ok: false, error: "Business or project not found" };
   }
   // Path must live under this workspace's prefix — guards against a forged path.
   if (!opts.storagePath.startsWith(`${user.workspaceId}/${opts.lobId}/`)) {

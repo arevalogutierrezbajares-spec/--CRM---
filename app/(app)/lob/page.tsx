@@ -11,7 +11,12 @@ import {
   FilterBar,
   type FilterDimension,
 } from "@/components/work/filter-bar";
-import { listLines, type LobListItem } from "@/db/queries/lines-of-business";
+import {
+  listBusinessLinksForLobs,
+  listLines,
+  type BusinessRef,
+  type LobListItem,
+} from "@/db/queries/lines-of-business";
 import { safeRead } from "@/lib/db-status";
 
 type SearchParams = Promise<{
@@ -73,24 +78,32 @@ export default async function ProjectsPage(props: {
     },
   ];
 
-  // Split into Featured + the rest. Active sub-modules of a parent (e.g. CaneyCloud →
-  // CaneyRestaurant / Stays / WA Concierge / Academy) stay prominent; top-level
-  // non-featured ventures are shaded "back-burner".
-  // Featured ventures stack vertically in founding order (VAV → CaneyCloud →
-  // Employ Venezuela …), not by last-touched — the gallery order shouldn't
-  // shuffle every time one venture gets an edit.
-  const featured = filtered
-    .filter((p) => p.featured)
+  // Kind-driven grouping: the standing Businesses (VAV, CaneyCloud) render
+  // large on top — stacked vertically in founding order, not last-touched,
+  // so the gallery doesn't reshuffle every time one gets an edit. Sub-modules
+  // keep their row; everything else is a Project, grouped by status below.
+  // (`featured` stays in the DB but no longer drives the gallery.)
+  const businesses = filtered
+    .filter((p) => p.kind === "business" && !p.parentLobId)
     .sort((a, b) => +new Date(a.createdAt) - +new Date(b.createdAt));
-  const rest = filtered.filter((p) => !p.featured);
-  const modules = rest.filter((p) => p.parentLobId);
-  const others = rest.filter((p) => !p.parentLobId);
+  const modules = filtered.filter((p) => p.parentLobId);
+  const projectRows = filtered.filter((p) => p.kind === "project" && !p.parentLobId);
 
   const groups: Record<
     "active" | "waiting" | "done" | "lost",
     LobListItem[]
   > = { active: [], waiting: [], done: [], lost: [] };
-  for (const p of others) groups[p.status].push(p);
+  for (const p of projectRows) groups[p.status].push(p);
+
+  // Linked-business chips for the project cards (one batched query).
+  const businessLinks = await safeRead<Map<string, BusinessRef[]>>(
+    () =>
+      listBusinessLinksForLobs(
+        user.workspaceId,
+        projectRows.map((p) => p.id),
+      ),
+    new Map(),
+  );
 
   return (
     <>
@@ -100,16 +113,20 @@ export default async function ProjectsPage(props: {
         action={
           <Button asChild size="sm">
             <Link href="/lob/new">
-              <Plus className="h-4 w-4" /> New line of business
+              <Plus className="h-4 w-4" /> New project
             </Link>
           </Button>
         }
       />
       <main className="mx-auto w-full max-w-7xl flex-1 px-6 py-6 space-y-4">
         <header>
-          <h1 className="text-[22px] font-medium tracking-tight">Lines of Business</h1>
+          <h1 className="text-[22px] font-medium tracking-tight">Business</h1>
           <p className="text-[13px] text-text-secondary">
-            {allRes.data.length} venture{allRes.data.length === 1 ? "" : "s"} in your portfolio · each LoB groups its projects, links, docs &amp; contacts.
+            {allRes.data.filter((p) => p.kind === "business").length} business
+            {allRes.data.filter((p) => p.kind === "business").length === 1 ? "" : "es"} ·{" "}
+            {allRes.data.filter((p) => p.kind === "project").length} project
+            {allRes.data.filter((p) => p.kind === "project").length === 1 ? "" : "s"} — each
+            groups its workstreams, links, docs &amp; contacts.
           </p>
         </header>
 
@@ -129,30 +146,30 @@ export default async function ProjectsPage(props: {
           >
             <p className="text-[13px] text-text-secondary">
               {allRes.data.length === 0
-                ? "No lines of business yet."
-                : "No lines of business match these filters."}
+                ? "No businesses or projects yet."
+                : "No businesses or projects match these filters."}
             </p>
             {allRes.data.length === 0 && (
               <Button asChild size="sm" className="mt-3">
                 <Link href="/lob/new">
-                  <Plus className="h-4 w-4" /> New line of business
+                  <Plus className="h-4 w-4" /> New project
                 </Link>
               </Button>
             )}
           </div>
         ) : (
           <div className="space-y-6">
-            {/* ── Priority row at top (no label) ─────────────────────── */}
-            {/* Stacked full-width, one venture per row — not side by side */}
-            {featured.length > 0 && (
+            {/* ── Businesses at the top — VAV then CaneyCloud, stacked
+                   full-width, one per row (not side by side) ──────────── */}
+            {businesses.length > 0 && (
               <div className="grid gap-4">
-                {featured.map((p) => (
+                {businesses.map((p) => (
                   <ProjectCard key={p.id} project={p} variant="featured" />
                 ))}
               </div>
             )}
 
-            {/* ── Active sub-modules (children of a featured/active parent) ── */}
+            {/* ── Active sub-modules (children of a business) ─────────── */}
             {modules.length > 0 && (
               <section>
                 <h2 className="text-label text-text-secondary mb-3">
@@ -166,18 +183,23 @@ export default async function ProjectsPage(props: {
               </section>
             )}
 
-            {/* ── Other ventures (shaded / back-burner) ──────────────── */}
+            {/* ── Projects (shaded / back-burner), grouped by status ──── */}
             {(["active", "waiting", "done", "lost"] as const).map((s) => {
               const items = groups[s];
               if (items.length === 0) return null;
               return (
                 <section key={s}>
                   <h2 className="text-label text-text-secondary mb-3">
-                    {s === "active" ? "Other ventures" : s} · {items.length}
+                    {s === "active" ? "Projects" : s} · {items.length}
                   </h2>
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     {items.map((p) => (
-                      <ProjectCard key={p.id} project={p} variant="muted" />
+                      <ProjectCard
+                        key={p.id}
+                        project={p}
+                        variant="muted"
+                        businesses={businessLinks.data.get(p.id) ?? []}
+                      />
                     ))}
                   </div>
                 </section>

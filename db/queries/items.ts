@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { and, asc, desc, eq, ilike, sql } from "drizzle-orm";
 import { db } from "@/db";
 import * as schema from "@/db/schema";
@@ -23,7 +24,9 @@ export type WorkspaceDoc = {
   projectTitle: string;
 };
 
-export async function listWorkspaceDocs(workspaceId: string, limit = 300): Promise<WorkspaceDoc[]> {
+/** React cache(): the doc index feeds Home mention sources + the sidebar
+ *  Explorer — dedupe to one query per request. */
+export const listWorkspaceDocs = cache(async (workspaceId: string, limit = 300): Promise<WorkspaceDoc[]> => {
   const rows = await db
     .select({
       id: schema.projectLinks.id,
@@ -61,7 +64,7 @@ export async function listWorkspaceDocs(workspaceId: string, limit = 300): Promi
             : `/lob/${r.projectId}`,
     };
   });
-}
+});
 
 export type ItemAttachment = {
   id: string;
@@ -355,15 +358,17 @@ export async function removeItemAttachment(workspaceId: string, id: string): Pro
 
 /* ── pickers ──────────────────────────────────────────────────────────── */
 
-export async function listProjectsForPicker(
-  workspaceId: string,
-): Promise<{ id: string; title: string }[]> {
-  return db
-    .select({ id: schema.projects.id, title: schema.projects.title })
-    .from(schema.projects)
-    .where(eq(schema.projects.workspaceId, workspaceId))
-    .orderBy(asc(schema.projects.title));
-}
+/** React cache(): pickers/mention sources ask for this several times per
+ *  request — dedupe to one query. */
+export const listProjectsForPicker = cache(
+  async (workspaceId: string): Promise<{ id: string; title: string }[]> => {
+    return db
+      .select({ id: schema.projects.id, title: schema.projects.title })
+      .from(schema.projects)
+      .where(eq(schema.projects.workspaceId, workspaceId))
+      .orderBy(asc(schema.projects.title));
+  },
+);
 
 /** Whether a project id belongs to the workspace (validates #refs / picks). */
 export async function projectExistsInWorkspace(

@@ -38,10 +38,10 @@ export default async function NewProjectPage(props: {
           <ChevronLeft className="h-4 w-4" /> Back
         </Link>
         <header className="mt-4 mb-6">
-          <h1 className="text-2xl font-semibold tracking-tight">New project</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">New workstream</h1>
           <p className="text-sm text-[var(--muted-foreground)]">
-            A project rolls up to a line of business. Milestones, finance, and
-            meetings attach to it.
+            A workstream rolls up to a business or project. Milestones, finance,
+            and meetings attach to it.
           </p>
         </header>
 
@@ -54,7 +54,7 @@ export default async function NewProjectPage(props: {
               lobLocked={Boolean(sp.lob)}
               initial={sp.lob ? { lobId: sp.lob } : undefined}
               action={action}
-              submitLabel="Create project"
+              submitLabel="Create workstream"
             />
           </CardContent>
         </Card>

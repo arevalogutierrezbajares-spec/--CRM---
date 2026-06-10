@@ -4,6 +4,7 @@ import { computeHealth, type HealthColor } from "@/lib/health";
 
 const {
   linesOfBusiness,
+  lobBusinessLinks,
   projects,
   projectContacts,
   contacts,
@@ -32,6 +33,8 @@ export type LobListItem = LobRow & {
 export async function listLines(opts: {
   workspaceId: string;
   status?: "active" | "waiting" | "done" | "lost";
+  /** Restrict to businesses or projects (omit for both). */
+  kind?: "business" | "project";
   /** Default true: hide child LoBs (sub-modules) from the gallery */
   topLevelOnly?: boolean;
   /** Restrict to children of this parent (used when listing modules) */
@@ -39,6 +42,7 @@ export async function listLines(opts: {
 }): Promise<LobListItem[]> {
   const conditions = [eq(linesOfBusiness.workspaceId, opts.workspaceId)];
   if (opts.status) conditions.push(eq(linesOfBusiness.status, opts.status));
+  if (opts.kind) conditions.push(eq(linesOfBusiness.kind, opts.kind));
   if (opts.parentId) {
     conditions.push(eq(linesOfBusiness.parentLobId, opts.parentId));
   } else if (opts.topLevelOnly !== false) {
@@ -201,6 +205,148 @@ export async function getLob(opts: { id: string; workspaceId: string }) {
     stages,
     milestones: rollupMilestones,
   };
+}
+
+/* ─── Business ↔ Project links ─────────────────────────────────────────── */
+
+export type BusinessRef = {
+  id: string;
+  title: string;
+  coverEmoji: string | null;
+  coverColor: string | null;
+  logoUrl: string | null;
+};
+
+/** The standing businesses (top-level kind='business' rows) — pickers/checkboxes. */
+export async function listBusinesses(workspaceId: string): Promise<BusinessRef[]> {
+  return db
+    .select({
+      id: linesOfBusiness.id,
+      title: linesOfBusiness.title,
+      coverEmoji: linesOfBusiness.coverEmoji,
+      coverColor: linesOfBusiness.coverColor,
+      logoUrl: linesOfBusiness.logoUrl,
+    })
+    .from(linesOfBusiness)
+    .where(
+      and(
+        eq(linesOfBusiness.workspaceId, workspaceId),
+        eq(linesOfBusiness.kind, "business"),
+        rawSql`${linesOfBusiness.parentLobId} IS NULL`,
+      ),
+    )
+    .orderBy(asc(linesOfBusiness.title));
+}
+
+/** Businesses a project rolls up to (header chips on the project page). */
+export async function listBusinessLinks(
+  projectLobId: string,
+  workspaceId: string,
+): Promise<BusinessRef[]> {
+  const rows = await db
+    .select({
+      id: linesOfBusiness.id,
+      title: linesOfBusiness.title,
+      coverEmoji: linesOfBusiness.coverEmoji,
+      coverColor: linesOfBusiness.coverColor,
+      logoUrl: linesOfBusiness.logoUrl,
+    })
+    .from(lobBusinessLinks)
+    .innerJoin(linesOfBusiness, eq(linesOfBusiness.id, lobBusinessLinks.businessLobId))
+    .where(
+      and(
+        eq(lobBusinessLinks.projectLobId, projectLobId),
+        eq(lobBusinessLinks.workspaceId, workspaceId),
+      ),
+    )
+    .orderBy(asc(linesOfBusiness.title));
+  return rows;
+}
+
+/** Batch variant for the gallery: projectLobId → linked businesses. */
+export async function listBusinessLinksForLobs(
+  workspaceId: string,
+  lobIds: string[],
+): Promise<Map<string, BusinessRef[]>> {
+  const out = new Map<string, BusinessRef[]>();
+  if (lobIds.length === 0) return out;
+  const rows = await db
+    .select({
+      projectLobId: lobBusinessLinks.projectLobId,
+      id: linesOfBusiness.id,
+      title: linesOfBusiness.title,
+      coverEmoji: linesOfBusiness.coverEmoji,
+      coverColor: linesOfBusiness.coverColor,
+      logoUrl: linesOfBusiness.logoUrl,
+    })
+    .from(lobBusinessLinks)
+    .innerJoin(linesOfBusiness, eq(linesOfBusiness.id, lobBusinessLinks.businessLobId))
+    .where(
+      and(
+        eq(lobBusinessLinks.workspaceId, workspaceId),
+        inArray(lobBusinessLinks.projectLobId, lobIds),
+      ),
+    )
+    .orderBy(asc(linesOfBusiness.title));
+  for (const { projectLobId, ...ref } of rows) {
+    (out.get(projectLobId) ?? out.set(projectLobId, []).get(projectLobId)!).push(ref);
+  }
+  return out;
+}
+
+/**
+ * Replace-set a project's business links. Validates kinds: the source must be
+ * a kind='project' LoB and every target a top-level kind='business' LoB, all
+ * in the caller's workspace — invalid input rejects rather than silently drops.
+ */
+export async function setBusinessLinks(opts: {
+  workspaceId: string;
+  projectLobId: string;
+  businessIds: string[];
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const uniqueIds = Array.from(new Set(opts.businessIds));
+  const fence = await db
+    .select({ id: linesOfBusiness.id, kind: linesOfBusiness.kind, parentLobId: linesOfBusiness.parentLobId })
+    .from(linesOfBusiness)
+    .where(
+      and(
+        eq(linesOfBusiness.workspaceId, opts.workspaceId),
+        inArray(linesOfBusiness.id, [opts.projectLobId, ...uniqueIds]),
+      ),
+    );
+  const byId = new Map(fence.map((r) => [r.id, r]));
+  const source = byId.get(opts.projectLobId);
+  if (!source) return { ok: false, error: "Project not found" };
+  if (source.kind !== "project") {
+    return { ok: false, error: "Only projects can link to businesses" };
+  }
+  for (const id of uniqueIds) {
+    const target = byId.get(id);
+    if (!target || target.kind !== "business" || target.parentLobId) {
+      return { ok: false, error: "Linked businesses must be top-level businesses" };
+    }
+  }
+
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(lobBusinessLinks)
+      .where(
+        and(
+          eq(lobBusinessLinks.projectLobId, opts.projectLobId),
+          eq(lobBusinessLinks.workspaceId, opts.workspaceId),
+        ),
+      );
+    if (uniqueIds.length > 0) {
+      await tx.insert(lobBusinessLinks).values(
+        uniqueIds.map((businessLobId) => ({
+          projectLobId: opts.projectLobId,
+          businessLobId,
+          workspaceId: opts.workspaceId,
+        })),
+      );
+    }
+  });
+  return { ok: true };
 }
 
 export async function listTemplates() {

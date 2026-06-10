@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import * as schema from "@/db/schema";
@@ -6,14 +7,17 @@ import * as schema from "@/db/schema";
 export type InitiativePick = { id: string; title: string };
 type ItemKind = "milestone" | "action_item";
 
-/** All initiatives in the workspace, for the multi-select + Town Hall filter chips. */
-export async function listInitiativesForPicker(workspaceId: string): Promise<InitiativePick[]> {
-  return db
-    .select({ id: schema.initiatives.id, title: schema.initiatives.title })
-    .from(schema.initiatives)
-    .where(eq(schema.initiatives.workspaceId, workspaceId))
-    .orderBy(asc(schema.initiatives.title));
-}
+/** All initiatives in the workspace, for the multi-select + Town Hall filter chips.
+ *  React cache(): dedupe to one query per request. */
+export const listInitiativesForPicker = cache(
+  async (workspaceId: string): Promise<InitiativePick[]> => {
+    return db
+      .select({ id: schema.initiatives.id, title: schema.initiatives.title })
+      .from(schema.initiatives)
+      .where(eq(schema.initiatives.workspaceId, workspaceId))
+      .orderBy(asc(schema.initiatives.title));
+  },
+);
 
 /** Initiative ids currently linked to one item (workspace-fenced via the item's own row). */
 export async function getItemInitiativeIds(

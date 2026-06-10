@@ -33,23 +33,25 @@ export type ContactLeadMode = "direct" | "leads" | "all";
 export async function listContacts(opts: {
   workspaceId: string;
   archived?: boolean;
-  tagName?: string;
-  projectId?: string;
+  /** Filter to contacts carrying ANY of these tag names (union). */
+  tagNames?: string[];
+  /** Filter to contacts linked to ANY of these projects (union). */
+  projectIds?: string[];
   leadMode?: ContactLeadMode;
 }): Promise<ContactListItem[]> {
   const archived = opts.archived ?? false;
   const leadMode = opts.leadMode ?? "all";
-  const projectContactIds = opts.projectId
-    ? await listContactIdsForProject({
+  const projectContactIds = opts.projectIds?.length
+    ? await listContactIdsForProjects({
         workspaceId: opts.workspaceId,
-        projectId: opts.projectId,
+        projectIds: opts.projectIds,
       })
     : null;
 
   let rows: ContactRow[];
-  if (opts.tagName) {
+  if (opts.tagNames?.length) {
     const res = await db
-      .select({ contact: contacts })
+      .selectDistinct({ contact: contacts })
       .from(contacts)
       .innerJoin(contactTags, eq(contactTags.contactId, contacts.id))
       .innerJoin(tags, eq(tags.id, contactTags.tagId))
@@ -57,7 +59,7 @@ export async function listContacts(opts: {
         and(
           eq(contacts.workspaceId, opts.workspaceId),
           eq(contacts.archived, archived),
-          eq(tags.name, opts.tagName),
+          inArray(tags.name, opts.tagNames),
         ),
       )
       .orderBy(desc(contacts.updatedAt));
@@ -195,7 +197,23 @@ async function executeRows<T>(query: SQL): Promise<T[]> {
   return rows as unknown as T[];
 }
 
-async function getProjectContactShape(): Promise<ProjectContactShape> {
+// The schema shape can't change while the process is running, and this probe
+// used to hit information_schema 3× per contacts-page request (listContacts →
+// project options → project refs). Memoize the promise for the process lifetime;
+// a failed probe clears it so the next request retries.
+let projectContactShapePromise: Promise<ProjectContactShape> | null = null;
+
+function getProjectContactShape(): Promise<ProjectContactShape> {
+  if (!projectContactShapePromise) {
+    projectContactShapePromise = probeProjectContactShape().catch((err) => {
+      projectContactShapePromise = null;
+      throw err;
+    });
+  }
+  return projectContactShapePromise;
+}
+
+async function probeProjectContactShape(): Promise<ProjectContactShape> {
   const [shape] = await executeRows<SchemaProbeRow>(rawSql`
     select
       exists (
@@ -365,12 +383,18 @@ async function listLegacyProjectOptions(opts: {
   `);
 }
 
-async function listContactIdsForProject(opts: {
+async function listContactIdsForProjects(opts: {
   workspaceId: string;
-  projectId: string;
+  projectIds: string[];
 }): Promise<Set<string>> {
+  if (opts.projectIds.length === 0) return new Set();
   const shape = await getProjectContactShape();
   if (!shape) return new Set();
+
+  const projectIdList = rawSql.join(
+    opts.projectIds.map((id) => rawSql`${id}`),
+    rawSql`, `,
+  );
 
   const rows =
     shape.mode === "lob"
@@ -382,7 +406,7 @@ async function listContactIdsForProject(opts: {
             on c.id = pc.contact_id
            and c.workspace_id = ${opts.workspaceId}
           where lob.workspace_id = ${opts.workspaceId}
-            and lob.id = ${opts.projectId}
+            and lob.id in (${projectIdList})
         `)
       : await executeRows<ProjectContactIdRow>(rawSql`
           select distinct pc.contact_id
@@ -392,7 +416,7 @@ async function listContactIdsForProject(opts: {
             on c.id = pc.contact_id
            and c.workspace_id = ${opts.workspaceId}
           where p.workspace_id = ${opts.workspaceId}
-            and p.id = ${opts.projectId}
+            and p.id in (${projectIdList})
         `);
 
   return new Set(rows.map((row) => row.contact_id));

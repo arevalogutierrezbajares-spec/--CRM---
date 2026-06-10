@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 type Channel = {
   kind: string;
   value: string;
-  isPrimary?: boolean;
+  isPrimary?: boolean | null;
 };
 
 function pickPrimary(channels: Channel[], kind: string): string | null {

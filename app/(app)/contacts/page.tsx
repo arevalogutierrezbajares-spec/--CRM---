@@ -5,7 +5,7 @@ import { requireUser } from "@/lib/current-user";
 import { TopBar } from "@/components/layout/top-bar";
 import { Button } from "@/components/ui/button";
 import { DbBanner } from "@/components/db-banner";
-import { ContactsGrid } from "@/components/contacts/contacts-grid";
+import { ContactsGrid, type ContactGridRow } from "@/components/contacts/contacts-grid";
 import {
   listContactProjectOptions,
   listContacts,
@@ -29,12 +29,16 @@ export default async function ContactsPage(props: {
   const user = await requireUser();
   const sp = await props.searchParams;
   const archived = sp.archived === "true";
-  const projectId = sp.project || undefined;
+  // ?project= accepts a comma list (multi-select filter, union semantics).
+  const projectIds = (sp.project ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
   const leadMode = parseLeadMode(sp.leadView);
 
   const [res, tagsRes, projectOptionsRes] = await Promise.all([
     safeRead<ContactListItem[]>(
-      () => listContacts({ workspaceId: user.workspaceId, archived, projectId, leadMode }),
+      () => listContacts({ workspaceId: user.workspaceId, archived, projectIds, leadMode }),
       [],
     ),
     safeRead(() => listTags(), []),
@@ -45,9 +49,24 @@ export default async function ContactsPage(props: {
   ]);
 
   const ventureTags = tagsRes.data.filter((t) => t.kind === "venture");
-  const selectedProject = projectId
-    ? projectOptionsRes.data.find((p) => p.id === projectId)
-    : undefined;
+  const selectedProjects = projectOptionsRes.data.filter((p) => projectIds.includes(p.id));
+  const selectedProject = selectedProjects.length === 1 ? selectedProjects[0] : undefined;
+
+  // Trim each row to what the grid renders — keeps notes/intro chains/channel
+  // ids/audit fields out of the RSC payload (ContactListItem itself is shared
+  // by other pages, so the trim lives here, not in the query).
+  const gridRows: ContactGridRow[] = res.data.map((c) => ({
+    id: c.id,
+    name: c.name,
+    type: c.type,
+    organization: c.organization,
+    relationshipType: c.relationshipType,
+    lastTouchAt: c.lastTouchAt,
+    updatedAt: c.updatedAt,
+    channels: c.channels.map((ch) => ({ kind: ch.kind, value: ch.value, isPrimary: ch.isPrimary })),
+    tags: c.tags.map((t) => ({ id: t.id, name: t.name, kind: t.kind, color: t.color })),
+    projects: c.projects.map((p) => ({ id: p.id, title: p.title, parentTitle: p.parentTitle })),
+  }));
 
   return (
     <>
@@ -74,7 +93,9 @@ export default async function ContactsPage(props: {
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Contacts</h1>
             <p className="text-sm text-[var(--muted-foreground)]">
-              {selectedProject
+              {selectedProjects.length > 1
+                ? `Contacts across ${selectedProjects.length} projects.`
+                : selectedProject
                 ? leadMode === "leads"
                   ? `${selectedProject.title} LinkedIn leads.`
                   : `${selectedProject.title} project contacts.`
@@ -117,7 +138,7 @@ export default async function ContactsPage(props: {
 
         <Suspense fallback={<div className="text-sm text-[var(--muted-foreground)]">Loading…</div>}>
           <ContactsGrid
-            initialContacts={res.data}
+            initialContacts={gridRows}
             ventureTags={ventureTags}
             allTags={tagsRes.data}
             projectOptions={projectOptionsRes.data}

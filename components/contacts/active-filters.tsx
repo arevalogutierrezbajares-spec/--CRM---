@@ -36,6 +36,15 @@ const LEAD_VIEW_LABEL: Record<string, string> = {
   all: "Direct + LinkedIn leads",
 };
 
+const ALL_RELATIONSHIPS = "friend,lead,partner,prospect";
+
+function splitList(v: string | null | undefined): string[] {
+  return (v ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 export function ActiveFilters({
   projectOptions = [],
 }: {
@@ -46,12 +55,28 @@ export function ActiveFilters({
   const sp = useSearchParams();
   const filters = parseFilter(sp.get("filter"));
   const q = sp.get("q");
-  const tag = sp.get("tag");
-  const projectId = sp.get("project");
+  const tagNames = splitList(sp.get("tag"));
+  const projectIds = splitList(sp.get("project"));
   const leadView = sp.get("leadView");
   const group = sp.get("group");
 
   const chips: Array<{ key: string; label: string; onRemove: () => void }> = [];
+
+  // Default state: no relationship filter key = prospects hidden. The chip is
+  // the one-click way to bring them back (writes the explicit all-four list).
+  if (!("relationship" in filters)) {
+    chips.push({
+      key: "prospects-hidden",
+      label: "Prospects hidden",
+      onRemove: () => {
+        router.push(
+          buildHref(pathname, new URLSearchParams(sp.toString()), {
+            filters: { ...filters, relationship: ALL_RELATIONSHIPS },
+          }),
+        );
+      },
+    });
+  }
 
   if (q) {
     chips.push({
@@ -66,27 +91,31 @@ export function ActiveFilters({
     });
   }
 
-  if (tag) {
+  for (const name of tagNames) {
     chips.push({
-      key: "tag",
-      label: `Tag: ${tag}`,
+      key: `tag:${name}`,
+      label: `Tag: ${name}`,
       onRemove: () => {
         const next = new URLSearchParams(sp.toString());
-        next.delete("tag");
+        const remaining = tagNames.filter((t) => t !== name);
+        if (remaining.length > 0) next.set("tag", remaining.join(","));
+        else next.delete("tag");
         const s = next.toString();
         router.push(s ? `${pathname}?${s}` : pathname);
       },
     });
   }
 
-  if (projectId) {
-    const project = projectOptions.find((p) => p.id === projectId);
+  for (const id of projectIds) {
+    const project = projectOptions.find((p) => p.id === id);
     chips.push({
-      key: "project",
-      label: `Project: ${project?.title ?? projectId}`,
+      key: `project:${id}`,
+      label: `Project: ${project?.title ?? id}`,
       onRemove: () => {
         const next = new URLSearchParams(sp.toString());
-        next.delete("project");
+        const remaining = projectIds.filter((p) => p !== id);
+        if (remaining.length > 0) next.set("project", remaining.join(","));
+        else next.delete("project");
         const s = next.toString();
         router.push(s ? `${pathname}?${s}` : pathname);
       },
@@ -107,14 +136,19 @@ export function ActiveFilters({
   }
 
   for (const [col, value] of Object.entries(filters)) {
-    let display = value;
+    let display: string;
     if (col === "type") display = TYPE_LABEL[value] ?? value;
-    else if (col === "relationship") display = RELATIONSHIP_LABEL[value] ?? value;
-    else display = `${FILTER_LABEL[col] ?? col}: ${value}`;
+    else if (col === "relationship") {
+      const values = splitList(value);
+      display =
+        value === ALL_RELATIONSHIPS
+          ? "All relationships"
+          : `Relationship: ${values.map((v) => RELATIONSHIP_LABEL[v] ?? v).join(", ")}`;
+    } else display = `${FILTER_LABEL[col] ?? col}: ${value}`;
 
     chips.push({
       key: `f:${col}`,
-      label: col === "type" || col === "relationship" ? display : display,
+      label: display,
       onRemove: () => {
         const nextFilters = { ...filters };
         delete nextFilters[col];

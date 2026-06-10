@@ -167,7 +167,7 @@ export function ClientLogoControl({
 
         {availableBrands.length === 0 ? (
           <p className="mt-1 text-xs text-[var(--muted-foreground)]">
-            Add a logo to a project (Line of Business) and it can be shown here.
+            Add a logo to a business or project and it can be shown here.
           </p>
         ) : (
           <div className="mt-2 space-y-1">

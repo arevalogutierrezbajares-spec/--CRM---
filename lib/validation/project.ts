@@ -9,7 +9,7 @@ export const projectStatusEnum = z.enum(["active", "waiting", "done", "lost"]);
  */
 export const projectFormSchema = z
   .object({
-    lobId: z.string().uuid("Pick a line of business"),
+    lobId: z.string().uuid("Pick a business or project"),
     title: z.string().min(1, "Title is required").max(200),
     status: projectStatusEnum.default("active"),
     dueDate: z
