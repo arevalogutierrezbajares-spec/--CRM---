@@ -94,7 +94,10 @@ async function listTasksDueBy(
         sql`${milestones.dueDate} <= ${endDate}`,
       ),
     )
-    .orderBy(milestones.dueDate);
+    .orderBy(milestones.dueDate)
+    // The overdue backlog grows without bound; due-date ASC means the cap keeps
+    // the most urgent rows. The cards render a scrollable list anyway.
+    .limit(250);
 
   return rows.map((r) => ({
     id: r.id,

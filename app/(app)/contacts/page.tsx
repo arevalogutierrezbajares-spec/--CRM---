@@ -5,7 +5,7 @@ import { requireUser } from "@/lib/current-user";
 import { TopBar } from "@/components/layout/top-bar";
 import { Button } from "@/components/ui/button";
 import { DbBanner } from "@/components/db-banner";
-import { ContactsGrid } from "@/components/contacts/contacts-grid";
+import { ContactsGrid, type ContactGridRow } from "@/components/contacts/contacts-grid";
 import {
   listContactProjectOptions,
   listContacts,
@@ -48,6 +48,22 @@ export default async function ContactsPage(props: {
   const selectedProject = projectId
     ? projectOptionsRes.data.find((p) => p.id === projectId)
     : undefined;
+
+  // Trim each row to what the grid renders — keeps notes/intro chains/channel
+  // ids/audit fields out of the RSC payload (ContactListItem itself is shared
+  // by other pages, so the trim lives here, not in the query).
+  const gridRows: ContactGridRow[] = res.data.map((c) => ({
+    id: c.id,
+    name: c.name,
+    type: c.type,
+    organization: c.organization,
+    relationshipType: c.relationshipType,
+    lastTouchAt: c.lastTouchAt,
+    updatedAt: c.updatedAt,
+    channels: c.channels.map((ch) => ({ kind: ch.kind, value: ch.value, isPrimary: ch.isPrimary })),
+    tags: c.tags.map((t) => ({ id: t.id, name: t.name, kind: t.kind, color: t.color })),
+    projects: c.projects.map((p) => ({ id: p.id, title: p.title, parentTitle: p.parentTitle })),
+  }));
 
   return (
     <>
@@ -117,7 +133,7 @@ export default async function ContactsPage(props: {
 
         <Suspense fallback={<div className="text-sm text-[var(--muted-foreground)]">Loading…</div>}>
           <ContactsGrid
-            initialContacts={res.data}
+            initialContacts={gridRows}
             ventureTags={ventureTags}
             allTags={tagsRes.data}
             projectOptions={projectOptionsRes.data}

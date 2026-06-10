@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { and, asc, eq, ilike, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import * as schema from "@/db/schema";
@@ -30,8 +31,10 @@ export type TeamMember = {
   lastSeenAt: Date | null;
 };
 
-/** All members of a workspace with their role + last-seen, owners first. */
-export async function listWorkspaceMembers(workspaceId: string): Promise<TeamMember[]> {
+/** All members of a workspace with their role + last-seen, owners first.
+ *  React cache(): several Home/drawer widgets need the roster — dedupe to one
+ *  query per request. */
+export const listWorkspaceMembers = cache(async (workspaceId: string): Promise<TeamMember[]> => {
   const rows = await db
     .select({
       userId: schema.users.id,
@@ -53,7 +56,7 @@ export async function listWorkspaceMembers(workspaceId: string): Promise<TeamMem
     role: r.role,
     lastSeenAt: r.lastSeenAt ?? null,
   }));
-}
+});
 
 /** Fuzzy-match workspace teammates by name → {userId, displayName}. Used by the
  *  WhatsApp agent (find_member) to resolve an assignee from a name. */

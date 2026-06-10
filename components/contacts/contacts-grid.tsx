@@ -50,7 +50,7 @@ import {
   bulkArchiveContacts,
   bulkAddTagToContacts,
 } from "@/app/(app)/contacts/actions";
-import type { ContactListItem, ContactProjectOption } from "@/db/queries/contacts";
+import type { ContactProjectOption } from "@/db/queries/contacts";
 import {
   parseSort,
   parseFilter,
@@ -69,8 +69,24 @@ type Tag = {
   color?: string | null;
 };
 
+/** The trimmed per-row payload the grid actually renders. The server page maps
+ *  ContactListItem down to this so the RSC payload skips notes, intro chains,
+ *  channel ids, workspace/creator ids, etc. */
+export type ContactGridRow = {
+  id: string;
+  name: string;
+  type: "person" | "org";
+  organization: string | null;
+  relationshipType: "friend" | "lead" | "partner" | "prospect";
+  lastTouchAt: Date | string | null;
+  updatedAt: Date | string;
+  channels: { kind: string; value: string; isPrimary?: boolean | null }[];
+  tags: Tag[];
+  projects: { id: string; title: string; parentTitle: string | null }[];
+};
+
 type Props = {
-  initialContacts: ContactListItem[];
+  initialContacts: ContactGridRow[];
   ventureTags: Tag[];
   allTags: Tag[];
   projectOptions: ContactProjectOption[];
@@ -80,7 +96,7 @@ type Props = {
 // ─── virtual list item types ────────────────────────────────────────────────
 type VRow =
   | { kind: "group-header"; label: string; count: number }
-  | { kind: "contact"; contact: ContactListItem; rowIdx: number };
+  | { kind: "contact"; contact: ContactGridRow; rowIdx: number };
 
 const ROW_H = 52;       // contact row height estimate
 const GROUP_H = 28;     // group header height estimate
@@ -143,14 +159,14 @@ export function ContactsGrid({
         return false;
       });
     }
-    rows = applyFilters<ContactListItem>(rows, filters, {
+    rows = applyFilters<ContactGridRow>(rows, filters, {
       relationship: (r, v) => r.relationshipType === v,
       type: (r, v) => r.type === v,
       org: (r, v) =>
         (r.organization ?? "").toLowerCase().includes(v.toLowerCase()),
       project: (r, v) => r.projects.some((p) => p.id === v),
     });
-    return applySort<ContactListItem>(rows, sort, {
+    return applySort<ContactGridRow>(rows, sort, {
       name: (r) => r.name.toLowerCase(),
       relationship: (r) => r.relationshipType,
       organization: (r) => (r.organization ?? "").toLowerCase(),
@@ -161,7 +177,7 @@ export function ContactsGrid({
 
   const grouped = useMemo(
     () =>
-      groupBy<ContactListItem>(sorted, group, (r) => {
+      groupBy<ContactGridRow>(sorted, group, (r) => {
         if (group === "relationship") return r.relationshipType;
         if (group === "type") return r.type;
         if (group === "org") return r.organization ?? "—";
@@ -697,7 +713,7 @@ function ProjectPills({
   projects,
   className,
 }: {
-  projects: ContactListItem["projects"];
+  projects: ContactGridRow["projects"];
   className?: string;
 }) {
   if (projects.length === 0) return null;
@@ -737,7 +753,7 @@ function MobileCard({
   onToggle,
   onTagClick,
 }: {
-  contact: ContactListItem;
+  contact: ContactGridRow;
   selected: boolean;
   onToggle: () => void;
   onTagClick: (t: Tag) => void;

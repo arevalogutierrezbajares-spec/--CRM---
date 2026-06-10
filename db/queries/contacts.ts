@@ -195,7 +195,23 @@ async function executeRows<T>(query: SQL): Promise<T[]> {
   return rows as unknown as T[];
 }
 
-async function getProjectContactShape(): Promise<ProjectContactShape> {
+// The schema shape can't change while the process is running, and this probe
+// used to hit information_schema 3× per contacts-page request (listContacts →
+// project options → project refs). Memoize the promise for the process lifetime;
+// a failed probe clears it so the next request retries.
+let projectContactShapePromise: Promise<ProjectContactShape> | null = null;
+
+function getProjectContactShape(): Promise<ProjectContactShape> {
+  if (!projectContactShapePromise) {
+    projectContactShapePromise = probeProjectContactShape().catch((err) => {
+      projectContactShapePromise = null;
+      throw err;
+    });
+  }
+  return projectContactShapePromise;
+}
+
+async function probeProjectContactShape(): Promise<ProjectContactShape> {
   const [shape] = await executeRows<SchemaProbeRow>(rawSql`
     select
       exists (
