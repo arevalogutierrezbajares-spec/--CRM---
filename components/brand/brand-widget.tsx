@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { motion, useReducedMotion } from "framer-motion";
 import { BrandPillars } from "./brand-pillars";
 
@@ -81,8 +82,9 @@ function phaseLabel(phase: Phase): "hidden" | "shown" | "culled" {
 }
 
 /**
- * Animated brand lockup for the sidebar header (top-left). Tap (or a
- * BRAND_INTRO_REPLAY_EVENT) plays the choreography IN PLACE — "ArevaloGutierrez-
+ * Animated brand lockup for the sidebar header (top-left). Tap navigates Home
+ * (the sidebar persists across routes, so the choreography keeps playing). Tap
+ * (or a BRAND_INTRO_REPLAY_EVENT) plays the choreography IN PLACE — "ArevaloGutierrez-
  * Brewer Technologies" spells out and folds down to "AGB Technologies". The
  * animated full name overlays so it can spill right over the content for the
  * brief animation without shoving the sidebar layout. `rail` = icon-only.
@@ -160,11 +162,11 @@ export function BrandWidget({ rail = false }: { rail?: boolean }) {
   // the right over the content during the brief fold.
   if (rail) {
     return (
-      <button
-        type="button"
+      <Link
+        href="/"
         onClick={play}
-        aria-label="AGB Technologies"
-        title="AGB Technologies"
+        aria-label="AGB Technologies — ir al inicio"
+        title="AGB Technologies — Home"
         className="relative flex items-center justify-center text-text-primary transition-opacity hover:opacity-80 active:scale-[0.96]"
       >
         <BrandPillars key={runKey} size={24} play={playing} settle={phase === "settle"} className="shrink-0 text-text-primary" />
@@ -173,17 +175,17 @@ export function BrandWidget({ rail = false }: { rail?: boolean }) {
             {letters}
           </span>
         )}
-      </button>
+      </Link>
     );
   }
 
   // Expanded sidebar header (top-left): logo + the name.
   return (
-    <button
-      type="button"
+    <Link
+      href="/"
       onClick={play}
-      aria-label="AGB Technologies — reproducir animación"
-      title="AGB Technologies"
+      aria-label="AGB Technologies — ir al inicio"
+      title="AGB Technologies — Home"
       className="flex min-w-0 items-center gap-2 text-text-primary transition-opacity hover:opacity-80 active:scale-[0.98]"
     >
       <BrandPillars key={runKey} size={24} play={playing} settle={phase === "settle"} className="shrink-0 text-text-primary" />
@@ -203,6 +205,6 @@ export function BrandWidget({ rail = false }: { rail?: boolean }) {
           </span>
         )}
       </span>
-    </button>
+    </Link>
   );
 }
