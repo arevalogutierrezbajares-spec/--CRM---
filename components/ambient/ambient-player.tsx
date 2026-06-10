@@ -9,18 +9,13 @@ import { isAudioMuted, onAudioMuteChange } from "@/lib/audio-mute";
  *
  * Two modes:
  *  - FIRST RUN (this browser has never heard the intro): plays the one fixed
- *    Motiversity video start-to-finish. When it ends — or on the next session —
- *    it switches to random mode forever.
- *  - RANDOM: shuffles the Motiversity channel's uploads playlist (no API key —
- *    a channel's uploads playlist id is its channel id with UC -> UU), starting
+ *    Motiversity video start-to-finish. When it ends it switches to random mode.
+ *  - RANDOM: shuffles the Motiversity channel's uploads playlist, starting
  *    at a random index so each session differs, and auto-advances.
  *
  * The YouTube iframe is parked off-screen (audio only). A small music icon sits
  * bottom-right; hovering it slides up a control bar (restart / play / skip + vol).
- *
- * On a FRESH login, after the ÑIGO greeting ends (`agb:greeting-ended`), the
- * screen blurs for a beat and then playback begins. Armed by the one-shot
- * `agb_play_ambient` flag the sign-in flow sets. Respects the global mute.
+ * Playback is MANUAL ONLY — press the button to start.
  */
 
 // The fixed intro track — youtube.com/watch?v=r04ZPcYyTjw
@@ -33,10 +28,6 @@ const RANDOM_INDEX_RANGE = 200;
 const LS_VOLUME = "agb.ambient.volume";
 // Persists across sessions (per browser): set once the intro has been heard.
 const FIRST_DONE_KEY = "agb_ambient_first_done_v1";
-const LOGIN_FLAG = "agb_play_ambient";
-const GREETING_ENDED = "agb:greeting-ended";
-// If the greeting never fires (muted / autoplay blocked), start anyway after this.
-const GREETING_FALLBACK_MS = 6000;
 
 const YT_PLAYING = 1;
 
@@ -88,12 +79,9 @@ function markFirstDone() {
   }
 }
 
-type Phase = "idle" | "blurring" | "revealed";
-
 export function AmbientPlayer() {
   const holderRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YTPlayer | null>(null);
-  const startedRef = useRef(false); // guards the one-shot login start sequence
   const modeRef = useRef<"first" | "random">("random");
   const goRandomRef = useRef<() => void>(() => {});
 
@@ -101,7 +89,6 @@ export function AmbientPlayer() {
   const [playing, setPlaying] = useState(false);
   const [muted, setMuted] = useState(false);
   const [volume, setVolume] = useState(40);
-  const [phase, setPhase] = useState<Phase>("idle"); // blur-overlay state machine
 
   // Restore saved volume.
   useEffect(() => {
@@ -228,44 +215,6 @@ export function AmbientPlayer() {
     }, 900);
   }, [volume]);
 
-  // The cinematic: blur the screen, then start. Returns immediately.
-  const runIntro = useCallback(() => {
-    setPhase("blurring"); // overlay fades in
-    window.setTimeout(() => {
-      beginPlayback();
-      setPhase("revealed"); // overlay fades back out
-      window.setTimeout(() => setPhase("idle"), 900);
-    }, 900);
-  }, [beginPlayback]);
-
-  // Fresh-login arming: wait for the greeting to end, then run the intro once.
-  useEffect(() => {
-    if (!ready) return;
-    let armed = false;
-    try {
-      armed = sessionStorage.getItem(LOGIN_FLAG) === "1";
-      if (armed) sessionStorage.removeItem(LOGIN_FLAG);
-    } catch {
-      /* ignore */
-    }
-    if (!armed || startedRef.current) return;
-
-    let fallback = 0;
-    const start = () => {
-      if (startedRef.current) return;
-      startedRef.current = true;
-      window.removeEventListener(GREETING_ENDED, start);
-      window.clearTimeout(fallback);
-      runIntro();
-    };
-    window.addEventListener(GREETING_ENDED, start);
-    fallback = window.setTimeout(start, GREETING_FALLBACK_MS);
-    return () => {
-      window.removeEventListener(GREETING_ENDED, start);
-      window.clearTimeout(fallback);
-    };
-  }, [ready, runIntro]);
-
   const toggle = useCallback(() => {
     const p = playerRef.current;
     if (!ready || !p) return;
@@ -297,15 +246,6 @@ export function AmbientPlayer() {
       >
         <div ref={holderRef} />
       </div>
-
-      {/* Cinematic blur overlay (fresh-login intro only). */}
-      <div
-        aria-hidden
-        className={`pointer-events-none fixed inset-0 z-[90] backdrop-blur-md transition-opacity duration-700 ${
-          phase === "blurring" ? "opacity-100" : "opacity-0"
-        }`}
-        style={{ background: "color-mix(in oklab, var(--background) 35%, transparent)" }}
-      />
 
       {/* Bottom-right trigger + hover-revealed control bar. */}
       <div className="group fixed bottom-4 right-4 z-50 flex items-center justify-end gap-2">

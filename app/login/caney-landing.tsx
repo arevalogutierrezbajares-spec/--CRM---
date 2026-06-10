@@ -314,11 +314,9 @@ function HolographicForm() {
       setError(result.error ?? "Could not sign in.");
       return;
     }
-    // Arm the post-greeting WIN video + ambient motivation player — only on a
-    // fresh login (each consumed once on Home).
+    // Arm the post-greeting WIN audio — plays once after the greeting on Home.
     try {
       sessionStorage.setItem("agb_play_win", "1");
-      sessionStorage.setItem("agb_play_ambient", "1");
     } catch {
       /* ignore */
     }
