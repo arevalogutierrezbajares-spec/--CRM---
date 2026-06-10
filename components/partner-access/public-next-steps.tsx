@@ -22,10 +22,12 @@ export function PublicNextSteps({
 }) {
   const [steps, setSteps] = useState(initialSteps);
   const [pending, setPending] = useState<Set<string>>(new Set());
+  const [error, setError] = useState<string | null>(null);
 
   async function handleToggle(step: PartnerNextStep) {
     if (pending.has(step.id)) return;
     setPending((prev) => new Set(prev).add(step.id));
+    setError(null);
     try {
       const res = await fetch(`/api/access/${token}/next-steps/${step.id}`, {
         method: "PATCH",
@@ -41,7 +43,12 @@ export function PublicNextSteps({
               : s,
           ),
         );
+      } else {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        setError(data.error ?? "No se pudo guardar el cambio. Intenta de nuevo.");
       }
+    } catch {
+      setError("Sin conexión. Revisa tu internet e intenta de nuevo.");
     } finally {
       setPending((prev) => {
         const n = new Set(prev);
@@ -77,6 +84,7 @@ export function PublicNextSteps({
       <p className="mb-2 text-xs text-[var(--muted-foreground)]">
         {openCount > 0 ? `${openCount} pendiente${openCount === 1 ? "" : "s"}` : "Todo al día ✓"}
       </p>
+      {error && <p className="mb-2 text-xs text-red-600 dark:text-red-400">{error}</p>}
       <ul className="max-h-[360px] space-y-2 overflow-y-auto pr-1">
         {ordered.map((step) => {
           const interactive = step.assignedTo === "partner" || step.assignedTo === "both";

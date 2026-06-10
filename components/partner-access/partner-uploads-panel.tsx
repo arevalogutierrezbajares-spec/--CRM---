@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Download, FileUp, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatRelative } from "@/lib/utils";
@@ -29,14 +30,21 @@ export function PartnerUploadsPanel({
 
   function handleDelete(uploadId: string) {
     startTransition(async () => {
-      await deletePartnerUploadAction({ roomId, uploadId });
-      setUploads((prev) => prev.filter((u) => u.id !== uploadId));
+      const res = await deletePartnerUploadAction({ roomId, uploadId });
+      if (res.ok) {
+        setUploads((prev) => prev.filter((u) => u.id !== uploadId));
+      } else {
+        toast.error(res.error);
+      }
     });
   }
 
   async function handleDownload(upload: PartnerUpload) {
-    const url = await getDownloadUrl(upload.id);
-    if (!url) return;
+    const url = await getDownloadUrl(upload.id).catch(() => null);
+    if (!url) {
+      toast.error("Couldn't get the download link. Try again.");
+      return;
+    }
     const a = document.createElement("a");
     a.href = url;
     a.download = upload.originalFilename;

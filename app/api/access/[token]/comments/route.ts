@@ -4,7 +4,11 @@ import {
   getPartnerRoomMember,
   resolvePartnerRoomByToken,
 } from "@/db/queries/partner-access";
-import { addItemComment, commentTargetExists } from "@/db/queries/partner-repository";
+import {
+  addItemComment,
+  commentTargetExists,
+  countRecentGuestComments,
+} from "@/db/queries/partner-repository";
 import {
   getPartnerMemberIdFromCookies,
   isPartnerRoomUnlocked,
@@ -37,6 +41,17 @@ export async function POST(req: NextRequest, props: { params: Params }) {
   const parsed = Body.safeParse(json);
   if (!parsed.success) {
     return NextResponse.json({ error: "Escribe un comentario primero" }, { status: 400 });
+  }
+
+  // Soft flood guard for the unauthenticated composer (mirrors messages route).
+  const recent = await countRecentGuestComments({ roomId: room.id, seconds: 60 }).catch(
+    () => 0,
+  );
+  if (recent >= 20) {
+    return NextResponse.json(
+      { error: "Estás comentando muy rápido. Espera un momento." },
+      { status: 429 },
+    );
   }
 
   const exists = await commentTargetExists({

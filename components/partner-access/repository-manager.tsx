@@ -140,7 +140,16 @@ export function RepositoryManager({
           sizeBytes: file.size,
         }),
       });
-      if (!finRes.ok) throw new Error("Saved file but could not finalize");
+      if (!finRes.ok) {
+        // Clean up the stored object so failed finalizes don't orphan blobs.
+        void fetch(`/api/room-items/${roomId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "abort", storagePath: path }),
+        }).catch(() => {});
+        const { error } = (await finRes.json().catch(() => ({}))) as { error?: string };
+        throw new Error(error || "Saved file but could not finalize");
+      }
       toast.success("Added to repository");
       router.refresh();
     } catch (err) {
@@ -165,6 +174,7 @@ export function RepositoryManager({
   async function deleteComment(id: string) {
     const res = await deleteRoomCommentAction({ roomId, commentId: id });
     if (res.ok) router.refresh();
+    else toast.error(res.error);
   }
 
   return (

@@ -9,6 +9,9 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      // `server-only` is a build-time marker; stub it so unit tests can
+      // import server modules (lib/server-action-guard, storage helpers).
+      "server-only": path.resolve(__dirname, "__tests__/stubs/server-only.ts"),
       "@": path.resolve(__dirname),
     },
   },

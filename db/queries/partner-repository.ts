@@ -1,5 +1,24 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, gt, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
+
+/** Flood guard for the public comments route: guest comments in this room recently. */
+export async function countRecentGuestComments(input: {
+  roomId: string;
+  seconds: number;
+}): Promise<number> {
+  const since = new Date(Date.now() - input.seconds * 1000);
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(schema.partnerItemComments)
+    .where(
+      and(
+        eq(schema.partnerItemComments.roomId, input.roomId),
+        eq(schema.partnerItemComments.authorKind, "guest"),
+        gt(schema.partnerItemComments.createdAt, since),
+      ),
+    );
+  return row?.count ?? 0;
+}
 
 export type PartnerRoomItem = typeof schema.partnerRoomItems.$inferSelect;
 export type PartnerItemComment = typeof schema.partnerItemComments.$inferSelect;

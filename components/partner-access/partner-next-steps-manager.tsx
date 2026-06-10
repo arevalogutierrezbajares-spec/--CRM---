@@ -79,7 +79,11 @@ export function PartnerNextStepsManager({
   function handleToggle(step: PartnerNextStep) {
     const complete = !step.completedAt;
     startTransition(async () => {
-      await togglePartnerNextStepAction({ roomId, stepId: step.id, complete });
+      const res = await togglePartnerNextStepAction({ roomId, stepId: step.id, complete });
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
       setSteps((prev) =>
         prev.map((s) =>
           s.id === step.id
@@ -92,7 +96,11 @@ export function PartnerNextStepsManager({
 
   function handleDelete(stepId: string) {
     startTransition(async () => {
-      await deletePartnerNextStepAction({ roomId, stepId });
+      const res = await deletePartnerNextStepAction({ roomId, stepId });
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
       setSteps((prev) => prev.filter((s) => s.id !== stepId));
     });
   }
@@ -102,6 +110,7 @@ export function PartnerNextStepsManager({
 
   return (
     <div className="space-y-3">
+      {error && !showForm && <p className="text-xs text-red-500">{error}</p>}
       {open.length === 0 && done.length === 0 && !showForm && (
         <p className="text-sm text-[var(--muted-foreground)]">
           No next steps yet. Add items both you and your partner can track.
@@ -111,7 +120,7 @@ export function PartnerNextStepsManager({
       {open.length > 0 && (
         <ul className="space-y-2">
           {open.map((step) => (
-            <StepRow key={step.id} step={step} onToggle={handleToggle} onDelete={handleDelete} />
+            <StepRow key={step.id} step={step} busy={isPending} onToggle={handleToggle} onDelete={handleDelete} />
           ))}
         </ul>
       )}
@@ -123,7 +132,7 @@ export function PartnerNextStepsManager({
           </summary>
           <ul className="mt-2 space-y-2 opacity-60">
             {done.map((step) => (
-              <StepRow key={step.id} step={step} onToggle={handleToggle} onDelete={handleDelete} />
+              <StepRow key={step.id} step={step} busy={isPending} onToggle={handleToggle} onDelete={handleDelete} />
             ))}
           </ul>
         </details>
@@ -177,10 +186,12 @@ export function PartnerNextStepsManager({
 
 function StepRow({
   step,
+  busy,
   onToggle,
   onDelete,
 }: {
   step: PartnerNextStep;
+  busy?: boolean;
   onToggle: (step: PartnerNextStep) => void;
   onDelete: (id: string) => void;
 }) {
@@ -188,8 +199,9 @@ function StepRow({
     <li className="flex items-start gap-2 rounded-md border border-[var(--border)] p-2.5">
       <button
         type="button"
+        disabled={busy}
         onClick={() => onToggle(step)}
-        className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border ${step.completedAt ? "border-green-500 bg-green-500 text-white" : "border-[var(--border)] hover:border-[var(--foreground)]"}`}
+        className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border disabled:opacity-50 ${step.completedAt ? "border-green-500 bg-green-500 text-white" : "border-[var(--border)] hover:border-[var(--foreground)]"}`}
       >
         {step.completedAt && <Check className="h-2.5 w-2.5" />}
       </button>
@@ -214,8 +226,9 @@ function StepRow({
       </div>
       <button
         type="button"
+        disabled={busy}
         onClick={() => onDelete(step.id)}
-        className="shrink-0 text-[var(--muted-foreground)] hover:text-red-500"
+        className="shrink-0 text-[var(--muted-foreground)] hover:text-red-500 disabled:opacity-50"
       >
         <Trash2 className="h-3.5 w-3.5" />
       </button>

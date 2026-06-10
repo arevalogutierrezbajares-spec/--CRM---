@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { withActionGuard } from "@/lib/server-action-guard";
 import { requireUser } from "@/lib/current-user";
 import {
   PARTNER_KIND_OPTIONS,
@@ -87,7 +88,7 @@ function revalidatePartnerRoom(roomId: string, contactId?: string | null) {
   if (contactId) revalidatePath(`/contacts/${contactId}`);
 }
 
-export async function shareProjectLinkAction(opts: {
+async function _shareProjectLinkAction(opts: {
   projectId: string;
   projectLinkId: string;
   contactId: string;
@@ -133,7 +134,7 @@ export async function shareProjectLinkAction(opts: {
   };
 }
 
-export async function trackPartnerShareAction(opts: {
+async function _trackPartnerShareAction(opts: {
   shareId: string;
   event: "viewed" | "downloaded" | "revoked";
 }): Promise<PartnerShareResult> {
@@ -154,7 +155,7 @@ export async function trackPartnerShareAction(opts: {
   return { ok: true, id: res.id, roomId: res.roomId ?? "" };
 }
 
-export async function updatePartnerRoomDetailsAction(opts: {
+async function _updatePartnerRoomDetailsAction(opts: {
   roomId: string;
   name: string;
   partnerKind: string;
@@ -185,7 +186,7 @@ export async function updatePartnerRoomDetailsAction(opts: {
   return { ok: true, id: res.room.id };
 }
 
-export async function updatePartnerRoomStatusAction(opts: {
+async function _updatePartnerRoomStatusAction(opts: {
   roomId: string;
   status: string;
 }): Promise<PartnerRoomActionResult> {
@@ -208,7 +209,7 @@ export async function updatePartnerRoomStatusAction(opts: {
   return { ok: true, id: res.room.id };
 }
 
-export async function regeneratePartnerRoomAccessLinkAction(opts: {
+async function _regeneratePartnerRoomAccessLinkAction(opts: {
   roomId: string;
 }): Promise<PartnerRoomActionResult> {
   const user = await requireUser();
@@ -228,7 +229,7 @@ export async function regeneratePartnerRoomAccessLinkAction(opts: {
   };
 }
 
-export async function createPartnerNextStepAction(opts: {
+async function _createPartnerNextStepAction(opts: {
   roomId: string;
   text: string;
   assignedTo: "owner" | "partner" | "both";
@@ -253,7 +254,7 @@ export async function createPartnerNextStepAction(opts: {
   return { ok: true, id: step.id };
 }
 
-export async function togglePartnerNextStepAction(opts: {
+async function _togglePartnerNextStepAction(opts: {
   roomId: string;
   stepId: string;
   complete: boolean;
@@ -270,7 +271,7 @@ export async function togglePartnerNextStepAction(opts: {
   return { ok: true };
 }
 
-export async function deletePartnerNextStepAction(opts: {
+async function _deletePartnerNextStepAction(opts: {
   roomId: string;
   stepId: string;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -280,7 +281,7 @@ export async function deletePartnerNextStepAction(opts: {
   return { ok: true };
 }
 
-export async function deletePartnerUploadAction(opts: {
+async function _deletePartnerUploadAction(opts: {
   roomId: string;
   uploadId: string;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -291,7 +292,7 @@ export async function deletePartnerUploadAction(opts: {
   return { ok: true };
 }
 
-export async function setRoomClientLogoAction(opts: {
+async function _setRoomClientLogoAction(opts: {
   roomId: string;
   contactId: string;
   logoUrl: string | null;
@@ -324,7 +325,7 @@ export async function setRoomClientLogoAction(opts: {
   return { ok: true };
 }
 
-export async function setRoomSeatLimitAction(opts: {
+async function _setRoomSeatLimitAction(opts: {
   roomId: string;
   seatLimit: number | null;
 }): Promise<PartnerRoomActionResult> {
@@ -348,7 +349,7 @@ export async function setRoomSeatLimitAction(opts: {
   return { ok: true, id: opts.roomId };
 }
 
-export async function addExpectedGuestAction(opts: {
+async function _addExpectedGuestAction(opts: {
   roomId: string;
   name: string;
   roleLabel?: string | null;
@@ -375,7 +376,7 @@ export async function addExpectedGuestAction(opts: {
   return { ok: true, id: row.id };
 }
 
-export async function removeRoomMemberAction(opts: {
+async function _removeRoomMemberAction(opts: {
   roomId: string;
   memberId: string;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -385,7 +386,7 @@ export async function removeRoomMemberAction(opts: {
   return { ok: true };
 }
 
-export async function addRoomLinkAction(opts: {
+async function _addRoomLinkAction(opts: {
   roomId: string;
   title: string;
   url: string;
@@ -413,7 +414,7 @@ export async function addRoomLinkAction(opts: {
   return { ok: true, id: item.id };
 }
 
-export async function updateRoomItemAction(opts: {
+async function _updateRoomItemAction(opts: {
   roomId: string;
   itemId: string;
   title?: string;
@@ -434,7 +435,7 @@ export async function updateRoomItemAction(opts: {
   return { ok: true };
 }
 
-export async function deleteRoomItemAction(opts: {
+async function _deleteRoomItemAction(opts: {
   roomId: string;
   itemId: string;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -445,7 +446,7 @@ export async function deleteRoomItemAction(opts: {
   return { ok: true };
 }
 
-export async function addRoomCommentAction(opts: {
+async function _addRoomCommentAction(opts: {
   roomId: string;
   targetKind: "share" | "item";
   targetId: string;
@@ -492,7 +493,7 @@ export async function addRoomCommentAction(opts: {
   };
 }
 
-export async function deleteRoomCommentAction(opts: {
+async function _deleteRoomCommentAction(opts: {
   roomId: string;
   commentId: string;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -502,7 +503,7 @@ export async function deleteRoomCommentAction(opts: {
   return { ok: true };
 }
 
-export async function setRoomBrandLogosAction(opts: {
+async function _setRoomBrandLogosAction(opts: {
   roomId: string;
   brandLobIds: string[] | null;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -521,7 +522,7 @@ export async function setRoomBrandLogosAction(opts: {
   return { ok: true };
 }
 
-export async function assignRoomTeamMemberAction(opts: {
+async function _assignRoomTeamMemberAction(opts: {
   roomId: string;
   userId: string;
   title?: string | null;
@@ -541,7 +542,7 @@ export async function assignRoomTeamMemberAction(opts: {
   return { ok: true };
 }
 
-export async function removeRoomTeamMemberAction(opts: {
+async function _removeRoomTeamMemberAction(opts: {
   roomId: string;
   teamId: string;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -551,7 +552,7 @@ export async function removeRoomTeamMemberAction(opts: {
   return { ok: true };
 }
 
-export async function createPartnerRoomAction(opts: {
+async function _createPartnerRoomAction(opts: {
   contactId: string;
   partnerKind: string;
   name?: string | null;
@@ -583,7 +584,7 @@ export async function createPartnerRoomAction(opts: {
   };
 }
 
-export async function setPartnerRoomPasscodeAction(opts: {
+async function _setPartnerRoomPasscodeAction(opts: {
   roomId: string;
   passcode: string | null;
 }): Promise<PartnerRoomActionResult> {
@@ -606,7 +607,7 @@ export async function setPartnerRoomPasscodeAction(opts: {
   return { ok: true, id: res.room.id };
 }
 
-export async function updateSharePermissionsAction(opts: {
+async function _updateSharePermissionsAction(opts: {
   shareId: string;
   permissions: string[];
 }): Promise<PartnerShareResult> {
@@ -628,7 +629,7 @@ export async function updateSharePermissionsAction(opts: {
   return { ok: true, id: res.id, roomId: res.roomId ?? "" };
 }
 
-export async function listShareableRoomDocsAction(opts: {
+async function _listShareableRoomDocsAction(opts: {
   roomId: string;
 }): Promise<
   { ok: true; docs: ShareableRoomDoc[] } | { ok: false; error: string }
@@ -647,7 +648,7 @@ export async function listShareableRoomDocsAction(opts: {
   return { ok: true, docs };
 }
 
-export async function addRoomDocumentsAction(opts: {
+async function _addRoomDocumentsAction(opts: {
   roomId: string;
   items: Array<{ linkId: string; lobId: string }>;
   allowDownload: boolean;
@@ -703,7 +704,7 @@ export async function addRoomDocumentsAction(opts: {
   return { ok: true, added, failed };
 }
 
-export async function createRoomMessageAction(opts: {
+async function _createRoomMessageAction(opts: {
   roomId: string;
   body: string;
 }): Promise<
@@ -750,7 +751,7 @@ export async function createRoomMessageAction(opts: {
   };
 }
 
-export async function deleteRoomMessageAction(opts: {
+async function _deleteRoomMessageAction(opts: {
   roomId: string;
   messageId: string;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -762,3 +763,34 @@ export async function deleteRoomMessageAction(opts: {
   revalidatePath(`/partner-access/rooms/${opts.roomId}`);
   return { ok: true };
 }
+
+// Every action is wrapped so an unexpected throw (DB drift, FK violation,
+// network) returns { ok: false } instead of crashing to the digest error page.
+export const shareProjectLinkAction = withActionGuard("shareProjectLinkAction", _shareProjectLinkAction);
+export const trackPartnerShareAction = withActionGuard("trackPartnerShareAction", _trackPartnerShareAction);
+export const updatePartnerRoomDetailsAction = withActionGuard("updatePartnerRoomDetailsAction", _updatePartnerRoomDetailsAction);
+export const updatePartnerRoomStatusAction = withActionGuard("updatePartnerRoomStatusAction", _updatePartnerRoomStatusAction);
+export const regeneratePartnerRoomAccessLinkAction = withActionGuard("regeneratePartnerRoomAccessLinkAction", _regeneratePartnerRoomAccessLinkAction);
+export const createPartnerNextStepAction = withActionGuard("createPartnerNextStepAction", _createPartnerNextStepAction);
+export const togglePartnerNextStepAction = withActionGuard("togglePartnerNextStepAction", _togglePartnerNextStepAction);
+export const deletePartnerNextStepAction = withActionGuard("deletePartnerNextStepAction", _deletePartnerNextStepAction);
+export const deletePartnerUploadAction = withActionGuard("deletePartnerUploadAction", _deletePartnerUploadAction);
+export const setRoomClientLogoAction = withActionGuard("setRoomClientLogoAction", _setRoomClientLogoAction);
+export const setRoomSeatLimitAction = withActionGuard("setRoomSeatLimitAction", _setRoomSeatLimitAction);
+export const addExpectedGuestAction = withActionGuard("addExpectedGuestAction", _addExpectedGuestAction);
+export const removeRoomMemberAction = withActionGuard("removeRoomMemberAction", _removeRoomMemberAction);
+export const addRoomLinkAction = withActionGuard("addRoomLinkAction", _addRoomLinkAction);
+export const updateRoomItemAction = withActionGuard("updateRoomItemAction", _updateRoomItemAction);
+export const deleteRoomItemAction = withActionGuard("deleteRoomItemAction", _deleteRoomItemAction);
+export const addRoomCommentAction = withActionGuard("addRoomCommentAction", _addRoomCommentAction);
+export const deleteRoomCommentAction = withActionGuard("deleteRoomCommentAction", _deleteRoomCommentAction);
+export const setRoomBrandLogosAction = withActionGuard("setRoomBrandLogosAction", _setRoomBrandLogosAction);
+export const assignRoomTeamMemberAction = withActionGuard("assignRoomTeamMemberAction", _assignRoomTeamMemberAction);
+export const removeRoomTeamMemberAction = withActionGuard("removeRoomTeamMemberAction", _removeRoomTeamMemberAction);
+export const createPartnerRoomAction = withActionGuard("createPartnerRoomAction", _createPartnerRoomAction);
+export const setPartnerRoomPasscodeAction = withActionGuard("setPartnerRoomPasscodeAction", _setPartnerRoomPasscodeAction);
+export const updateSharePermissionsAction = withActionGuard("updateSharePermissionsAction", _updateSharePermissionsAction);
+export const listShareableRoomDocsAction = withActionGuard("listShareableRoomDocsAction", _listShareableRoomDocsAction);
+export const addRoomDocumentsAction = withActionGuard("addRoomDocumentsAction", _addRoomDocumentsAction);
+export const createRoomMessageAction = withActionGuard("createRoomMessageAction", _createRoomMessageAction);
+export const deleteRoomMessageAction = withActionGuard("deleteRoomMessageAction", _deleteRoomMessageAction);

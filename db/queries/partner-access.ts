@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
+import { pgErrorCode } from "@/lib/server-action-guard";
 import {
   createPartnerAccessToken,
   hashPartnerAccessToken,
@@ -944,10 +945,18 @@ export async function createPartnerShare(input: CreatePartnerShareInput) {
     return { room, share, accessToken };
   }).catch((error: unknown) => {
     if (error instanceof Error && error.message === "ROOM_NOT_FOUND") return null;
+    if (pgErrorCode(error) === "23503") return "FK_VIOLATION" as const;
     throw error;
   });
 
   if (!result) return { ok: false as const, error: "Room not found" };
+  if (result === "FK_VIOLATION") {
+    return {
+      ok: false as const,
+      error:
+        "Could not attach this document — its business record is missing or out of sync. Refresh and try again.",
+    };
+  }
   return { ok: true as const, ...result };
 }
 
@@ -1402,6 +1411,24 @@ export async function countPartnerRoomMembers(input: { roomId: string }) {
     .select({ count: sql<number>`count(*)::int` })
     .from(schema.partnerRoomMembers)
     .where(eq(schema.partnerRoomMembers.roomId, input.roomId));
+  return row?.count ?? 0;
+}
+
+/** Flood guard for the public identify route: seats claimed in this room recently. */
+export async function countRecentSeatClaims(input: {
+  roomId: string;
+  seconds: number;
+}) {
+  const since = new Date(Date.now() - input.seconds * 1000);
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(schema.partnerRoomMembers)
+    .where(
+      and(
+        eq(schema.partnerRoomMembers.roomId, input.roomId),
+        gt(schema.partnerRoomMembers.createdAt, since),
+      ),
+    );
   return row?.count ?? 0;
 }
 

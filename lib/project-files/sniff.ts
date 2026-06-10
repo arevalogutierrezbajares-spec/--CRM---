@@ -25,6 +25,7 @@ const SIG = {
   webp: [0x57, 0x45, 0x42, 0x50], // WEBP (at offset 8)
   zip: [0x50, 0x4b, 0x03, 0x04], // PK\x03\x04 (docx/xlsx/pptx)
   zipEmpty: [0x50, 0x4b, 0x05, 0x06],
+  ole: [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1], // legacy .doc/.xls/.ppt
   // Executable signatures we explicitly reject even for text extensions.
   mz: [0x4d, 0x5a], // PE / DOS
   elf: [0x7f, 0x45, 0x4c, 0x46],
@@ -87,6 +88,62 @@ export function sniffConsistent(filename: string, bytes: Uint8Array): SniffResul
     case ".html":
     case ".htm":
       // Text/markup files have no signature; only reject clear executables.
+      return isExecutable(bytes)
+        ? { ok: false, reason: "Executable content rejected." }
+        : { ok: true };
+    default:
+      return { ok: false, reason: "Unsupported file type." };
+  }
+}
+
+/** True when the head bytes carry a known executable signature. */
+export function isExecutableContent(bytes: Uint8Array): boolean {
+  return isExecutable(bytes);
+}
+
+/**
+ * Allow-list for the PUBLIC partner-room upload (guests sending docs back to
+ * the operator). Wider than the FR-DOC list — clients send legacy Office files
+ * and zips — but every family still gets a magic-byte check server-side.
+ */
+export const PARTNER_UPLOAD_EXTS = [
+  ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
+  ".txt", ".csv", ".png", ".jpg", ".jpeg", ".zip",
+] as const;
+
+export function isAllowedPartnerUpload(filename: string): boolean {
+  return (PARTNER_UPLOAD_EXTS as readonly string[]).includes(extOf(filename));
+}
+
+/** Magic-byte validation for the partner-upload allow-list. */
+export function sniffPartnerUpload(filename: string, bytes: Uint8Array): SniffResult {
+  const ext = extOf(filename);
+  const mismatch: SniffResult = {
+    ok: false,
+    reason: "File content does not match its extension.",
+  };
+  switch (ext) {
+    case ".pdf":
+    case ".png":
+    case ".jpg":
+    case ".jpeg":
+    case ".docx":
+    case ".xlsx":
+    case ".pptx":
+      return sniffConsistent(filename, bytes);
+    case ".doc":
+    case ".xls":
+    case ".ppt":
+      // Legacy Office = OLE compound file; some old exports are actually zips.
+      return startsWith(bytes, SIG.ole) || startsWith(bytes, SIG.zip)
+        ? { ok: true }
+        : mismatch;
+    case ".zip":
+      return startsWith(bytes, SIG.zip) || startsWith(bytes, SIG.zipEmpty)
+        ? { ok: true }
+        : mismatch;
+    case ".txt":
+    case ".csv":
       return isExecutable(bytes)
         ? { ok: false, reason: "Executable content rejected." }
         : { ok: true };

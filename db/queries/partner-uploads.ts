@@ -1,7 +1,25 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, gt, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 
 export type PartnerUpload = typeof schema.partnerUploads.$inferSelect;
+
+/** Flood guard for the public upload route: uploads in this room recently. */
+export async function countRecentPartnerUploads(input: {
+  roomId: string;
+  seconds: number;
+}): Promise<number> {
+  const since = new Date(Date.now() - input.seconds * 1000);
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(schema.partnerUploads)
+    .where(
+      and(
+        eq(schema.partnerUploads.roomId, input.roomId),
+        gt(schema.partnerUploads.createdAt, since),
+      ),
+    );
+  return row?.count ?? 0;
+}
 
 export async function listPartnerUploads(opts: {
   workspaceId: string;

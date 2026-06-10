@@ -5,11 +5,13 @@ import { Upload, X, CheckCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { PROJECT_FILES_BUCKET } from "@/lib/project-files/constants";
 import { formatBytes } from "@/lib/project-files/limits";
+import { PARTNER_UPLOAD_EXTS } from "@/lib/project-files/sniff";
 
 type UploadState = "idle" | "uploading" | "done" | "error";
 
 const MAX_BYTES = 25 * 1024 * 1024;
-const ALLOWED_EXTS = [".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".csv", ".png", ".jpg", ".jpeg", ".zip"];
+// Single source of truth with the server route's allow-list.
+const ALLOWED_EXTS: readonly string[] = PARTNER_UPLOAD_EXTS;
 
 export function PublicUploadForm({ token }: { token: string }) {
   const [state, setState] = useState<UploadState>("idle");
@@ -85,7 +87,16 @@ export function PublicUploadForm({ token }: { token: string }) {
           note: note.trim() || null,
         }),
       });
-      if (!finalRes.ok) throw new Error("Se cargó el archivo pero no se pudo guardar");
+      if (!finalRes.ok) {
+        // Don't leave an invisible orphan in storage — best-effort cleanup.
+        void fetch(`/api/access/${token}/upload`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "abort", storagePath: path }),
+        }).catch(() => {});
+        const { error: msg } = (await finalRes.json().catch(() => ({}))) as { error?: string };
+        throw new Error(msg || "No se pudo guardar el archivo. Intenta de nuevo.");
+      }
       setProgress(100);
 
       setDone((prev) => [...prev, { filename: file.name }]);

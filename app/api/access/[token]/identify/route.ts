@@ -2,12 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import {
   claimPartnerRoomSeat,
+  countRecentSeatClaims,
   resolvePartnerRoomByToken,
 } from "@/db/queries/partner-access";
 import {
   PARTNER_GATE_COOKIE_OPTIONS,
   isPartnerRoomUnlocked,
   partnerMemberCookieName,
+  partnerMemberCookieValue,
 } from "@/lib/partner-room-gate.server";
 
 const Body = z.object({
@@ -43,6 +45,18 @@ export async function POST(req: NextRequest, props: { params: Params }) {
     return NextResponse.json({ error: "Ingresa un correo válido" }, { status: 400 });
   }
 
+  // Soft flood guard: a visitor can't mass-create member rows in a room
+  // that has no seat limit configured.
+  const recent = await countRecentSeatClaims({ roomId: room.id, seconds: 60 }).catch(
+    () => 0,
+  );
+  if (recent >= 10) {
+    return NextResponse.json(
+      { error: "Demasiados registros a la vez. Espera un momento." },
+      { status: 429 },
+    );
+  }
+
   const result = await claimPartnerRoomSeat({
     workspaceId: room.workspaceId,
     roomId: room.id,
@@ -73,7 +87,7 @@ export async function POST(req: NextRequest, props: { params: Params }) {
   });
   res.cookies.set(
     partnerMemberCookieName(room.id),
-    result.member.id,
+    partnerMemberCookieValue(room.id, result.member.id),
     PARTNER_GATE_COOKIE_OPTIONS,
   );
   return res;

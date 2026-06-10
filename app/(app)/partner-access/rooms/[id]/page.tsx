@@ -127,11 +127,16 @@ export default async function PartnerAccessRoomPage(props: { params: Params }) {
 
   const { room } = detail;
   const activeShares = detail.shares.filter((share) => !share.revokedAt);
-  const brandLogos = await resolveRoomBrandLogos({
-    workspaceId: user.workspaceId,
-    brandLobIds: room.brandLobIds ?? null,
-    shares: activeShares,
-  });
+  const brandLogosRes = await safeRead(
+    () =>
+      resolveRoomBrandLogos({
+        workspaceId: user.workspaceId,
+        brandLobIds: room.brandLobIds ?? null,
+        shares: activeShares,
+      }),
+    [],
+  );
+  const brandLogos = brandLogosRes.data;
 
   const commentsByTarget: Record<
     string,

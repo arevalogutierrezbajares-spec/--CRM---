@@ -1,4 +1,4 @@
-import { createHash, timingSafeEqual } from "crypto";
+import { createHash, createHmac, timingSafeEqual } from "crypto";
 import { cookies } from "next/headers";
 
 // Optional 4-digit gate on top of the public access token. The token (160-bit,
@@ -63,12 +63,41 @@ export async function isPartnerRoomUnlocked(room: {
   return safeEqualHex(value, partnerGateCookieValue(room.id, room.passcodeHash));
 }
 
+// The member cookie is signed with a server-only secret so a visitor can't
+// impersonate another member of the same room by guessing their UUID. Falls
+// back to unsigned in environments without the secret (local dev).
+function memberCookieSecret(): string | null {
+  return process.env.SUPABASE_SERVICE_ROLE_KEY || null;
+}
+
+function memberCookieSignature(roomId: string, memberId: string, secret: string) {
+  return createHmac("sha256", secret)
+    .update(`pa-member:${roomId}:${memberId}`)
+    .digest("hex");
+}
+
+/** Cookie value for an identified member: `<uuid>.<hmac>` (or bare uuid in dev). */
+export function partnerMemberCookieValue(roomId: string, memberId: string) {
+  const secret = memberCookieSecret();
+  if (!secret) return memberId;
+  return `${memberId}.${memberCookieSignature(roomId, memberId, secret)}`;
+}
+
 /** The member id this visitor identified as, if the cookie matches the room. */
 export async function getPartnerMemberIdFromCookies(roomId: string) {
   const store = await cookies();
   const value = store.get(partnerMemberCookieName(roomId))?.value;
-  if (!value || !/^[0-9a-f-]{36}$/.test(value)) return null;
-  return value;
+  if (!value) return null;
+
+  const [memberId, signature] = value.split(".", 2);
+  if (!/^[0-9a-f-]{36}$/.test(memberId ?? "")) return null;
+
+  const secret = memberCookieSecret();
+  if (!secret) return signature ? null : memberId;
+  if (!signature || !/^[0-9a-f]{64}$/.test(signature)) return null;
+  return safeEqualHex(signature, memberCookieSignature(roomId, memberId, secret))
+    ? memberId
+    : null;
 }
 
 export const PARTNER_GATE_COOKIE_OPTIONS = {

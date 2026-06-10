@@ -33,6 +33,7 @@ export function PartnerCommentThread({
   const [pending, setPending] = useState<RepoComment[]>([]);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const serverIds = new Set(comments.map((c) => c.id));
   const merged = [...comments, ...pending.filter((c) => !serverIds.has(c.id))];
@@ -41,12 +42,18 @@ export function PartnerCommentThread({
     const body = draft.trim();
     if (!body || busy) return;
     setBusy(true);
+    setError(null);
     try {
       const saved = await onSubmit(body);
       if (saved) {
         setPending((p) => [...p, saved]);
         setDraft("");
+      } else {
+        // The draft stays in the box so nothing the guest typed is lost.
+        setError("No se pudo enviar el comentario. Intenta de nuevo.");
       }
+    } catch {
+      setError("No se pudo enviar el comentario. Intenta de nuevo.");
     } finally {
       setBusy(false);
     }
@@ -90,6 +97,7 @@ export function PartnerCommentThread({
             </div>
           ))}
 
+          {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
           <div className="flex items-start gap-2 pt-1">
             <textarea
               value={draft}
