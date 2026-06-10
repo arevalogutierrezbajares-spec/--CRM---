@@ -9,6 +9,7 @@ const PUBLIC_PATHS = [
   "/auth/callback",
   "/auth/handoff", // implicit-flow magic-link → server-side session establishment
   "/access/", // Partner Access public rooms authenticate by hashed token.
+  "/api/access/", // Partner Access API routes (upload sign/finalize, next-step toggle) — auth by token hash.
   "/f/", // F&F Pitch Feedback public links authenticate by invite token.
   "/api/health",
   "/api/pitch-feedback/respond", // F&F Pitch Feedback public response capture.

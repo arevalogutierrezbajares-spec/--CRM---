@@ -15,8 +15,12 @@ function toLocalInput(date: Date) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-export default async function NewMeetingPage() {
+type SearchParams = Promise<{ attendee?: string }>;
+
+export default async function NewMeetingPage(props: { searchParams: SearchParams }) {
   const user = await requireUser();
+  const sp = await props.searchParams;
+  const preselectedAttendee = sp.attendee ?? null;
 
   const [contactsRes, projectsRes] = await Promise.all([
     safeRead(
@@ -59,7 +63,10 @@ export default async function NewMeetingPage() {
         <Card>
           <CardContent className="pt-6">
             <MeetingForm
-              initial={{ scheduledAt: toLocalInput(new Date()) }}
+              initial={{
+                scheduledAt: toLocalInput(new Date()),
+                attendeeIds: preselectedAttendee ? [preselectedAttendee] : [],
+              }}
               contacts={contactsRes.data.map((c) => ({
                 id: c.id,
                 name: c.name,

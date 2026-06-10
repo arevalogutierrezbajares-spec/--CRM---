@@ -19,6 +19,14 @@ import {
   updatePartnerRoomDetails,
   updatePartnerRoomStatus,
 } from "@/db/queries/partner-access";
+import {
+  createPartnerNextStep,
+  completePartnerNextStep,
+  uncompletePartnerNextStep,
+  deletePartnerNextStep,
+} from "@/db/queries/partner-next-steps";
+import { deletePartnerUpload } from "@/db/queries/partner-uploads";
+import { removeObjects } from "@/lib/project-files/storage";
 
 export type PartnerShareResult =
   | { ok: true; id: string; roomId: string; accessPath?: string | null }
@@ -193,4 +201,67 @@ export async function regeneratePartnerRoomAccessLinkAction(opts: {
     id: res.room.id,
     accessPath: `/access/${res.accessToken}`,
   };
+}
+
+export async function createPartnerNextStepAction(opts: {
+  roomId: string;
+  text: string;
+  assignedTo: "owner" | "partner" | "both";
+  dueAt?: string | null;
+}): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  const user = await requireUser();
+  const text = opts.text.trim();
+  if (!text) return { ok: false, error: "Text is required" };
+
+  const dueAt = opts.dueAt ? new Date(opts.dueAt) : null;
+  const step = await createPartnerNextStep({
+    workspaceId: user.workspaceId,
+    roomId: opts.roomId,
+    text,
+    assignedTo: opts.assignedTo,
+    dueAt,
+    sortOrder: 0,
+    createdByUser: user.id,
+  });
+
+  revalidatePath(`/partner-access/rooms/${opts.roomId}`);
+  return { ok: true, id: step.id };
+}
+
+export async function togglePartnerNextStepAction(opts: {
+  roomId: string;
+  stepId: string;
+  complete: boolean;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const user = await requireUser();
+
+  if (opts.complete) {
+    await completePartnerNextStep({ workspaceId: user.workspaceId, roomId: opts.roomId, stepId: opts.stepId, completedBy: "owner" });
+  } else {
+    await uncompletePartnerNextStep({ workspaceId: user.workspaceId, stepId: opts.stepId });
+  }
+
+  revalidatePath(`/partner-access/rooms/${opts.roomId}`);
+  return { ok: true };
+}
+
+export async function deletePartnerNextStepAction(opts: {
+  roomId: string;
+  stepId: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const user = await requireUser();
+  await deletePartnerNextStep({ workspaceId: user.workspaceId, stepId: opts.stepId });
+  revalidatePath(`/partner-access/rooms/${opts.roomId}`);
+  return { ok: true };
+}
+
+export async function deletePartnerUploadAction(opts: {
+  roomId: string;
+  uploadId: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const user = await requireUser();
+  const row = await deletePartnerUpload({ workspaceId: user.workspaceId, uploadId: opts.uploadId });
+  if (row) await removeObjects([row.storagePath]).catch(() => {});
+  revalidatePath(`/partner-access/rooms/${opts.roomId}`);
+  return { ok: true };
 }

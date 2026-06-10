@@ -18,6 +18,8 @@ import { ReciprocityCard } from "@/components/reciprocity/reciprocity-card";
 import { reciprocityFor } from "@/db/queries/reciprocity";
 import { getContact } from "@/db/queries/contacts";
 import { listPartnerAccessForContact } from "@/db/queries/partner-access";
+import { listPartnerNextSteps } from "@/db/queries/partner-next-steps";
+import { listPartnerUploads } from "@/db/queries/partner-uploads";
 import { PartnerAccessPanel } from "@/components/partner-access/partner-access-panel";
 import { listPitchFeedbackForContact } from "@/db/queries/pitch-feedback";
 import { PitchFeedbackPanel } from "@/components/pitch-feedback/pitch-feedback-panel";
@@ -60,6 +62,26 @@ export default async function ContactDetailPage(props: { params: Params }) {
       invites: [],
     }),
   ]);
+
+  // Build next-step and upload counts per room for the partner panel badges
+  const roomIds = accessRes.data.rooms.map((r) => r.id);
+  const [nextStepsByRoom, uploadsByRoom] = roomIds.length
+    ? await Promise.all([
+        Promise.all(roomIds.map((rid) =>
+          listPartnerNextSteps({ workspaceId: user.workspaceId, roomId: rid })
+            .then((steps) => [rid, steps.filter((s) => !s.completedAt).length] as const)
+            .catch(() => [rid, 0] as const)
+        )),
+        Promise.all(roomIds.map((rid) =>
+          listPartnerUploads({ workspaceId: user.workspaceId, roomId: rid })
+            .then((ups) => [rid, ups.length] as const)
+            .catch(() => [rid, 0] as const)
+        )),
+      ])
+    : [[], []];
+
+  const nextStepCountByRoom = Object.fromEntries(nextStepsByRoom);
+  const uploadCountByRoom = Object.fromEntries(uploadsByRoom);
 
   if (contactRes.ok && !contactRes.data) notFound();
   const contact = contactRes.data;
@@ -223,7 +245,11 @@ export default async function ContactDetailPage(props: { params: Params }) {
                   contactName={contact.name}
                   overview={pitchFeedbackRes.data}
                 />
-                <PartnerAccessPanel access={accessRes.data} />
+                <PartnerAccessPanel
+                  access={accessRes.data}
+                  nextStepCountByRoom={nextStepCountByRoom}
+                  uploadCountByRoom={uploadCountByRoom}
+                />
                 <Card>
                   <CardHeader>
                     <CardTitle>Channels</CardTitle>

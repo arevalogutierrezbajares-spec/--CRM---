@@ -27,6 +27,10 @@ import {
   listRecentTouchesForContacts,
   listPriorMeetingsForContacts,
 } from "@/db/queries/meetings";
+import { listPartnerAccessForContact } from "@/db/queries/partner-access";
+import { listPartnerNextSteps } from "@/db/queries/partner-next-steps";
+import { listPartnerUploads } from "@/db/queries/partner-uploads";
+import { MeetingPartnerRooms } from "@/components/meetings/meeting-partner-rooms";
 import { listProjects } from "@/db/queries/projects";
 import { listContacts } from "@/db/queries/contacts";
 import {
@@ -130,6 +134,41 @@ export default async function MeetingDetailPage(props: {
   > = {};
   for (const t of recentTouches) {
     (recentByContact[t.contactId] ??= []).push(t);
+  }
+
+  // Fetch partner rooms for attendees who have them
+  const partnerRoomSummaries: Array<{
+    id: string; name: string; status: string; partnerKind: string | null;
+    contactName: string | null; openSteps: number; uploads: number;
+  }> = [];
+  if (attendeeIds.length && meeting) {
+    const accessResults = await Promise.all(
+      attendeeIds.map((cid) =>
+        listPartnerAccessForContact({ contactId: cid, workspaceId: user.workspaceId }).catch(() => null)
+      )
+    );
+    const allRooms = accessResults.flatMap((r, i) =>
+      (r?.rooms ?? []).map((room) => ({ room, contactId: attendeeIds[i] }))
+    );
+    const attendeeNameById = Object.fromEntries(
+      meeting.attendees.map((a) => [a.id, a.name])
+    );
+    for (const { room, contactId } of allRooms) {
+      if (room.status === "revoked") continue;
+      const [steps, uploads] = await Promise.all([
+        listPartnerNextSteps({ workspaceId: user.workspaceId, roomId: room.id }).catch(() => []),
+        listPartnerUploads({ workspaceId: user.workspaceId, roomId: room.id }).catch(() => []),
+      ]);
+      partnerRoomSummaries.push({
+        id: room.id,
+        name: room.name,
+        status: room.status,
+        partnerKind: room.partnerKind,
+        contactName: attendeeNameById[contactId] ?? null,
+        openSteps: steps.filter((s) => !s.completedAt).length,
+        uploads: uploads.length,
+      });
+    }
   }
 
   async function spawn() {
@@ -309,6 +348,8 @@ export default async function MeetingDetailPage(props: {
                         />
                       </CardContent>
                     </Card>
+
+                    <MeetingPartnerRooms rooms={partnerRoomSummaries} />
 
                     <Card>
                       <CardHeader>

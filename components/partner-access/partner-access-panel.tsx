@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronRight, DoorOpen, FileText, ShieldCheck } from "lucide-react";
+import { CheckSquare, ChevronRight, DoorOpen, Eye, FileText, FileUp, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,8 +21,12 @@ function statusVariant(status: string) {
 
 export function PartnerAccessPanel({
   access,
+  nextStepCountByRoom = {},
+  uploadCountByRoom = {},
 }: {
   access: PartnerAccessOverview;
+  nextStepCountByRoom?: Record<string, number>;
+  uploadCountByRoom?: Record<string, number>;
 }) {
   const lastShare = access.shares[0];
 
@@ -63,31 +67,49 @@ export function PartnerAccessPanel({
                   Rooms
                 </div>
                 <ul className="space-y-1.5">
-                  {access.rooms.slice(0, 3).map((room) => (
-                    <li key={room.id}>
-                      <Link
-                        href={`/partner-access/rooms/${room.id}`}
-                        className="block rounded-md border border-[var(--border)] bg-[var(--background)] p-2 hover:bg-[var(--accent)]"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="min-w-0">
-                            <div className="truncate text-sm font-medium">
-                              {room.name}
+                  {access.rooms.slice(0, 3).map((room) => {
+                    const openSteps = nextStepCountByRoom[room.id] ?? 0;
+                    const uploads = uploadCountByRoom[room.id] ?? 0;
+                    return (
+                      <li key={room.id}>
+                        <div className="rounded-md border border-[var(--border)] bg-[var(--background)] p-2">
+                          <Link href={`/partner-access/rooms/${room.id}`} className="block hover:underline">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="min-w-0">
+                                <div className="truncate text-sm font-medium">{room.name}</div>
+                                <div className="text-xs text-[var(--muted-foreground)]">
+                                  {partnerKindLabel(room.partnerKind)} · {room.shareCount} shared
+                                </div>
+                              </div>
+                              <div className="flex shrink-0 items-center gap-1">
+                                <Badge variant={statusVariant(room.status)}>{room.status}</Badge>
+                                <ChevronRight className="h-3.5 w-3.5 text-[var(--muted-foreground)]" />
+                              </div>
                             </div>
-                            <div className="text-xs text-[var(--muted-foreground)]">
-                              {partnerKindLabel(room.partnerKind)} · {room.shareCount} shared
-                            </div>
-                          </div>
-                          <div className="flex shrink-0 items-center gap-1">
-                            <Badge variant={statusVariant(room.status)}>
-                              {room.status}
-                            </Badge>
-                            <ChevronRight className="h-3.5 w-3.5 text-[var(--muted-foreground)]" />
+                          </Link>
+                          <div className="mt-1.5 flex items-center gap-2 text-[10px] text-[var(--muted-foreground)]">
+                            {openSteps > 0 && (
+                              <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                                <CheckSquare className="h-2.5 w-2.5" />{openSteps} open
+                              </span>
+                            )}
+                            {uploads > 0 && (
+                              <span className="inline-flex items-center gap-1 rounded bg-[var(--secondary)] px-1.5 py-0.5">
+                                <FileUp className="h-2.5 w-2.5" />{uploads} sent
+                              </span>
+                            )}
+                            <Link
+                              href={`/partner-access/rooms/${room.id}/preview`}
+                              target="_blank"
+                              className="ml-auto inline-flex items-center gap-1 hover:text-[var(--foreground)]"
+                            >
+                              <Eye className="h-2.5 w-2.5" />Preview
+                            </Link>
                           </div>
                         </div>
-                      </Link>
-                    </li>
-                  ))}
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             )}

@@ -2,14 +2,18 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
   Activity,
+  CheckSquare,
   ChevronLeft,
   DoorOpen,
+  Eye,
   FileText,
+  FileUp,
   ShieldCheck,
   UsersRound,
 } from "lucide-react";
 import { TopBar } from "@/components/layout/top-bar";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DbBanner } from "@/components/db-banner";
 import { SectionLabel } from "@/components/dashboard/shared/section-label";
@@ -17,7 +21,11 @@ import { RoomAccessLinkActions } from "@/components/partner-access/room-access-l
 import { RoomDetailsForm } from "@/components/partner-access/room-details-form";
 import { RoomStatusActions } from "@/components/partner-access/room-status-actions";
 import { ShareLedgerActions } from "@/components/partner-access/share-ledger-actions";
+import { PartnerNextStepsManager } from "@/components/partner-access/partner-next-steps-manager";
+import { PartnerUploadsPanel } from "@/components/partner-access/partner-uploads-panel";
 import { getPartnerAccessRoom } from "@/db/queries/partner-access";
+import { listPartnerNextSteps } from "@/db/queries/partner-next-steps";
+import { listPartnerUploads } from "@/db/queries/partner-uploads";
 import { requireUser } from "@/lib/current-user";
 import { safeRead } from "@/lib/db-status";
 import {
@@ -67,6 +75,13 @@ export default async function PartnerAccessRoomPage(props: { params: Params }) {
   if (roomRes.ok && !roomRes.data) notFound();
 
   const detail = roomRes.data;
+
+  const [nextStepsRes, uploadsRes] = detail
+    ? await Promise.all([
+        safeRead(() => listPartnerNextSteps({ workspaceId: user.workspaceId, roomId: id }), []),
+        safeRead(() => listPartnerUploads({ workspaceId: user.workspaceId, roomId: id }), []),
+      ])
+    : [{ ok: true as const, data: [] }, { ok: true as const, data: [] }];
   if (!detail) {
     const error = roomRes.ok ? "Room not found" : roomRes.error;
     return (
@@ -128,9 +143,12 @@ export default async function PartnerAccessRoomPage(props: { params: Params }) {
               Created by {detail.createdByName ?? "AGB"}.
             </p>
           </div>
-          <div className="rounded-md border border-[var(--border)] px-3 py-2 text-xs text-[var(--muted-foreground)]">
-            Token URL is managed in Room Controls
-          </div>
+          <Button asChild variant="outline" size="sm">
+            <Link href={`/partner-access/rooms/${id}/preview`} target="_blank">
+              <Eye className="h-4 w-4" />
+              Preview as partner
+            </Link>
+          </Button>
         </div>
 
         {!roomRes.ok && <DbBanner error={roomRes.error} />}
@@ -240,6 +258,44 @@ export default async function PartnerAccessRoomPage(props: { params: Params }) {
                     </table>
                   </div>
                 )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileUp className="h-4 w-4" />
+                  Partner Uploads
+                  {uploadsRes.data.length > 0 && (
+                    <Badge variant="secondary" className="ml-auto">{uploadsRes.data.length}</Badge>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <PartnerUploadsPanel
+                  roomId={id}
+                  initialUploads={uploadsRes.data}
+                />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <CheckSquare className="h-4 w-4" />
+                  Next Steps
+                  {nextStepsRes.data.filter((s) => !s.completedAt).length > 0 && (
+                    <span className="ml-auto rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                      {nextStepsRes.data.filter((s) => !s.completedAt).length} open
+                    </span>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <PartnerNextStepsManager
+                  roomId={id}
+                  initialSteps={nextStepsRes.data}
+                />
               </CardContent>
             </Card>
 
