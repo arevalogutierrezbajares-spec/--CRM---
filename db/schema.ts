@@ -231,6 +231,10 @@ export const partnerAccessEventType = pgEnum("partner_access_event_type", [
   "question",
   "revoked",
   "expired",
+  "partner_uploaded",
+  "next_step_created",
+  "next_step_completed",
+  "next_step_deleted",
 ]);
 
 /* ─── Pitch feedback module enums ─────────────────────────────────────── */
@@ -889,6 +893,51 @@ export const partnerAccessEvents = pgTable("partner_access_events", {
     .defaultNow(),
 });
 
+export const partnerUploads = pgTable("partner_uploads", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  roomId: uuid("room_id")
+    .notNull()
+    .references(() => partnerRooms.id, { onDelete: "cascade" }),
+  storagePath: text("storage_path").notNull(),
+  originalFilename: text("original_filename").notNull(),
+  mimeType: text("mime_type"),
+  sizeBytes: integer("size_bytes"),
+  label: text("label"),
+  note: text("note"),
+  downloadedAt: timestamp("downloaded_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const partnerNextSteps = pgTable("partner_next_steps", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  roomId: uuid("room_id")
+    .notNull()
+    .references(() => partnerRooms.id, { onDelete: "cascade" }),
+  text: text("text").notNull(),
+  assignedTo: text("assigned_to").notNull().default("partner"),
+  dueAt: timestamp("due_at", { withTimezone: true }),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  completedBy: text("completed_by"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdByUser: uuid("created_by_user").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // PITCH FEEDBACK — contact-linked private pitch walkthroughs and feedback.
 // Public tokens are hashed; campaign snapshots preserve what a recipient saw.
@@ -1130,6 +1179,62 @@ export const pitchFeedbackDeliveryAttempts = pgTable(
     ).on(t.inviteId, t.channel, t.messageSnapshot),
   }),
 );
+
+// ── Story presentations: native, dynamic decks with click-to-comment feedback ──
+// A presentation is an ordered list of slides (JSON). Shareable to external
+// clients via a hashed token (same pattern as pitch feedback / partner access).
+export const presentations = pgTable("presentations", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  subtitle: text("subtitle"),
+  // Slide[] — see lib/presentations/types.ts for the shape.
+  slides: jsonb("slides").$type<unknown[]>().notNull().default([]),
+  // Optional link back to a line of business / project for context.
+  lobId: uuid("lob_id").references(() => linesOfBusiness.id, {
+    onDelete: "set null",
+  }),
+  shareToken: text("share_token").unique(),
+  shareEnabled: boolean("share_enabled").notNull().default(false),
+  allowComments: boolean("allow_comments").notNull().default(true),
+  createdBy: uuid("created_by")
+    .notNull()
+    .references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+// A comment pinned to a position on a slide (PPT/Figma-style). Author is a
+// workspace user (internal) OR an external client identified by name (token).
+export const presentationComments = pgTable("presentation_comments", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  presentationId: uuid("presentation_id")
+    .notNull()
+    .references(() => presentations.id, { onDelete: "cascade" }),
+  // The slide's stable id within the slides JSON.
+  slideId: text("slide_id").notNull(),
+  // Anchor as a fraction of the slide (0..1) so it survives any render size.
+  xPct: doublePrecision("x_pct").notNull(),
+  yPct: doublePrecision("y_pct").notNull(),
+  body: text("body").notNull(),
+  authorUserId: uuid("author_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  authorName: text("author_name"), // set for external (token) commenters
+  resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
 
 // FR-PMO: per-user pinned projects for quick access on the Home dashboard.
 export const projectPins = pgTable(
