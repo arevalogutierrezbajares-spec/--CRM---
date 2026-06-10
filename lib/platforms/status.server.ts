@@ -11,7 +11,8 @@ export type PlatformCheck = {
   path?: string;
 };
 
-const PING_TIMEOUT_MS = 4000;
+// Generous: Cloud Run scale-to-zero cold starts can take several seconds.
+const PING_TIMEOUT_MS = 8000;
 
 /** GET with a hard timeout. Any response < 500 counts as reachable —
  *  gated/404 pages still prove the deployment is up. */
@@ -32,8 +33,13 @@ async function ping(url: string, label: string): Promise<PlatformCheck> {
       status: ms > 2500 ? "warn" : "ok",
       detail: `HTTP ${res.status} · ${ms}ms`,
     };
-  } catch {
-    return { label, status: "down", detail: "Unreachable" };
+  } catch (err) {
+    const timedOut = err instanceof Error && err.name === "TimeoutError";
+    return {
+      label,
+      status: timedOut ? "warn" : "down",
+      detail: timedOut ? `No response in ${PING_TIMEOUT_MS / 1000}s` : "Unreachable",
+    };
   }
 }
 
@@ -115,7 +121,7 @@ export async function caneyChecks(siteUrl: string): Promise<PlatformCheck[]> {
   const checks: Promise<PlatformCheck>[] = [ping(siteUrl, "Site")];
   const apiUrl = process.env.CANEY_PMS_API_URL;
   if (apiUrl) {
-    checks.push(ping(apiUrl, "Backend API"));
+    checks.push(ping(`${apiUrl}/health`, "Backend API"));
   } else {
     checks.push(
       Promise.resolve<PlatformCheck>({
