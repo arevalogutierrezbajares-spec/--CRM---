@@ -13,7 +13,6 @@ import {
 import { HealthBadge } from "@/components/ui/health-badge";
 import { DashBadge } from "@/components/dashboard/shared/badge";
 import { DbBanner } from "@/components/db-banner";
-import { MilestoneList } from "@/components/projects/milestone-list";
 import { ProjectTasks } from "@/components/projects/project-tasks";
 import { getProject } from "@/db/queries/projects";
 import { listWorkspaceMembers } from "@/db/queries/team";
@@ -141,24 +140,6 @@ export default async function ProjectDetailPage(props: { params: Params }) {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Milestones</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <MilestoneList
-              projectId={project.id}
-              milestones={project.milestones.map((m) => ({
-                id: m.id,
-                title: m.title,
-                status: m.status,
-                dueDate: m.dueDate,
-                blockerText: m.blockerText,
-                order: m.order,
-              }))}
-            />
-          </CardContent>
-        </Card>
       </main>
     </>
   );

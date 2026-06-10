@@ -124,13 +124,13 @@ export default async function ProjectsPage(props: {
           >
             <p className="text-[13px] text-text-secondary">
               {allRes.data.length === 0
-                ? "No projects yet."
-                : "No projects match these filters."}
+                ? "No lines of business yet."
+                : "No lines of business match these filters."}
             </p>
             {allRes.data.length === 0 && (
               <Button asChild size="sm" className="mt-3">
-                <Link href="/projects/new">
-                  <Plus className="h-4 w-4" /> New project
+                <Link href="/lob/new">
+                  <Plus className="h-4 w-4" /> New line of business
                 </Link>
               </Button>
             )}
