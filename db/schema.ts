@@ -2101,6 +2101,8 @@ export const initiatives = pgTable("initiatives", {
   targetEndDate: date("target_end_date"),
   actualEndDate: date("actual_end_date"),
   notes: text("notes"),
+  // FR-PRG-2 — shown on the initiative card, round-trips through Roadmap-MD.
+  successCriteria: text("success_criteria"),
   createdBy: uuid("created_by")
     .notNull()
     .references(() => users.id),
@@ -2108,6 +2110,31 @@ export const initiatives = pgTable("initiatives", {
     .notNull()
     .defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+// ─── Plan versions (Roadmap Module, FR-PLV-1..3) ─────────────────────────
+// One row per export / applied import / plan commit. The md snapshot IS the
+// artifact users saw and serves as the 3-way merge base for re-imports.
+export const planVersionSource = pgEnum("plan_version_source", [
+  "export",
+  "import",
+  "commit",
+]);
+
+export const planVersions = pgTable("plan_versions", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  version: integer("version").notNull(),
+  source: planVersionSource("source").notNull(),
+  snapshotMd: text("snapshot_md").notNull(),
+  note: text("note"),
+  summary: jsonb("summary"),
+  createdBy: uuid("created_by").references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
 });
@@ -2422,6 +2449,11 @@ export const actionItems = pgTable("action_items", {
     onDelete: "set null",
   }),
   contactId: uuid("contact_id").references(() => contacts.id, {
+    onDelete: "set null",
+  }),
+  // FR-AIT-2/3 (Roadmap Module): optional link to a task — covers both
+  // "relates to" and post-promote provenance. Null = unlinked capture.
+  milestoneId: uuid("milestone_id").references(() => milestones.id, {
     onDelete: "set null",
   }),
   // FR-PMO: who's responsible (a workspace user). Distinct from contactId.

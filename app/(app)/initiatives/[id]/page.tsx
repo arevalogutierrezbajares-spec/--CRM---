@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronLeft, Target } from "lucide-react";
+import { ChevronLeft, Flag, Target } from "lucide-react";
+import { SuccessCriteriaEditor } from "@/components/roadmap/success-criteria-editor";
 import { requireUser } from "@/lib/current-user";
 import { TopBar } from "@/components/layout/top-bar";
 import { DashCard } from "@/components/dashboard/shared/dash-card";
@@ -82,6 +83,15 @@ export default async function InitiativeDetailPage(props: { params: Params }) {
                 </p>
               </DashCard>
             )}
+
+            {/* FR-PRG-2 — success criteria, editable here (roadmap module) */}
+            <DashCard>
+              <SectionLabel icon={Flag}>Success criteria</SectionLabel>
+              <SuccessCriteriaEditor
+                initiativeId={init.id}
+                value={init.successCriteria}
+              />
+            </DashCard>
 
             <DashCard>
               <SectionLabel

@@ -12,6 +12,8 @@ import {
   type InitiativeListItem,
   type SprintWithStats,
 } from "@/db/queries/work";
+import { nextPlanVersionNumber } from "@/db/queries/roadmap";
+import { RoadmapToolbar } from "@/components/roadmap/roadmap-toolbar";
 
 /* Compute a 6-month timeline window starting from today's month. */
 function buildTimeline() {
@@ -62,6 +64,11 @@ export default async function RoadmapPage() {
     ),
     safeRead<SprintWithStats[]>(() => listSprints(user.workspaceId), []),
   ]);
+  const versionRes = await safeRead<number>(
+    () => nextPlanVersionNumber(user.workspaceId),
+    1,
+  );
+  const currentVersion = versionRes.data - 1;
 
   const tl = buildTimeline();
 
@@ -94,6 +101,8 @@ export default async function RoadmapPage() {
         </header>
 
         <WorkNav />
+
+        <RoadmapToolbar currentVersion={currentVersion} />
 
         {!initsRes.ok && (
           <DbBanner error={(initsRes as { error?: string }).error ?? ""} />
@@ -184,8 +193,11 @@ export default async function RoadmapPage() {
                         }}
                         title={`${init.startDate} → ${init.targetEndDate ?? "open"}`}
                       >
+                        {/* FR-PRG-1: fractions, not percentages */}
                         <span className="truncate" style={{ color: "white" }}>
-                          {init.progressPct}%
+                          {init.taskCount > 0
+                            ? `${init.taskDoneCount}/${init.taskCount}`
+                            : "no tasks"}
                         </span>
                       </div>
                     </div>
