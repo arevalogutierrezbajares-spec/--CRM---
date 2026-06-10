@@ -1,6 +1,7 @@
 import { requireUser } from "@/lib/current-user";
 import { TopBar } from "@/components/layout/top-bar";
 import { PlatformCard } from "@/components/platforms/platform-card";
+import { DemoLinksSection } from "@/components/platforms/demo-links-section";
 import { VaultSection } from "@/components/platforms/vault-section";
 import { PLATFORMS } from "@/lib/platforms/config";
 import {
@@ -15,6 +16,7 @@ import {
   listVaultItems,
   type VaultItemListed,
 } from "@/db/queries/vault";
+import { listDemoLinks, type DemoLinkRow } from "@/db/queries/demo-links";
 import { safeRead } from "@/lib/db-status";
 
 // Status pings must run fresh on every visit, never from the build cache.
@@ -31,6 +33,11 @@ export default async function PlatformsPage() {
           ? await vavChecks(p.baseUrl)
           : await caneyChecks(p.baseUrl);
     }),
+  );
+
+  const demoLinksRes = await safeRead<DemoLinkRow[]>(
+    () => listDemoLinks(user.workspaceId),
+    [],
   );
 
   const vaultConfigured = isVaultConfigured();
@@ -68,6 +75,8 @@ export default async function PlatformsPage() {
             checks={checksById[platform.id] ?? []}
           />
         ))}
+
+        <DemoLinksSection items={demoLinksRes.data ?? []} />
 
         <VaultSection
           configured={vaultConfigured}

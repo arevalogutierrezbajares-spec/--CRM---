@@ -3179,3 +3179,32 @@ export const sharedReminderContacts = pgTable(
   },
   (t) => ({ pk: primaryKey({ columns: [t.reminderId, t.contactId] }) }),
 );
+
+// ── Demo links (Platform Management) ────────────────────────────────────────
+// Shareable product demos per platform: a direct deep link (e.g. CaneyCloud's
+// `?guia=demo-rapido` guided tours), the demo-account credentials needed to
+// reach it, or both. Demo credentials are intentionally plaintext — they are
+// made to be handed to prospects; real secrets belong in the vault.
+export const demoLinks = pgTable("demo_links", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  /** Matches lib/platforms/config PLATFORMS ids ("caneycloud", "vav") or free text. */
+  platformId: text("platform_id").notNull().default("other"),
+  label: text("label").notNull(),
+  description: text("description"),
+  /** The demo deep link. Null = credentials-only entry. */
+  url: text("url"),
+  /** Demo-account credentials (plaintext by design — see header note). */
+  username: text("username"),
+  password: text("password"),
+  /** How to get in / what the viewer should know ("login first", TTL, etc.). */
+  accessNotes: text("access_notes"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdBy: uuid("created_by").references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }),
+});
