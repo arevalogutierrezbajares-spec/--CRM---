@@ -62,8 +62,8 @@ export function PartnerCommentThread({
       >
         <MessageSquare className="h-3.5 w-3.5" />
         {merged.length > 0
-          ? `${merged.length} comment${merged.length === 1 ? "" : "s"}`
-          : "Add comment"}
+          ? `${merged.length} comentario${merged.length === 1 ? "" : "s"}`
+          : "Comentar"}
       </button>
 
       {open && (
@@ -101,8 +101,8 @@ export function PartnerCommentThread({
                 }
               }}
               rows={1}
-              placeholder="Add a comment…"
-              aria-label="Add a comment"
+              placeholder="Escribe un comentario…"
+              aria-label="Escribe un comentario"
               className="min-h-[36px] flex-1 resize-none rounded-md border border-[var(--border)] bg-[var(--background)] px-2.5 py-1.5 text-sm outline-none focus:ring-2 focus:ring-[var(--ring)]"
             />
             <button

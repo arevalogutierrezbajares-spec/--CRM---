@@ -46,13 +46,13 @@ function mediaKind(mime: string | null): "image" | "video" | "none" {
 }
 
 const KIND_LABEL: Record<string, string> = {
-  file: "Document",
-  link: "Link",
-  doc: "Document",
-  note: "Note",
+  file: "Documento",
+  link: "Enlace",
+  doc: "Documento",
+  note: "Nota",
 };
 function kindLabel(kind: string) {
-  return KIND_LABEL[kind] ?? "Document";
+  return KIND_LABEL[kind] ?? "Documento";
 }
 
 export function PublicRepository({
@@ -84,9 +84,9 @@ export function PublicRepository({
     <div className="rounded-xl border border-[var(--border)] bg-[var(--card)]">
       <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] px-4 py-3">
         <div>
-          <h2 className="text-base font-semibold">Repository</h2>
+          <h2 className="text-base font-semibold">Repositorio</h2>
           <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">
-            Documents, links, and media shared with you — comment on anything.
+            Documentos, enlaces y medios compartidos contigo — comenta lo que quieras.
           </p>
         </div>
         <span className="rounded-full bg-[var(--secondary)] px-2 py-0.5 text-xs text-[var(--secondary-foreground)]">
@@ -97,7 +97,7 @@ export function PublicRepository({
       {empty ? (
         <div className="p-5">
           <p className="rounded-lg border border-dashed border-[var(--border)] p-5 text-sm text-[var(--muted-foreground)]">
-            Nothing here yet. New documents and links will appear in this space.
+            Aún no hay nada aquí. Los nuevos documentos y enlaces aparecerán en este espacio.
           </p>
         </div>
       ) : (
@@ -130,7 +130,7 @@ export function PublicRepository({
                           className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-2 py-1 text-xs hover:bg-[var(--secondary)]"
                         >
                           <ArrowUpRight className="h-3.5 w-3.5" />
-                          Open
+                          Abrir
                         </a>
                       ) : item.kind === "file" && mk === "none" ? (
                         <a
@@ -140,7 +140,7 @@ export function PublicRepository({
                           className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-2 py-1 text-xs hover:bg-[var(--secondary)]"
                         >
                           <Download className="h-3.5 w-3.5" />
-                          Open
+                          Abrir
                         </a>
                       ) : null}
                     </div>
@@ -212,7 +212,7 @@ export function PublicRepository({
                             className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-2 py-1 text-xs hover:bg-[var(--secondary)]"
                           >
                             <ArrowUpRight className="h-3.5 w-3.5" />
-                            Open
+                            Abrir
                           </a>
                         )}
                         {share.isHtmlDeck && (
@@ -223,7 +223,7 @@ export function PublicRepository({
                             className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-2 py-1 text-xs hover:bg-[var(--secondary)]"
                           >
                             <ArrowUpRight className="h-3.5 w-3.5" />
-                            View deck
+                            Ver presentación
                           </a>
                         )}
                         {share.canDownload && (
@@ -234,7 +234,7 @@ export function PublicRepository({
                             className="inline-flex items-center gap-1 rounded-md bg-[var(--primary)] px-2 py-1 text-xs text-[var(--primary-foreground)] hover:opacity-90"
                           >
                             <Download className="h-3.5 w-3.5" />
-                            Download
+                            Descargar
                           </a>
                         )}
                       </div>

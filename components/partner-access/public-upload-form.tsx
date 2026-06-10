@@ -25,7 +25,7 @@ export function PublicUploadForm({ token }: { token: string }) {
     const f = e.target.files?.[0];
     if (!f) return;
     if (f.size > MAX_BYTES) {
-      setError(`File too large. Maximum ${formatBytes(MAX_BYTES)}.`);
+      setError(`El archivo es muy grande. Máximo ${formatBytes(MAX_BYTES)}.`);
       return;
     }
     const ext = "." + f.name.split(".").pop()?.toLowerCase();
@@ -57,7 +57,7 @@ export function PublicUploadForm({ token }: { token: string }) {
       });
       if (!signRes.ok) {
         const { error: msg } = await signRes.json() as { error?: string };
-        throw new Error(msg || "Could not prepare upload");
+        throw new Error(msg || "No se pudo preparar la carga");
       }
       const { path, token: uploadToken, bucket } = await signRes.json() as { path: string; token: string; bucket: string };
       setProgress(30);
@@ -85,7 +85,7 @@ export function PublicUploadForm({ token }: { token: string }) {
           note: note.trim() || null,
         }),
       });
-      if (!finalRes.ok) throw new Error("Upload recorded but could not save metadata");
+      if (!finalRes.ok) throw new Error("Se cargó el archivo pero no se pudo guardar");
       setProgress(100);
 
       setDone((prev) => [...prev, { filename: file.name }]);
@@ -96,7 +96,7 @@ export function PublicUploadForm({ token }: { token: string }) {
       if (inputRef.current) inputRef.current.value = "";
     } catch (err) {
       setState("error");
-      setError(err instanceof Error ? err.message : "Upload failed");
+      setError(err instanceof Error ? err.message : "La carga falló");
     }
   }
 
@@ -107,7 +107,7 @@ export function PublicUploadForm({ token }: { token: string }) {
           {done.map((d, i) => (
             <li key={i} className="flex items-center gap-2 text-sm text-green-600">
               <CheckCircle className="h-4 w-4 shrink-0" />
-              <span className="truncate">{d.filename} uploaded</span>
+              <span className="truncate">{d.filename} enviado</span>
             </li>
           ))}
         </ul>
@@ -119,10 +119,10 @@ export function PublicUploadForm({ token }: { token: string }) {
       >
         <Upload className="mx-auto h-8 w-8 text-[var(--muted-foreground)]" />
         <p className="mt-2 text-sm font-medium">
-          {file ? file.name : "Click to choose a file"}
+          {file ? file.name : "Haz clic para elegir un archivo"}
         </p>
         <p className="mt-1 text-xs text-[var(--muted-foreground)]">
-          PDF, Word, Excel, images, ZIP — max 25 MB
+          PDF, Word, Excel, imágenes, ZIP — máx. 25 MB
         </p>
         <input
           ref={inputRef}
@@ -147,13 +147,13 @@ export function PublicUploadForm({ token }: { token: string }) {
 
           <input
             type="text"
-            placeholder="Label (optional) e.g. Signed NDA"
+            placeholder="Etiqueta (opcional) p. ej. NDA firmado"
             value={label}
             onChange={(e) => setLabel(e.target.value)}
             className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm placeholder:text-[var(--muted-foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
           />
           <textarea
-            placeholder="Note to share with the team (optional)"
+            placeholder="Nota para el equipo (opcional)"
             value={note}
             onChange={(e) => setNote(e.target.value)}
             rows={2}
@@ -179,7 +179,7 @@ export function PublicUploadForm({ token }: { token: string }) {
           onClick={handleUpload}
           className="w-full rounded-md bg-[var(--foreground)] px-4 py-2 text-sm font-medium text-[var(--background)] hover:opacity-90 disabled:opacity-50"
         >
-          Send file
+          Enviar archivo
         </button>
       )}
     </div>

@@ -23,24 +23,24 @@ export async function POST(req: NextRequest, props: { params: Params }) {
   const room = await resolvePartnerRoomByToken(token).catch(() => null);
   if (!room) {
     return NextResponse.json(
-      { error: "Room not found or access expired" },
+      { error: "Sala no encontrada o acceso expirado" },
       { status: 404 },
     );
   }
   // PIN must be cleared before a seat can be claimed.
   if (!(await isPartnerRoomUnlocked(room))) {
-    return NextResponse.json({ error: "Room is locked" }, { status: 401 });
+    return NextResponse.json({ error: "La sala está bloqueada" }, { status: 401 });
   }
 
   let json: unknown;
   try {
     json = await req.json();
   } catch {
-    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+    return NextResponse.json({ error: "Solicitud inválida" }, { status: 400 });
   }
   const parsed = Body.safeParse(json);
   if (!parsed.success) {
-    return NextResponse.json({ error: "Enter a valid email" }, { status: 400 });
+    return NextResponse.json({ error: "Ingresa un correo válido" }, { status: 400 });
   }
 
   const result = await claimPartnerRoomSeat({
@@ -54,16 +54,16 @@ export async function POST(req: NextRequest, props: { params: Params }) {
   }).catch(() => null);
 
   if (!result) {
-    return NextResponse.json({ error: "Could not sign you in" }, { status: 500 });
+    return NextResponse.json({ error: "No pudimos registrarte" }, { status: 500 });
   }
   if (!result.ok) {
     if (result.error === "seat_full") {
       return NextResponse.json(
-        { error: "This room is full. Ask the host to add a seat." },
+        { error: "La sala está llena. Pide al anfitrión que agregue un lugar." },
         { status: 403 },
       );
     }
-    return NextResponse.json({ error: "Please enter your name" }, { status: 400 });
+    return NextResponse.json({ error: "Por favor ingresa tu nombre" }, { status: 400 });
   }
 
   const res = NextResponse.json({

@@ -23,8 +23,7 @@ import { PublicNextSteps } from "@/components/partner-access/public-next-steps";
 import { PublicRoomMessages } from "@/components/partner-access/public-room-messages";
 import { RoomSignIn } from "@/components/partner-access/room-sign-in";
 import { CoBrandLockup } from "@/components/partner-access/co-brand-lockup";
-import { RoomParticipants } from "@/components/partner-access/room-participants";
-import { RoomTeamDisplay } from "@/components/partner-access/room-team-display";
+import { RoomPeople } from "@/components/partner-access/room-people";
 import {
   PublicRepository,
   type RepoShare as RepoShareView,
@@ -107,11 +106,11 @@ export default async function PublicAccessRoomPage({
   ];
 
   const shares = access.shares;
-  const projects = Array.from(
-    new Set(shares.map((share) => share.projectTitle).filter(Boolean)),
-  );
   const lastShared = shares[0]?.sharedAt ?? access.room.updatedAt;
   const openSteps = nextSteps.filter((s) => !s.completedAt);
+  // new Date().getTime() (not Date.now()) — the repo's purity lint bans Date.now
+  // in render; this server-snapshot is passed to the client for overdue checks.
+  const nowMs = new Date().getTime();
 
   const commentsByTarget: Record<string, RepoCommentView[]> = {};
   for (const c of repoComments) {
@@ -187,35 +186,37 @@ export default async function PublicAccessRoomPage({
               />
               <p className="mt-5 inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.2em] text-[var(--primary)]">
                 <Lock className="h-3 w-3" />
-                Private room · {partnerKindLabel(access.room.partnerKind)}
+                Sala privada · {partnerKindLabel(access.room.partnerKind)}
               </p>
               <h1 className="mt-2 text-3xl font-semibold tracking-tight md:text-4xl">
-                {firstName ? `Welcome, ${firstName}` : "Welcome"}
+                {firstName ? `Bienvenido, ${firstName}` : "Bienvenido"}
               </h1>
               <p className="mt-3 max-w-2xl text-base leading-7 text-[var(--muted-foreground)]">
                 {access.room.welcomeMessage ??
-                  `Everything we're working on together lives here — documents, updates, and a direct line to the team. Make yourself at home.`}
+                  `Todo lo que estamos trabajando juntos vive aquí — documentos, novedades y una línea directa con el equipo. Estás en tu casa.`}
               </p>
             </div>
 
             <div className="flex shrink-0 flex-wrap gap-2">
-              <Stat label="In your room" value={totalItems} />
-              {openSteps.length > 0 && <Stat label="For you" value={openSteps.length} />}
-              <Stat label="Updated" value={formatRelative(lastShared)} />
+              <Stat label="En tu sala" value={totalItems} />
+              {openSteps.length > 0 && <Stat label="Para ti" value={openSteps.length} />}
+              <Stat label="Actualizado" value={formatRelative(lastShared)} />
             </div>
           </div>
         </header>
 
-        {/* Team leads on mobile (warmth + who's looking after you), then folds
-            into the desktop sidebar. */}
-        {access.team.length > 0 && (
+        {/* The alliance leads on mobile (warmth + who's here), then folds into
+            the desktop sidebar. */}
+        {(access.team.length > 0 || participants.length > 0) && (
           <div className="lg:hidden">
-            <RoomTeamDisplay
-              team={access.team.map((t) => ({
+            <RoomPeople
+              hosts={access.team.map((t) => ({
                 id: t.id,
                 displayName: t.displayName,
                 title: t.title,
               }))}
+              guests={participants}
+              youId={member?.id ?? null}
             />
           </div>
         )}
@@ -227,23 +228,23 @@ export default async function PublicAccessRoomPage({
               shares={repoShares}
               items={repoItemViews}
               commentsByTarget={commentsByTarget}
-              ownerLabel="The team"
+              ownerLabel="El equipo"
             />
             {/* Messages section */}
             <div className="rounded-xl border border-[var(--border)] bg-[var(--card)]">
               <div className="flex items-center gap-2 border-b border-[var(--border)] px-4 py-3">
                 <MessageSquare className="h-4 w-4 text-[var(--muted-foreground)]" />
                 <div>
-                  <h2 className="text-base font-semibold">Messages</h2>
+                  <h2 className="text-base font-semibold">Mensajes</h2>
                   <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">
-                    Questions, notes, and updates between you and the team.
+                    Preguntas, notas y novedades entre tú y el equipo.
                   </p>
                 </div>
               </div>
               <div className="p-4">
                 <PublicRoomMessages
                   token={token}
-                  ownerLabel="The team"
+                  ownerLabel="El equipo"
                   mentionCandidates={mentionCandidates}
                   initialMessages={messages.map((m) => ({
                     id: m.id,
@@ -261,9 +262,9 @@ export default async function PublicAccessRoomPage({
               <div className="flex items-center gap-2 border-b border-[var(--border)] px-4 py-3">
                 <Upload className="h-4 w-4 text-[var(--muted-foreground)]" />
                 <div>
-                  <h2 className="text-base font-semibold">Send Files</h2>
+                  <h2 className="text-base font-semibold">Enviar archivos</h2>
                   <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">
-                    Upload documents back to the team — contracts, signatures, assets.
+                    Envía documentos al equipo — contratos, firmas, recursos.
                   </p>
                 </div>
               </div>
@@ -272,7 +273,7 @@ export default async function PublicAccessRoomPage({
                 {partnerUploads.length > 0 && (
                   <div className="mt-4 border-t border-[var(--border)] pt-4">
                     <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted-foreground)]">
-                      Previously sent
+                      Enviados anteriormente
                     </p>
                     <ul className="mt-2 space-y-1.5">
                       {partnerUploads.map((u) => (
@@ -295,43 +296,29 @@ export default async function PublicAccessRoomPage({
               returns to the right column. */}
           <aside className="space-y-4 lg:order-2">
             <div className="hidden lg:block">
-              <RoomTeamDisplay
-                team={access.team.map((t) => ({
+              <RoomPeople
+                hosts={access.team.map((t) => ({
                   id: t.id,
                   displayName: t.displayName,
                   title: t.title,
                 }))}
+                guests={participants}
+                youId={member?.id ?? null}
               />
-            </div>
-
-            <RoomParticipants participants={participants} youId={member?.id ?? null} />
-
-            <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
-              <h2 className="text-base font-semibold">Room Status</h2>
-              <div className="mt-3 space-y-3 text-sm">
-                <RoomRow label="For" value={access.contact.name ?? "Partner"} />
-                {access.contact.organization && (
-                  <RoomRow label="Org" value={access.contact.organization} />
-                )}
-                {projects.length > 0 && (
-                  <RoomRow label="Projects" value={projects.join(", ")} />
-                )}
-                <RoomRow label="Access" value="Active" />
-              </div>
             </div>
 
             <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
               <div className="flex items-center gap-2">
                 <CheckSquare className="h-4 w-4 text-[var(--muted-foreground)]" />
-                <h2 className="text-base font-semibold">Next Steps</h2>
+                <h2 className="text-base font-semibold">Próximos pasos</h2>
                 {openSteps.length > 0 && (
                   <span className="ml-auto rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-                    {openSteps.length} open
+                    {openSteps.length} pendiente{openSteps.length === 1 ? "" : "s"}
                   </span>
                 )}
               </div>
               <div className="mt-3">
-                <PublicNextSteps token={token} initialSteps={nextSteps} />
+                <PublicNextSteps token={token} initialSteps={nextSteps} nowMs={nowMs} />
               </div>
             </div>
           </aside>
@@ -340,9 +327,9 @@ export default async function PublicAccessRoomPage({
         <footer className="mt-2 flex flex-col items-center gap-1 border-t border-[var(--border)] pt-5 text-center text-xs text-[var(--muted-foreground)]">
           <span className="inline-flex items-center gap-1.5">
             <Lock className="h-3 w-3" />
-            Private &amp; confidential — shared only with you.
+            Privado y confidencial — compartido solo contigo.
           </span>
-          <span>This room is monitored for your security. Please don&rsquo;t forward the link.</span>
+          <span>Esta sala es privada. Por favor, no reenvíes el enlace.</span>
         </footer>
       </div>
     </main>
@@ -360,17 +347,6 @@ function Stat({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-function RoomRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-start justify-between gap-4 border-b border-[var(--border)] pb-2 last:border-0 last:pb-0">
-      <span className="text-xs uppercase tracking-wide text-[var(--muted-foreground)]">
-        {label}
-      </span>
-      <span className="max-w-[190px] text-right">{value}</span>
-    </div>
-  );
-}
-
 function UnavailableRoom() {
   return (
     <main className="min-h-screen bg-[var(--bg-page)]">
@@ -379,10 +355,10 @@ function UnavailableRoom() {
           <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--secondary)]">
             <Lock className="h-5 w-5 text-[var(--muted-foreground)]" />
           </div>
-          <h1 className="mt-4 text-xl font-semibold">Access unavailable</h1>
+          <h1 className="mt-4 text-xl font-semibold">Acceso no disponible</h1>
           <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[var(--muted-foreground)]">
-            This room may have expired, been paused, or been replaced with a new
-            link. Ask the person who shared it to send the latest access link.
+            Esta sala pudo haber expirado, estar en pausa o haber sido reemplazada
+            por un nuevo enlace. Pide a quien te lo compartió el enlace más reciente.
           </p>
         </div>
       </div>

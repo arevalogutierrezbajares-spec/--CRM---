@@ -25,7 +25,7 @@ import { listPartnerUploadsByRoom } from "@/db/queries/partner-uploads";
 import { listPartnerRoomMessages } from "@/db/queries/partner-messages";
 import { resolveRoomBrandLogos } from "@/db/queries/partner-access";
 import { CoBrandLockup } from "@/components/partner-access/co-brand-lockup";
-import { RoomTeamDisplay } from "@/components/partner-access/room-team-display";
+import { RoomPeople } from "@/components/partner-access/room-people";
 import { partnerKindLabel } from "@/lib/partner-access";
 import { formatRelative } from "@/lib/utils";
 
@@ -278,36 +278,35 @@ export default async function PartnerRoomPreviewPage({ params }: { params: Param
           </div>
 
           <aside className="space-y-4">
-            <RoomTeamDisplay
-              team={detail.team.map((t) => ({
+            <RoomPeople
+              hosts={detail.team.map((t) => ({
                 id: t.id,
                 displayName: t.displayName,
                 title: t.title,
               }))}
+              guests={detail.members
+                .filter((m) => m.email)
+                .map((m) => ({
+                  id: m.id,
+                  displayName: m.displayName,
+                  roleLabel: m.roleLabel,
+                  lastViewedAt: m.lastViewedAt,
+                }))}
+              youId={null}
             />
-            <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
-              <h2 className="text-base font-semibold">Room Status</h2>
-              <div className="mt-3 space-y-3 text-sm">
-                <RoomRow label="For" value={detail.contact.name ?? "Partner"} />
-                {detail.contact.organization && (
-                  <RoomRow label="Org" value={detail.contact.organization} />
-                )}
-                <RoomRow label="Access" value="Active" />
-              </div>
-            </div>
 
             <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
               <div className="flex items-center gap-2">
                 <CheckSquare className="h-4 w-4 text-[var(--muted-foreground)]" />
-                <h2 className="text-base font-semibold">Next Steps</h2>
+                <h2 className="text-base font-semibold">Próximos pasos</h2>
                 {openSteps.length > 0 && (
                   <span className="ml-auto rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
-                    {openSteps.length} open
+                    {openSteps.length} pendiente{openSteps.length === 1 ? "" : "s"}
                   </span>
                 )}
               </div>
               {nextSteps.length === 0 ? (
-                <p className="mt-3 text-sm text-[var(--muted-foreground)]">No next steps have been set yet.</p>
+                <p className="mt-3 text-sm text-[var(--muted-foreground)]">Aún no hay próximos pasos.</p>
               ) : (
                 <ul className="mt-3 space-y-2">
                   {nextSteps.map((step) => (
@@ -318,7 +317,7 @@ export default async function PartnerRoomPreviewPage({ params }: { params: Param
                       <div>
                         <p className={`text-sm ${step.completedAt ? "line-through text-[var(--muted-foreground)]" : ""}`}>{step.text}</p>
                         {step.dueAt && (
-                          <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">Due {formatRelative(step.dueAt)}</p>
+                          <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">Para {formatRelative(step.dueAt)}</p>
                         )}
                       </div>
                     </li>
@@ -342,11 +341,3 @@ function Fact({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-function RoomRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-start justify-between gap-4 border-b border-[var(--border)] pb-2 last:border-0 last:pb-0">
-      <span className="text-xs uppercase tracking-wide text-[var(--muted-foreground)]">{label}</span>
-      <span className="max-w-[190px] text-right">{value}</span>
-    </div>
-  );
-}

@@ -103,7 +103,7 @@ export function RoomSignIn({
         <button
           type="button"
           onClick={toggleSound}
-          aria-label={playing ? "Mute sound" : "Play sound"}
+          aria-label={playing ? "Silenciar" : "Reproducir sonido"}
           className="absolute right-4 top-4 grid h-11 w-11 place-items-center rounded-full bg-white/10 text-white/70 transition hover:bg-white/20"
         >
           {playing ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
@@ -177,7 +177,7 @@ export function RoomSignIn({
               animate={{ opacity: 1 }}
               className="text-center text-sm text-white/60"
             >
-              Opening the room…
+              Abriendo la sala…
             </motion.div>
           )}
         </AnimatePresence>
@@ -248,11 +248,11 @@ function PinStep({
         setLocked(true);
         setRetryAt(data.retryAt ? new Date(data.retryAt).getTime() : Date.now() + 60_000);
       }
-      setError(data.error ?? "That code didn't match.");
+      setError(data.error ?? "Ese código no coincide.");
       setCode("");
       inputRef.current?.focus();
     } catch {
-      setError("Something went wrong. Try again.");
+      setError("Algo salió mal. Inténtalo de nuevo.");
     } finally {
       setChecking(false);
     }
@@ -265,7 +265,7 @@ function PinStep({
           <Lock className="h-5 w-5 text-white/70" />
         </div>
         <h1 className="mt-4 text-lg font-semibold">{roomName}</h1>
-        <p className="mt-1 text-sm text-white/70">Enter your 4-digit access code.</p>
+        <p className="mt-1 text-sm text-white/70">Ingresa tu código de 4 dígitos.</p>
       </div>
       <form
         className="mt-5 text-center"
@@ -300,7 +300,7 @@ function PinStep({
           </p>
         )}
         {(checking || ok) && (
-          <p className="mt-3 text-sm text-white/70">{ok ? "Unlocked…" : "Checking…"}</p>
+          <p className="mt-3 text-sm text-white/70">{ok ? "Listo…" : "Verificando…"}</p>
         )}
       </form>
     </Card>
@@ -349,9 +349,9 @@ function IdentityStep({
         return;
       }
       const data = (await res.json().catch(() => ({}))) as { error?: string };
-      setError(data.error ?? "Could not sign you in.");
+      setError(data.error ?? "No pudimos registrarte.");
     } catch {
-      setError("Could not sign you in. Try again.");
+      setError("No pudimos registrarte. Inténtalo de nuevo.");
     } finally {
       setSaving(false);
     }
@@ -362,9 +362,9 @@ function IdentityStep({
       <div className="text-center">
         <h1 className="text-lg font-semibold">{roomName}</h1>
         <p className="mt-1 text-sm text-white/70">
-          Confirm who you are to enter.
+          Confirma quién eres para entrar.
           {seatsLeft !== null && seatsLeft <= 3 && seatsLeft > 0 && (
-            <span className="text-white/40"> {seatsLeft} seat{seatsLeft === 1 ? "" : "s"} left.</span>
+            <span className="text-white/40"> {seatsLeft} {seatsLeft === 1 ? "lugar" : "lugares"} disponible{seatsLeft === 1 ? "" : "s"}.</span>
           )}
         </p>
       </div>
@@ -396,8 +396,8 @@ function IdentityStep({
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Your name"
-            aria-label="Your name"
+            placeholder="Tu nombre"
+            aria-label="Tu nombre"
             className="w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2.5 text-sm text-white placeholder-white/30 outline-none focus:ring-2 focus:ring-[#D4A855]/60"
           />
         )}
@@ -423,7 +423,7 @@ function IdentityStep({
           disabled={saving || !email.trim() || !effectiveName.trim()}
           className="w-full rounded-lg bg-[#D4A855] px-3 py-2.5 text-sm font-semibold text-neutral-950 transition hover:bg-[#e0bb6f] disabled:opacity-50"
         >
-          {saving ? "Entering…" : "Enter room"}
+          {saving ? "Entrando…" : "Entrar a la sala"}
         </button>
       </form>
     </Card>

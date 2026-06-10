@@ -142,7 +142,7 @@ export function BrandWidget() {
         title="AGB Technologies"
         className="absolute right-0 top-1/2 z-10 flex -translate-y-1/2 items-center gap-1.5 rounded-md text-text-primary transition-opacity hover:opacity-80 active:scale-[0.98]"
       >
-        <BrandPillars size={22} play={playing} settle={phase === "settle"} className="shrink-0 text-text-primary" />
+        <BrandPillars key={runKey} size={22} play={playing} settle={phase === "settle"} className="shrink-0 text-text-primary" />
         <motion.span
           key={runKey}
           aria-label="AGB Technologies"

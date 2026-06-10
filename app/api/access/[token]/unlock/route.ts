@@ -8,7 +8,7 @@ import {
 } from "@/lib/partner-room-gate.server";
 
 const Body = z.object({
-  passcode: z.string().regex(/^\d{4}$/, "Enter the 4-digit code"),
+  passcode: z.string().regex(/^\d{4}$/, "Ingresa el código de 4 dígitos"),
 });
 
 type Params = Promise<{ token: string }>;
@@ -24,7 +24,7 @@ export async function POST(req: NextRequest, props: { params: Params }) {
   }
   const parsed = Body.safeParse(json);
   if (!parsed.success) {
-    return NextResponse.json({ error: "Enter the 4-digit code" }, { status: 400 });
+    return NextResponse.json({ error: "Ingresa el código de 4 dígitos" }, { status: 400 });
   }
 
   const result = await verifyPartnerRoomPasscode({
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest, props: { params: Params }) {
 
   if (!result) {
     return NextResponse.json(
-      { error: "Room not found or access expired" },
+      { error: "Sala no encontrada o acceso expirado" },
       { status: 404 },
     );
   }
@@ -43,7 +43,7 @@ export async function POST(req: NextRequest, props: { params: Params }) {
     if (result.locked) {
       return NextResponse.json(
         {
-          error: "Too many attempts. Try again in a few minutes.",
+          error: "Demasiados intentos. Inténtalo en unos minutos.",
           locked: true,
           retryAt: result.retryAt,
         },
@@ -51,7 +51,7 @@ export async function POST(req: NextRequest, props: { params: Params }) {
       );
     }
     return NextResponse.json(
-      { error: "That code didn't match. Try again." },
+      { error: "Ese código no coincide. Inténtalo de nuevo." },
       { status: 401 },
     );
   }

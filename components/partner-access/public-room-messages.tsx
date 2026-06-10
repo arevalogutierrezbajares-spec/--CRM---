@@ -80,7 +80,7 @@ export function PublicRoomMessages({
     <div className="space-y-3">
       {messages.length === 0 ? (
         <p className="text-sm text-[var(--muted-foreground)]">
-          No messages yet. Questions or notes for the team go here.
+          Aún no hay mensajes. Aquí van tus preguntas o notas para el equipo.
         </p>
       ) : (
         <ul ref={listRef} className="max-h-80 space-y-2 overflow-y-auto pr-1">
@@ -129,7 +129,7 @@ export function PublicRoomMessages({
           onChange={setDraft}
           onSubmit={() => void send()}
           candidates={mentionCandidates}
-          placeholder="Write a message… @ to mention"
+          placeholder="Escribe un mensaje… @ para mencionar"
           ariaLabel="Message to the team"
           className="min-h-[44px] w-full resize-none rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[var(--ring)]"
         />
