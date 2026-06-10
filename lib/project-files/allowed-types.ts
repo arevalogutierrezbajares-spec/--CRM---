@@ -117,6 +117,26 @@ export function previewKind(filename: string): PreviewKind {
   return PREVIEW_BY_EXT[extOf(filename)] ?? "none";
 }
 
+/**
+ * The URL that actually RENDERS a stored file in a browser context (iframe or
+ * a new tab). Single source of truth — every surface that displays a file must
+ * go through this, never the raw signed URL directly.
+ *
+ * Why: Supabase Storage force-serves HTML objects as text/plain + nosniff +
+ * a deny-all CSP regardless of the stored mimetype, so a signed URL can NEVER
+ * render an HTML deck — it shows raw source. Our /api/materials/[id]/view
+ * proxy re-serves the bytes as text/html inside an opaque-origin sandbox.
+ * (This is the same bug class as the contact-logo proxy: a proxy exists, but
+ * a code path bypasses it.)
+ */
+export function viewerHref(
+  kind: PreviewKind,
+  linkId: string,
+  signedUrl: string,
+): string {
+  return kind === "html" ? `/api/materials/${linkId}/view` : signedUrl;
+}
+
 /** File-type chip label from a stored MIME / filename. */
 export function chipForFile(filename: string, mime: string): string {
   const ext = extOf(filename);

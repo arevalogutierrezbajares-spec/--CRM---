@@ -11,7 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { previewKind, chipForFile } from "@/lib/project-files/allowed-types";
+import { previewKind, chipForFile, viewerHref } from "@/lib/project-files/allowed-types";
 
 export type PreviewFile = {
   linkId: string;
@@ -55,10 +55,20 @@ export function FilePreviewModal({
 }) {
   const kind = file ? previewKind(file.filename) : "none";
   const chip = file ? chipForFile(file.filename, file.mime) : "FILE";
+  // HTML decks are full-viewport designs — give them a near-fullscreen stage.
+  // A 5xl/72vh box puts a deck below its own responsive breakpoints and it
+  // renders skeletal (headlines only).
+  const isDeck = kind === "html";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl gap-3 p-4">
+      <DialogContent
+        className={
+          isDeck
+            ? "max-w-[96vw] sm:max-w-[96vw] gap-3 p-4"
+            : "max-w-5xl gap-3 p-4"
+        }
+      >
         <DialogHeader className="pr-8">
           <DialogTitle className="flex items-center gap-2 text-left">
             <span className="shrink-0 rounded bg-surface px-1.5 py-0.5 text-[10px] font-medium text-text-secondary tabular-nums">
@@ -68,7 +78,11 @@ export function FilePreviewModal({
           </DialogTitle>
         </DialogHeader>
 
-        <div className="relative h-[72vh] w-full overflow-hidden rounded-md border border-[var(--border)] bg-surface">
+        <div
+          className={`relative w-full overflow-hidden rounded-md border border-[var(--border)] bg-surface ${
+            isDeck ? "h-[84vh]" : "h-[72vh]"
+          }`}
+        >
           {loading && (
             <div className="absolute inset-0 grid place-items-center text-text-tertiary">
               <Loader2 className="h-6 w-6 animate-spin" />
@@ -103,7 +117,16 @@ export function FilePreviewModal({
                 type="button"
                 variant="ghost"
                 size="sm"
-                onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
+                onClick={() =>
+                  // viewerHref, NOT the signed URL: Supabase serves HTML
+                  // objects as text/plain+nosniff, which renders raw source.
+                  file &&
+                  window.open(
+                    viewerHref(kind, file.linkId, url),
+                    "_blank",
+                    "noopener,noreferrer",
+                  )
+                }
               >
                 <ExternalLink size={14} />
                 Open in new tab
@@ -160,11 +183,12 @@ function PreviewBody({
   }
 
   if (kind === "html") {
-    // Served via our proxy so the Content-Type is text/html (Supabase stores it
-    // as text/plain, which renders as source). Sandboxed like present mode.
+    // Served via our proxy so the Content-Type is text/html (Supabase serves
+    // stored HTML as text/plain, which renders as source). Sandboxed like
+    // present mode.
     return (
       <iframe
-        src={`/api/materials/${linkId}/view`}
+        src={viewerHref("html", linkId, url)}
         title={label}
         className="h-full w-full bg-white"
         sandbox="allow-scripts allow-popups allow-forms"
