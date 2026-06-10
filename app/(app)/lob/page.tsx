@@ -76,7 +76,12 @@ export default async function ProjectsPage(props: {
   // Split into Featured + the rest. Active sub-modules of a parent (e.g. CaneyCloud →
   // CaneyRestaurant / Stays / WA Concierge / Academy) stay prominent; top-level
   // non-featured ventures are shaded "back-burner".
-  const featured = filtered.filter((p) => p.featured);
+  // Featured ventures stack vertically in founding order (VAV → CaneyCloud →
+  // Employ Venezuela …), not by last-touched — the gallery order shouldn't
+  // shuffle every time one venture gets an edit.
+  const featured = filtered
+    .filter((p) => p.featured)
+    .sort((a, b) => +new Date(a.createdAt) - +new Date(b.createdAt));
   const rest = filtered.filter((p) => !p.featured);
   const modules = rest.filter((p) => p.parentLobId);
   const others = rest.filter((p) => !p.parentLobId);
@@ -138,8 +143,9 @@ export default async function ProjectsPage(props: {
         ) : (
           <div className="space-y-6">
             {/* ── Priority row at top (no label) ─────────────────────── */}
+            {/* Stacked full-width, one venture per row — not side by side */}
             {featured.length > 0 && (
-              <div className="grid gap-4 lg:grid-cols-2">
+              <div className="grid gap-4">
                 {featured.map((p) => (
                   <ProjectCard key={p.id} project={p} variant="featured" />
                 ))}
