@@ -1,5 +1,4 @@
 import { CheckSquare, FileText, Lock, MessageSquare, Upload } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { formatRelative } from "@/lib/utils";
 import {
   countClaimedSeats,
@@ -25,6 +24,7 @@ import { PublicRoomMessages } from "@/components/partner-access/public-room-mess
 import { RoomSignIn } from "@/components/partner-access/room-sign-in";
 import { CoBrandLockup } from "@/components/partner-access/co-brand-lockup";
 import { RoomParticipants } from "@/components/partner-access/room-participants";
+import { RoomTeamDisplay } from "@/components/partner-access/room-team-display";
 import {
   PublicRepository,
   type RepoShare as RepoShareView,
@@ -162,37 +162,46 @@ export default async function PublicAccessRoomPage({
     sizeBytes: item.sizeBytes,
   }));
 
+  const firstName = access.contact.name?.trim().split(/\s+/)[0] ?? null;
+  const totalItems = shares.length + repoItemViews.length;
+
   return (
     <main className="min-h-screen bg-[var(--bg-page)]">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-5 py-5 md:px-8 md:py-8">
-        <header className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5 md:p-7">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+        <header className="relative overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] p-6 md:p-9">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0"
+            style={{
+              background:
+                "radial-gradient(120% 80% at 0% 0%, color-mix(in oklab, var(--primary) 12%, transparent), transparent 60%), radial-gradient(120% 80% at 100% 0%, color-mix(in oklab, var(--primary) 8%, transparent), transparent 55%)",
+            }}
+          />
+          <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-3xl">
               <CoBrandLockup
                 brandLogos={access.brandLogos}
                 clientLogoUrl={access.contact.logoUrl}
                 clientName={access.contact.name}
+                size={64}
               />
-              <div className="mt-4 flex flex-wrap items-center gap-2">
-                <Badge variant="outline">{partnerKindLabel(access.room.partnerKind)}</Badge>
-                <span className="inline-flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
-                  <Lock className="h-3.5 w-3.5" />
-                  Private access room
-                </span>
-              </div>
-              <h1 className="mt-4 text-3xl font-semibold tracking-tight md:text-4xl">
-                {access.room.name}
+              <p className="mt-5 inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.2em] text-[var(--primary)]">
+                <Lock className="h-3 w-3" />
+                Private room · {partnerKindLabel(access.room.partnerKind)}
+              </p>
+              <h1 className="mt-2 text-3xl font-semibold tracking-tight md:text-4xl">
+                {firstName ? `Welcome, ${firstName}` : "Welcome"}
               </h1>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--muted-foreground)]">
+              <p className="mt-3 max-w-2xl text-base leading-7 text-[var(--muted-foreground)]">
                 {access.room.welcomeMessage ??
-                  "A curated view of the project materials, context, and next steps shared with you."}
+                  `Everything we're working on together lives here — documents, updates, and a direct line to the team. Make yourself at home.`}
               </p>
             </div>
 
-            <div className="grid min-w-[220px] grid-cols-2 gap-2 lg:grid-cols-1">
-              <Fact label="Shared files" value={shares.length} />
-              {openSteps.length > 0 && <Fact label="Open actions" value={openSteps.length} />}
-              <Fact label="Last update" value={formatRelative(lastShared)} />
+            <div className="flex shrink-0 flex-wrap gap-2">
+              <Stat label="In your room" value={totalItems} />
+              {openSteps.length > 0 && <Stat label="For you" value={openSteps.length} />}
+              <Stat label="Updated" value={formatRelative(lastShared)} />
             </div>
           </div>
         </header>
@@ -269,6 +278,15 @@ export default async function PublicAccessRoomPage({
           </div>
 
           <aside className="space-y-4">
+            <RoomTeamDisplay
+              team={access.team.map((t) => ({
+                id: t.id,
+                displayName: t.displayName,
+                email: t.email,
+                title: t.title,
+              }))}
+            />
+
             <RoomParticipants participants={participants} youId={member?.id ?? null} />
 
             <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
@@ -307,13 +325,13 @@ export default async function PublicAccessRoomPage({
   );
 }
 
-function Fact({ label, value }: { label: string; value: React.ReactNode }) {
+function Stat({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="rounded-lg border border-[var(--border)] bg-[var(--background)] p-3">
-      <div className="text-[11px] uppercase tracking-wide text-[var(--muted-foreground)]">
+    <div className="rounded-xl border border-[var(--border)] bg-[var(--background)]/60 px-4 py-2.5 backdrop-blur">
+      <div className="text-[10px] uppercase tracking-wide text-[var(--muted-foreground)]">
         {label}
       </div>
-      <div className="mt-1 text-sm font-medium tabular-nums">{value}</div>
+      <div className="mt-0.5 text-base font-semibold tabular-nums">{value}</div>
     </div>
   );
 }

@@ -23,8 +23,9 @@ import { getPartnerAccessRoom } from "@/db/queries/partner-access";
 import { listPartnerNextStepsByRoom } from "@/db/queries/partner-next-steps";
 import { listPartnerUploadsByRoom } from "@/db/queries/partner-uploads";
 import { listPartnerRoomMessages } from "@/db/queries/partner-messages";
-import { brandLogosFromShares } from "@/db/queries/partner-access";
+import { resolveRoomBrandLogos } from "@/db/queries/partner-access";
 import { CoBrandLockup } from "@/components/partner-access/co-brand-lockup";
+import { RoomTeamDisplay } from "@/components/partner-access/room-team-display";
 import { partnerKindLabel } from "@/lib/partner-access";
 import { formatRelative } from "@/lib/utils";
 
@@ -46,7 +47,11 @@ export default async function PartnerRoomPreviewPage({ params }: { params: Param
   const { room } = detail;
   const shares = detail.shares.filter((s) => !s.revokedAt);
   const openSteps = nextSteps.filter((s) => !s.completedAt);
-  const brandLogos = brandLogosFromShares(shares);
+  const brandLogos = await resolveRoomBrandLogos({
+    workspaceId: user.workspaceId,
+    brandLobIds: room.brandLobIds ?? null,
+    shares,
+  });
 
   return (
     <main className="min-h-screen bg-[var(--bg-page)]">
@@ -273,6 +278,14 @@ export default async function PartnerRoomPreviewPage({ params }: { params: Param
           </div>
 
           <aside className="space-y-4">
+            <RoomTeamDisplay
+              team={detail.team.map((t) => ({
+                id: t.id,
+                displayName: t.displayName,
+                email: t.email,
+                title: t.title,
+              }))}
+            />
             <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
               <h2 className="text-base font-semibold">Room Status</h2>
               <div className="mt-3 space-y-3 text-sm">

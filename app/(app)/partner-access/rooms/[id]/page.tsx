@@ -34,7 +34,13 @@ import { ShareLedgerActions } from "@/components/partner-access/share-ledger-act
 import { SharePermissionsEditor } from "@/components/partner-access/share-permissions-editor";
 import { PartnerNextStepsManager } from "@/components/partner-access/partner-next-steps-manager";
 import { PartnerUploadsPanel } from "@/components/partner-access/partner-uploads-panel";
-import { getPartnerAccessRoom, brandLogosFromShares } from "@/db/queries/partner-access";
+import {
+  getPartnerAccessRoom,
+  resolveRoomBrandLogos,
+  listLogoBrands,
+} from "@/db/queries/partner-access";
+import { listWorkspaceEmailMembers } from "@/db/queries/email";
+import { RoomTeamManager } from "@/components/partner-access/room-team-manager";
 import { listPartnerNextSteps } from "@/db/queries/partner-next-steps";
 import { listPartnerUploads } from "@/db/queries/partner-uploads";
 import { listPartnerRoomMessages } from "@/db/queries/partner-messages";
@@ -88,15 +94,19 @@ export default async function PartnerAccessRoomPage(props: { params: Params }) {
 
   const detail = roomRes.data;
 
-  const [nextStepsRes, uploadsRes, messagesRes, itemsRes, commentsRes] = detail
+  const [nextStepsRes, uploadsRes, messagesRes, itemsRes, commentsRes, brandsRes, membersRes] = detail
     ? await Promise.all([
         safeRead(() => listPartnerNextSteps({ workspaceId: user.workspaceId, roomId: id }), []),
         safeRead(() => listPartnerUploads({ workspaceId: user.workspaceId, roomId: id }), []),
         safeRead(() => listPartnerRoomMessages({ roomId: id }), []),
         safeRead(() => listRoomItems({ roomId: id }), []),
         safeRead(() => listRoomComments({ roomId: id }), []),
+        safeRead(() => listLogoBrands({ workspaceId: user.workspaceId }), []),
+        safeRead(() => listWorkspaceEmailMembers(user.workspaceId), []),
       ])
     : [
+        { ok: true as const, data: [] },
+        { ok: true as const, data: [] },
         { ok: true as const, data: [] },
         { ok: true as const, data: [] },
         { ok: true as const, data: [] },
@@ -116,10 +126,12 @@ export default async function PartnerAccessRoomPage(props: { params: Params }) {
   }
 
   const { room } = detail;
-  const brandLogos = brandLogosFromShares(
-    detail.shares.filter((share) => !share.revokedAt),
-  );
   const activeShares = detail.shares.filter((share) => !share.revokedAt);
+  const brandLogos = await resolveRoomBrandLogos({
+    workspaceId: user.workspaceId,
+    brandLobIds: room.brandLobIds ?? null,
+    shares: activeShares,
+  });
 
   const commentsByTarget: Record<
     string,
@@ -555,6 +567,39 @@ export default async function PartnerAccessRoomPage(props: { params: Params }) {
                   contactName={detail.contact.name}
                   clientLogoUrl={detail.contact.logoUrl}
                   brandLogos={brandLogos}
+                  availableBrands={brandsRes.data}
+                  selectedBrandLobIds={room.brandLobIds ?? null}
+                />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <UsersRound className="h-4 w-4" />
+                  Team for this client
+                  {detail.team.length > 0 && (
+                    <Badge variant="secondary" className="ml-auto">
+                      {detail.team.length}
+                    </Badge>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <RoomTeamManager
+                  roomId={room.id}
+                  team={detail.team.map((t) => ({
+                    id: t.id,
+                    userId: t.userId,
+                    displayName: t.displayName,
+                    email: t.email,
+                    title: t.title,
+                  }))}
+                  workspaceMembers={membersRes.data.map((m) => ({
+                    userId: m.userId,
+                    displayName: m.displayName,
+                    email: m.email,
+                  }))}
                 />
               </CardContent>
             </Card>

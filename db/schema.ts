@@ -800,6 +800,8 @@ export const partnerRooms = pgTable("partner_rooms", {
   passcodeLockedUntil: timestamp("passcode_locked_until", { withTimezone: true }),
   // Max distinct guests who may claim a seat (enter email at the gate). Null = unlimited.
   seatLimit: integer("seat_limit"),
+  // null = auto-derive brand logos from shared docs; array of LoB ids = explicit pick.
+  brandLobIds: jsonb("brand_lob_ids").$type<string[]>(),
   createdBy: uuid("created_by")
     .notNull()
     .references(() => users.id),
@@ -954,6 +956,28 @@ export const partnerRoomMessages = pgTable("partner_room_messages", {
     .notNull()
     .defaultNow(),
 });
+
+export const partnerRoomTeam = pgTable(
+  "partner_room_team",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    roomId: uuid("room_id")
+      .notNull()
+      .references(() => partnerRooms.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    title: text("title"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    uniqRoomUser: uniqueIndex("partner_room_team_room_user_uniq").on(t.roomId, t.userId),
+  }),
+);
 
 export const partnerRoomItems = pgTable("partner_room_items", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),

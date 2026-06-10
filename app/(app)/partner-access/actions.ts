@@ -14,6 +14,7 @@ import {
 } from "@/lib/partner-access";
 import {
   addExpectedGuest,
+  addRoomTeamMember,
   createPartnerRoomForContact,
   createPartnerShare,
   getPartnerRoomBasic,
@@ -21,6 +22,8 @@ import {
   recordPartnerShareTracking,
   regeneratePartnerRoomAccessToken,
   removeRoomMember,
+  removeRoomTeamMember,
+  setRoomBrandLobIds,
   updateContactLogo,
   setPartnerRoomPasscode,
   setPartnerRoomSeatLimit,
@@ -495,6 +498,55 @@ export async function deleteRoomCommentAction(opts: {
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const user = await requireUser();
   await deleteItemComment({ workspaceId: user.workspaceId, commentId: opts.commentId });
+  revalidatePath(`/partner-access/rooms/${opts.roomId}`);
+  return { ok: true };
+}
+
+export async function setRoomBrandLogosAction(opts: {
+  roomId: string;
+  brandLobIds: string[] | null;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const user = await requireUser();
+  const ids =
+    opts.brandLobIds && opts.brandLobIds.length > 0
+      ? Array.from(new Set(opts.brandLobIds)).slice(0, 12)
+      : null;
+  const updated = await setRoomBrandLobIds({
+    workspaceId: user.workspaceId,
+    roomId: opts.roomId,
+    brandLobIds: ids,
+  });
+  if (!updated) return { ok: false, error: "Room not found" };
+  revalidatePath(`/partner-access/rooms/${opts.roomId}`);
+  return { ok: true };
+}
+
+export async function assignRoomTeamMemberAction(opts: {
+  roomId: string;
+  userId: string;
+  title?: string | null;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const user = await requireUser();
+  const room = await getPartnerRoomBasic({ workspaceId: user.workspaceId, roomId: opts.roomId });
+  if (!room) return { ok: false, error: "Room not found" };
+
+  const row = await addRoomTeamMember({
+    workspaceId: user.workspaceId,
+    roomId: opts.roomId,
+    userId: opts.userId,
+    title: opts.title,
+  });
+  if (!row) return { ok: false, error: "That teammate isn't in your workspace" };
+  revalidatePath(`/partner-access/rooms/${opts.roomId}`);
+  return { ok: true };
+}
+
+export async function removeRoomTeamMemberAction(opts: {
+  roomId: string;
+  teamId: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const user = await requireUser();
+  await removeRoomTeamMember({ workspaceId: user.workspaceId, teamId: opts.teamId });
   revalidatePath(`/partner-access/rooms/${opts.roomId}`);
   return { ok: true };
 }

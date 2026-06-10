@@ -59,6 +59,7 @@ export type PartnerAccessRoomDetail = {
   shares: PartnerAccessShare[];
   members: PartnerAccessRoomMember[];
   events: PartnerAccessRoomEvent[];
+  team: RoomTeamMember[];
 };
 
 export async function listPartnerAccessForContact(opts: {
@@ -252,7 +253,7 @@ export async function getPartnerAccessRoom(opts: {
 
   if (!roomRow) return null;
 
-  const [shares, members, events] = await Promise.all([
+  const [shares, members, events, team] = await Promise.all([
     db
       .select({
         share: schema.partnerShares,
@@ -308,6 +309,7 @@ export async function getPartnerAccessRoom(opts: {
       )
       .orderBy(desc(schema.partnerAccessEvents.createdAt))
       .limit(50),
+    listRoomTeam({ roomId: opts.roomId }),
   ]);
 
   return {
@@ -340,6 +342,7 @@ export async function getPartnerAccessRoom(opts: {
       actorName: row.actorName,
       shareLabel: row.shareLabel,
     })),
+    team,
   };
 }
 
@@ -555,6 +558,8 @@ export type PublicPartnerRoom = {
   };
   /** Distinct LoB logos for the projects shared into this room (co-branding). */
   brandLogos: BrandLogo[];
+  /** Team members assigned to show up for this client. */
+  team: RoomTeamMember[];
   shares: Array<PartnerAccessShare & {
     storagePath: string | null;
     mimeType: string | null;
@@ -564,6 +569,164 @@ export type PublicPartnerRoom = {
     signedUrl: string | null;
   }>;
 };
+
+export type RoomTeamMember = {
+  id: string;
+  userId: string;
+  displayName: string | null;
+  email: string | null;
+  title: string | null;
+};
+
+/** LoBs that have a logo set — candidates for the room brand picker. */
+export async function listLogoBrands(input: { workspaceId: string }): Promise<BrandLogo[]> {
+  const rows = await db
+    .select({
+      lobId: schema.linesOfBusiness.id,
+      title: schema.linesOfBusiness.title,
+      logoUrl: schema.linesOfBusiness.logoUrl,
+      logoUrlDark: schema.linesOfBusiness.logoUrlDark,
+    })
+    .from(schema.linesOfBusiness)
+    .where(eq(schema.linesOfBusiness.workspaceId, input.workspaceId))
+    .orderBy(asc(schema.linesOfBusiness.title));
+  return rows
+    .filter((r): r is typeof r & { logoUrl: string } => Boolean(r.logoUrl))
+    .map((r) => ({
+      lobId: r.lobId,
+      title: r.title,
+      logoUrl: r.logoUrl,
+      logoUrlDark: r.logoUrlDark,
+    }));
+}
+
+/** Brand logos for a room: explicit selection if set, else auto from shares. */
+export async function resolveRoomBrandLogos(input: {
+  workspaceId: string;
+  brandLobIds: string[] | null;
+  shares: Array<{
+    lobId: string | null;
+    lobLogoUrl?: string | null;
+    lobLogoUrlDark?: string | null;
+    projectTitle?: string | null;
+  }>;
+}): Promise<BrandLogo[]> {
+  if (input.brandLobIds && input.brandLobIds.length > 0) {
+    const rows = await db
+      .select({
+        lobId: schema.linesOfBusiness.id,
+        title: schema.linesOfBusiness.title,
+        logoUrl: schema.linesOfBusiness.logoUrl,
+        logoUrlDark: schema.linesOfBusiness.logoUrlDark,
+      })
+      .from(schema.linesOfBusiness)
+      .where(
+        and(
+          eq(schema.linesOfBusiness.workspaceId, input.workspaceId),
+          inArray(schema.linesOfBusiness.id, input.brandLobIds),
+        ),
+      );
+    const byId = new Map(rows.map((r) => [r.lobId, r]));
+    // Preserve the owner's chosen order; skip any without a logo.
+    return input.brandLobIds
+      .map((id) => byId.get(id))
+      .filter((r): r is NonNullable<typeof r> & { logoUrl: string } => Boolean(r?.logoUrl))
+      .map((r) => ({ lobId: r.lobId, title: r.title, logoUrl: r.logoUrl, logoUrlDark: r.logoUrlDark }));
+  }
+  return brandLogosFromShares(input.shares);
+}
+
+export async function setRoomBrandLobIds(input: {
+  workspaceId: string;
+  roomId: string;
+  brandLobIds: string[] | null;
+}) {
+  const [updated] = await db
+    .update(schema.partnerRooms)
+    .set({ brandLobIds: input.brandLobIds, updatedAt: new Date() })
+    .where(
+      and(
+        eq(schema.partnerRooms.workspaceId, input.workspaceId),
+        eq(schema.partnerRooms.id, input.roomId),
+      ),
+    )
+    .returning({ id: schema.partnerRooms.id });
+  return updated ?? null;
+}
+
+export async function listRoomTeam(input: { roomId: string }): Promise<RoomTeamMember[]> {
+  const rows = await db
+    .select({
+      id: schema.partnerRoomTeam.id,
+      userId: schema.partnerRoomTeam.userId,
+      title: schema.partnerRoomTeam.title,
+      sortOrder: schema.partnerRoomTeam.sortOrder,
+      displayName: schema.users.displayName,
+      email: schema.users.email,
+    })
+    .from(schema.partnerRoomTeam)
+    .leftJoin(schema.users, eq(schema.users.id, schema.partnerRoomTeam.userId))
+    .where(eq(schema.partnerRoomTeam.roomId, input.roomId))
+    .orderBy(asc(schema.partnerRoomTeam.sortOrder), asc(schema.users.displayName));
+  return rows.map((r) => ({
+    id: r.id,
+    userId: r.userId,
+    displayName: r.displayName,
+    email: r.email,
+    title: r.title,
+  }));
+}
+
+export async function addRoomTeamMember(input: {
+  workspaceId: string;
+  roomId: string;
+  userId: string;
+  title?: string | null;
+}) {
+  // Validate the user is a member of this workspace before assigning.
+  const [member] = await db
+    .select({ userId: schema.workspaceMembers.userId })
+    .from(schema.workspaceMembers)
+    .where(
+      and(
+        eq(schema.workspaceMembers.workspaceId, input.workspaceId),
+        eq(schema.workspaceMembers.userId, input.userId),
+      ),
+    )
+    .limit(1);
+  if (!member) return null;
+
+  const [row] = await db
+    .insert(schema.partnerRoomTeam)
+    .values({
+      workspaceId: input.workspaceId,
+      roomId: input.roomId,
+      userId: input.userId,
+      title: input.title?.trim() || null,
+    })
+    .onConflictDoUpdate({
+      target: [schema.partnerRoomTeam.roomId, schema.partnerRoomTeam.userId],
+      set: { title: input.title?.trim() || null },
+    })
+    .returning();
+  return row;
+}
+
+export async function removeRoomTeamMember(input: {
+  workspaceId: string;
+  teamId: string;
+}) {
+  const [deleted] = await db
+    .delete(schema.partnerRoomTeam)
+    .where(
+      and(
+        eq(schema.partnerRoomTeam.id, input.teamId),
+        eq(schema.partnerRoomTeam.workspaceId, input.workspaceId),
+      ),
+    )
+    .returning({ id: schema.partnerRoomTeam.id });
+  return deleted ?? null;
+}
 
 /** Distinct LoB logos among a set of shares, in share order. */
 export function brandLogosFromShares(
@@ -1571,6 +1734,15 @@ export async function getPublicPartnerRoomByToken(input: {
     signedUrl: null,
   }));
 
+  const [brandLogos, team] = await Promise.all([
+    resolveRoomBrandLogos({
+      workspaceId: row.room.workspaceId,
+      brandLobIds: row.room.brandLobIds ?? null,
+      shares: mappedShares,
+    }),
+    listRoomTeam({ roomId: row.room.id }),
+  ]);
+
   return {
     room: row.room,
     contact: {
@@ -1579,7 +1751,8 @@ export async function getPublicPartnerRoomByToken(input: {
       organization: row.contactOrganization,
       logoUrl: row.contactLogoUrl,
     },
-    brandLogos: brandLogosFromShares(mappedShares),
+    brandLogos,
+    team,
     shares: mappedShares,
   };
 }

@@ -4,10 +4,14 @@ import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ImageIcon, Upload, X } from "lucide-react";
 import { toast } from "sonner";
-import { setRoomClientLogoAction } from "@/app/(app)/partner-access/actions";
+import {
+  setRoomBrandLogosAction,
+  setRoomClientLogoAction,
+} from "@/app/(app)/partner-access/actions";
 import { createClient } from "@/lib/supabase/client";
 import { PROJECT_FILES_BUCKET } from "@/lib/project-files/constants";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import type { BrandLogo } from "@/db/queries/partner-access";
 
@@ -23,12 +27,16 @@ export function ClientLogoControl({
   contactName,
   clientLogoUrl,
   brandLogos,
+  availableBrands,
+  selectedBrandLobIds,
 }: {
   roomId: string;
   contactId: string | null;
   contactName: string | null;
   clientLogoUrl: string | null;
   brandLogos: BrandLogo[];
+  availableBrands: BrandLogo[];
+  selectedBrandLobIds: string[] | null;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -36,6 +44,24 @@ export function ClientLogoControl({
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const isAuto = !selectedBrandLobIds || selectedBrandLobIds.length === 0;
+  const selected = new Set(selectedBrandLobIds ?? []);
+
+  function setBrands(next: string[] | null) {
+    startTransition(async () => {
+      const res = await setRoomBrandLogosAction({ roomId, brandLobIds: next });
+      if (res.ok) router.refresh();
+      else toast.error(res.error);
+    });
+  }
+
+  function toggleBrand(lobId: string) {
+    const next = new Set(selected);
+    if (next.has(lobId)) next.delete(lobId);
+    else next.add(lobId);
+    setBrands(next.size === 0 ? null : Array.from(next));
+  }
 
   if (!contactId) {
     return (
@@ -114,25 +140,68 @@ export function ClientLogoControl({
   return (
     <div className="space-y-4">
       <div>
-        <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted-foreground)]">
-          Your projects
-        </p>
-        {brandLogos.length === 0 ? (
-          <p className="mt-1 text-xs text-[var(--muted-foreground)]">
-            Project logos appear here automatically once you share a document
-            from a project that has a logo.
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted-foreground)]">
+            Your brand logos
           </p>
-        ) : (
+          <span className="text-[10px] uppercase tracking-wide text-[var(--muted-foreground)]">
+            {isAuto ? "Auto" : `${selected.size} chosen`}
+          </span>
+        </div>
+
+        {/* What's showing now */}
+        {brandLogos.length > 0 && (
           <div className="mt-1.5 flex flex-wrap items-center gap-2">
             {brandLogos.map((logo) => (
               <span
                 key={logo.lobId}
-                className="grid h-9 w-9 place-items-center overflow-hidden rounded-md border border-[var(--border)] bg-[var(--card)] p-1"
+                className="grid h-9 w-9 place-items-center overflow-hidden rounded-full border border-[var(--border)] bg-white p-1 dark:bg-[var(--card)]"
                 title={logo.title}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={logo.logoUrl} alt={`${logo.title} logo`} className="max-h-full max-w-full object-contain" />
               </span>
+            ))}
+          </div>
+        )}
+
+        {availableBrands.length === 0 ? (
+          <p className="mt-1 text-xs text-[var(--muted-foreground)]">
+            Add a logo to a project (Line of Business) and it can be shown here.
+          </p>
+        ) : (
+          <div className="mt-2 space-y-1">
+            <label className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-sm hover:bg-[var(--secondary)]">
+              <Checkbox
+                checked={isAuto}
+                onCheckedChange={() => setBrands(null)}
+                aria-label="Auto — from shared documents"
+                disabled={pending}
+              />
+              <span>
+                Auto
+                <span className="ml-1 text-xs text-[var(--muted-foreground)]">
+                  — match the projects you share
+                </span>
+              </span>
+            </label>
+            {availableBrands.map((brand) => (
+              <label
+                key={brand.lobId}
+                className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-sm hover:bg-[var(--secondary)]"
+              >
+                <Checkbox
+                  checked={!isAuto && selected.has(brand.lobId)}
+                  onCheckedChange={() => toggleBrand(brand.lobId)}
+                  aria-label={brand.title}
+                  disabled={pending}
+                />
+                <span className="grid h-6 w-6 shrink-0 place-items-center overflow-hidden rounded-full border border-[var(--border)] bg-white p-0.5 dark:bg-[var(--card)]">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={brand.logoUrl} alt="" className="max-h-full max-w-full object-contain" />
+                </span>
+                <span className="truncate">{brand.title}</span>
+              </label>
             ))}
           </div>
         )}
