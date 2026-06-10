@@ -1009,6 +1009,25 @@ export async function countClaimedSeats(input: { roomId: string }) {
   return row?.count ?? 0;
 }
 
+/** Signed-in (claimed) members — the live roster shown in the public room. */
+export async function listClaimedRoomMembers(input: { roomId: string }) {
+  return db
+    .select({
+      id: schema.partnerRoomMembers.id,
+      displayName: schema.partnerRoomMembers.displayName,
+      roleLabel: schema.partnerRoomMembers.roleLabel,
+      lastViewedAt: schema.partnerRoomMembers.lastViewedAt,
+    })
+    .from(schema.partnerRoomMembers)
+    .where(
+      and(
+        eq(schema.partnerRoomMembers.roomId, input.roomId),
+        isNotNull(schema.partnerRoomMembers.email),
+      ),
+    )
+    .orderBy(asc(schema.partnerRoomMembers.displayName));
+}
+
 /** Pre-added, not-yet-claimed guest names for the sign-in dropdown. */
 export async function listClaimableRoomMembers(input: { roomId: string }) {
   return db

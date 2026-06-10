@@ -367,6 +367,9 @@ export default async function PartnerAccessRoomPage(props: { params: Params }) {
                 <RoomMessagesManager
                   roomId={id}
                   partnerLabel={detail.contact.name ?? "your partner"}
+                  mentionCandidates={detail.members
+                    .filter((m) => m.email && m.displayName)
+                    .map((m) => m.displayName as string)}
                   initialMessages={messagesRes.data.map((m) => ({
                     id: m.id,
                     body: m.body,

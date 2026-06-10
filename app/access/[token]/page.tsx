@@ -6,6 +6,7 @@ import {
   getPartnerRoomMember,
   getPublicPartnerRoomByToken,
   listClaimableRoomMembers,
+  listClaimedRoomMembers,
   recordPublicPartnerRoomView,
 } from "@/db/queries/partner-access";
 import { listPartnerNextStepsByRoom } from "@/db/queries/partner-next-steps";
@@ -23,6 +24,7 @@ import { PublicNextSteps } from "@/components/partner-access/public-next-steps";
 import { PublicRoomMessages } from "@/components/partner-access/public-room-messages";
 import { RoomSignIn } from "@/components/partner-access/room-sign-in";
 import { CoBrandLockup } from "@/components/partner-access/co-brand-lockup";
+import { RoomParticipants } from "@/components/partner-access/room-participants";
 import {
   PublicRepository,
   type RepoShare as RepoShareView,
@@ -89,14 +91,20 @@ export default async function PublicAccessRoomPage({
     memberEmail: member?.email ?? null,
   }).catch(() => {});
 
-  const [nextSteps, partnerUploads, messages, repoItems, repoComments] =
+  const [nextSteps, partnerUploads, messages, repoItems, repoComments, participants] =
     await Promise.all([
       listPartnerNextStepsByRoom({ roomId: access.room.id }).catch(() => []),
       listPartnerUploadsByRoom({ roomId: access.room.id }).catch(() => []),
       listPartnerRoomMessages({ roomId: access.room.id }).catch(() => []),
       listRoomItems({ roomId: access.room.id }).catch(() => []),
       listRoomComments({ roomId: access.room.id }).catch(() => []),
+      listClaimedRoomMembers({ roomId: access.room.id }).catch(() => []),
     ]);
+
+  const mentionCandidates = [
+    "Team",
+    ...participants.map((p) => p.displayName).filter((n): n is string => Boolean(n)),
+  ];
 
   const shares = access.shares;
   const projects = Array.from(
@@ -213,6 +221,7 @@ export default async function PublicAccessRoomPage({
                 <PublicRoomMessages
                   token={token}
                   ownerLabel="The team"
+                  mentionCandidates={mentionCandidates}
                   initialMessages={messages.map((m) => ({
                     id: m.id,
                     body: m.body,
@@ -260,6 +269,8 @@ export default async function PublicAccessRoomPage({
           </div>
 
           <aside className="space-y-4">
+            <RoomParticipants participants={participants} youId={member?.id ?? null} />
+
             <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
               <h2 className="text-base font-semibold">Room Status</h2>
               <div className="mt-3 space-y-3 text-sm">

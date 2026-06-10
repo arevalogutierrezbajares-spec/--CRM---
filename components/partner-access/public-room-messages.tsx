@@ -3,6 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Send } from "lucide-react";
 import { formatRelative } from "@/lib/utils";
+import {
+  MentionTextarea,
+  renderWithMentions,
+} from "@/components/partner-access/mention-textarea";
 
 export type RoomMessageView = {
   id: string;
@@ -22,10 +26,12 @@ export function PublicRoomMessages({
   token,
   initialMessages,
   ownerLabel,
+  mentionCandidates = [],
 }: {
   token: string;
   initialMessages: RoomMessageView[];
   ownerLabel: string;
+  mentionCandidates?: string[];
 }) {
   const [pending, setPending] = useState<RoomMessageView[]>([]);
   const [draft, setDraft] = useState("");
@@ -44,8 +50,7 @@ export function PublicRoomMessages({
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages.length]);
 
-  async function send(event: React.FormEvent) {
-    event.preventDefault();
+  async function send() {
     const body = draft.trim();
     if (!body || sending) return;
     setSending(true);
@@ -103,7 +108,7 @@ export function PublicRoomMessages({
                     · {formatRelative(message.createdAt)}
                   </div>
                   <p className="mt-0.5 whitespace-pre-wrap break-words text-sm">
-                    {message.body}
+                    {renderWithMentions(message.body)}
                   </p>
                 </div>
               </li>
@@ -112,20 +117,21 @@ export function PublicRoomMessages({
         </ul>
       )}
 
-      <form onSubmit={send} className="flex items-start gap-2">
-        <textarea
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void send();
+        }}
+        className="flex items-start gap-2"
+      >
+        <MentionTextarea
           value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
-              event.preventDefault();
-              void send(event);
-            }
-          }}
-          rows={2}
-          placeholder="Write a message to the team…"
-          aria-label="Message to the team"
-          className="min-h-[44px] flex-1 resize-none rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[var(--ring)]"
+          onChange={setDraft}
+          onSubmit={() => void send()}
+          candidates={mentionCandidates}
+          placeholder="Write a message… @ to mention"
+          ariaLabel="Message to the team"
+          className="min-h-[44px] w-full resize-none rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[var(--ring)]"
         />
         <button
           type="submit"

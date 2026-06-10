@@ -10,8 +10,11 @@ import {
 } from "@/app/(app)/partner-access/actions";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { Textarea } from "@/components/ui/textarea";
 import { formatRelative } from "@/lib/utils";
+import {
+  MentionTextarea,
+  renderWithMentions,
+} from "@/components/partner-access/mention-textarea";
 
 export type RoomMessageRow = {
   id: string;
@@ -31,10 +34,12 @@ export function RoomMessagesManager({
   roomId,
   initialMessages,
   partnerLabel,
+  mentionCandidates = [],
 }: {
   roomId: string;
   initialMessages: RoomMessageRow[];
   partnerLabel: string;
+  mentionCandidates?: string[];
 }) {
   const router = useRouter();
   const [pending, setPending] = useState<RoomMessageRow[]>([]);
@@ -134,7 +139,7 @@ export function RoomMessagesManager({
                     />
                   </div>
                   <p className="mt-0.5 whitespace-pre-wrap break-words text-sm">
-                    {message.body}
+                    {renderWithMentions(message.body)}
                   </p>
                 </div>
               </li>
@@ -144,19 +149,14 @@ export function RoomMessagesManager({
       )}
 
       <div className="flex items-start gap-2">
-        <Textarea
+        <MentionTextarea
           value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
-              event.preventDefault();
-              send();
-            }
-          }}
-          rows={2}
-          placeholder={`Message ${partnerLabel}…`}
-          aria-label={`Message ${partnerLabel}`}
-          className="min-h-[44px] flex-1 resize-none"
+          onChange={setDraft}
+          onSubmit={send}
+          candidates={mentionCandidates}
+          placeholder={`Message ${partnerLabel}… @ to mention`}
+          ariaLabel={`Message ${partnerLabel}`}
+          className="min-h-[44px] w-full resize-none rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[var(--ring)]"
         />
         <Button
           type="button"
