@@ -247,6 +247,11 @@ export default async function ContactDetailPage(props: { params: Params }) {
                 />
                 <PartnerAccessPanel
                   access={accessRes.data}
+                  contact={{
+                    id: contact.id,
+                    name: contact.name,
+                    organization: contact.organization,
+                  }}
                   nextStepCountByRoom={nextStepCountByRoom}
                   uploadCountByRoom={uploadCountByRoom}
                 />

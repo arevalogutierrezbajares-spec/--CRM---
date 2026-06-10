@@ -11,6 +11,7 @@ import {
   Eye,
   FileText,
   Lock,
+  MessageSquare,
   ShieldCheck,
   Upload,
 } from "lucide-react";
@@ -21,6 +22,7 @@ import { requireUser } from "@/lib/current-user";
 import { getPartnerAccessRoom } from "@/db/queries/partner-access";
 import { listPartnerNextStepsByRoom } from "@/db/queries/partner-next-steps";
 import { listPartnerUploadsByRoom } from "@/db/queries/partner-uploads";
+import { listPartnerRoomMessages } from "@/db/queries/partner-messages";
 import { partnerKindLabel } from "@/lib/partner-access";
 import { formatRelative } from "@/lib/utils";
 
@@ -35,6 +37,7 @@ export default async function PartnerRoomPreviewPage({ params }: { params: Param
     listPartnerNextStepsByRoom({ roomId: id }),
     listPartnerUploadsByRoom({ roomId: id }),
   ]);
+  const messages = detail ? await listPartnerRoomMessages({ roomId: id }) : [];
 
   if (!detail) notFound();
 
@@ -48,7 +51,13 @@ export default async function PartnerRoomPreviewPage({ params }: { params: Param
       <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-5 py-2.5 dark:border-amber-900 dark:bg-amber-950/40">
         <div className="flex items-center gap-2 text-sm text-amber-800 dark:text-amber-300">
           <Eye className="h-4 w-4 shrink-0" />
-          <span>Admin preview — this is exactly what your partner sees</span>
+          <span>
+            Admin preview — a close approximation of the partner&rsquo;s room
+            {room.passcodeHash
+              ? " (they enter a 4-digit code first)"
+              : ""}
+            . The live page also offers self-identification and an interactive deck viewer.
+          </span>
         </div>
         <Link
           href={`/partner-access/rooms/${id}`}
@@ -159,6 +168,63 @@ export default async function PartnerRoomPreviewPage({ params }: { params: Param
                   ))}
                 </ul>
               )}
+            </div>
+
+            {/* Messages section */}
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--card)]">
+              <div className="flex items-center gap-2 border-b border-[var(--border)] px-4 py-3">
+                <MessageSquare className="h-4 w-4 text-[var(--muted-foreground)]" />
+                <div>
+                  <h2 className="text-base font-semibold">Messages</h2>
+                  <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">
+                    Questions, notes, and updates between you and the team.
+                  </p>
+                </div>
+              </div>
+              <div className="p-4">
+                {messages.length === 0 ? (
+                  <p className="text-sm text-[var(--muted-foreground)]">
+                    No messages yet.
+                  </p>
+                ) : (
+                  <ul className="max-h-80 space-y-2 overflow-y-auto pr-1">
+                    {messages.map((message) => {
+                      const fromPartner = message.authorKind === "partner";
+                      return (
+                        <li
+                          key={message.id}
+                          className={fromPartner ? "flex justify-end" : "flex"}
+                        >
+                          <div
+                            className={`max-w-[85%] rounded-lg px-3 py-2 ${
+                              fromPartner
+                                ? "bg-[var(--primary)] text-[var(--primary-foreground)]"
+                                : "bg-[var(--secondary)]"
+                            }`}
+                          >
+                            <div
+                              className={`text-[11px] ${
+                                fromPartner
+                                  ? "text-[var(--primary-foreground)] opacity-70"
+                                  : "text-[var(--muted-foreground)]"
+                              }`}
+                            >
+                              {message.authorName ?? (fromPartner ? "Partner" : "The team")} ·{" "}
+                              {formatRelative(message.createdAt)}
+                            </div>
+                            <p className="mt-0.5 whitespace-pre-wrap break-words text-sm">
+                              {message.body}
+                            </p>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+                <p className="mt-3 text-xs text-[var(--muted-foreground)]">
+                  Composer visible to partner on the live link — not interactive in admin preview.
+                </p>
+              </div>
             </div>
 
             {/* Send files section */}

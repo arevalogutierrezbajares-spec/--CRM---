@@ -1,5 +1,7 @@
+import { redirect } from "next/navigation";
 import { getPublicPartnerShareByToken } from "@/db/queries/partner-access";
 import { ClientDeckViewer } from "@/components/access/client-deck-viewer";
+import { isPartnerRoomUnlocked } from "@/lib/partner-room-gate.server";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +17,10 @@ export default async function ClientDeckPage({ params }: { params: Params }) {
   const row = await getPublicPartnerShareByToken({ token, shareId }).catch(
     () => null,
   );
+
+  if (row && !(await isPartnerRoomUnlocked(row.room))) {
+    redirect(`/access/${token}`);
+  }
 
   if (!row || row.share.kindSnapshot !== "file" || !row.storagePath) {
     return (

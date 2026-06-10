@@ -13,12 +13,23 @@ import {
   type PartnerShareChannel,
 } from "@/lib/partner-access";
 import {
+  createPartnerRoomForContact,
   createPartnerShare,
+  getPartnerRoomBasic,
+  listShareableDocsForRoom,
   recordPartnerShareTracking,
   regeneratePartnerRoomAccessToken,
+  setPartnerRoomPasscode,
   updatePartnerRoomDetails,
   updatePartnerRoomStatus,
+  updatePartnerSharePermissions,
+  type ShareableRoomDoc,
 } from "@/db/queries/partner-access";
+import {
+  createPartnerRoomMessage,
+  deletePartnerRoomMessage,
+} from "@/db/queries/partner-messages";
+import { isValidPartnerPasscode } from "@/lib/partner-room-gate.server";
 import {
   createPartnerNextStep,
   completePartnerNextStep,
@@ -262,6 +273,218 @@ export async function deletePartnerUploadAction(opts: {
   const user = await requireUser();
   const row = await deletePartnerUpload({ workspaceId: user.workspaceId, uploadId: opts.uploadId });
   if (row) await removeObjects([row.storagePath]).catch(() => {});
+  revalidatePath(`/partner-access/rooms/${opts.roomId}`);
+  return { ok: true };
+}
+
+export async function createPartnerRoomAction(opts: {
+  contactId: string;
+  partnerKind: string;
+  name?: string | null;
+}): Promise<
+  | { ok: true; roomId: string; accessPath: string | null; existed: boolean }
+  | { ok: false; error: string }
+> {
+  const user = await requireUser();
+  if (!PARTNER_KINDS.has(opts.partnerKind as PartnerKind)) {
+    return { ok: false, error: "Invalid partner type" };
+  }
+
+  const res = await createPartnerRoomForContact({
+    workspaceId: user.workspaceId,
+    actorId: user.id,
+    contactId: opts.contactId,
+    partnerKind: opts.partnerKind as PartnerKind,
+    name: opts.name,
+  });
+
+  if (!res.ok) return res;
+
+  revalidatePartnerRoom(res.room.id, res.room.primaryContactId);
+  return {
+    ok: true,
+    roomId: res.room.id,
+    accessPath: res.accessToken ? `/access/${res.accessToken}` : null,
+    existed: res.existed,
+  };
+}
+
+export async function setPartnerRoomPasscodeAction(opts: {
+  roomId: string;
+  passcode: string | null;
+}): Promise<PartnerRoomActionResult> {
+  const user = await requireUser();
+
+  if (opts.passcode !== null && !isValidPartnerPasscode(opts.passcode)) {
+    return { ok: false, error: "The code must be exactly 4 digits" };
+  }
+
+  const res = await setPartnerRoomPasscode({
+    workspaceId: user.workspaceId,
+    actorId: user.id,
+    roomId: opts.roomId,
+    passcode: opts.passcode,
+  });
+
+  if (!res.ok) return res;
+
+  revalidatePartnerRoom(res.room.id, res.room.primaryContactId);
+  return { ok: true, id: res.room.id };
+}
+
+export async function updateSharePermissionsAction(opts: {
+  shareId: string;
+  permissions: string[];
+}): Promise<PartnerShareResult> {
+  const user = await requireUser();
+  const permissions = normalizePermissions(opts.permissions);
+
+  const res = await updatePartnerSharePermissions({
+    workspaceId: user.workspaceId,
+    actorId: user.id,
+    shareId: opts.shareId,
+    permissions,
+  });
+
+  if (!res.ok) return res;
+
+  if (res.contactId) revalidatePath(`/contacts/${res.contactId}`);
+  if (res.roomId) revalidatePath(`/partner-access/rooms/${res.roomId}`);
+  revalidatePath("/partner-access");
+  return { ok: true, id: res.id, roomId: res.roomId ?? "" };
+}
+
+export async function listShareableRoomDocsAction(opts: {
+  roomId: string;
+}): Promise<
+  { ok: true; docs: ShareableRoomDoc[] } | { ok: false; error: string }
+> {
+  const user = await requireUser();
+  const room = await getPartnerRoomBasic({
+    workspaceId: user.workspaceId,
+    roomId: opts.roomId,
+  });
+  if (!room) return { ok: false, error: "Room not found" };
+
+  const docs = await listShareableDocsForRoom({
+    workspaceId: user.workspaceId,
+    roomId: opts.roomId,
+  });
+  return { ok: true, docs };
+}
+
+export async function addRoomDocumentsAction(opts: {
+  roomId: string;
+  items: Array<{ linkId: string; lobId: string }>;
+  allowDownload: boolean;
+}): Promise<
+  { ok: true; added: number; failed: number } | { ok: false; error: string }
+> {
+  const user = await requireUser();
+  if (opts.items.length === 0) {
+    return { ok: false, error: "Pick at least one document" };
+  }
+
+  const room = await getPartnerRoomBasic({
+    workspaceId: user.workspaceId,
+    roomId: opts.roomId,
+  });
+  if (!room) return { ok: false, error: "Room not found" };
+  if (room.status === "revoked") {
+    return { ok: false, error: "Revoked rooms cannot receive documents" };
+  }
+  if (!room.primaryContactId) {
+    return { ok: false, error: "This room has no contact attached" };
+  }
+
+  const permissions: PartnerPermission[] = opts.allowDownload
+    ? ["view", "download"]
+    : ["view"];
+
+  let added = 0;
+  let lastError: string | null = null;
+  for (const item of opts.items) {
+    const res = await createPartnerShare({
+      workspaceId: user.workspaceId,
+      actorId: user.id,
+      projectId: item.lobId,
+      projectLinkId: item.linkId,
+      contactId: room.primaryContactId,
+      partnerKind: room.partnerKind as PartnerKind,
+      channel: "manual",
+      permissions,
+      roomId: room.id,
+      preserveExistingShare: true,
+    });
+    if (res.ok) added++;
+    else lastError = res.error;
+  }
+
+  if (added === 0) {
+    return { ok: false, error: lastError ?? "Could not add documents" };
+  }
+
+  revalidatePartnerRoom(room.id, room.primaryContactId);
+  const failed = opts.items.length - added;
+  return { ok: true, added, failed };
+}
+
+export async function createRoomMessageAction(opts: {
+  roomId: string;
+  body: string;
+}): Promise<
+  | {
+      ok: true;
+      message: {
+        id: string;
+        body: string;
+        authorKind: string;
+        authorName: string | null;
+        createdAt: string;
+      };
+    }
+  | { ok: false; error: string }
+> {
+  const user = await requireUser();
+  const room = await getPartnerRoomBasic({
+    workspaceId: user.workspaceId,
+    roomId: opts.roomId,
+  });
+  if (!room) return { ok: false, error: "Room not found" };
+
+  const message = await createPartnerRoomMessage({
+    workspaceId: user.workspaceId,
+    roomId: room.id,
+    authorKind: "owner",
+    authorUserId: user.id,
+    authorName: user.displayName ?? user.email,
+    body: opts.body,
+  });
+
+  if (!message) return { ok: false, error: "Write a message first" };
+
+  revalidatePath(`/partner-access/rooms/${opts.roomId}`);
+  return {
+    ok: true,
+    message: {
+      id: message.id,
+      body: message.body,
+      authorKind: message.authorKind,
+      authorName: message.authorName,
+      createdAt: message.createdAt.toISOString(),
+    },
+  };
+}
+
+export async function deleteRoomMessageAction(opts: {
+  roomId: string;
+  messageId: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const user = await requireUser();
+  await deletePartnerRoomMessage({
+    workspaceId: user.workspaceId,
+    messageId: opts.messageId,
+  });
   revalidatePath(`/partner-access/rooms/${opts.roomId}`);
   return { ok: true };
 }

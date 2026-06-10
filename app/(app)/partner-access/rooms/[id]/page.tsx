@@ -2,13 +2,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
   Activity,
+  CalendarClock,
   CheckSquare,
   ChevronLeft,
   DoorOpen,
   Eye,
   FileText,
   FileUp,
-  ShieldCheck,
+  MessageSquare,
   UsersRound,
 } from "lucide-react";
 import { TopBar } from "@/components/layout/top-bar";
@@ -17,15 +18,20 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DbBanner } from "@/components/db-banner";
 import { SectionLabel } from "@/components/dashboard/shared/section-label";
+import { AddDocsDialog } from "@/components/partner-access/add-docs-dialog";
 import { RoomAccessLinkActions } from "@/components/partner-access/room-access-link-actions";
 import { RoomDetailsForm } from "@/components/partner-access/room-details-form";
+import { RoomMessagesManager } from "@/components/partner-access/room-messages-manager";
+import { RoomPasscodeControls } from "@/components/partner-access/room-passcode-controls";
 import { RoomStatusActions } from "@/components/partner-access/room-status-actions";
 import { ShareLedgerActions } from "@/components/partner-access/share-ledger-actions";
+import { SharePermissionsEditor } from "@/components/partner-access/share-permissions-editor";
 import { PartnerNextStepsManager } from "@/components/partner-access/partner-next-steps-manager";
 import { PartnerUploadsPanel } from "@/components/partner-access/partner-uploads-panel";
 import { getPartnerAccessRoom } from "@/db/queries/partner-access";
 import { listPartnerNextSteps } from "@/db/queries/partner-next-steps";
 import { listPartnerUploads } from "@/db/queries/partner-uploads";
+import { listPartnerRoomMessages } from "@/db/queries/partner-messages";
 import { requireUser } from "@/lib/current-user";
 import { safeRead } from "@/lib/db-status";
 import {
@@ -76,12 +82,17 @@ export default async function PartnerAccessRoomPage(props: { params: Params }) {
 
   const detail = roomRes.data;
 
-  const [nextStepsRes, uploadsRes] = detail
+  const [nextStepsRes, uploadsRes, messagesRes] = detail
     ? await Promise.all([
         safeRead(() => listPartnerNextSteps({ workspaceId: user.workspaceId, roomId: id }), []),
         safeRead(() => listPartnerUploads({ workspaceId: user.workspaceId, roomId: id }), []),
+        safeRead(() => listPartnerRoomMessages({ roomId: id }), []),
       ])
-    : [{ ok: true as const, data: [] }, { ok: true as const, data: [] }];
+    : [
+        { ok: true as const, data: [] },
+        { ok: true as const, data: [] },
+        { ok: true as const, data: [] },
+      ];
   if (!detail) {
     const error = roomRes.ok ? "Room not found" : roomRes.error;
     return (
@@ -168,13 +179,16 @@ export default async function PartnerAccessRoomPage(props: { params: Params }) {
                 <CardTitle className="flex items-center gap-2">
                   <FileText className="h-4 w-4" />
                   Shared Materials
+                  <span className="ml-auto">
+                    <AddDocsDialog roomId={id} />
+                  </span>
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 {detail.shares.length === 0 ? (
                   <EmptyState
                     title="No materials"
-                    body="Share a project file, doc, or link to place it in this room."
+                    body="Use “Add documents” to place project files, docs, or links in this room."
                   />
                 ) : (
                   <div className="overflow-x-auto">
@@ -183,7 +197,12 @@ export default async function PartnerAccessRoomPage(props: { params: Params }) {
                         <tr>
                           <th className="py-2 pr-4 font-medium">Asset</th>
                           <th className="py-2 pr-4 font-medium">Project</th>
-                          <th className="py-2 pr-4 font-medium">Permissions</th>
+                          <th className="py-2 pr-4 font-medium">
+                            Permissions
+                            <span className="ml-1 font-normal normal-case text-[var(--muted-foreground)]">
+                              (tap to toggle)
+                            </span>
+                          </th>
                           <th className="py-2 pr-4 font-medium">Status</th>
                           <th className="py-2 pr-4 font-medium">Shared</th>
                           <th className="py-2 font-medium">Controls</th>
@@ -221,19 +240,23 @@ export default async function PartnerAccessRoomPage(props: { params: Params }) {
                                 <div className="text-xs text-[var(--muted-foreground)]">
                                   {partnerShareChannelLabel(share.channel)}
                                 </div>
+                                {share.meetingId && share.meetingTitle && (
+                                  <Link
+                                    href={`/meetings/${share.meetingId}`}
+                                    className="mt-1 inline-flex items-center gap-1 rounded bg-[var(--secondary)] px-1.5 py-0.5 text-[10px] text-[var(--secondary-foreground)] hover:underline"
+                                  >
+                                    <CalendarClock className="h-2.5 w-2.5" />
+                                    {share.meetingTitle}
+                                  </Link>
+                                )}
                               </td>
                               <td className="py-3 pr-4">
-                                <div className="flex flex-wrap gap-1">
-                                  {share.permissions.map((permission) => (
-                                    <span
-                                      key={permission}
-                                      className="inline-flex items-center gap-1 rounded bg-[var(--secondary)] px-1.5 py-0.5 text-[10px] text-[var(--secondary-foreground)]"
-                                    >
-                                      <ShieldCheck className="h-2.5 w-2.5" />
-                                      {permission}
-                                    </span>
-                                  ))}
-                                </div>
+                                <SharePermissionsEditor
+                                  key={`${share.id}:${share.permissions.join(",")}`}
+                                  shareId={share.id}
+                                  permissions={share.permissions}
+                                  disabled={Boolean(share.revokedAt)}
+                                />
                               </td>
                               <td className="py-3 pr-4">
                                 <Badge variant={status.variant}>
@@ -258,6 +281,33 @@ export default async function PartnerAccessRoomPage(props: { params: Params }) {
                     </table>
                   </div>
                 )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <MessageSquare className="h-4 w-4" />
+                  Messages
+                  {messagesRes.data.length > 0 && (
+                    <Badge variant="secondary" className="ml-auto">
+                      {messagesRes.data.length}
+                    </Badge>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <RoomMessagesManager
+                  roomId={id}
+                  partnerLabel={detail.contact.name ?? "your partner"}
+                  initialMessages={messagesRes.data.map((m) => ({
+                    id: m.id,
+                    body: m.body,
+                    authorKind: m.authorKind,
+                    authorName: m.authorName,
+                    createdAt: m.createdAt.toISOString(),
+                  }))}
+                />
               </CardContent>
             </Card>
 
@@ -363,6 +413,53 @@ export default async function PartnerAccessRoomPage(props: { params: Params }) {
                     room.publicAccessLastViewedAt?.toISOString() ?? null
                   }
                 />
+                <div className="border-t border-[var(--border)] pt-4">
+                  <RoomPasscodeControls
+                    roomId={room.id}
+                    hasPasscode={Boolean(room.passcodeHash)}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <UsersRound className="h-4 w-4" />
+                  People in this room
+                  {detail.members.length > 0 && (
+                    <Badge variant="secondary" className="ml-auto">
+                      {detail.members.length}
+                    </Badge>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {detail.members.length === 0 ? (
+                  <p className="text-sm text-[var(--muted-foreground)]">
+                    No one has introduced themselves yet. Visitors can leave
+                    their email on the room page.
+                  </p>
+                ) : (
+                  <ul className="space-y-2">
+                    {detail.members.map((member) => (
+                      <li
+                        key={member.id}
+                        className="rounded-md border border-[var(--border)] p-2.5"
+                      >
+                        <div className="truncate text-sm font-medium">
+                          {member.displayName ?? member.email}
+                        </div>
+                        <div className="truncate text-xs text-[var(--muted-foreground)]">
+                          {member.displayName ? `${member.email} · ` : ""}
+                          {member.lastViewedAt
+                            ? `last seen ${formatRelative(member.lastViewedAt)}`
+                            : "never viewed"}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </CardContent>
             </Card>
 

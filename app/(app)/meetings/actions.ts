@@ -542,6 +542,7 @@ export async function shareMeetingMaterialsAction(
       permissions,
       message: opts?.message ?? null,
       expiresAt: null,
+      meetingId,
     });
     if (!res.ok) {
       lastError = res.error;

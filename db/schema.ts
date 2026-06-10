@@ -235,6 +235,11 @@ export const partnerAccessEventType = pgEnum("partner_access_event_type", [
   "next_step_created",
   "next_step_completed",
   "next_step_deleted",
+  "member_identified",
+  "message_posted",
+  "passcode_set",
+  "passcode_removed",
+  "share_updated",
 ]);
 
 /* ─── Pitch feedback module enums ─────────────────────────────────────── */
@@ -786,6 +791,9 @@ export const partnerRooms = pgTable("partner_rooms", {
   publicAccessLastViewedAt: timestamp("public_access_last_viewed_at", {
     withTimezone: true,
   }),
+  passcodeHash: text("passcode_hash"),
+  passcodeFailedCount: integer("passcode_failed_count").notNull().default(0),
+  passcodeLockedUntil: timestamp("passcode_locked_until", { withTimezone: true }),
   createdBy: uuid("created_by")
     .notNull()
     .references(() => users.id),
@@ -844,6 +852,9 @@ export const partnerShares = pgTable("partner_shares", {
     onDelete: "set null",
   }),
   projectLinkId: uuid("project_link_id").references(() => projectLinks.id, {
+    onDelete: "set null",
+  }),
+  meetingId: uuid("meeting_id").references(() => meetings.id, {
     onDelete: "set null",
   }),
   labelSnapshot: text("label_snapshot").notNull(),
@@ -908,6 +919,28 @@ export const partnerUploads = pgTable("partner_uploads", {
   label: text("label"),
   note: text("note"),
   downloadedAt: timestamp("downloaded_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const partnerRoomMessages = pgTable("partner_room_messages", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  roomId: uuid("room_id")
+    .notNull()
+    .references(() => partnerRooms.id, { onDelete: "cascade" }),
+  authorKind: text("author_kind").notNull().default("owner"),
+  authorUserId: uuid("author_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  authorMemberId: uuid("author_member_id").references(() => partnerRoomMembers.id, {
+    onDelete: "set null",
+  }),
+  authorName: text("author_name"),
+  body: text("body").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

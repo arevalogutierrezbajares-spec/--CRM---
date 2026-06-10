@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { hashPartnerAccessToken } from "@/lib/partner-access-token.server";
 import { createSignedUploadUrl, slugFilename } from "@/lib/project-files/storage";
 import { PROJECT_FILES_BUCKET } from "@/lib/project-files/constants";
 import { createPartnerUpload } from "@/db/queries/partner-uploads";
-import { db, schema } from "@/db";
-import { eq } from "drizzle-orm";
+import { resolvePartnerRoomByToken } from "@/db/queries/partner-access";
+import { isPartnerRoomUnlocked } from "@/lib/partner-room-gate.server";
 
 const SignBody = z.object({
   action: z.literal("sign"),
@@ -26,23 +25,14 @@ const FinalizeBody = z.object({
 
 type Params = Promise<{ token: string }>;
 
-async function resolveRoom(token: string) {
-  const tokenHash = hashPartnerAccessToken(token);
-  const [row] = await db
-    .select({ id: schema.partnerRooms.id, workspaceId: schema.partnerRooms.workspaceId, status: schema.partnerRooms.status, expiresAt: schema.partnerRooms.expiresAt })
-    .from(schema.partnerRooms)
-    .where(eq(schema.partnerRooms.publicAccessTokenHash, tokenHash))
-    .limit(1);
-  if (!row || row.status === "revoked" || row.status === "paused") return null;
-  if (row.expiresAt && row.expiresAt.getTime() < Date.now()) return null;
-  return row;
-}
-
 export async function POST(req: NextRequest, props: { params: Params }) {
   const { token } = await props.params;
-  const room = await resolveRoom(token);
+  const room = await resolvePartnerRoomByToken(token).catch(() => null);
   if (!room) {
     return NextResponse.json({ error: "Room not found or access expired" }, { status: 404 });
+  }
+  if (!(await isPartnerRoomUnlocked(room))) {
+    return NextResponse.json({ error: "Room is locked" }, { status: 401 });
   }
 
   let body: unknown;
@@ -59,7 +49,7 @@ export async function POST(req: NextRequest, props: { params: Params }) {
     if (!parsed.success) {
       return NextResponse.json({ error: "Invalid input" }, { status: 400 });
     }
-    const { filename, sizeBytes } = parsed.data;
+    const { filename } = parsed.data;
     const unique = crypto.randomUUID();
     const path = `${room.workspaceId}/partner-uploads/${room.id}/${unique}-${slugFilename(filename)}`;
     const signed = await createSignedUploadUrl(path);
@@ -73,6 +63,13 @@ export async function POST(req: NextRequest, props: { params: Params }) {
     const parsed = FinalizeBody.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json({ error: "Invalid input" }, { status: 400 });
+    }
+    // The storagePath is client-supplied; only accept one under this room's
+    // own upload prefix so a visitor can't register a row pointing at another
+    // workspace's private objects.
+    const requiredPrefix = `${room.workspaceId}/partner-uploads/${room.id}/`;
+    if (!parsed.data.storagePath.startsWith(requiredPrefix)) {
+      return NextResponse.json({ error: "Invalid upload path" }, { status: 400 });
     }
     const upload = await createPartnerUpload({
       workspaceId: room.workspaceId,

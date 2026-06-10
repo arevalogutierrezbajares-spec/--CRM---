@@ -5,6 +5,7 @@ import {
   Download,
   FileText,
   Lock,
+  MessageSquare,
   ShieldCheck,
   Upload,
 } from "lucide-react";
@@ -13,16 +14,25 @@ import { Button } from "@/components/ui/button";
 import { formatBytes } from "@/lib/project-files/limits";
 import { formatRelative } from "@/lib/utils";
 import {
+  getPartnerRoomMember,
   getPublicPartnerRoomByToken,
   recordPublicPartnerRoomView,
   type PublicPartnerRoom,
 } from "@/db/queries/partner-access";
 import { listPartnerNextStepsByRoom } from "@/db/queries/partner-next-steps";
 import { listPartnerUploadsByRoom } from "@/db/queries/partner-uploads";
+import { listPartnerRoomMessages } from "@/db/queries/partner-messages";
 import { partnerKindLabel } from "@/lib/partner-access";
+import {
+  getPartnerMemberIdFromCookies,
+  isPartnerRoomUnlocked,
+} from "@/lib/partner-room-gate.server";
 import { materialType } from "@/lib/materials/material-type";
 import { PublicUploadForm } from "@/components/partner-access/public-upload-form";
 import { PublicNextSteps } from "@/components/partner-access/public-next-steps";
+import { PublicIdentify } from "@/components/partner-access/public-identify";
+import { PublicRoomMessages } from "@/components/partner-access/public-room-messages";
+import { RoomGate } from "@/components/partner-access/room-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -37,15 +47,30 @@ export default async function PublicAccessRoomPage({
   const access = await getPublicPartnerRoomByToken({ token }).catch(() => null);
   if (!access) return <UnavailableRoom />;
 
+  if (!(await isPartnerRoomUnlocked(access.room))) {
+    return <RoomGate token={token} roomName={access.room.name} />;
+  }
+
+  const memberId = await getPartnerMemberIdFromCookies(access.room.id);
+  const member = memberId
+    ? await getPartnerRoomMember({
+        roomId: access.room.id,
+        memberId,
+      }).catch(() => null)
+    : null;
+
   await recordPublicPartnerRoomView({
     roomId: access.room.id,
     workspaceId: access.room.workspaceId,
     contactId: access.contact.id,
+    memberId: member?.id ?? null,
+    memberEmail: member?.email ?? null,
   }).catch(() => {});
 
-  const [nextSteps, partnerUploads] = await Promise.all([
+  const [nextSteps, partnerUploads, messages] = await Promise.all([
     listPartnerNextStepsByRoom({ roomId: access.room.id }).catch(() => []),
     listPartnerUploadsByRoom({ roomId: access.room.id }).catch(() => []),
+    listPartnerRoomMessages({ roomId: access.room.id }).catch(() => []),
   ]);
 
   const shares = access.shares;
@@ -156,6 +181,32 @@ export default async function PublicAccessRoomPage({
                 </ul>
               )}
             </div>
+            {/* Messages section */}
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--card)]">
+              <div className="flex items-center gap-2 border-b border-[var(--border)] px-4 py-3">
+                <MessageSquare className="h-4 w-4 text-[var(--muted-foreground)]" />
+                <div>
+                  <h2 className="text-base font-semibold">Messages</h2>
+                  <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">
+                    Questions, notes, and updates between you and the team.
+                  </p>
+                </div>
+              </div>
+              <div className="p-4">
+                <PublicRoomMessages
+                  token={token}
+                  ownerLabel="The team"
+                  initialMessages={messages.map((m) => ({
+                    id: m.id,
+                    body: m.body,
+                    authorKind: m.authorKind,
+                    authorName: m.authorName,
+                    createdAt: m.createdAt.toISOString(),
+                  }))}
+                />
+              </div>
+            </div>
+
             {/* Partner uploads section */}
             <div className="rounded-xl border border-[var(--border)] bg-[var(--card)]">
               <div className="flex items-center gap-2 border-b border-[var(--border)] px-4 py-3">
@@ -192,6 +243,13 @@ export default async function PublicAccessRoomPage({
           </div>
 
           <aside className="space-y-4">
+            <PublicIdentify
+              token={token}
+              identifiedAs={
+                member ? { email: member.email, name: member.displayName } : null
+              }
+            />
+
             <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
               <h2 className="text-base font-semibold">Room Status</h2>
               <div className="mt-3 space-y-3 text-sm">

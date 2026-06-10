@@ -4,6 +4,7 @@ import {
   recordPublicPartnerShareEvent,
 } from "@/db/queries/partner-access";
 import { createSignedDownloadUrl } from "@/lib/project-files/storage";
+import { isPartnerRoomUnlocked } from "@/lib/partner-room-gate.server";
 
 type Params = Promise<{ token: string; shareId: string }>;
 
@@ -14,6 +15,9 @@ export async function GET(_: Request, { params }: { params: Params }) {
   );
   if (!row || !row.share.permissions.includes("download") || !row.storagePath) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  if (!(await isPartnerRoomUnlocked(row.room))) {
+    return NextResponse.json({ error: "Room is locked" }, { status: 401 });
   }
 
   const signed = await createSignedDownloadUrl(row.storagePath);

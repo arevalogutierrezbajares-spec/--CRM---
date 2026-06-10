@@ -3,10 +3,11 @@ import {
   getPublicPartnerShareByToken,
   recordPublicPartnerShareEvent,
 } from "@/db/queries/partner-access";
+import { isPartnerRoomUnlocked } from "@/lib/partner-room-gate.server";
 
 type Params = Promise<{ token: string; shareId: string }>;
 
-export async function GET(_: Request, { params }: { params: Params }) {
+export async function GET(req: Request, { params }: { params: Params }) {
   const { token, shareId } = await params;
   const row = await getPublicPartnerShareByToken({ token, shareId }).catch(
     () => null,
@@ -14,6 +15,9 @@ export async function GET(_: Request, { params }: { params: Params }) {
   const target = row?.share.urlSnapshot ?? row?.url;
   if (!row || !target) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  if (!(await isPartnerRoomUnlocked(row.room))) {
+    return NextResponse.redirect(new URL(`/access/${token}`, req.url));
   }
 
   await recordPublicPartnerShareEvent({

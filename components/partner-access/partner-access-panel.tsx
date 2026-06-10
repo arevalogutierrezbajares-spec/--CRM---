@@ -5,6 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { ShareLedgerActions } from "@/components/partner-access/share-ledger-actions";
+import {
+  NewRoomDialog,
+  type NewRoomContactOption,
+} from "@/components/partner-access/new-room-dialog";
 import type { PartnerAccessOverview } from "@/db/queries/partner-access";
 import {
   partnerKindLabel,
@@ -21,10 +25,12 @@ function statusVariant(status: string) {
 
 export function PartnerAccessPanel({
   access,
+  contact,
   nextStepCountByRoom = {},
   uploadCountByRoom = {},
 }: {
   access: PartnerAccessOverview;
+  contact?: NewRoomContactOption;
   nextStepCountByRoom?: Record<string, number>;
   uploadCountByRoom?: Record<string, number>;
 }) {
@@ -34,13 +40,22 @@ export function PartnerAccessPanel({
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center justify-between gap-2">
-          <span className="inline-flex items-center gap-2">
-            <DoorOpen className="h-4 w-4" />
-            Partner Access
+          <span className="inline-flex min-w-0 items-center gap-2">
+            <DoorOpen className="h-4 w-4 shrink-0" />
+            <span className="truncate">Partner Access</span>
           </span>
-          <Button asChild variant="ghost" size="sm" className="h-7 px-2">
-            <Link href="/partner-access">Open</Link>
-          </Button>
+          <span className="flex shrink-0 items-center gap-1">
+            {contact && (
+              <NewRoomDialog
+                fixedContact={contact}
+                triggerVariant="ghost"
+                triggerLabel="New"
+              />
+            )}
+            <Button asChild variant="ghost" size="sm" className="h-7 px-2">
+              <Link href="/partner-access">Open</Link>
+            </Button>
+          </span>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -48,7 +63,9 @@ export function PartnerAccessPanel({
           <div className="rounded-md border border-dashed border-[var(--border)] p-3">
             <p className="text-sm font-medium">No access shared yet.</p>
             <p className="mt-1 text-xs text-[var(--muted-foreground)]">
-              Share a project document to create the first room and ledger entry.
+              {contact
+                ? "Create a room to give this contact a private workspace, or share a project document."
+                : "Share a project document to create the first room and ledger entry."}
             </p>
           </div>
         ) : (

@@ -5,6 +5,7 @@ import {
 } from "@/db/queries/partner-access";
 import { createSignedDownloadUrl } from "@/lib/project-files/storage";
 import { canonicalMime } from "@/lib/project-files/allowed-types";
+import { isPartnerRoomUnlocked } from "@/lib/partner-room-gate.server";
 
 /**
  * Render a shared file (esp. HTML decks) inline for an external client, with the
@@ -24,6 +25,9 @@ export async function GET(_: Request, { params }: { params: Params }) {
   const row = await getPublicPartnerShareByToken({ token, shareId }).catch(() => null);
   if (!row || row.share.kindSnapshot !== "file" || !row.storagePath) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  if (!(await isPartnerRoomUnlocked(row.room))) {
+    return NextResponse.json({ error: "Room is locked" }, { status: 401 });
   }
 
   const signed = await createSignedDownloadUrl(row.storagePath);

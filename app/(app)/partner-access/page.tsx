@@ -14,6 +14,8 @@ import {
   partnerShareChannelLabel,
 } from "@/lib/partner-access";
 import { listPartnerAccessDashboard } from "@/db/queries/partner-access";
+import { listContacts } from "@/db/queries/contacts";
+import { NewRoomDialog } from "@/components/partner-access/new-room-dialog";
 
 function statusVariant(status: string) {
   if (status === "active") return "success";
@@ -24,11 +26,19 @@ function statusVariant(status: string) {
 
 export default async function PartnerAccessPage() {
   const user = await requireUser();
-  const accessRes = await safeRead(
-    () => listPartnerAccessDashboard({ workspaceId: user.workspaceId }),
-    { rooms: [], shares: [] },
-  );
+  const [accessRes, contactsRes] = await Promise.all([
+    safeRead(
+      () => listPartnerAccessDashboard({ workspaceId: user.workspaceId }),
+      { rooms: [], shares: [] },
+    ),
+    safeRead(() => listContacts({ workspaceId: user.workspaceId }), []),
+  ]);
   const access = accessRes.data;
+  const contactOptions = contactsRes.data.map((contact) => ({
+    id: contact.id,
+    name: contact.name,
+    organization: contact.organization,
+  }));
   const activeShares = access.shares.filter((share) => !share.revokedAt);
   const viewedShares = access.shares.filter((share) => share.viewedAt);
   const downloadedShares = access.shares.filter((share) => share.downloadedAt);
@@ -47,6 +57,7 @@ export default async function PartnerAccessPage() {
               across creative, capital, strategic, operating, and advisor relationships.
             </p>
           </div>
+          <NewRoomDialog contacts={contactOptions} />
         </div>
 
         {!accessRes.ok && <DbBanner error={accessRes.error} />}

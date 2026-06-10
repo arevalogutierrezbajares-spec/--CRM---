@@ -1,9 +1,15 @@
-import { and, desc, eq, gt, inArray, isNull, ne, or } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import {
   createPartnerAccessToken,
   hashPartnerAccessToken,
 } from "@/lib/partner-access-token.server";
+import {
+  hashPartnerRoomPasscode,
+  verifyPasscodeAgainstHash,
+  PARTNER_PASSCODE_LOCK_MINUTES,
+  PARTNER_PASSCODE_MAX_ATTEMPTS,
+} from "@/lib/partner-room-gate.server";
 import type {
   PartnerKind,
   PartnerPermission,
@@ -22,6 +28,7 @@ export type PartnerAccessShare = typeof schema.partnerShares.$inferSelect & {
   liveLabel: string | null;
   roomName: string | null;
   sharedByName: string | null;
+  meetingTitle: string | null;
 };
 
 export type PartnerAccessOverview = {
@@ -77,6 +84,7 @@ export async function listPartnerAccessForContact(opts: {
         liveLabel: schema.projectLinks.label,
         roomName: schema.partnerRooms.name,
         sharedByName: schema.users.displayName,
+        meetingTitle: schema.meetings.title,
       })
       .from(schema.partnerShares)
       .leftJoin(schema.contacts, eq(schema.contacts.id, schema.partnerShares.contactId))
@@ -87,6 +95,7 @@ export async function listPartnerAccessForContact(opts: {
       )
       .leftJoin(schema.partnerRooms, eq(schema.partnerRooms.id, schema.partnerShares.roomId))
       .leftJoin(schema.users, eq(schema.users.id, schema.partnerShares.sharedBy))
+      .leftJoin(schema.meetings, eq(schema.meetings.id, schema.partnerShares.meetingId))
       .where(
         and(
           eq(schema.partnerShares.workspaceId, opts.workspaceId),
@@ -128,6 +137,7 @@ export async function listPartnerAccessForContact(opts: {
       liveLabel: row.liveLabel,
       roomName: row.roomName,
       sharedByName: row.sharedByName,
+      meetingTitle: row.meetingTitle,
     })),
   };
 }
@@ -152,6 +162,7 @@ export async function listPartnerAccessDashboard(opts: {
         liveLabel: schema.projectLinks.label,
         roomName: schema.partnerRooms.name,
         sharedByName: schema.users.displayName,
+        meetingTitle: schema.meetings.title,
       })
       .from(schema.partnerShares)
       .leftJoin(schema.contacts, eq(schema.contacts.id, schema.partnerShares.contactId))
@@ -162,6 +173,7 @@ export async function listPartnerAccessDashboard(opts: {
       )
       .leftJoin(schema.partnerRooms, eq(schema.partnerRooms.id, schema.partnerShares.roomId))
       .leftJoin(schema.users, eq(schema.users.id, schema.partnerShares.sharedBy))
+      .leftJoin(schema.meetings, eq(schema.meetings.id, schema.partnerShares.meetingId))
       .where(eq(schema.partnerShares.workspaceId, opts.workspaceId))
       .orderBy(desc(schema.partnerShares.sharedAt)),
     roomIds.length
@@ -198,6 +210,7 @@ export async function listPartnerAccessDashboard(opts: {
       liveLabel: row.liveLabel,
       roomName: row.roomName,
       sharedByName: row.sharedByName,
+      meetingTitle: row.meetingTitle,
     })),
   };
 }
@@ -236,6 +249,7 @@ export async function getPartnerAccessRoom(opts: {
         liveLabel: schema.projectLinks.label,
         roomName: schema.partnerRooms.name,
         sharedByName: schema.users.displayName,
+        meetingTitle: schema.meetings.title,
       })
       .from(schema.partnerShares)
       .leftJoin(schema.contacts, eq(schema.contacts.id, schema.partnerShares.contactId))
@@ -246,6 +260,7 @@ export async function getPartnerAccessRoom(opts: {
       )
       .leftJoin(schema.partnerRooms, eq(schema.partnerRooms.id, schema.partnerShares.roomId))
       .leftJoin(schema.users, eq(schema.users.id, schema.partnerShares.sharedBy))
+      .leftJoin(schema.meetings, eq(schema.meetings.id, schema.partnerShares.meetingId))
       .where(
         and(
           eq(schema.partnerShares.workspaceId, opts.workspaceId),
@@ -300,6 +315,7 @@ export async function getPartnerAccessRoom(opts: {
       liveLabel: row.liveLabel,
       roomName: row.roomName,
       sharedByName: row.sharedByName,
+      meetingTitle: row.meetingTitle,
     })),
     members,
     events: events.map((row) => ({
@@ -497,6 +513,12 @@ export type CreatePartnerShareInput = {
   permissions: PartnerPermission[];
   message?: string | null;
   expiresAt?: Date | null;
+  /** Pin the share to a specific room instead of resolving by contact+kind. */
+  roomId?: string | null;
+  /** Meeting this material was shared from, for provenance. */
+  meetingId?: string | null;
+  /** When the doc is already shared, leave its tuned permissions untouched. */
+  preserveExistingShare?: boolean;
 };
 
 export type PublicPartnerRoom = {
@@ -565,15 +587,25 @@ export async function createPartnerShare(input: CreatePartnerShareInput) {
       .select()
       .from(schema.partnerRooms)
       .where(
-        and(
-          eq(schema.partnerRooms.workspaceId, input.workspaceId),
-          eq(schema.partnerRooms.primaryContactId, input.contactId),
-          eq(schema.partnerRooms.partnerKind, input.partnerKind),
-          ne(schema.partnerRooms.status, "revoked"),
-        ),
+        input.roomId
+          ? and(
+              eq(schema.partnerRooms.workspaceId, input.workspaceId),
+              eq(schema.partnerRooms.id, input.roomId),
+              ne(schema.partnerRooms.status, "revoked"),
+            )
+          : and(
+              eq(schema.partnerRooms.workspaceId, input.workspaceId),
+              eq(schema.partnerRooms.primaryContactId, input.contactId),
+              eq(schema.partnerRooms.partnerKind, input.partnerKind),
+              ne(schema.partnerRooms.status, "revoked"),
+            ),
       )
       .orderBy(desc(schema.partnerRooms.updatedAt))
       .limit(1);
+
+    if (input.roomId && !existingRoom) {
+      throw new Error("ROOM_NOT_FOUND");
+    }
 
     let accessToken: string | null = null;
     let room = existingRoom;
@@ -624,12 +656,24 @@ export async function createPartnerShare(input: CreatePartnerShareInput) {
       .where(
         and(
           eq(schema.partnerShares.workspaceId, input.workspaceId),
-          eq(schema.partnerShares.contactId, input.contactId),
+          eq(schema.partnerShares.roomId, room.id),
           eq(schema.partnerShares.projectLinkId, input.projectLinkId),
           isNull(schema.partnerShares.revokedAt),
         ),
       )
       .limit(1);
+
+    // Bulk "add documents" must never clobber a share whose permissions were
+    // tuned by hand — a re-add of an already-present doc is a no-op.
+    if (existingShare && input.preserveExistingShare) {
+      if (room.status === "draft") {
+        await tx
+          .update(schema.partnerRooms)
+          .set({ status: "active", updatedAt: now, lastActivityAt: now })
+          .where(eq(schema.partnerRooms.id, room.id));
+      }
+      return { room, share: existingShare, accessToken };
+    }
 
     const values = {
       workspaceId: input.workspaceId,
@@ -637,6 +681,7 @@ export async function createPartnerShare(input: CreatePartnerShareInput) {
       contactId: input.contactId,
       lobId: input.projectId,
       projectLinkId: input.projectLinkId,
+      meetingId: input.meetingId ?? existingShare?.meetingId ?? null,
       labelSnapshot: linkRow.link.label,
       kindSnapshot: linkRow.link.kind,
       categorySnapshot: linkRow.link.category,
@@ -657,8 +702,10 @@ export async function createPartnerShare(input: CreatePartnerShareInput) {
           .returning()
       : await tx.insert(schema.partnerShares).values(values).returning();
 
+    // A draft room goes live on first share; a deliberately paused room stays
+    // paused (adding a doc must not silently re-expose it on the public link).
     await tx.update(schema.partnerRooms).set({
-      status: "active",
+      status: room.status === "draft" ? "active" : room.status,
       updatedAt: now,
       lastActivityAt: now,
     }).where(eq(schema.partnerRooms.id, room.id));
@@ -680,9 +727,476 @@ export async function createPartnerShare(input: CreatePartnerShareInput) {
     });
 
     return { room, share, accessToken };
+  }).catch((error: unknown) => {
+    if (error instanceof Error && error.message === "ROOM_NOT_FOUND") return null;
+    throw error;
   });
 
+  if (!result) return { ok: false as const, error: "Room not found" };
   return { ok: true as const, ...result };
+}
+
+/**
+ * Explicitly create a room for a contact (no document required). Returns the
+ * existing non-revoked room for contact+kind when one already exists.
+ */
+export async function createPartnerRoomForContact(input: {
+  workspaceId: string;
+  actorId: string;
+  contactId: string;
+  partnerKind: PartnerKind;
+  name?: string | null;
+}) {
+  const [contact] = await db
+    .select({ id: schema.contacts.id, name: schema.contacts.name })
+    .from(schema.contacts)
+    .where(
+      and(
+        eq(schema.contacts.id, input.contactId),
+        eq(schema.contacts.workspaceId, input.workspaceId),
+      ),
+    )
+    .limit(1);
+
+  if (!contact) return { ok: false as const, error: "Contact not found" };
+
+  const [existing] = await db
+    .select()
+    .from(schema.partnerRooms)
+    .where(
+      and(
+        eq(schema.partnerRooms.workspaceId, input.workspaceId),
+        eq(schema.partnerRooms.primaryContactId, input.contactId),
+        eq(schema.partnerRooms.partnerKind, input.partnerKind),
+        ne(schema.partnerRooms.status, "revoked"),
+      ),
+    )
+    .orderBy(desc(schema.partnerRooms.updatedAt))
+    .limit(1);
+
+  if (existing) {
+    return {
+      ok: true as const,
+      room: existing,
+      accessToken: null,
+      existed: true,
+    };
+  }
+
+  const accessToken = createPartnerAccessToken();
+  const now = new Date();
+  const room = await db.transaction(async (tx) => {
+    const [created] = await tx
+      .insert(schema.partnerRooms)
+      .values({
+        workspaceId: input.workspaceId,
+        primaryContactId: input.contactId,
+        name: input.name?.trim() || `${contact.name} Room`,
+        partnerKind: input.partnerKind,
+        status: "active",
+        publicAccessTokenHash: hashPartnerAccessToken(accessToken),
+        publicAccessTokenCreatedAt: now,
+        createdBy: input.actorId,
+        lastActivityAt: now,
+      })
+      .returning();
+
+    await tx.insert(schema.partnerAccessEvents).values({
+      workspaceId: input.workspaceId,
+      roomId: created.id,
+      contactId: input.contactId,
+      actorUserId: input.actorId,
+      eventType: "room_created",
+      metadata: { partnerKind: input.partnerKind, explicit: true },
+    });
+
+    return created;
+  });
+
+  return { ok: true as const, room, accessToken, existed: false };
+}
+
+/** Set (4 digits) or clear the public-link passcode for a room. */
+export async function setPartnerRoomPasscode(input: {
+  workspaceId: string;
+  actorId: string;
+  roomId: string;
+  passcode: string | null;
+}) {
+  const [existing] = await db
+    .select()
+    .from(schema.partnerRooms)
+    .where(
+      and(
+        eq(schema.partnerRooms.workspaceId, input.workspaceId),
+        eq(schema.partnerRooms.id, input.roomId),
+      ),
+    )
+    .limit(1);
+
+  if (!existing) return { ok: false as const, error: "Room not found" };
+
+  const now = new Date();
+  const passcodeHash = input.passcode
+    ? hashPartnerRoomPasscode(existing.id, input.passcode)
+    : null;
+
+  const room = await db.transaction(async (tx) => {
+    const [updated] = await tx
+      .update(schema.partnerRooms)
+      .set({
+        passcodeHash,
+        passcodeFailedCount: 0,
+        passcodeLockedUntil: null,
+        updatedAt: now,
+      })
+      .where(eq(schema.partnerRooms.id, existing.id))
+      .returning();
+
+    await tx.insert(schema.partnerAccessEvents).values({
+      workspaceId: input.workspaceId,
+      roomId: existing.id,
+      contactId: existing.primaryContactId,
+      actorUserId: input.actorId,
+      eventType: passcodeHash ? "passcode_set" : "passcode_removed",
+      metadata: {},
+    });
+
+    return updated;
+  });
+
+  return { ok: true as const, room };
+}
+
+export type VerifyPartnerPasscodeResult =
+  | { ok: true; roomId: string; passcodeHash: string }
+  | { ok: false; locked: boolean; retryAt: string | null };
+
+/**
+ * Verify a 4-digit passcode for a token-resolved room, with a room-wide
+ * lockout after repeated failures to keep online brute-force impractical.
+ */
+export async function verifyPartnerRoomPasscode(input: {
+  token: string;
+  passcode: string;
+}): Promise<VerifyPartnerPasscodeResult | null> {
+  const tokenHash = hashPartnerAccessToken(input.token);
+  const [room] = await db
+    .select()
+    .from(schema.partnerRooms)
+    .where(eq(schema.partnerRooms.publicAccessTokenHash, tokenHash))
+    .limit(1);
+
+  if (!room || room.status === "revoked" || room.status === "paused") return null;
+  if (room.expiresAt && room.expiresAt.getTime() < Date.now()) return null;
+  if (!room.passcodeHash) {
+    // Nothing to unlock — treat as success so the gate clears itself.
+    return { ok: true, roomId: room.id, passcodeHash: "" };
+  }
+
+  const now = new Date();
+  if (room.passcodeLockedUntil && room.passcodeLockedUntil.getTime() > now.getTime()) {
+    return {
+      ok: false,
+      locked: true,
+      retryAt: room.passcodeLockedUntil.toISOString(),
+    };
+  }
+
+  if (verifyPasscodeAgainstHash(room.id, input.passcode, room.passcodeHash)) {
+    await db
+      .update(schema.partnerRooms)
+      .set({ passcodeFailedCount: 0, passcodeLockedUntil: null })
+      .where(eq(schema.partnerRooms.id, room.id));
+    return { ok: true, roomId: room.id, passcodeHash: room.passcodeHash };
+  }
+
+  // Atomic increment so concurrent wrong guesses can't collapse into one and
+  // exceed the attempt ceiling.
+  const [bumped] = await db
+    .update(schema.partnerRooms)
+    .set({ passcodeFailedCount: sql`${schema.partnerRooms.passcodeFailedCount} + 1` })
+    .where(eq(schema.partnerRooms.id, room.id))
+    .returning({ failedCount: schema.partnerRooms.passcodeFailedCount });
+
+  const failedCount = bumped?.failedCount ?? room.passcodeFailedCount + 1;
+  const lock = failedCount >= PARTNER_PASSCODE_MAX_ATTEMPTS;
+  if (lock) {
+    await db
+      .update(schema.partnerRooms)
+      .set({
+        passcodeFailedCount: 0,
+        passcodeLockedUntil: new Date(
+          now.getTime() + PARTNER_PASSCODE_LOCK_MINUTES * 60 * 1000,
+        ),
+      })
+      .where(eq(schema.partnerRooms.id, room.id));
+  }
+  const lockedUntil = lock
+    ? new Date(now.getTime() + PARTNER_PASSCODE_LOCK_MINUTES * 60 * 1000)
+    : null;
+
+  return {
+    ok: false,
+    locked: lock,
+    retryAt: lockedUntil?.toISOString() ?? null,
+  };
+}
+
+/** Upsert a self-identified room visitor into partner_room_members. */
+export async function identifyPartnerRoomMember(input: {
+  workspaceId: string;
+  roomId: string;
+  contactId: string | null;
+  email: string;
+  displayName?: string | null;
+}) {
+  const email = input.email.trim().toLowerCase();
+  const displayName = input.displayName?.trim() || null;
+  const now = new Date();
+
+  const member = await db.transaction(async (tx) => {
+    // Upsert on (roomId, email) so a double-submit / retried fetch can't throw
+    // a unique-violation 500. onConflict counts as "already a member".
+    const [row] = await tx
+      .insert(schema.partnerRoomMembers)
+      .values({
+        workspaceId: input.workspaceId,
+        roomId: input.roomId,
+        contactId: input.contactId,
+        email,
+        displayName,
+        lastViewedAt: now,
+      })
+      .onConflictDoUpdate({
+        target: [
+          schema.partnerRoomMembers.roomId,
+          schema.partnerRoomMembers.email,
+        ],
+        set: {
+          displayName: sql`coalesce(${displayName ?? null}, ${schema.partnerRoomMembers.displayName})`,
+          lastViewedAt: now,
+        },
+      })
+      .returning();
+
+    await tx.insert(schema.partnerAccessEvents).values({
+      workspaceId: input.workspaceId,
+      roomId: input.roomId,
+      contactId: input.contactId,
+      eventType: "member_identified",
+      metadata: { email, displayName },
+    });
+
+    await tx
+      .update(schema.partnerRooms)
+      .set({ lastActivityAt: now, updatedAt: now })
+      .where(eq(schema.partnerRooms.id, input.roomId));
+
+    return row;
+  });
+
+  return member;
+}
+
+export async function countPartnerRoomMembers(input: { roomId: string }) {
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(schema.partnerRoomMembers)
+    .where(eq(schema.partnerRoomMembers.roomId, input.roomId));
+  return row?.count ?? 0;
+}
+
+export async function getPartnerMemberByEmail(input: {
+  roomId: string;
+  email: string;
+}) {
+  const email = input.email.trim().toLowerCase();
+  const [member] = await db
+    .select()
+    .from(schema.partnerRoomMembers)
+    .where(
+      and(
+        eq(schema.partnerRoomMembers.roomId, input.roomId),
+        eq(schema.partnerRoomMembers.email, email),
+      ),
+    )
+    .limit(1);
+  return member ?? null;
+}
+
+/** Look up a member by id, fenced to a room (cookie values are untrusted). */
+export async function getPartnerRoomMember(input: {
+  roomId: string;
+  memberId: string;
+}) {
+  const [member] = await db
+    .select()
+    .from(schema.partnerRoomMembers)
+    .where(
+      and(
+        eq(schema.partnerRoomMembers.id, input.memberId),
+        eq(schema.partnerRoomMembers.roomId, input.roomId),
+      ),
+    )
+    .limit(1);
+  return member ?? null;
+}
+
+/** Update the permission set on an existing share. */
+export async function updatePartnerSharePermissions(input: {
+  workspaceId: string;
+  actorId: string;
+  shareId: string;
+  permissions: PartnerPermission[];
+}) {
+  const [share] = await db
+    .select()
+    .from(schema.partnerShares)
+    .where(
+      and(
+        eq(schema.partnerShares.id, input.shareId),
+        eq(schema.partnerShares.workspaceId, input.workspaceId),
+      ),
+    )
+    .limit(1);
+
+  if (!share) return { ok: false as const, error: "Share not found" };
+  if (share.revokedAt) {
+    return { ok: false as const, error: "Share has been removed" };
+  }
+
+  const now = new Date();
+  await db.transaction(async (tx) => {
+    await tx
+      .update(schema.partnerShares)
+      .set({ permissions: input.permissions })
+      .where(eq(schema.partnerShares.id, share.id));
+
+    if (share.roomId) {
+      await tx
+        .update(schema.partnerRooms)
+        .set({ lastActivityAt: now, updatedAt: now })
+        .where(eq(schema.partnerRooms.id, share.roomId));
+    }
+
+    await tx.insert(schema.partnerAccessEvents).values({
+      workspaceId: input.workspaceId,
+      roomId: share.roomId,
+      shareId: share.id,
+      contactId: share.contactId,
+      actorUserId: input.actorId,
+      eventType: "share_updated",
+      metadata: {
+        label: share.labelSnapshot,
+        from: share.permissions,
+        to: input.permissions,
+      },
+    });
+  });
+
+  return {
+    ok: true as const,
+    id: share.id,
+    roomId: share.roomId,
+    contactId: share.contactId,
+  };
+}
+
+export type ShareableRoomDoc = {
+  id: string;
+  label: string;
+  kind: string;
+  category: string | null;
+  lobId: string;
+  lobTitle: string;
+  sizeBytes: number | null;
+  mimeType: string | null;
+  originalFilename: string | null;
+  alreadyShared: boolean;
+};
+
+/** Workspace docs/files/links that can be placed into a room, with shared flags. */
+export async function listShareableDocsForRoom(input: {
+  workspaceId: string;
+  roomId: string;
+}): Promise<ShareableRoomDoc[]> {
+  const [links, activeShares] = await Promise.all([
+    db
+      .select({
+        id: schema.projectLinks.id,
+        label: schema.projectLinks.label,
+        kind: schema.projectLinks.kind,
+        category: schema.projectLinks.category,
+        lobId: schema.projectLinks.lobId,
+        lobTitle: schema.linesOfBusiness.title,
+        sizeBytes: schema.projectLinks.sizeBytes,
+        mimeType: schema.projectLinks.mimeType,
+        originalFilename: schema.projectLinks.originalFilename,
+      })
+      .from(schema.projectLinks)
+      .innerJoin(
+        schema.linesOfBusiness,
+        eq(schema.linesOfBusiness.id, schema.projectLinks.lobId),
+      )
+      .where(
+        and(
+          eq(schema.projectLinks.workspaceId, input.workspaceId),
+          ne(schema.projectLinks.kind, "note"),
+        ),
+      )
+      .orderBy(asc(schema.linesOfBusiness.title), asc(schema.projectLinks.label)),
+    db
+      .select({ projectLinkId: schema.partnerShares.projectLinkId })
+      .from(schema.partnerShares)
+      .where(
+        and(
+          eq(schema.partnerShares.workspaceId, input.workspaceId),
+          eq(schema.partnerShares.roomId, input.roomId),
+          isNull(schema.partnerShares.revokedAt),
+        ),
+      ),
+  ]);
+
+  const shared = new Set(
+    activeShares.map((s) => s.projectLinkId).filter(Boolean) as string[],
+  );
+
+  return links.map((link) => ({
+    ...link,
+    alreadyShared: shared.has(link.id),
+  }));
+}
+
+/** Light room fetch for action-layer checks (workspace-fenced). */
+export async function getPartnerRoomBasic(input: {
+  workspaceId: string;
+  roomId: string;
+}) {
+  const [room] = await db
+    .select()
+    .from(schema.partnerRooms)
+    .where(
+      and(
+        eq(schema.partnerRooms.workspaceId, input.workspaceId),
+        eq(schema.partnerRooms.id, input.roomId),
+      ),
+    )
+    .limit(1);
+  return room ?? null;
+}
+
+/** Resolve a live (active, unexpired) room from a public token. */
+export async function resolvePartnerRoomByToken(token: string) {
+  const tokenHash = hashPartnerAccessToken(token);
+  const [room] = await db
+    .select()
+    .from(schema.partnerRooms)
+    .where(eq(schema.partnerRooms.publicAccessTokenHash, tokenHash))
+    .limit(1);
+  if (!room || room.status === "revoked" || room.status === "paused") return null;
+  if (room.expiresAt && room.expiresAt.getTime() < Date.now()) return null;
+  return room;
 }
 
 export async function getPublicPartnerRoomByToken(input: {
@@ -716,6 +1230,7 @@ export async function getPublicPartnerRoomByToken(input: {
       liveLabel: schema.projectLinks.label,
       roomName: schema.partnerRooms.name,
       sharedByName: schema.users.displayName,
+      meetingTitle: schema.meetings.title,
       storagePath: schema.projectLinks.storagePath,
       mimeType: schema.projectLinks.mimeType,
       originalFilename: schema.projectLinks.originalFilename,
@@ -731,6 +1246,7 @@ export async function getPublicPartnerRoomByToken(input: {
     )
     .leftJoin(schema.partnerRooms, eq(schema.partnerRooms.id, schema.partnerShares.roomId))
     .leftJoin(schema.users, eq(schema.users.id, schema.partnerShares.sharedBy))
+      .leftJoin(schema.meetings, eq(schema.meetings.id, schema.partnerShares.meetingId))
     .where(
       and(
         eq(schema.partnerShares.roomId, row.room.id),
@@ -757,6 +1273,7 @@ export async function getPublicPartnerRoomByToken(input: {
       liveLabel: shareRow.liveLabel,
       roomName: shareRow.roomName,
       sharedByName: shareRow.sharedByName,
+      meetingTitle: shareRow.meetingTitle,
       storagePath: shareRow.storagePath,
       mimeType: shareRow.mimeType,
       originalFilename: shareRow.originalFilename,
@@ -771,6 +1288,8 @@ export async function recordPublicPartnerRoomView(input: {
   roomId: string;
   workspaceId: string;
   contactId: string | null;
+  memberId?: string | null;
+  memberEmail?: string | null;
 }) {
   const now = new Date();
   await db.transaction(async (tx) => {
@@ -783,12 +1302,26 @@ export async function recordPublicPartnerRoomView(input: {
       })
       .where(eq(schema.partnerRooms.id, input.roomId));
 
+    if (input.memberId) {
+      await tx
+        .update(schema.partnerRoomMembers)
+        .set({ lastViewedAt: now })
+        .where(
+          and(
+            eq(schema.partnerRoomMembers.id, input.memberId),
+            eq(schema.partnerRoomMembers.roomId, input.roomId),
+          ),
+        );
+    }
+
     await tx.insert(schema.partnerAccessEvents).values({
       workspaceId: input.workspaceId,
       roomId: input.roomId,
       contactId: input.contactId,
       eventType: "viewed",
-      metadata: { surface: "public_room" },
+      metadata: input.memberEmail
+        ? { surface: "public_room", memberEmail: input.memberEmail }
+        : { surface: "public_room" },
     });
   });
 }

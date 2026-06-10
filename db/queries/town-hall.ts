@@ -229,6 +229,7 @@ function notificationHref(entityType: string | null, entityId: string | null): s
   if (entityType && entityId) {
     if (entityType === "action_item" || entityType === "milestone") return `/?item=${entityType}:${entityId}`;
     if (entityType === "meeting") return `/meetings/${entityId}`;
+    if (entityType === "partner_room") return `/partner-access/rooms/${entityId}`;
   }
   return "/town-hall";
 }
