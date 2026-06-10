@@ -8,11 +8,12 @@ import { BrandPillars } from "./brand-pillars";
 export const BRAND_INTRO_REPLAY_EVENT = "agb:brand-intro-replay";
 const SEEN_KEY = "agb_brand_intro_seen_v1";
 
-const FULL_NAME = "ArevaloGutierrezBrewer Technologies";
+// Only the name unfolds (no " Technologies" — that word would overflow the
+// sidebar). It spells out, then culls down to A·G·B; the resting lockup adds
+// " Technologies" back when it settles.
+const FULL_NAME = "ArevaloGutierrezBrewer";
 /** Indices of A, G, B inside FULL_NAME — the letters that survive the cull. */
 const KEEP = new Set([0, 7, 16]);
-/** " Technologies" (index 22 onward) also survives. */
-const WORD_START = 22;
 /** These two letters squash flat (the Luxo-lamp beat) instead of popping. */
 const SQUASHED = new Set([15, 19]);
 
@@ -127,7 +128,7 @@ export function BrandWidget({ rail = false }: { rail?: boolean }) {
   const letters = (
     <motion.span
       key={runKey}
-      aria-label="ArevaloGutierrezBrewer Technologies"
+      aria-label="ArevaloGutierrezBrewer"
       className="whitespace-nowrap text-[15px] leading-none tracking-tight"
       initial="hidden"
       animate={phaseLabel(phase)}
@@ -135,7 +136,7 @@ export function BrandWidget({ rail = false }: { rail?: boolean }) {
       {Array.from(FULL_NAME).map((ch, i) => {
         const ctx: LetterCtx = {
           i,
-          keep: KEEP.has(i) || i >= WORD_START,
+          keep: KEEP.has(i),
           squash: SQUASHED.has(i),
           rank: CULL_RANK[i] ?? 0,
         };
@@ -144,7 +145,7 @@ export function BrandWidget({ rail = false }: { rail?: boolean }) {
             <motion.span
               custom={ctx}
               variants={innerVariants}
-              className={`inline-block ${KEEP.has(i) ? "font-bold" : i >= WORD_START ? "font-medium" : ""}`}
+              className={`inline-block ${KEEP.has(i) ? "font-bold" : ""}`}
               style={{ transformOrigin: ctx.squash ? "50% 100%" : "50% 50%" }}
             >
               {ch === " " ? " " : ch}
