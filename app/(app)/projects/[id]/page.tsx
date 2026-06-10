@@ -13,7 +13,10 @@ import {
 import { HealthBadge } from "@/components/ui/health-badge";
 import { DashBadge } from "@/components/dashboard/shared/badge";
 import { DbBanner } from "@/components/db-banner";
+import { ProjectTabs } from "@/components/projects/project-tabs";
 import { ProjectTasks } from "@/components/projects/project-tasks";
+import { ProjectKpis } from "@/components/projects/project-kpis";
+import { ProjectActivityLog } from "@/components/projects/project-activity-log";
 import { getProject } from "@/db/queries/projects";
 import { listWorkspaceMembers } from "@/db/queries/team";
 import { safeRead } from "@/lib/db-status";
@@ -21,6 +24,7 @@ import { formatDate } from "@/lib/utils";
 import { computeHealth } from "@/lib/health";
 
 type Params = Promise<{ id: string }>;
+type SearchParams = Promise<{ tab?: string }>;
 
 const STATUS_VARIANT: Record<
   "active" | "waiting" | "done" | "lost",
@@ -32,9 +36,10 @@ const STATUS_VARIANT: Record<
   lost: "neutral",
 };
 
-export default async function ProjectDetailPage(props: { params: Params }) {
+export default async function ProjectDetailPage(props: { params: Params; searchParams: SearchParams }) {
   const user = await requireUser();
   const { id } = await props.params;
+  const sp = await props.searchParams;
 
   const projectRes = await safeRead(
     () => getProject({ id, workspaceId: user.workspaceId }),
@@ -59,6 +64,25 @@ export default async function ProjectDetailPage(props: { params: Params }) {
     })),
   });
   const membersRes = await safeRead(() => listWorkspaceMembers(user.workspaceId), []);
+
+  // KPI calculations from milestones
+  const total = project.milestones.length;
+  const done = project.milestones.filter((m) => m.status === "done").length;
+  const open = project.milestones.filter(
+    (m) => m.status !== "done" && m.status !== "cancelled",
+  ).length;
+  const today = new Date().toISOString().slice(0, 10);
+  const overdue = project.milestones.filter(
+    (m) =>
+      m.dueDate &&
+      m.status !== "done" &&
+      m.status !== "cancelled" &&
+      m.dueDate < today,
+  ).length;
+  const progressPct = total > 0 ? Math.round((done / total) * 100) : 0;
+
+  const initialTab =
+    sp.tab === "tasks" || sp.tab === "documentation" ? sp.tab : "overview";
 
   return (
     <>
@@ -116,30 +140,83 @@ export default async function ProjectDetailPage(props: { params: Params }) {
           )}
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Tasks</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ProjectTasks
-              projectId={project.id}
-              tasks={project.milestones.map((m) => ({
-                id: m.id,
-                title: m.title,
-                description: m.description ?? null,
-                status: m.status,
-                dueDate: m.dueDate,
-                priority: m.priority ?? null,
-                assignedTo: m.assignedTo ?? null,
-              }))}
-              members={membersRes.data.map((member) => ({
-                userId: member.userId,
-                displayName: member.displayName,
-              }))}
-            />
-          </CardContent>
-        </Card>
-
+        <ProjectTabs
+          initialTab={initialTab}
+          overview={
+            <div className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Overview</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ProjectKpis
+                    health={health}
+                    status={project.status}
+                    progressPct={progressPct}
+                    done={done}
+                    total={total}
+                    open={open}
+                    overdue={overdue}
+                    contacts={0}
+                    stageName={null}
+                    dueDate={project.dueDate ?? null}
+                    updatedAt={project.updatedAt}
+                    touchCount={0}
+                  />
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Recent activity</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ProjectActivityLog events={[]} />
+                </CardContent>
+              </Card>
+            </div>
+          }
+          tasks={
+            <Card>
+              <CardHeader>
+                <CardTitle>Tasks</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ProjectTasks
+                  projectId={project.id}
+                  tasks={project.milestones.map((m) => ({
+                    id: m.id,
+                    title: m.title,
+                    description: m.description ?? null,
+                    status: m.status,
+                    dueDate: m.dueDate,
+                    priority: m.priority ?? null,
+                    assignedTo: m.assignedTo ?? null,
+                  }))}
+                  members={membersRes.data.map((member) => ({
+                    userId: member.userId,
+                    displayName: member.displayName,
+                  }))}
+                />
+              </CardContent>
+            </Card>
+          }
+          documentation={
+            <Card>
+              <CardHeader>
+                <CardTitle>Documentation</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="py-3 text-tiny text-text-tertiary">
+                  Docs, files, and links for this project live on the{" "}
+                  <Link href={`/lob/${project.lobId}`} className="underline hover:text-text-primary">
+                    line of business page
+                  </Link>
+                  .
+                </p>
+              </CardContent>
+            </Card>
+          }
+        />
       </main>
     </>
   );
