@@ -119,4 +119,22 @@ describe("grid-state", () => {
     );
     expect(href).toBe("/contacts?archived=true&sort=name%3Aasc");
   });
+
+  it("round-trips comma-list filter values (multi-select)", () => {
+    const filters = parseFilter("relationship=friend,lead;project=a,b");
+    expect(filters).toEqual({ relationship: "friend,lead", project: "a,b" });
+    expect(stringifyFilter(filters)).toBe("relationship=friend,lead;project=a,b");
+  });
+
+  it("applyFilters supports set-membership predicates over comma lists", () => {
+    const rows = [
+      { id: 1, rel: "friend" },
+      { id: 2, rel: "prospect" },
+      { id: 3, rel: "lead" },
+    ];
+    const out = applyFilters(rows, { rel: "friend,lead" }, {
+      rel: (r, v) => v.split(",").includes(r.rel),
+    });
+    expect(out.map((r) => r.id)).toEqual([1, 3]);
+  });
 });

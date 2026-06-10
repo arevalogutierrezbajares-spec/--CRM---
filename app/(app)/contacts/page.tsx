@@ -29,12 +29,16 @@ export default async function ContactsPage(props: {
   const user = await requireUser();
   const sp = await props.searchParams;
   const archived = sp.archived === "true";
-  const projectId = sp.project || undefined;
+  // ?project= accepts a comma list (multi-select filter, union semantics).
+  const projectIds = (sp.project ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
   const leadMode = parseLeadMode(sp.leadView);
 
   const [res, tagsRes, projectOptionsRes] = await Promise.all([
     safeRead<ContactListItem[]>(
-      () => listContacts({ workspaceId: user.workspaceId, archived, projectId, leadMode }),
+      () => listContacts({ workspaceId: user.workspaceId, archived, projectIds, leadMode }),
       [],
     ),
     safeRead(() => listTags(), []),
@@ -45,9 +49,8 @@ export default async function ContactsPage(props: {
   ]);
 
   const ventureTags = tagsRes.data.filter((t) => t.kind === "venture");
-  const selectedProject = projectId
-    ? projectOptionsRes.data.find((p) => p.id === projectId)
-    : undefined;
+  const selectedProjects = projectOptionsRes.data.filter((p) => projectIds.includes(p.id));
+  const selectedProject = selectedProjects.length === 1 ? selectedProjects[0] : undefined;
 
   // Trim each row to what the grid renders — keeps notes/intro chains/channel
   // ids/audit fields out of the RSC payload (ContactListItem itself is shared
@@ -90,7 +93,9 @@ export default async function ContactsPage(props: {
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Contacts</h1>
             <p className="text-sm text-[var(--muted-foreground)]">
-              {selectedProject
+              {selectedProjects.length > 1
+                ? `Contacts across ${selectedProjects.length} projects.`
+                : selectedProject
                 ? leadMode === "leads"
                   ? `${selectedProject.title} LinkedIn leads.`
                   : `${selectedProject.title} project contacts.`

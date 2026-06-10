@@ -9,7 +9,12 @@ type Tag = { id: string; name: string; color?: string | null };
 export function VenturePillBar({ tags }: { tags: Tag[] }) {
   const sp = useSearchParams();
   const pathname = usePathname();
-  const active = sp.get("tag");
+  // ?tag= is a comma list (multi-select); pills toggle membership.
+  const activeNames = (sp.get("tag") ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const active = activeNames.length > 0;
 
   if (tags.length === 0) return null;
 
@@ -17,8 +22,15 @@ export function VenturePillBar({ tags }: { tags: Tag[] }) {
 
   function hrefFor(tagName: string | null) {
     const params = new URLSearchParams(sp.toString());
-    if (tagName === null) params.delete("tag");
-    else params.set("tag", tagName);
+    if (tagName === null) {
+      params.delete("tag");
+    } else {
+      const next = activeNames.includes(tagName)
+        ? activeNames.filter((n) => n !== tagName)
+        : [...activeNames, tagName];
+      if (next.length > 0) params.set("tag", next.join(","));
+      else params.delete("tag");
+    }
     const q = params.toString();
     return q ? `${pathname}?${q}` : pathname;
   }
@@ -37,7 +49,7 @@ export function VenturePillBar({ tags }: { tags: Tag[] }) {
         All
       </Link>
       {tags.map((t) => {
-        const isActive = active === t.name;
+        const isActive = activeNames.includes(t.name);
         return (
           <Link
             key={t.id}
