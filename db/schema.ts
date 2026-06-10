@@ -619,6 +619,11 @@ export const pipelineStages = pgTable("pipeline_stages", {
 // PROJECTS
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Discriminates the portfolio: the 2 standing BUSINESSES (CaneyCloud, VAV —
+// modules inherit the parent's kind) vs every other venture, a PROJECT with
+// identical functionality that can link to 0..n businesses.
+export const lobKind = pgEnum("lob_kind", ["business", "project"]);
+
 // A Line of Business (LoB) is the top-level venture record: portfolio display,
 // pipeline, shared links/docs/contacts, and module self-nesting. Formerly the
 // `projects` table; the lighter execution-unit `projects` table now rolls up to it.
@@ -628,6 +633,7 @@ export const linesOfBusiness = pgTable("lines_of_business", {
     .notNull()
     .references(() => workspaces.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
+  kind: lobKind("kind").notNull().default("project"),
   status: projectStatus("status").notNull().default("active"),
   templateId: text("template_id").references(() => pipelineTemplates.id),
   currentStageId: uuid("current_stage_id").references(() => pipelineStages.id),
@@ -687,6 +693,30 @@ export const projects = pgTable("projects", {
     .notNull()
     .defaultNow(),
 });
+
+// A kind='project' LoB can roll up to 0..n kind='business' LoBs
+// (e.g. Ucaima Transformation → CaneyCloud + VAV). Kind correctness is
+// enforced in setBusinessLinks, not by the database.
+export const lobBusinessLinks = pgTable(
+  "lob_business_links",
+  {
+    projectLobId: uuid("project_lob_id")
+      .notNull()
+      .references(() => linesOfBusiness.id, { onDelete: "cascade" }),
+    businessLobId: uuid("business_lob_id")
+      .notNull()
+      .references(() => linesOfBusiness.id, { onDelete: "cascade" }),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.projectLobId, t.businessLobId] }),
+  }),
+);
 
 // project_link.kind discriminates the row variant:
 //   'note' — legacy freeform entry with no URL (existing 134 seeded rows)
