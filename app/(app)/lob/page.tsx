@@ -11,7 +11,12 @@ import {
   FilterBar,
   type FilterDimension,
 } from "@/components/work/filter-bar";
-import { listLines, type LobListItem } from "@/db/queries/lines-of-business";
+import {
+  listBusinessLinksForLobs,
+  listLines,
+  type BusinessRef,
+  type LobListItem,
+} from "@/db/queries/lines-of-business";
 import { safeRead } from "@/lib/db-status";
 
 type SearchParams = Promise<{
@@ -73,19 +78,29 @@ export default async function ProjectsPage(props: {
     },
   ];
 
-  // Split into Featured + the rest. Active sub-modules of a parent (e.g. CaneyCloud →
-  // CaneyRestaurant / Stays / WA Concierge / Academy) stay prominent; top-level
-  // non-featured ventures are shaded "back-burner".
-  const featured = filtered.filter((p) => p.featured);
-  const rest = filtered.filter((p) => !p.featured);
-  const modules = rest.filter((p) => p.parentLobId);
-  const others = rest.filter((p) => !p.parentLobId);
+  // Kind-driven grouping: the standing Businesses (CaneyCloud, VAV) render
+  // large on top; their sub-modules keep their row; everything else is a
+  // Project, grouped by status below. (`featured` stays in the DB but no
+  // longer drives the gallery.)
+  const businesses = filtered.filter((p) => p.kind === "business" && !p.parentLobId);
+  const modules = filtered.filter((p) => p.parentLobId);
+  const projectRows = filtered.filter((p) => p.kind === "project" && !p.parentLobId);
 
   const groups: Record<
     "active" | "waiting" | "done" | "lost",
     LobListItem[]
   > = { active: [], waiting: [], done: [], lost: [] };
-  for (const p of others) groups[p.status].push(p);
+  for (const p of projectRows) groups[p.status].push(p);
+
+  // Linked-business chips for the project cards (one batched query).
+  const businessLinks = await safeRead<Map<string, BusinessRef[]>>(
+    () =>
+      listBusinessLinksForLobs(
+        user.workspaceId,
+        projectRows.map((p) => p.id),
+      ),
+    new Map(),
+  );
 
   return (
     <>
@@ -137,16 +152,16 @@ export default async function ProjectsPage(props: {
           </div>
         ) : (
           <div className="space-y-6">
-            {/* ── Priority row at top (no label) ─────────────────────── */}
-            {featured.length > 0 && (
+            {/* ── Businesses (CaneyCloud · VAV) at the top ───────────── */}
+            {businesses.length > 0 && (
               <div className="grid gap-4 lg:grid-cols-2">
-                {featured.map((p) => (
+                {businesses.map((p) => (
                   <ProjectCard key={p.id} project={p} variant="featured" />
                 ))}
               </div>
             )}
 
-            {/* ── Active sub-modules (children of a featured/active parent) ── */}
+            {/* ── Active sub-modules (children of a business) ─────────── */}
             {modules.length > 0 && (
               <section>
                 <h2 className="text-label text-text-secondary mb-3">
@@ -160,18 +175,23 @@ export default async function ProjectsPage(props: {
               </section>
             )}
 
-            {/* ── Other ventures (shaded / back-burner) ──────────────── */}
+            {/* ── Projects (shaded / back-burner), grouped by status ──── */}
             {(["active", "waiting", "done", "lost"] as const).map((s) => {
               const items = groups[s];
               if (items.length === 0) return null;
               return (
                 <section key={s}>
                   <h2 className="text-label text-text-secondary mb-3">
-                    {s === "active" ? "Other ventures" : s} · {items.length}
+                    {s === "active" ? "Projects" : s} · {items.length}
                   </h2>
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     {items.map((p) => (
-                      <ProjectCard key={p.id} project={p} variant="muted" />
+                      <ProjectCard
+                        key={p.id}
+                        project={p}
+                        variant="muted"
+                        businesses={businessLinks.data.get(p.id) ?? []}
+                      />
                     ))}
                   </div>
                 </section>

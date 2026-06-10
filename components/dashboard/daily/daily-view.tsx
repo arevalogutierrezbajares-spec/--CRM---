@@ -27,6 +27,8 @@ interface DailyViewProps {
   docs: RefObject[];
   pinnedProjects: PinnedProject[];
   recentProjects: { id: string; title: string }[];
+  /** Favorites are businesses-only; this feeds the pin picker. */
+  pinnableBusinesses: { id: string; title: string }[];
   scorecard: ScorecardRow[];
   nowMs: number;
   tz: string;
@@ -50,6 +52,7 @@ export function DailyView({
   docs,
   pinnedProjects,
   recentProjects,
+  pinnableBusinesses,
   scorecard,
   nowMs,
   tz,
@@ -94,7 +97,7 @@ export function DailyView({
     },
     {
       id: "pinned",
-      node: <PinnedProjects pinned={pinnedProjects} allProjects={pickerProjects} recent={recentProjects} nowMs={nowMs} />,
+      node: <PinnedProjects pinned={pinnedProjects} allProjects={pinnableBusinesses} recent={recentProjects} nowMs={nowMs} />,
     },
     {
       id: "ai",

@@ -28,6 +28,7 @@ import { DEFAULT_TOWN_HALL_FEED_LIMIT, listTownHallFeed, type FeedItem } from "@
 import { getWorkspaceCountdown, type WorkspaceCountdown } from "@/db/queries/workspace-settings";
 import { listInitiativesForPicker, type InitiativePick } from "@/db/queries/item-initiatives";
 import { listPinnedProjects, listRecentProjects, type PinnedProject } from "@/db/queries/pins";
+import { listBusinesses } from "@/db/queries/lines-of-business";
 import { listScorecard, quarterOf, type ScorecardRow } from "@/db/queries/okrs";
 import { getDashboardLayout } from "@/db/queries/dashboard-layout";
 import { DEFAULT_WIDGETS, type DashWidget } from "@/lib/dashboard/layout";
@@ -292,6 +293,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
     members: { userId: string; displayName: string }[];
     pinnedProjects: PinnedProject[];
     recentProjects: { id: string; title: string }[];
+    pinnableBusinesses: { id: string; title: string }[];
   } | null = null;
   let weeklyData: {
     tasks: DashTask[];
@@ -311,12 +313,17 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
   } | null = null;
 
   if (view === "daily") {
-    const [tasks, meetings, actionItems, pinnedProjects, recentProjects] = await Promise.all([
+    const [tasks, meetings, actionItems, pinnedProjects, recentProjects, businesses] = await Promise.all([
       safeRead<DashTask[]>(() => listTasksToday(user.workspaceId, todayStr), []),
       safeRead<DashMeeting[]>(() => listMeetingsToday(user.workspaceId), []),
       safeRead<DashActionItem[]>(() => listOpenActionItems(user.workspaceId, 12, todayStr), []),
       safeRead<PinnedProject[]>(() => listPinnedProjects(user.workspaceId, user.id, todayStr), []),
       safeRead<{ id: string; title: string }[]>(() => listRecentProjects(user.workspaceId, user.id, 8), []),
+      // Favorites are businesses-only — the pin picker offers just these.
+      safeRead<{ id: string; title: string }[]>(
+        () => listBusinesses(user.workspaceId).then((bs) => bs.map((b) => ({ id: b.id, title: b.title }))),
+        [],
+      ),
     ]);
     dailyData = {
       tasks: tasks.data,
@@ -326,6 +333,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
       members,
       pinnedProjects: pinnedProjects.data,
       recentProjects: recentProjects.data,
+      pinnableBusinesses: businesses.data,
     };
   } else if (view === "weekly") {
     const [tasks, meetings, projects, commandMetrics] = await Promise.all([
@@ -474,6 +482,7 @@ export default async function HomePage(props: { searchParams: SearchParams }) {
           members={dailyData.members}
           pinnedProjects={dailyData.pinnedProjects}
           recentProjects={dailyData.recentProjects}
+          pinnableBusinesses={dailyData.pinnableBusinesses}
           docs={docsRes.data}
           scorecard={scorecardRes.data}
           nowMs={nowMs}
