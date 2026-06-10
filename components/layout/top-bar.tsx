@@ -4,6 +4,7 @@ import { UserMenu } from "./user-menu";
 import { MobileNav } from "./mobile-nav";
 import { NotificationBell } from "@/components/town-hall/notification-bell";
 import { MobileTownHallButton } from "@/components/town-hall/mobile-townhall-button";
+import { BrandWidget } from "@/components/brand/brand-widget";
 
 export function TopBar({
   email,
@@ -27,6 +28,7 @@ export function TopBar({
         ) : null}
       </div>
       <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+        <BrandWidget />
         {action}
         <MobileTownHallButton />
         <Link

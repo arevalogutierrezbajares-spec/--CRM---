@@ -1,10 +1,11 @@
 "use client";
 
-import { BRAND_INTRO_REPLAY_EVENT } from "./brand-intro";
+import { BRAND_INTRO_REPLAY_EVENT } from "./brand-widget";
 
 /**
  * Sidebar brand lockup — pillars mark + "AGB Technologies" with the initials
- * oversized. Clicking it replays the brand intro animation.
+ * oversized. Clicking it plays the brand animation inline in the top-right
+ * BrandWidget (no popup).
  */
 export function BrandMark({ rail = false }: { rail?: boolean }) {
   const replay = () => window.dispatchEvent(new Event(BRAND_INTRO_REPLAY_EVENT));
