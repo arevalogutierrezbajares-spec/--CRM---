@@ -19,6 +19,7 @@ import {
   listShareableDocsForRoom,
   recordPartnerShareTracking,
   regeneratePartnerRoomAccessToken,
+  setContactLogoUrl,
   setPartnerRoomPasscode,
   updatePartnerRoomDetails,
   updatePartnerRoomStatus,
@@ -274,6 +275,35 @@ export async function deletePartnerUploadAction(opts: {
   const row = await deletePartnerUpload({ workspaceId: user.workspaceId, uploadId: opts.uploadId });
   if (row) await removeObjects([row.storagePath]).catch(() => {});
   revalidatePath(`/partner-access/rooms/${opts.roomId}`);
+  return { ok: true };
+}
+
+export async function setRoomClientLogoAction(opts: {
+  roomId: string;
+  contactId: string;
+  logoUrl: string | null;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const user = await requireUser();
+
+  const url = opts.logoUrl?.trim() || null;
+  if (url) {
+    // Accept absolute http(s) URLs or site-relative asset paths (e.g. /logos/x.svg).
+    const ok = /^https?:\/\//i.test(url) || url.startsWith("/");
+    if (!ok) {
+      return { ok: false, error: "Enter an image URL (https://…) or /path" };
+    }
+    if (url.length > 2048) return { ok: false, error: "That URL is too long" };
+  }
+
+  const updated = await setContactLogoUrl({
+    workspaceId: user.workspaceId,
+    contactId: opts.contactId,
+    logoUrl: url,
+  });
+  if (!updated) return { ok: false, error: "Contact not found" };
+
+  revalidatePath(`/partner-access/rooms/${opts.roomId}`);
+  revalidatePath(`/contacts/${opts.contactId}`);
   return { ok: true };
 }
 

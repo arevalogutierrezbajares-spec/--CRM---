@@ -23,6 +23,8 @@ import { getPartnerAccessRoom } from "@/db/queries/partner-access";
 import { listPartnerNextStepsByRoom } from "@/db/queries/partner-next-steps";
 import { listPartnerUploadsByRoom } from "@/db/queries/partner-uploads";
 import { listPartnerRoomMessages } from "@/db/queries/partner-messages";
+import { brandLogosFromShares } from "@/db/queries/partner-access";
+import { CoBrandLockup } from "@/components/partner-access/co-brand-lockup";
 import { partnerKindLabel } from "@/lib/partner-access";
 import { formatRelative } from "@/lib/utils";
 
@@ -44,6 +46,7 @@ export default async function PartnerRoomPreviewPage({ params }: { params: Param
   const { room } = detail;
   const shares = detail.shares.filter((s) => !s.revokedAt);
   const openSteps = nextSteps.filter((s) => !s.completedAt);
+  const brandLogos = brandLogosFromShares(shares);
 
   return (
     <main className="min-h-screen bg-[var(--bg-page)]">
@@ -71,7 +74,12 @@ export default async function PartnerRoomPreviewPage({ params }: { params: Param
         <header className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5 md:p-7">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div className="max-w-3xl">
-              <div className="flex flex-wrap items-center gap-2">
+              <CoBrandLockup
+                brandLogos={brandLogos}
+                clientLogoUrl={detail.contact.logoUrl}
+                clientName={detail.contact.name}
+              />
+              <div className="mt-4 flex flex-wrap items-center gap-2">
                 <Badge variant="outline">{partnerKindLabel(room.partnerKind)}</Badge>
                 <span className="inline-flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
                   <Lock className="h-3.5 w-3.5" />

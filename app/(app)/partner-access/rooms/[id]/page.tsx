@@ -9,6 +9,7 @@ import {
   Eye,
   FileText,
   FileUp,
+  Image as ImageIcon,
   MessageSquare,
   UsersRound,
 } from "lucide-react";
@@ -19,6 +20,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DbBanner } from "@/components/db-banner";
 import { SectionLabel } from "@/components/dashboard/shared/section-label";
 import { AddDocsDialog } from "@/components/partner-access/add-docs-dialog";
+import { ClientLogoControl } from "@/components/partner-access/client-logo-control";
 import { RoomAccessLinkActions } from "@/components/partner-access/room-access-link-actions";
 import { RoomDetailsForm } from "@/components/partner-access/room-details-form";
 import { RoomMessagesManager } from "@/components/partner-access/room-messages-manager";
@@ -28,7 +30,7 @@ import { ShareLedgerActions } from "@/components/partner-access/share-ledger-act
 import { SharePermissionsEditor } from "@/components/partner-access/share-permissions-editor";
 import { PartnerNextStepsManager } from "@/components/partner-access/partner-next-steps-manager";
 import { PartnerUploadsPanel } from "@/components/partner-access/partner-uploads-panel";
-import { getPartnerAccessRoom } from "@/db/queries/partner-access";
+import { getPartnerAccessRoom, brandLogosFromShares } from "@/db/queries/partner-access";
 import { listPartnerNextSteps } from "@/db/queries/partner-next-steps";
 import { listPartnerUploads } from "@/db/queries/partner-uploads";
 import { listPartnerRoomMessages } from "@/db/queries/partner-messages";
@@ -106,6 +108,9 @@ export default async function PartnerAccessRoomPage(props: { params: Params }) {
   }
 
   const { room } = detail;
+  const brandLogos = brandLogosFromShares(
+    detail.shares.filter((share) => !share.revokedAt),
+  );
   const activeShares = detail.shares.filter((share) => !share.revokedAt);
   const viewedShares = detail.shares.filter((share) => share.viewedAt);
   const downloadedShares = detail.shares.filter((share) => share.downloadedAt);
@@ -480,6 +485,24 @@ export default async function PartnerAccessRoomPage(props: { params: Params }) {
                     welcomeMessage: room.welcomeMessage,
                     expiresAt: room.expiresAt?.toISOString() ?? null,
                   }}
+                />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ImageIcon className="h-4 w-4" />
+                  Co-branding
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ClientLogoControl
+                  roomId={room.id}
+                  contactId={detail.contact.id}
+                  contactName={detail.contact.name}
+                  clientLogoUrl={detail.contact.logoUrl}
+                  brandLogos={brandLogos}
                 />
               </CardContent>
             </Card>

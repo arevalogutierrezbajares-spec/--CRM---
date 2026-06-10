@@ -29,6 +29,8 @@ export type PartnerAccessShare = typeof schema.partnerShares.$inferSelect & {
   roomName: string | null;
   sharedByName: string | null;
   meetingTitle: string | null;
+  lobLogoUrl: string | null;
+  lobLogoUrlDark: string | null;
 };
 
 export type PartnerAccessOverview = {
@@ -51,6 +53,7 @@ export type PartnerAccessRoomDetail = {
     id: string | null;
     name: string | null;
     organization: string | null;
+    logoUrl: string | null;
   };
   createdByName: string | null;
   shares: PartnerAccessShare[];
@@ -85,6 +88,8 @@ export async function listPartnerAccessForContact(opts: {
         roomName: schema.partnerRooms.name,
         sharedByName: schema.users.displayName,
         meetingTitle: schema.meetings.title,
+        lobLogoUrl: schema.linesOfBusiness.logoUrl,
+        lobLogoUrlDark: schema.linesOfBusiness.logoUrlDark,
       })
       .from(schema.partnerShares)
       .leftJoin(schema.contacts, eq(schema.contacts.id, schema.partnerShares.contactId))
@@ -138,6 +143,8 @@ export async function listPartnerAccessForContact(opts: {
       roomName: row.roomName,
       sharedByName: row.sharedByName,
       meetingTitle: row.meetingTitle,
+      lobLogoUrl: row.lobLogoUrl,
+      lobLogoUrlDark: row.lobLogoUrlDark,
     })),
   };
 }
@@ -163,6 +170,8 @@ export async function listPartnerAccessDashboard(opts: {
         roomName: schema.partnerRooms.name,
         sharedByName: schema.users.displayName,
         meetingTitle: schema.meetings.title,
+        lobLogoUrl: schema.linesOfBusiness.logoUrl,
+        lobLogoUrlDark: schema.linesOfBusiness.logoUrlDark,
       })
       .from(schema.partnerShares)
       .leftJoin(schema.contacts, eq(schema.contacts.id, schema.partnerShares.contactId))
@@ -211,6 +220,8 @@ export async function listPartnerAccessDashboard(opts: {
       roomName: row.roomName,
       sharedByName: row.sharedByName,
       meetingTitle: row.meetingTitle,
+      lobLogoUrl: row.lobLogoUrl,
+      lobLogoUrlDark: row.lobLogoUrlDark,
     })),
   };
 }
@@ -225,6 +236,7 @@ export async function getPartnerAccessRoom(opts: {
       contactId: schema.contacts.id,
       contactName: schema.contacts.name,
       contactOrganization: schema.contacts.organization,
+      contactLogoUrl: schema.contacts.logoUrl,
       createdByName: schema.users.displayName,
     })
     .from(schema.partnerRooms)
@@ -250,6 +262,8 @@ export async function getPartnerAccessRoom(opts: {
         roomName: schema.partnerRooms.name,
         sharedByName: schema.users.displayName,
         meetingTitle: schema.meetings.title,
+        lobLogoUrl: schema.linesOfBusiness.logoUrl,
+        lobLogoUrlDark: schema.linesOfBusiness.logoUrlDark,
       })
       .from(schema.partnerShares)
       .leftJoin(schema.contacts, eq(schema.contacts.id, schema.partnerShares.contactId))
@@ -306,6 +320,7 @@ export async function getPartnerAccessRoom(opts: {
       id: roomRow.contactId,
       name: roomRow.contactName,
       organization: roomRow.contactOrganization,
+      logoUrl: roomRow.contactLogoUrl,
     },
     createdByName: roomRow.createdByName,
     shares: shares.map((row) => ({
@@ -316,6 +331,8 @@ export async function getPartnerAccessRoom(opts: {
       roomName: row.roomName,
       sharedByName: row.sharedByName,
       meetingTitle: row.meetingTitle,
+      lobLogoUrl: row.lobLogoUrl,
+      lobLogoUrlDark: row.lobLogoUrlDark,
     })),
     members,
     events: events.map((row) => ({
@@ -521,13 +538,23 @@ export type CreatePartnerShareInput = {
   preserveExistingShare?: boolean;
 };
 
+export type BrandLogo = {
+  lobId: string;
+  title: string;
+  logoUrl: string;
+  logoUrlDark: string | null;
+};
+
 export type PublicPartnerRoom = {
   room: typeof schema.partnerRooms.$inferSelect;
   contact: {
     id: string | null;
     name: string | null;
     organization: string | null;
+    logoUrl: string | null;
   };
+  /** Distinct LoB logos for the projects shared into this room (co-branding). */
+  brandLogos: BrandLogo[];
   shares: Array<PartnerAccessShare & {
     storagePath: string | null;
     mimeType: string | null;
@@ -537,6 +564,31 @@ export type PublicPartnerRoom = {
     signedUrl: string | null;
   }>;
 };
+
+/** Distinct LoB logos among a set of shares, in share order. */
+export function brandLogosFromShares(
+  shares: Array<{
+    lobId: string | null;
+    lobLogoUrl?: string | null;
+    lobLogoUrlDark?: string | null;
+    projectTitle?: string | null;
+  }>,
+): BrandLogo[] {
+  const seen = new Set<string>();
+  const logos: BrandLogo[] = [];
+  for (const share of shares) {
+    if (!share.lobId || !share.lobLogoUrl) continue;
+    if (seen.has(share.lobId)) continue;
+    seen.add(share.lobId);
+    logos.push({
+      lobId: share.lobId,
+      title: share.projectTitle ?? "Project",
+      logoUrl: share.lobLogoUrl,
+      logoUrlDark: share.lobLogoUrlDark ?? null,
+    });
+  }
+  return logos;
+}
 
 export async function createPartnerShare(input: CreatePartnerShareInput) {
   const [contact] = await db
@@ -1168,6 +1220,25 @@ export async function listShareableDocsForRoom(input: {
   }));
 }
 
+/** Set or clear a contact's brand logo URL (used for co-branded rooms). */
+export async function setContactLogoUrl(input: {
+  workspaceId: string;
+  contactId: string;
+  logoUrl: string | null;
+}) {
+  const [updated] = await db
+    .update(schema.contacts)
+    .set({ logoUrl: input.logoUrl, updatedAt: new Date() })
+    .where(
+      and(
+        eq(schema.contacts.id, input.contactId),
+        eq(schema.contacts.workspaceId, input.workspaceId),
+      ),
+    )
+    .returning({ id: schema.contacts.id });
+  return updated ?? null;
+}
+
 /** Light room fetch for action-layer checks (workspace-fenced). */
 export async function getPartnerRoomBasic(input: {
   workspaceId: string;
@@ -1209,6 +1280,7 @@ export async function getPublicPartnerRoomByToken(input: {
       contactId: schema.contacts.id,
       contactName: schema.contacts.name,
       contactOrganization: schema.contacts.organization,
+      contactLogoUrl: schema.contacts.logoUrl,
     })
     .from(schema.partnerRooms)
     .leftJoin(schema.contacts, eq(schema.contacts.id, schema.partnerRooms.primaryContactId))
@@ -1231,6 +1303,8 @@ export async function getPublicPartnerRoomByToken(input: {
       roomName: schema.partnerRooms.name,
       sharedByName: schema.users.displayName,
       meetingTitle: schema.meetings.title,
+      lobLogoUrl: schema.linesOfBusiness.logoUrl,
+      lobLogoUrlDark: schema.linesOfBusiness.logoUrlDark,
       storagePath: schema.projectLinks.storagePath,
       mimeType: schema.projectLinks.mimeType,
       originalFilename: schema.projectLinks.originalFilename,
@@ -1259,28 +1333,34 @@ export async function getPublicPartnerRoomByToken(input: {
     )
     .orderBy(desc(schema.partnerShares.sharedAt));
 
+  const mappedShares = shares.map((shareRow) => ({
+    ...shareRow.share,
+    contactName: shareRow.contactName,
+    projectTitle: shareRow.projectTitle,
+    liveLabel: shareRow.liveLabel,
+    roomName: shareRow.roomName,
+    sharedByName: shareRow.sharedByName,
+    meetingTitle: shareRow.meetingTitle,
+    lobLogoUrl: shareRow.lobLogoUrl,
+    lobLogoUrlDark: shareRow.lobLogoUrlDark,
+    storagePath: shareRow.storagePath,
+    mimeType: shareRow.mimeType,
+    originalFilename: shareRow.originalFilename,
+    sizeBytes: shareRow.sizeBytes,
+    description: shareRow.description,
+    signedUrl: null,
+  }));
+
   return {
     room: row.room,
     contact: {
       id: row.contactId,
       name: row.contactName,
       organization: row.contactOrganization,
+      logoUrl: row.contactLogoUrl,
     },
-    shares: shares.map((shareRow) => ({
-      ...shareRow.share,
-      contactName: shareRow.contactName,
-      projectTitle: shareRow.projectTitle,
-      liveLabel: shareRow.liveLabel,
-      roomName: shareRow.roomName,
-      sharedByName: shareRow.sharedByName,
-      meetingTitle: shareRow.meetingTitle,
-      storagePath: shareRow.storagePath,
-      mimeType: shareRow.mimeType,
-      originalFilename: shareRow.originalFilename,
-      sizeBytes: shareRow.sizeBytes,
-      description: shareRow.description,
-      signedUrl: null,
-    })),
+    brandLogos: brandLogosFromShares(mappedShares),
+    shares: mappedShares,
   };
 }
 

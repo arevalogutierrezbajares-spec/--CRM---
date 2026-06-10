@@ -33,6 +33,7 @@ import { PublicNextSteps } from "@/components/partner-access/public-next-steps";
 import { PublicIdentify } from "@/components/partner-access/public-identify";
 import { PublicRoomMessages } from "@/components/partner-access/public-room-messages";
 import { RoomGate } from "@/components/partner-access/room-gate";
+import { CoBrandLockup } from "@/components/partner-access/co-brand-lockup";
 
 export const dynamic = "force-dynamic";
 
@@ -86,7 +87,12 @@ export default async function PublicAccessRoomPage({
         <header className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5 md:p-7">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div className="max-w-3xl">
-              <div className="flex flex-wrap items-center gap-2">
+              <CoBrandLockup
+                brandLogos={access.brandLogos}
+                clientLogoUrl={access.contact.logoUrl}
+                clientName={access.contact.name}
+              />
+              <div className="mt-4 flex flex-wrap items-center gap-2">
                 <Badge variant="outline">{partnerKindLabel(access.room.partnerKind)}</Badge>
                 <span className="inline-flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
                   <Lock className="h-3.5 w-3.5" />
