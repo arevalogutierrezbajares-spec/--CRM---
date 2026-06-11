@@ -2,13 +2,23 @@
 
 import {
   ArrowUpRight,
+  Banknote,
+  BarChart3,
+  Clapperboard,
   Download,
+  FileSignature,
   FileText,
   Film,
   ImageIcon,
   LinkIcon,
+  Palette,
+  Upload,
+  type LucideIcon,
 } from "lucide-react";
 import { formatBytes } from "@/lib/project-files/limits";
+import { formatRelativeEs } from "@/lib/utils";
+import { repoSection, REPO_SECTION_OPTIONS } from "@/lib/partner-access";
+import { PublicUploadForm } from "@/components/partner-access/public-upload-form";
 import {
   PartnerCommentThread,
   type RepoComment,
@@ -26,6 +36,7 @@ export type RepoShare = {
   isLink: boolean;
   urlSnapshot: string | null;
   canDownload: boolean;
+  section: string | null;
 };
 
 export type RepoItem = {
@@ -36,6 +47,14 @@ export type RepoItem = {
   url: string | null;
   mimeType: string | null;
   sizeBytes: number | null;
+  category: string | null;
+};
+
+export type RepoUpload = {
+  id: string;
+  label: string | null;
+  originalFilename: string;
+  createdAt: string;
 };
 
 function mediaKind(mime: string | null): "image" | "video" | "none" {
@@ -55,16 +74,31 @@ function kindLabel(kind: string) {
   return KIND_LABEL[kind] ?? "Documento";
 }
 
+const SECTION_ICONS: Record<string, LucideIcon> = {
+  documentos: FileText,
+  contratos: FileSignature,
+  contenido: Clapperboard,
+  finanzas: Banknote,
+  marca: Palette,
+  informes: BarChart3,
+};
+
+type Entry =
+  | { type: "item"; item: RepoItem }
+  | { type: "share"; share: RepoShare };
+
 export function PublicRepository({
   token,
   shares,
   items,
+  uploads,
   commentsByTarget,
   ownerLabel,
 }: {
   token: string;
   shares: RepoShare[];
   items: RepoItem[];
+  uploads: RepoUpload[];
   commentsByTarget: Record<string, RepoComment[]>;
   ownerLabel: string;
 }) {
@@ -78,7 +112,19 @@ export function PublicRepository({
     return (await res.json()) as RepoComment;
   }
 
-  const empty = shares.length === 0 && items.length === 0;
+  const sections = REPO_SECTION_OPTIONS.map((option) => {
+    const entries: Entry[] = [
+      ...items
+        .filter((item) => repoSection(item.category) === option.value)
+        .map((item) => ({ type: "item" as const, item })),
+      ...shares
+        .filter((share) => repoSection(share.section) === option.value)
+        .map((share) => ({ type: "share" as const, share })),
+    ];
+    return { ...option, entries };
+  }).filter((section) => section.entries.length > 0);
+
+  const total = shares.length + items.length;
 
   return (
     <div className="rounded-xl border border-[var(--border)] bg-[var(--card)]">
@@ -86,176 +132,280 @@ export function PublicRepository({
         <div>
           <h2 className="text-base font-semibold">Repositorio</h2>
           <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">
-            Documentos, enlaces y medios compartidos contigo — comenta lo que quieras.
+            Todo lo compartido contigo, organizado por sección — y un buzón para
+            enviarnos lo tuyo.
           </p>
         </div>
-        <span className="rounded-full bg-[var(--secondary)] px-2 py-0.5 text-xs text-[var(--secondary-foreground)]">
-          {shares.length + items.length}
+        <span className="rounded-full bg-[var(--secondary)] px-2 py-0.5 text-xs tabular-nums text-[var(--secondary-foreground)]">
+          {total}
         </span>
       </div>
 
-      {empty ? (
-        <div className="p-5">
+      {total === 0 ? (
+        <div className="px-4 pt-4">
           <p className="rounded-lg border border-dashed border-[var(--border)] p-5 text-sm text-[var(--muted-foreground)]">
             Aún no hay nada aquí. Los nuevos documentos y enlaces aparecerán en este espacio.
           </p>
         </div>
       ) : (
-        <ul className="divide-y divide-[var(--border)]">
-          {items.map((item) => {
-            const mk = mediaKind(item.mimeType);
-            const comments = commentsByTarget[`item:${item.id}`] ?? [];
-            return (
-              <li key={`item-${item.id}`} className="p-4">
-                <div className="flex items-start gap-3">
-                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-[var(--secondary)]">
-                    {item.kind === "link" ? (
-                      <LinkIcon className="h-4 w-4 text-[var(--muted-foreground)]" />
-                    ) : mk === "image" ? (
-                      <ImageIcon className="h-4 w-4 text-[var(--muted-foreground)]" />
-                    ) : mk === "video" ? (
-                      <Film className="h-4 w-4 text-[var(--muted-foreground)]" />
-                    ) : (
-                      <FileText className="h-4 w-4 text-[var(--muted-foreground)]" />
-                    )}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                      <h3 className="text-sm font-medium">{item.title}</h3>
-                      {item.kind === "link" && item.url ? (
-                        <a
-                          href={item.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-2 py-1 text-xs hover:bg-[var(--secondary)]"
-                        >
-                          <ArrowUpRight className="h-3.5 w-3.5" />
-                          Abrir
-                        </a>
-                      ) : item.kind === "file" && mk === "none" ? (
-                        <a
-                          href={`/access/${token}/item/${item.id}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-2 py-1 text-xs hover:bg-[var(--secondary)]"
-                        >
-                          <Download className="h-3.5 w-3.5" />
-                          Abrir
-                        </a>
-                      ) : null}
-                    </div>
-                    {item.sizeBytes ? (
-                      <p className="text-xs text-[var(--muted-foreground)]">
-                        {formatBytes(item.sizeBytes)}
-                      </p>
-                    ) : null}
-                    {item.description && (
-                      <p className="mt-1.5 text-sm leading-6 text-[var(--muted-foreground)]">
-                        {item.description}
-                      </p>
-                    )}
-
-                    {item.kind === "file" && mk === "image" && (
-                      /* eslint-disable-next-line @next/next/no-img-element */
-                      <img
-                        src={`/access/${token}/item/${item.id}`}
-                        alt={item.title}
-                        className="mt-2 max-h-72 rounded-lg border border-[var(--border)] object-contain"
-                      />
-                    )}
-                    {item.kind === "file" && mk === "video" && (
-                      <video
-                        controls
-                        src={`/access/${token}/item/${item.id}`}
-                        className="mt-2 max-h-72 w-full rounded-lg border border-[var(--border)]"
-                      />
-                    )}
-
-                    <PartnerCommentThread
-                      comments={comments}
+        sections.map((section) => {
+          const Icon = SECTION_ICONS[section.value] ?? FileText;
+          return (
+            <section key={section.value} aria-label={section.label}>
+              <div className="flex items-center gap-2 border-b border-[var(--border)] bg-[var(--secondary)]/40 px-4 py-2">
+                <Icon className="h-3.5 w-3.5 text-[var(--primary)]" />
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--muted-foreground)]">
+                  {section.label}
+                </h3>
+                <span className="text-[11px] tabular-nums text-[var(--muted-foreground)]">
+                  {section.entries.length}
+                </span>
+              </div>
+              <ul className="divide-y divide-[var(--border)] border-b border-[var(--border)]">
+                {section.entries.map((entry) =>
+                  entry.type === "item" ? (
+                    <ItemRow
+                      key={`item-${entry.item.id}`}
+                      token={token}
+                      item={entry.item}
+                      comments={commentsByTarget[`item:${entry.item.id}`] ?? []}
                       ownerLabel={ownerLabel}
-                      onSubmit={(body) => postComment("item", item.id, body)}
+                      onComment={(body) => postComment("item", entry.item.id, body)}
                     />
-                  </div>
-                </div>
-              </li>
-            );
-          })}
-
-          {shares.map((share) => {
-            const comments = commentsByTarget[`share:${share.id}`] ?? [];
-            return (
-              <li key={`share-${share.id}`} className="p-4">
-                <div className="flex items-start gap-3">
-                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-[var(--secondary)]">
-                    {share.isLink ? (
-                      <LinkIcon className="h-4 w-4 text-[var(--muted-foreground)]" />
-                    ) : (
-                      <FileText className="h-4 w-4 text-[var(--muted-foreground)]" />
-                    )}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <h3 className="text-sm font-medium">{share.title}</h3>
-                        <p className="text-xs text-[var(--muted-foreground)]">
-                          {share.projectTitle ?? "Proyecto"} · {kindLabel(share.kindSnapshot)}
-                          {share.sizeBytes ? ` · ${formatBytes(share.sizeBytes)}` : ""}
-                        </p>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-2">
-                        {share.isLink && share.urlSnapshot && (
-                          <a
-                            href={`/access/${token}/open/${share.id}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-2 py-1 text-xs hover:bg-[var(--secondary)]"
-                          >
-                            <ArrowUpRight className="h-3.5 w-3.5" />
-                            Abrir
-                          </a>
-                        )}
-                        {share.isHtmlDeck && (
-                          <a
-                            href={`/access/${token}/deck/${share.id}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-2 py-1 text-xs hover:bg-[var(--secondary)]"
-                          >
-                            <ArrowUpRight className="h-3.5 w-3.5" />
-                            Ver presentación
-                          </a>
-                        )}
-                        {share.canDownload && (
-                          <a
-                            href={`/access/${token}/download/${share.id}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 rounded-md bg-[var(--primary)] px-2 py-1 text-xs text-[var(--primary-foreground)] hover:opacity-90"
-                          >
-                            <Download className="h-3.5 w-3.5" />
-                            Descargar
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                    {share.description && (
-                      <p className="mt-1.5 text-sm leading-6 text-[var(--muted-foreground)]">
-                        {share.description}
-                      </p>
-                    )}
-                    <PartnerCommentThread
-                      comments={comments}
+                  ) : (
+                    <ShareRow
+                      key={`share-${entry.share.id}`}
+                      token={token}
+                      share={entry.share}
+                      comments={commentsByTarget[`share:${entry.share.id}`] ?? []}
                       ownerLabel={ownerLabel}
-                      onSubmit={(body) => postComment("share", share.id, body)}
+                      onComment={(body) => postComment("share", entry.share.id, body)}
                     />
-                  </div>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+                  ),
+                )}
+              </ul>
+            </section>
+          );
+        })
       )}
+
+      {/* Send-files inbox — same repository, opposite direction. */}
+      <section aria-label="Enviar archivos">
+        <div
+          className={`flex items-center gap-2 bg-[var(--secondary)]/40 px-4 py-2 ${
+            total === 0 ? "mt-4 border-t border-[var(--border)]" : ""
+          }`}
+        >
+          <Upload className="h-3.5 w-3.5 text-[var(--primary)]" />
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--muted-foreground)]">
+            Enviar archivos
+          </h3>
+          {uploads.length > 0 && (
+            <span className="text-[11px] tabular-nums text-[var(--muted-foreground)]">
+              {uploads.length}
+            </span>
+          )}
+        </div>
+        <div className="border-t border-[var(--border)] p-4">
+          <p className="mb-3 text-xs text-[var(--muted-foreground)]">
+            Envía documentos al equipo — contratos, firmas, recursos.
+          </p>
+          <PublicUploadForm token={token} />
+          {uploads.length > 0 && (
+            <div className="mt-4 border-t border-[var(--border)] pt-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted-foreground)]">
+                Enviados anteriormente
+              </p>
+              <ul className="mt-2 space-y-1.5">
+                {uploads.map((u) => (
+                  <li key={u.id} className="flex items-center gap-2 text-sm">
+                    <FileText className="h-3.5 w-3.5 shrink-0 text-[var(--muted-foreground)]" />
+                    <span className="truncate">{u.label || u.originalFilename}</span>
+                    <span className="ml-auto shrink-0 text-xs text-[var(--muted-foreground)]">
+                      {formatRelativeEs(u.createdAt)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      </section>
     </div>
+  );
+}
+
+function ItemRow({
+  token,
+  item,
+  comments,
+  ownerLabel,
+  onComment,
+}: {
+  token: string;
+  item: RepoItem;
+  comments: RepoComment[];
+  ownerLabel: string;
+  onComment: (body: string) => Promise<RepoComment | null>;
+}) {
+  const mk = mediaKind(item.mimeType);
+  return (
+    <li className="p-4 transition-colors hover:bg-[var(--secondary)]/25">
+      <div className="flex items-start gap-3">
+        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-[var(--secondary)]">
+          {item.kind === "link" ? (
+            <LinkIcon className="h-4 w-4 text-[var(--muted-foreground)]" />
+          ) : mk === "image" ? (
+            <ImageIcon className="h-4 w-4 text-[var(--muted-foreground)]" />
+          ) : mk === "video" ? (
+            <Film className="h-4 w-4 text-[var(--muted-foreground)]" />
+          ) : (
+            <FileText className="h-4 w-4 text-[var(--muted-foreground)]" />
+          )}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <h4 className="text-sm font-medium">{item.title}</h4>
+            {item.kind === "link" && item.url ? (
+              <a
+                href={item.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-2 py-1 text-xs hover:bg-[var(--secondary)]"
+              >
+                <ArrowUpRight className="h-3.5 w-3.5" />
+                Abrir
+              </a>
+            ) : item.kind === "file" && mk === "none" ? (
+              <a
+                href={`/access/${token}/item/${item.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-2 py-1 text-xs hover:bg-[var(--secondary)]"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Abrir
+              </a>
+            ) : null}
+          </div>
+          {item.sizeBytes ? (
+            <p className="text-xs text-[var(--muted-foreground)]">
+              {formatBytes(item.sizeBytes)}
+            </p>
+          ) : null}
+          {item.description && (
+            <p className="mt-1.5 text-sm leading-6 text-[var(--muted-foreground)]">
+              {item.description}
+            </p>
+          )}
+
+          {item.kind === "file" && mk === "image" && (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={`/access/${token}/item/${item.id}`}
+              alt={item.title}
+              className="mt-2 max-h-72 rounded-lg border border-[var(--border)] object-contain"
+            />
+          )}
+          {item.kind === "file" && mk === "video" && (
+            <video
+              controls
+              src={`/access/${token}/item/${item.id}`}
+              className="mt-2 max-h-72 w-full rounded-lg border border-[var(--border)]"
+            />
+          )}
+
+          <PartnerCommentThread
+            comments={comments}
+            ownerLabel={ownerLabel}
+            onSubmit={onComment}
+          />
+        </div>
+      </div>
+    </li>
+  );
+}
+
+function ShareRow({
+  token,
+  share,
+  comments,
+  ownerLabel,
+  onComment,
+}: {
+  token: string;
+  share: RepoShare;
+  comments: RepoComment[];
+  ownerLabel: string;
+  onComment: (body: string) => Promise<RepoComment | null>;
+}) {
+  return (
+    <li className="p-4 transition-colors hover:bg-[var(--secondary)]/25">
+      <div className="flex items-start gap-3">
+        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-[var(--secondary)]">
+          {share.isLink ? (
+            <LinkIcon className="h-4 w-4 text-[var(--muted-foreground)]" />
+          ) : (
+            <FileText className="h-4 w-4 text-[var(--muted-foreground)]" />
+          )}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div className="min-w-0">
+              <h4 className="text-sm font-medium">{share.title}</h4>
+              <p className="text-xs text-[var(--muted-foreground)]">
+                {share.projectTitle ?? "Proyecto"} · {kindLabel(share.kindSnapshot)}
+                {share.sizeBytes ? ` · ${formatBytes(share.sizeBytes)}` : ""}
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              {share.isLink && share.urlSnapshot && (
+                <a
+                  href={`/access/${token}/open/${share.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-2 py-1 text-xs hover:bg-[var(--secondary)]"
+                >
+                  <ArrowUpRight className="h-3.5 w-3.5" />
+                  Abrir
+                </a>
+              )}
+              {share.isHtmlDeck && (
+                <a
+                  href={`/access/${token}/deck/${share.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-2 py-1 text-xs hover:bg-[var(--secondary)]"
+                >
+                  <ArrowUpRight className="h-3.5 w-3.5" />
+                  Ver presentación
+                </a>
+              )}
+              {share.canDownload && (
+                <a
+                  href={`/access/${token}/download/${share.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 rounded-md bg-[var(--primary)] px-2 py-1 text-xs text-[var(--primary-foreground)] hover:opacity-90"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Descargar
+                </a>
+              )}
+            </div>
+          </div>
+          {share.description && (
+            <p className="mt-1.5 text-sm leading-6 text-[var(--muted-foreground)]">
+              {share.description}
+            </p>
+          )}
+          <PartnerCommentThread
+            comments={comments}
+            ownerLabel={ownerLabel}
+            onSubmit={onComment}
+          />
+        </div>
+      </div>
+    </li>
   );
 }

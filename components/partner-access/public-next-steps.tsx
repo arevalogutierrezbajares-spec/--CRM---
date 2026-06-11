@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { CalendarClock, Check, Users } from "lucide-react";
-import { formatRelative } from "@/lib/utils";
+import { formatRelativeEs } from "@/lib/utils";
 import type { PartnerNextStep } from "@/db/queries/partner-next-steps";
 
 const ASSIGNEE_LABEL: Record<string, string> = {
@@ -166,7 +166,7 @@ function StepItem({
             >
               <CalendarClock className="h-3 w-3" />
               {overdue ? "Vencido " : "Para "}
-              {formatRelative(step.dueAt)}
+              {formatRelativeEs(step.dueAt)}
             </span>
           )}
           {done && (

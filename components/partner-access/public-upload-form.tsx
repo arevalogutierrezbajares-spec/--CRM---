@@ -32,7 +32,7 @@ export function PublicUploadForm({ token }: { token: string }) {
     }
     const ext = "." + f.name.split(".").pop()?.toLowerCase();
     if (!ALLOWED_EXTS.includes(ext)) {
-      setError(`File type not allowed. Accepted: ${ALLOWED_EXTS.join(", ")}`);
+      setError(`Tipo de archivo no permitido. Aceptamos: ${ALLOWED_EXTS.join(", ")}`);
       return;
     }
     setError(null);
@@ -125,7 +125,7 @@ export function PublicUploadForm({ token }: { token: string }) {
       )}
 
       <div
-        className="rounded-xl border-2 border-dashed border-[var(--border)] p-6 text-center cursor-pointer hover:border-[var(--foreground)/30] transition-colors"
+        className="rounded-xl border-2 border-dashed border-[var(--border)] p-6 text-center cursor-pointer hover:border-[var(--foreground)]/30 transition-colors"
         onClick={() => inputRef.current?.click()}
       >
         <Upload className="mx-auto h-8 w-8 text-[var(--muted-foreground)]" />

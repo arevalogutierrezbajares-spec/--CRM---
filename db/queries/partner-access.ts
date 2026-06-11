@@ -655,6 +655,42 @@ export async function setRoomBrandLobIds(input: {
   return updated ?? null;
 }
 
+export async function setRoomHeroVideo(input: {
+  workspaceId: string;
+  roomId: string;
+  heroVideoKey: string | null;
+}) {
+  const [updated] = await db
+    .update(schema.partnerRooms)
+    .set({ heroVideoKey: input.heroVideoKey, updatedAt: new Date() })
+    .where(
+      and(
+        eq(schema.partnerRooms.workspaceId, input.workspaceId),
+        eq(schema.partnerRooms.id, input.roomId),
+      ),
+    )
+    .returning({ id: schema.partnerRooms.id });
+  return updated ?? null;
+}
+
+export async function setPartnerShareRoomSection(input: {
+  workspaceId: string;
+  shareId: string;
+  roomSection: string | null;
+}) {
+  const [updated] = await db
+    .update(schema.partnerShares)
+    .set({ roomSection: input.roomSection })
+    .where(
+      and(
+        eq(schema.partnerShares.id, input.shareId),
+        eq(schema.partnerShares.workspaceId, input.workspaceId),
+      ),
+    )
+    .returning({ id: schema.partnerShares.id, roomId: schema.partnerShares.roomId });
+  return updated ?? null;
+}
+
 export async function listRoomTeam(input: { roomId: string }): Promise<RoomTeamMember[]> {
   const rows = await db
     .select({

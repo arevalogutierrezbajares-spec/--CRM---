@@ -20,8 +20,17 @@ import {
   addRoomLinkAction,
   deleteRoomCommentAction,
   deleteRoomItemAction,
+  setShareRoomSectionAction,
   updateRoomItemAction,
 } from "@/app/(app)/partner-access/actions";
+import { REPO_SECTION_OPTIONS, repoSection } from "@/lib/partner-access";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { createClient } from "@/lib/supabase/client";
 import { PROJECT_FILES_BUCKET } from "@/lib/project-files/constants";
 import { Button } from "@/components/ui/button";
@@ -39,6 +48,7 @@ export type OwnerRepoItem = {
   kind: string;
   title: string;
   description: string | null;
+  category: string | null;
   url: string | null;
   mimeType: string | null;
   sizeBytes: number | null;
@@ -51,7 +61,39 @@ export type OwnerRepoShare = {
   kindSnapshot: string;
   sizeBytes: number | null;
   description: string | null;
+  roomSection: string | null;
 };
+
+/** Compact section dropdown shown on every repository entry. */
+function SectionSelect({
+  value,
+  disabled,
+  onChange,
+  label,
+}: {
+  value: string | null;
+  disabled?: boolean;
+  onChange: (value: string) => void;
+  label: string;
+}) {
+  return (
+    <Select value={repoSection(value)} onValueChange={onChange} disabled={disabled}>
+      <SelectTrigger
+        aria-label={label}
+        className="h-7 min-h-0 w-auto gap-1 px-2 py-0 text-xs sm:h-7 sm:py-0"
+      >
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {REPO_SECTION_OPTIONS.map((option) => (
+          <SelectItem key={option.value} value={option.value}>
+            {option.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
 
 function itemIcon(item: OwnerRepoItem) {
   if (item.kind === "link") return <LinkIcon className="h-4 w-4 text-[var(--muted-foreground)]" />;
@@ -79,6 +121,8 @@ export function RepositoryManager({
   const [linkTitle, setLinkTitle] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
   const [linkDesc, setLinkDesc] = useState("");
+  // Section applied to the next link/file added; entries can be re-filed inline.
+  const [newSection, setNewSection] = useState<string>("documentos");
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -90,6 +134,7 @@ export function RepositoryManager({
         title: linkTitle,
         url: linkUrl,
         description: linkDesc.trim() || null,
+        category: newSection,
       });
       if (res.ok) {
         setLinkTitle("");
@@ -135,6 +180,7 @@ export function RepositoryManager({
           action: "finalize",
           storagePath: path,
           title: file.name,
+          category: newSection,
           originalFilename: file.name,
           mimeType: file.type,
           sizeBytes: file.size,
@@ -204,6 +250,14 @@ export function RepositoryManager({
             e.target.value = "";
           }}
         />
+        <div className="ml-auto flex items-center gap-1.5">
+          <span className="text-xs text-[var(--muted-foreground)]">File under</span>
+          <SectionSelect
+            value={newSection}
+            onChange={setNewSection}
+            label="Section for new entries"
+          />
+        </div>
       </div>
 
       {adding && (
@@ -240,31 +294,77 @@ export function RepositoryManager({
             />
           ))}
           {shares.map((share) => (
-            <li key={`share-${share.id}`} className="rounded-md border border-[var(--border)] p-3">
-              <div className="flex items-start gap-2">
-                <FileText className="mt-0.5 h-4 w-4 shrink-0 text-[var(--muted-foreground)]" />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium">{share.title}</div>
-                  <div className="text-xs text-[var(--muted-foreground)]">
-                    {share.projectTitle ?? "Project"} · {share.kindSnapshot}
-                    {share.sizeBytes ? ` · ${formatBytes(share.sizeBytes)}` : ""} · shared doc
-                  </div>
-                  {share.description && (
-                    <p className="mt-1 text-sm text-[var(--muted-foreground)]">{share.description}</p>
-                  )}
-                  <PartnerCommentThread
-                    comments={commentsByTarget[`share:${share.id}`] ?? []}
-                    ownerLabel="You"
-                    onSubmit={ownerComment("share", share.id)}
-                    onDelete={deleteComment}
-                  />
-                </div>
-              </div>
-            </li>
+            <OwnerShareRow
+              key={`share-${share.id}`}
+              roomId={roomId}
+              share={share}
+              comments={commentsByTarget[`share:${share.id}`] ?? []}
+              onComment={ownerComment("share", share.id)}
+              onDeleteComment={deleteComment}
+            />
           ))}
         </ul>
       )}
     </div>
+  );
+}
+
+function OwnerShareRow({
+  roomId,
+  share,
+  comments,
+  onComment,
+  onDeleteComment,
+}: {
+  roomId: string;
+  share: OwnerRepoShare;
+  comments: RepoComment[];
+  onComment: (body: string) => Promise<RepoComment | null>;
+  onDeleteComment: (id: string) => Promise<void>;
+}) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+
+  function setSection(section: string) {
+    startTransition(async () => {
+      const res = await setShareRoomSectionAction({ roomId, shareId: share.id, section });
+      if (res.ok) router.refresh();
+      else toast.error(res.error);
+    });
+  }
+
+  return (
+    <li className="rounded-md border border-[var(--border)] p-3">
+      <div className="flex items-start gap-2">
+        <FileText className="mt-0.5 h-4 w-4 shrink-0 text-[var(--muted-foreground)]" />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="min-w-0">
+              <div className="truncate text-sm font-medium">{share.title}</div>
+              <div className="text-xs text-[var(--muted-foreground)]">
+                {share.projectTitle ?? "Project"} · {share.kindSnapshot}
+                {share.sizeBytes ? ` · ${formatBytes(share.sizeBytes)}` : ""} · shared doc
+              </div>
+            </div>
+            <SectionSelect
+              value={share.roomSection}
+              disabled={pending}
+              onChange={setSection}
+              label={`Section for ${share.title}`}
+            />
+          </div>
+          {share.description && (
+            <p className="mt-1 text-sm text-[var(--muted-foreground)]">{share.description}</p>
+          )}
+          <PartnerCommentThread
+            comments={comments}
+            ownerLabel="You"
+            onSubmit={onComment}
+            onDelete={onDeleteComment}
+          />
+        </div>
+      </div>
+    </li>
   );
 }
 
@@ -312,6 +412,14 @@ function OwnerItemRow({
     });
   }
 
+  function setSection(section: string) {
+    startTransition(async () => {
+      const res = await updateRoomItemAction({ roomId, itemId: item.id, category: section });
+      if (res.ok) router.refresh();
+      else toast.error(res.error);
+    });
+  }
+
   return (
     <li className="rounded-md border border-[var(--border)] p-3">
       <div className="flex items-start gap-2">
@@ -340,7 +448,13 @@ function OwnerItemRow({
                     {item.sizeBytes ? ` · ${formatBytes(item.sizeBytes)}` : ""}
                   </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-1">
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <SectionSelect
+                    value={item.category}
+                    disabled={pending}
+                    onChange={setSection}
+                    label={`Section for ${item.title}`}
+                  />
                   <button type="button" onClick={() => setEditing(true)} aria-label="Edit" className="text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
                     <Pencil className="h-3.5 w-3.5" />
                   </button>

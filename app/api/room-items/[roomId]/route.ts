@@ -10,6 +10,7 @@ import {
   sniffHeadBytes,
 } from "@/lib/project-files/storage";
 import { isExecutableContent } from "@/lib/project-files/sniff";
+import { REPO_SECTION_VALUES } from "@/lib/partner-access";
 
 type Params = Promise<{ roomId: string }>;
 
@@ -26,6 +27,7 @@ const FinalizeBody = z.object({
   storagePath: z.string().min(1),
   title: z.string().trim().min(1).max(200),
   description: z.string().trim().max(2000).optional(),
+  category: z.string().max(40).nullable().optional(),
   originalFilename: z.string().min(1),
   mimeType: z.string().nullable().optional(),
   sizeBytes: z.number().nullable().optional(),
@@ -80,6 +82,10 @@ export async function POST(req: NextRequest, props: { params: Params }) {
       kind: "file",
       title: parsed.data.title,
       description: parsed.data.description ?? null,
+      category:
+        parsed.data.category && REPO_SECTION_VALUES.has(parsed.data.category)
+          ? parsed.data.category
+          : null,
       storagePath: parsed.data.storagePath,
       mimeType: parsed.data.mimeType ?? null,
       sizeBytes: parsed.data.sizeBytes ?? null,

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Send } from "lucide-react";
-import { formatRelative } from "@/lib/utils";
+import { formatRelativeEs } from "@/lib/utils";
 import {
   MentionTextarea,
   renderWithMentions,
@@ -105,7 +105,7 @@ export function PublicRoomMessages({
                     {mine
                       ? message.authorName ?? "Tú"
                       : message.authorName ?? ownerLabel}{" "}
-                    · {formatRelative(message.createdAt)}
+                    · {formatRelativeEs(message.createdAt)}
                   </div>
                   <p className="mt-0.5 whitespace-pre-wrap break-words text-sm">
                     {renderWithMentions(message.body)}

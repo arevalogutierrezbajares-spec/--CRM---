@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { MessageSquare, Send, Trash2 } from "lucide-react";
-import { formatRelative } from "@/lib/utils";
+import { formatRelativeEs } from "@/lib/utils";
 
 export type RepoComment = {
   id: string;
@@ -81,7 +81,7 @@ export function PartnerCommentThread({
                 <span className="font-medium text-[var(--foreground)]">
                   {c.authorName ?? (c.authorKind === "owner" ? ownerLabel : "Invitado")}
                 </span>
-                {formatRelative(c.createdAt)}
+                {formatRelativeEs(c.createdAt)}
                 {onDelete && (
                   <button
                     type="button"

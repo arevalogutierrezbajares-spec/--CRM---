@@ -63,3 +63,37 @@ export function partnerShareChannelLabel(value: string | null | undefined) {
       ?.label ?? "Manual"
   );
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Repository sections — partner-facing groupings for room repository entries.
+// `value` is stored in partner_room_items.category / partner_shares.room_section.
+// Null/unknown values fall back to the "documentos" section.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const REPO_SECTION_OPTIONS = [
+  { value: "documentos", label: "Documentos" },
+  { value: "contratos", label: "Contratos & Legal" },
+  { value: "contenido", label: "Contenido & Media" },
+  { value: "finanzas", label: "Finanzas" },
+  { value: "marca", label: "Marca & Diseño" },
+  { value: "informes", label: "Informes" },
+] as const;
+
+export type RepoSection = (typeof REPO_SECTION_OPTIONS)[number]["value"];
+
+export const REPO_SECTION_VALUES: ReadonlySet<string> = new Set(
+  REPO_SECTION_OPTIONS.map((option) => option.value),
+);
+
+export function repoSection(value: string | null | undefined): RepoSection {
+  return REPO_SECTION_VALUES.has(value ?? "")
+    ? (value as RepoSection)
+    : "documentos";
+}
+
+export function repoSectionLabel(value: string | null | undefined) {
+  return (
+    REPO_SECTION_OPTIONS.find((option) => option.value === repoSection(value))
+      ?.label ?? "Documentos"
+  );
+}

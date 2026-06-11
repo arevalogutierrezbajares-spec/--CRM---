@@ -1,5 +1,7 @@
-import { CheckSquare, FileText, Lock, MessageSquare, Upload } from "lucide-react";
-import { formatRelative } from "@/lib/utils";
+import { ArrowRight, CheckSquare, Lock, MessageSquare } from "lucide-react";
+import { formatRelativeEs } from "@/lib/utils";
+import { roomHeroVideo } from "@/lib/partner-room-videos";
+import { RoomHeroVideo } from "@/components/partner-access/room-hero-video";
 import {
   countClaimedSeats,
   getPartnerRoomMember,
@@ -18,7 +20,6 @@ import {
   isPartnerRoomUnlocked,
 } from "@/lib/partner-room-gate.server";
 import { materialType } from "@/lib/materials/material-type";
-import { PublicUploadForm } from "@/components/partner-access/public-upload-form";
 import { PublicNextSteps } from "@/components/partner-access/public-next-steps";
 import { PublicRoomMessages } from "@/components/partner-access/public-room-messages";
 import { RoomSignIn } from "@/components/partner-access/room-sign-in";
@@ -106,11 +107,22 @@ export default async function PublicAccessRoomPage({
   ];
 
   const shares = access.shares;
-  const lastShared = shares[0]?.sharedAt ?? access.room.updatedAt;
   const openSteps = nextSteps.filter((s) => !s.completedAt);
   // new Date().getTime() (not Date.now()) — the repo's purity lint bans Date.now
   // in render; this server-snapshot is passed to the client for overdue checks.
   const nowMs = new Date().getTime();
+
+  // "Actualizado" reflects the newest thing the partner can actually see —
+  // shares, messages, and repository items — not just the last share.
+  const lastUpdated = new Date(
+    Math.max(
+      shares[0]?.sharedAt?.getTime() ?? 0,
+      messages[messages.length - 1]?.createdAt.getTime() ?? 0,
+      ...repoItems.map((item) => item.createdAt.getTime()),
+      access.room.updatedAt.getTime(),
+    ),
+  );
+  const isFreshUpdate = nowMs - lastUpdated.getTime() < 7 * 24 * 60 * 60 * 1000;
 
   const commentsByTarget: Record<string, RepoCommentView[]> = {};
   for (const c of repoComments) {
@@ -148,6 +160,7 @@ export default async function PublicAccessRoomPage({
         share.kindSnapshot === "file" &&
         Boolean(share.storagePath) &&
         share.permissions.includes("download"),
+      section: share.roomSection,
     };
   });
 
@@ -159,23 +172,39 @@ export default async function PublicAccessRoomPage({
     url: item.url,
     mimeType: item.mimeType,
     sizeBytes: item.sizeBytes,
+    category: item.category,
   }));
 
   const firstName = access.contact.name?.trim().split(/\s+/)[0] ?? null;
-  const totalItems = shares.length + repoItemViews.length;
+  const heroVideo = roomHeroVideo(access.room.heroVideoKey);
+  const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
 
   return (
-    <main className="min-h-screen bg-[var(--bg-page)]">
+    <main lang="es" className="min-h-screen bg-[var(--bg-page)]">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-5 py-5 md:px-8 md:py-8">
-        <header className="relative overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] p-6 md:p-9">
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-0"
-            style={{
-              background:
-                "radial-gradient(120% 80% at 0% 0%, color-mix(in oklab, var(--primary) 12%, transparent), transparent 60%), radial-gradient(120% 80% at 100% 0%, color-mix(in oklab, var(--primary) 8%, transparent), transparent 55%)",
-            }}
-          />
+        <header
+          className={`relative overflow-hidden rounded-2xl border p-6 md:p-9 ${
+            heroVideo
+              ? "flex min-h-[280px] flex-col justify-end border-black/20 md:min-h-[340px]"
+              : "border-[var(--border)] bg-[var(--card)]"
+          }`}
+        >
+          {heroVideo ? (
+            <RoomHeroVideo
+              mp4={heroVideo.mp4}
+              webm={heroVideo.webm}
+              poster={heroVideo.poster}
+            />
+          ) : (
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-0"
+              style={{
+                background:
+                  "radial-gradient(120% 80% at 0% 0%, color-mix(in oklab, var(--primary) 12%, transparent), transparent 60%), radial-gradient(120% 80% at 100% 0%, color-mix(in oklab, var(--primary) 8%, transparent), transparent 55%)",
+              }}
+            />
+          )}
           <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-3xl">
               <CoBrandLockup
@@ -184,26 +213,113 @@ export default async function PublicAccessRoomPage({
                 clientName={access.contact.name}
                 size={64}
               />
-              <p className="mt-5 inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.2em] text-[var(--primary)]">
+              <p
+                className={`mt-5 inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.2em] ${
+                  heroVideo ? "text-white/80" : "text-[var(--primary)]"
+                }`}
+              >
                 <Lock className="h-3 w-3" />
                 Sala privada · {partnerKindLabel(access.room.partnerKind)}
               </p>
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight md:text-4xl">
-                {firstName ? `Bienvenido, ${firstName}` : "Bienvenido"}
+              <h1
+                className={`mt-2 text-3xl font-semibold tracking-tight md:text-4xl ${
+                  heroVideo ? "text-white" : ""
+                }`}
+              >
+                {firstName
+                  ? `Te damos la bienvenida, ${firstName}`
+                  : "Te damos la bienvenida"}
               </h1>
-              <p className="mt-3 max-w-2xl text-base leading-7 text-[var(--muted-foreground)]">
+              <p
+                className={`mt-3 max-w-2xl text-base leading-7 ${
+                  heroVideo ? "text-white/85" : "text-[var(--muted-foreground)]"
+                }`}
+              >
                 {access.room.welcomeMessage ??
                   `Todo lo que estamos trabajando juntos vive aquí — documentos, novedades y una línea directa con el equipo. Estás en tu casa.`}
               </p>
             </div>
 
-            <div className="flex shrink-0 flex-wrap gap-2">
-              <Stat label="En tu sala" value={totalItems} />
-              {openSteps.length > 0 && <Stat label="Para ti" value={openSteps.length} />}
-              <Stat label="Actualizado" value={formatRelative(lastShared)} />
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              {openSteps.length > 0 && (
+                <a
+                  href="#pasos"
+                  className={`inline-flex items-center gap-2 rounded-full border px-3.5 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 ${
+                    heroVideo
+                      ? "border-white/25 bg-white/10 text-white backdrop-blur hover:bg-white/20 focus-visible:ring-white/80"
+                      : "border-[var(--border)] bg-[var(--background)]/60 backdrop-blur hover:bg-[var(--secondary)] focus-visible:ring-[var(--ring)]"
+                  }`}
+                >
+                  <span className="grid h-5 w-5 place-items-center rounded-full bg-amber-400/90 text-[11px] font-semibold tabular-nums text-amber-950">
+                    {openSteps.length}
+                  </span>
+                  {openSteps.length === 1 ? "paso para ti" : "pasos para ti"}
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </a>
+              )}
+              <span
+                className={`inline-flex items-center gap-2 rounded-full border px-3.5 py-2 text-sm transition-colors ${
+                  heroVideo
+                    ? "border-white/25 bg-white/10 text-white backdrop-blur"
+                    : "border-[var(--border)] bg-[var(--background)]/60 backdrop-blur"
+                }`}
+              >
+                <span className="relative flex h-2 w-2" aria-hidden>
+                  {isFreshUpdate && (
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60 motion-reduce:animate-none" />
+                  )}
+                  <span
+                    className={`relative inline-flex h-2 w-2 rounded-full ${
+                      isFreshUpdate
+                        ? "bg-emerald-400"
+                        : heroVideo
+                          ? "bg-white/40"
+                          : "bg-[var(--muted-foreground)]/40"
+                    }`}
+                  />
+                </span>
+                Actualizado {formatRelativeEs(lastUpdated)}
+              </span>
             </div>
           </div>
         </header>
+
+        {/* Messages get top billing: the latest exchange, one tap from replying. */}
+        <a
+          href="#mensajes"
+          className="group flex items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--card)] px-4 py-3 transition-colors hover:border-[var(--primary)]/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+        >
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[var(--primary)]/10">
+            <MessageSquare className="h-4 w-4 text-[var(--primary)]" />
+          </span>
+          {lastMessage ? (
+            <span className="min-w-0 flex-1">
+              <span className="block text-xs text-[var(--muted-foreground)]">
+                Último mensaje ·{" "}
+                {lastMessage.authorKind === "partner"
+                  ? lastMessage.authorName ?? "Tú"
+                  : lastMessage.authorName ?? "El equipo"}{" "}
+                · {formatRelativeEs(lastMessage.createdAt)}
+              </span>
+              <span title={lastMessage.body} className="block truncate text-sm">
+                {lastMessage.body}
+              </span>
+            </span>
+          ) : (
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-medium">
+                ¿Preguntas o ideas? Escríbenos.
+              </span>
+              <span className="block text-xs text-[var(--muted-foreground)]">
+                El equipo responde aquí mismo, en tu sala.
+              </span>
+            </span>
+          )}
+          <span className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-[var(--primary)]">
+            {lastMessage ? "Responder" : "Escribir"}
+            <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+          </span>
+        </a>
 
         {/* The alliance leads on mobile (warmth + who's here), then folds into
             the desktop sidebar. */}
@@ -227,11 +343,21 @@ export default async function PublicAccessRoomPage({
               token={token}
               shares={repoShares}
               items={repoItemViews}
+              uploads={partnerUploads.map((u) => ({
+                id: u.id,
+                label: u.label,
+                originalFilename: u.originalFilename,
+                createdAt: u.createdAt.toISOString(),
+              }))}
               commentsByTarget={commentsByTarget}
               ownerLabel="El equipo"
             />
+
             {/* Messages section */}
-            <div className="rounded-xl border border-[var(--border)] bg-[var(--card)]">
+            <div
+              id="mensajes"
+              className="scroll-mt-6 rounded-xl border border-[var(--border)] bg-[var(--card)]"
+            >
               <div className="flex items-center gap-2 border-b border-[var(--border)] px-4 py-3">
                 <MessageSquare className="h-4 w-4 text-[var(--muted-foreground)]" />
                 <div>
@@ -256,40 +382,6 @@ export default async function PublicAccessRoomPage({
                 />
               </div>
             </div>
-
-            {/* Partner uploads section */}
-            <div className="rounded-xl border border-[var(--border)] bg-[var(--card)]">
-              <div className="flex items-center gap-2 border-b border-[var(--border)] px-4 py-3">
-                <Upload className="h-4 w-4 text-[var(--muted-foreground)]" />
-                <div>
-                  <h2 className="text-base font-semibold">Enviar archivos</h2>
-                  <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">
-                    Envía documentos al equipo — contratos, firmas, recursos.
-                  </p>
-                </div>
-              </div>
-              <div className="p-4">
-                <PublicUploadForm token={token} />
-                {partnerUploads.length > 0 && (
-                  <div className="mt-4 border-t border-[var(--border)] pt-4">
-                    <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted-foreground)]">
-                      Enviados anteriormente
-                    </p>
-                    <ul className="mt-2 space-y-1.5">
-                      {partnerUploads.map((u) => (
-                        <li key={u.id} className="flex items-center gap-2 text-sm">
-                          <FileText className="h-3.5 w-3.5 shrink-0 text-[var(--muted-foreground)]" />
-                          <span className="truncate">{u.label || u.originalFilename}</span>
-                          <span className="ml-auto shrink-0 text-xs text-[var(--muted-foreground)]">
-                            {formatRelative(u.createdAt)}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            </div>
           </div>
 
           {/* On mobile the aside leads (team + next steps first); on desktop it
@@ -307,7 +399,10 @@ export default async function PublicAccessRoomPage({
               />
             </div>
 
-            <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
+            <div
+              id="pasos"
+              className="scroll-mt-6 rounded-xl border border-[var(--border)] bg-[var(--card)] p-4"
+            >
               <div className="flex items-center gap-2">
                 <CheckSquare className="h-4 w-4 text-[var(--muted-foreground)]" />
                 <h2 className="text-base font-semibold">Próximos pasos</h2>
@@ -336,20 +431,9 @@ export default async function PublicAccessRoomPage({
   );
 }
 
-function Stat({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div className="rounded-xl border border-[var(--border)] bg-[var(--background)]/60 px-4 py-2.5 backdrop-blur">
-      <div className="text-[10px] uppercase tracking-wide text-[var(--muted-foreground)]">
-        {label}
-      </div>
-      <div className="mt-0.5 text-base font-semibold tabular-nums">{value}</div>
-    </div>
-  );
-}
-
 function UnavailableRoom() {
   return (
-    <main className="min-h-screen bg-[var(--bg-page)]">
+    <main lang="es" className="min-h-screen bg-[var(--bg-page)]">
       <div className="mx-auto grid min-h-screen w-full max-w-2xl place-items-center px-5 py-10">
         <div className="w-full rounded-xl border border-[var(--border)] bg-[var(--card)] p-6 text-center">
           <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--secondary)]">

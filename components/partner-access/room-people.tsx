@@ -1,4 +1,4 @@
-import { formatRelative } from "@/lib/utils";
+import { formatRelativeEs } from "@/lib/utils";
 
 type Host = { id: string; displayName: string | null; title: string | null };
 type Guest = {
@@ -92,7 +92,7 @@ export function RoomPeople({
                   </div>
                   {(g.roleLabel || g.lastViewedAt) && (
                     <div className="truncate text-xs text-[var(--muted-foreground)]">
-                      {g.roleLabel ?? `activo ${formatRelative(g.lastViewedAt as Date)}`}
+                      {g.roleLabel ?? `activo ${formatRelativeEs(g.lastViewedAt as Date)}`}
                     </div>
                   )}
                 </div>

@@ -67,6 +67,7 @@ export async function createRoomItem(input: {
   kind: "link" | "file";
   title: string;
   description?: string | null;
+  category?: string | null;
   url?: string | null;
   storagePath?: string | null;
   mimeType?: string | null;
@@ -83,6 +84,7 @@ export async function createRoomItem(input: {
         kind: input.kind,
         title: input.title.trim(),
         description: input.description?.trim() || null,
+        category: input.category ?? null,
         url: input.url?.trim() || null,
         storagePath: input.storagePath ?? null,
         mimeType: input.mimeType ?? null,
@@ -112,10 +114,12 @@ export async function updateRoomItem(input: {
   itemId: string;
   title?: string;
   description?: string | null;
+  category?: string | null;
 }) {
   const patch: Record<string, unknown> = { updatedAt: new Date() };
   if (input.title !== undefined) patch.title = input.title.trim();
   if (input.description !== undefined) patch.description = input.description?.trim() || null;
+  if (input.category !== undefined) patch.category = input.category;
 
   const [row] = await db
     .update(schema.partnerRoomItems)

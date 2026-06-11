@@ -8,11 +8,13 @@ import {
   PARTNER_PERMISSION_OPTIONS,
   PARTNER_ROOM_STATUS_OPTIONS,
   PARTNER_SHARE_CHANNEL_OPTIONS,
+  REPO_SECTION_VALUES,
   type PartnerKind,
   type PartnerPermission,
   type PartnerRoomStatus,
   type PartnerShareChannel,
 } from "@/lib/partner-access";
+import { roomHeroVideo } from "@/lib/partner-room-videos";
 import {
   addExpectedGuest,
   addRoomTeamMember,
@@ -24,7 +26,9 @@ import {
   regeneratePartnerRoomAccessToken,
   removeRoomMember,
   removeRoomTeamMember,
+  setPartnerShareRoomSection,
   setRoomBrandLobIds,
+  setRoomHeroVideo,
   updateContactLogo,
   setPartnerRoomPasscode,
   setPartnerRoomSeatLimit,
@@ -386,11 +390,17 @@ async function _removeRoomMemberAction(opts: {
   return { ok: true };
 }
 
+/** Normalize a repository-section input: preset value or null (default section). */
+function parseRepoSection(value: string | null | undefined): string | null {
+  return value && REPO_SECTION_VALUES.has(value) ? value : null;
+}
+
 async function _addRoomLinkAction(opts: {
   roomId: string;
   title: string;
   url: string;
   description?: string | null;
+  category?: string | null;
 }): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
   const user = await requireUser();
   const title = opts.title.trim();
@@ -408,6 +418,7 @@ async function _addRoomLinkAction(opts: {
     title,
     url,
     description: opts.description ?? null,
+    category: parseRepoSection(opts.category),
     addedBy: user.id,
   });
   revalidatePath(`/partner-access/rooms/${opts.roomId}`);
@@ -419,6 +430,7 @@ async function _updateRoomItemAction(opts: {
   itemId: string;
   title?: string;
   description?: string | null;
+  category?: string | null;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const user = await requireUser();
   if (opts.title !== undefined && !opts.title.trim()) {
@@ -429,8 +441,44 @@ async function _updateRoomItemAction(opts: {
     itemId: opts.itemId,
     title: opts.title,
     description: opts.description,
+    category:
+      opts.category === undefined ? undefined : parseRepoSection(opts.category),
   });
   if (!row) return { ok: false, error: "Item not found" };
+  revalidatePath(`/partner-access/rooms/${opts.roomId}`);
+  return { ok: true };
+}
+
+async function _setShareRoomSectionAction(opts: {
+  roomId: string;
+  shareId: string;
+  section: string | null;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const user = await requireUser();
+  const row = await setPartnerShareRoomSection({
+    workspaceId: user.workspaceId,
+    shareId: opts.shareId,
+    roomSection: parseRepoSection(opts.section),
+  });
+  if (!row) return { ok: false, error: "Share not found" };
+  revalidatePath(`/partner-access/rooms/${opts.roomId}`);
+  return { ok: true };
+}
+
+async function _setRoomHeroVideoAction(opts: {
+  roomId: string;
+  heroVideoKey: string | null;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const user = await requireUser();
+  if (opts.heroVideoKey !== null && !roomHeroVideo(opts.heroVideoKey)) {
+    return { ok: false, error: "Unknown video" };
+  }
+  const row = await setRoomHeroVideo({
+    workspaceId: user.workspaceId,
+    roomId: opts.roomId,
+    heroVideoKey: opts.heroVideoKey,
+  });
+  if (!row) return { ok: false, error: "Room not found" };
   revalidatePath(`/partner-access/rooms/${opts.roomId}`);
   return { ok: true };
 }
@@ -781,6 +829,8 @@ export const addExpectedGuestAction = withActionGuard("addExpectedGuestAction", 
 export const removeRoomMemberAction = withActionGuard("removeRoomMemberAction", _removeRoomMemberAction);
 export const addRoomLinkAction = withActionGuard("addRoomLinkAction", _addRoomLinkAction);
 export const updateRoomItemAction = withActionGuard("updateRoomItemAction", _updateRoomItemAction);
+export const setShareRoomSectionAction = withActionGuard("setShareRoomSectionAction", _setShareRoomSectionAction);
+export const setRoomHeroVideoAction = withActionGuard("setRoomHeroVideoAction", _setRoomHeroVideoAction);
 export const deleteRoomItemAction = withActionGuard("deleteRoomItemAction", _deleteRoomItemAction);
 export const addRoomCommentAction = withActionGuard("addRoomCommentAction", _addRoomCommentAction);
 export const deleteRoomCommentAction = withActionGuard("deleteRoomCommentAction", _deleteRoomCommentAction);

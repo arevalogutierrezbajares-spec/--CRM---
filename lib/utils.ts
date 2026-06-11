@@ -48,3 +48,31 @@ export function formatRelative(value: Date | string | null | undefined) {
   if (diffDays < 365) return `${Math.floor(diffDays / 30)}mo ago`;
   return `${Math.floor(diffDays / 365)}y ago`;
 }
+
+/** Spanish twin of formatRelative — used on partner-facing (public room) surfaces. */
+export function formatRelativeEs(value: Date | string | null | undefined) {
+  if (!value) return "nunca";
+  const d = typeof value === "string" ? new Date(value) : value;
+  const diffMs = Date.now() - d.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  if (diffDays < 0) {
+    return d.toLocaleDateString("es-VE", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  }
+  if (diffDays === 0) return "hoy";
+  if (diffDays === 1) return "ayer";
+  if (diffDays < 7) return `hace ${diffDays} días`;
+  if (diffDays < 30) {
+    const w = Math.floor(diffDays / 7);
+    return w === 1 ? "hace 1 semana" : `hace ${w} semanas`;
+  }
+  if (diffDays < 365) {
+    const m = Math.floor(diffDays / 30);
+    return m === 1 ? "hace 1 mes" : `hace ${m} meses`;
+  }
+  const y = Math.floor(diffDays / 365);
+  return y === 1 ? "hace 1 año" : `hace ${y} años`;
+}

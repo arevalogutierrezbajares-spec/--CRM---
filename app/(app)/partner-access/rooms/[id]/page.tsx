@@ -22,6 +22,7 @@ import { DbBanner } from "@/components/db-banner";
 import { SectionLabel } from "@/components/dashboard/shared/section-label";
 import { AddDocsDialog } from "@/components/partner-access/add-docs-dialog";
 import { ClientLogoControl } from "@/components/partner-access/client-logo-control";
+import { HeroVideoPicker } from "@/components/partner-access/hero-video-picker";
 import { RoomGuestsManager } from "@/components/partner-access/room-guests-manager";
 import { RepositoryManager } from "@/components/partner-access/repository-manager";
 import { listRoomItems, listRoomComments } from "@/db/queries/partner-repository";
@@ -351,6 +352,7 @@ export default async function PartnerAccessRoomPage(props: { params: Params }) {
                     kind: it.kind,
                     title: it.title,
                     description: it.description,
+                    category: it.category,
                     url: it.url,
                     mimeType: it.mimeType,
                     sizeBytes: it.sizeBytes,
@@ -362,6 +364,7 @@ export default async function PartnerAccessRoomPage(props: { params: Params }) {
                     kindSnapshot: s.kindSnapshot,
                     sizeBytes: null,
                     description: null,
+                    roomSection: s.roomSection,
                   }))}
                   commentsByTarget={commentsByTarget}
                 />
@@ -575,6 +578,15 @@ export default async function PartnerAccessRoomPage(props: { params: Params }) {
                   availableBrands={brandsRes.data}
                   selectedBrandLobIds={room.brandLobIds ?? null}
                 />
+                <div className="mt-5 border-t border-[var(--border)] pt-4">
+                  <p className="text-sm font-medium">Background video</p>
+                  <div className="mt-2">
+                    <HeroVideoPicker
+                      roomId={room.id}
+                      heroVideoKey={room.heroVideoKey ?? null}
+                    />
+                  </div>
+                </div>
               </CardContent>
             </Card>
 
