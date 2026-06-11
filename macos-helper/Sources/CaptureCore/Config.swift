@@ -16,17 +16,51 @@ public struct HelperConfig: Codable, Equatable {
     public var neverPromptApps: [String]
     public var helperVersion: String
 
+    // MARK: - Auto-end tunables (FEATURE 1)
+
+    /// Continuous near-silence on BOTH channels for this many seconds
+    /// auto-finalizes the call as a normal end. Guards against runaway
+    /// recordings when the OS mic-release signal never fires (e.g. WhatsApp
+    /// holding the mic open after hangup). Default 90 s.
+    public var silenceAutoEndSeconds: Double
+    /// Hard ceiling: a single recording is auto-finalized after this many
+    /// seconds no matter what, so nothing ever runs forever. Default 2 h.
+    public var maxRecordingSeconds: Double
+
+    // MARK: - Live transcript (FEATURE 2)
+
+    /// Open a best-effort Deepgram live-transcript stream during recording and
+    /// show it in a floating window. Purely additive; never affects capture or
+    /// post-call filing. Default true.
+    public var liveTranscript: Bool
+    /// Auto-show the floating transcript window when a recording starts.
+    /// Default true (only meaningful when `liveTranscript` is on).
+    public var liveTranscriptAutoShow: Bool
+
     public init(crmBaseUrl: String = "",
                 token: String = "",
                 retentionNote: String? = nil,
                 neverPromptApps: [String] = [],
-                helperVersion: String = AudioConstants.helperVersion) {
+                helperVersion: String = AudioConstants.helperVersion,
+                silenceAutoEndSeconds: Double = HelperConfig.defaultSilenceAutoEndSeconds,
+                maxRecordingSeconds: Double = HelperConfig.defaultMaxRecordingSeconds,
+                liveTranscript: Bool = true,
+                liveTranscriptAutoShow: Bool = true) {
         self.crmBaseUrl = crmBaseUrl
         self.token = token
         self.retentionNote = retentionNote
         self.neverPromptApps = neverPromptApps
         self.helperVersion = helperVersion
+        self.silenceAutoEndSeconds = silenceAutoEndSeconds
+        self.maxRecordingSeconds = maxRecordingSeconds
+        self.liveTranscript = liveTranscript
+        self.liveTranscriptAutoShow = liveTranscriptAutoShow
     }
+
+    /// 90 s of two-channel silence ≈ a clearly-ended call, well past any natural pause.
+    public static let defaultSilenceAutoEndSeconds: Double = 90
+    /// 2 h ceiling — long enough for any real call, short of "runs forever".
+    public static let defaultMaxRecordingSeconds: Double = 2 * 60 * 60
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -35,10 +69,25 @@ public struct HelperConfig: Codable, Equatable {
         retentionNote = try? c.decodeIfPresent(String.self, forKey: .retentionNote)
         neverPromptApps = (try? c.decodeIfPresent([String].self, forKey: .neverPromptApps)) ?? []
         helperVersion = (try? c.decodeIfPresent(String.self, forKey: .helperVersion)) ?? AudioConstants.helperVersion
+        // New keys default to the safe values when absent so existing config.json
+        // files keep working without a rewrite. Non-positive overrides fall back.
+        let silence = (try? c.decodeIfPresent(Double.self, forKey: .silenceAutoEndSeconds)) ?? HelperConfig.defaultSilenceAutoEndSeconds
+        silenceAutoEndSeconds = silence > 0 ? silence : HelperConfig.defaultSilenceAutoEndSeconds
+        let maxDur = (try? c.decodeIfPresent(Double.self, forKey: .maxRecordingSeconds)) ?? HelperConfig.defaultMaxRecordingSeconds
+        maxRecordingSeconds = maxDur > 0 ? maxDur : HelperConfig.defaultMaxRecordingSeconds
+        liveTranscript = (try? c.decodeIfPresent(Bool.self, forKey: .liveTranscript)) ?? true
+        liveTranscriptAutoShow = (try? c.decodeIfPresent(Bool.self, forKey: .liveTranscriptAutoShow)) ?? true
     }
 
     public var isComplete: Bool {
         !token.isEmpty && URL(string: crmBaseUrl) != nil && !crmBaseUrl.isEmpty
+    }
+
+    /// URL of the CRM live-transcript token-grant endpoint, derived from
+    /// `crmBaseUrl`. Returns nil when the base URL is unusable.
+    public var liveTokenURL: URL? {
+        guard !crmBaseUrl.isEmpty, let base = URL(string: crmBaseUrl) else { return nil }
+        return base.appendingPathComponent("api/capture/live-token")
     }
 
     // MARK: - Load / save

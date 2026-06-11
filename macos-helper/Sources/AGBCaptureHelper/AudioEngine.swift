@@ -27,8 +27,29 @@ final class AudioEngine: NSObject {
 
     // Callbacks (delivered on the audio queue; hop to main for UI).
     var onError: ((String) -> Void)?
+    /// Fired (audio queue) when a recording auto-ends from continuous silence or
+    /// the hard duration cap (FEATURE 1). The delegate hops to main + finalizes.
+    var onAutoEnd: ((CallEndMonitor.Reason) -> Void)?
+    /// Fired (audio queue) for every interleaved-stereo PCM16 batch produced
+    /// while recording — a *copy* for the best-effort live-transcript stream
+    /// (FEATURE 2). Must never block: the closure is expected to enqueue and
+    /// return immediately. The spool/upload path is unaffected if it's nil or slow.
+    var onRecordingPCM: ((Data) -> Void)?
 
     let silenceMeter = SilenceMeter()
+
+    /// Auto-end watchdog (silence timeout + max-duration). Installed by the
+    /// delegate at affirm time with the configured windows; nil disables it.
+    private var callEndMonitor: CallEndMonitor?
+
+    /// Install the auto-end watchdog and start its clock. Call right after
+    /// promoting to recording. Pass nil to disable (e.g. in tests).
+    func installCallEndMonitor(_ monitor: CallEndMonitor?) {
+        stateLock.lock()
+        callEndMonitor = monitor
+        stateLock.unlock()
+        monitor?.start()
+    }
 
     private let ring = RingBuffer(capacity: AudioConstants.preRollBytes)
     private let interleaver = StereoInterleaver()
@@ -396,6 +417,22 @@ final class AudioEngine: NSObject {
             ring.append(bytes)
         case .recording:
             silenceMeter.feedInterleaved(bytes)
+
+            // FEATURE 2: hand a copy to the live-transcript stream. Best-effort,
+            // strictly non-blocking, decoupled from the spool path below.
+            onRecordingPCM?(bytes)
+
+            // FEATURE 1: auto-end watchdog. Feed the same bytes; if a threshold
+            // is crossed, signal the delegate to finalize (only fires once).
+            let monitor: CallEndMonitor? = {
+                stateLock.lock(); defer { stateLock.unlock() }
+                return callEndMonitor
+            }()
+            if let monitor, let reason = monitor.feed(bytes) {
+                HelperLog.shared.info("auto-end watchdog fired: \(reason)", category: "audio")
+                onAutoEnd?(reason)
+            }
+
             let currentSpooler: ChunkSpooler? = {
                 stateLock.lock(); defer { stateLock.unlock() }
                 return spooler

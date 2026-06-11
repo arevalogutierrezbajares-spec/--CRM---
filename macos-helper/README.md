@@ -80,7 +80,11 @@ swift test             # 59 unit tests (CaptureCore)
   "token": "agbcap_…",
   "retentionNote": "participant informed verbally",
   "neverPromptApps": ["Dictation", "SuperWhisper"],
-  "helperVersion": "1.0.0"
+  "helperVersion": "1.0.0",
+  "silenceAutoEndSeconds": 90,
+  "maxRecordingSeconds": 7200,
+  "liveTranscript": true,
+  "liveTranscriptAutoShow": true
 }
 ```
 
@@ -88,22 +92,73 @@ Env `AGB_CRM_URL` / `AGB_CRM_TOKEN` override the file (used by simulate mode
 and CI). `neverPromptApps` suppresses the record prompt for named apps
 (FR-CALL-TRG-6; app-name resolution requires macOS 14.4+).
 
+**Auto-end tunables** (all optional; absent keys use these defaults, and
+non-positive values fall back to the defaults so the safety net can't be
+disabled by a footgun config):
+
+| Key | Default | What it does |
+|---|---|---|
+| `silenceAutoEndSeconds` | `90` | Continuous near-silence on **both** channels for this long auto-finalizes the call as a normal end. The primary guard against runaway recordings when the OS mic-release signal never fires (e.g. WhatsApp holding the mic open after hangup). |
+| `maxRecordingSeconds` | `7200` (2 h) | Hard ceiling — a single recording is auto-finalized after this many seconds no matter what, so nothing ever runs forever. Logged distinctly. |
+| `liveTranscript` | `true` | Open a best-effort Deepgram live-transcript stream during recording and show it in a floating window. Purely additive; never affects capture or post-call filing. |
+| `liveTranscriptAutoShow` | `true` | Auto-show the floating transcript window when a recording starts (only meaningful when `liveTranscript` is on). |
+
 ## Usage
 
 | Menu item | What it does |
 |---|---|
 | ○ / ? / ● / ‖ / ↑ / ⚠ | idle / call detected / recording / paused / uploading / error — always visible (FR-CALL-RET-3) |
+| ● Recording mm:ss — Stop | **shown only while capturing**: a bold red live item with the running elapsed time, always one click from finalizing the call |
 | Start Recording | manual start, no detection needed (FR-CALL-TRG-4). Global hotkey: **⌘⇧R** toggles start/stop |
 | Stop Recording | ends capture (≤1 s), flushes, finalizes + files hands-free |
 | Pause / Resume | paused intervals are absent from the recording, not silence (FR-CALL-CAP-7) |
 | Off the record: discard last 5 min | drops the un-uploaded tail from the local spool (FR-CALL-CAP-8 v1) |
+| Show / Hide live transcript | toggles the floating live-transcript window (⌘⇧T) |
 | Test Connection | `GET /api/capture/ping` |
 | Configure… | URL + token + never-prompt apps |
 | Diagnostics | writes `~/Desktop/agb-capture-diagnostics.txt`: state, permissions, config (token masked), spool, last uploads, log tail (FR-CALL-OPS-6) |
 
-Call-end auto-detection (FR-CALL-TRG-5) uses CoreAudio process objects
-(macOS 14.4+) to notice when the *other* app releases the mic — 5 s of quiet
-auto-stops and files the call. On 14.0–14.3, stop manually (⌘⇧R or menu).
+### Call-end detection (three independent end conditions)
+
+A recording finalizes on **any** of the following — so a call can never run away
+even if one signal misbehaves:
+
+1. **Process-object mic-release** (FR-CALL-TRG-5) — CoreAudio process objects
+   (macOS 14.4+) notice when the *other* app releases the mic; 5 s of quiet
+   auto-stops and files the call. Works only when the app actually releases the
+   mic (some apps, e.g. WhatsApp, don't on hangup), and only on 14.4+.
+2. **Silence-based auto-end** — if **both** channels stay near-silent
+   continuously for `silenceAutoEndSeconds` (default 90 s), the call is treated
+   as ended and auto-finalized as a *normal* end (`partial: false`). Any signal
+   on either channel resets the timer. This is the catch-all for the WhatsApp
+   "mic held open after hangup" runaway. Version-independent (no 14.4 needed).
+3. **Hard max-duration cap** — `maxRecordingSeconds` (default 2 h) is an absolute
+   ceiling; crossing it auto-finalizes so nothing ever runs forever. Logged
+   distinctly from a silence end.
+
+Silence and max-duration ends post a quiet macOS notification ("recording filed")
+so you know it ended itself. Manual **Stop** (the live menu item, the Stop
+Recording item, or ⌘⇧R) is always available and unmistakable.
+
+### Live transcript (floating window)
+
+When a recording starts, the helper opens a best-effort Deepgram streaming
+WebSocket (`wss://api.deepgram.com/v1/listen`, `model=nova-3`, `language=multi`,
+multichannel) using a short-lived token minted from
+`POST /api/capture/live-token`, and shows a small, always-on-top, draggable
+floating window with the running transcript — speaker-labeled (**You** = your
+mic / **Participant** = system audio), newest at the bottom, autoscrolling, with
+interim text shown greyed until finalized. It talks to Deepgram directly (no
+Vercel WebSocket) and streams a **copy** of the same interleaved 16 kHz stereo
+PCM the recorder spools.
+
+This path is fully decoupled from capture: if the token request fails, the
+socket drops, or Deepgram errors, the window shows a quiet "live transcript
+unavailable" banner and **recording + post-call filing continue completely
+unaffected**. Post-call filing (the CRM transcribing both channels and filing
+the call) remains the source of truth; the live window is purely additive.
+Toggle it with **Show/Hide live transcript** (⌘⇧T); auto-show and the whole
+feature are configurable (`liveTranscript`, `liveTranscriptAutoShow`).
 
 Logs: `os.log` subsystem `com.agb.capture-helper` + rotating plain-text file at
 `~/Library/Application Support/AGBCaptureHelper/logs/helper.log`.

@@ -1,4 +1,5 @@
 import AppKit
+import UserNotifications
 import CaptureCore
 
 /// Menu-bar shell. Owns the state machine and wires detector → prompt →
@@ -57,6 +58,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var stopMenuItem: NSMenuItem?
     private var pauseMenuItem: NSMenuItem?
     private var offRecordMenuItem: NSMenuItem?
+    /// Prominent "● Recording mm:ss — Stop" item, visible only while capturing.
+    private let liveStopMenuItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+    private var liveTranscriptMenuItem: NSMenuItem?
+
+    /// FEATURE 2: live-transcript floating window + Deepgram stream.
+    private let liveWindow = LiveTranscriptWindow()
+    private var liveStreamer: LiveTranscriptStreamer?
+
+    /// Wall-clock recording start, for the live menu timer + elapsed display.
+    private var recordingStartedAt: Date?
+    /// Ticks the live "Recording mm:ss — Stop" label once a second.
+    private var liveTimer: Timer?
 
     private var store: SpoolStore?
     private var worker: UploadQueueWorker?
@@ -199,9 +212,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 return
             }
             let engine = AudioEngine()
-            engine.onError = { [weak self] message in
-                DispatchQueue.main.async { self?.handleEngineError(message) }
-            }
+            self.configureEngineCallbacks(engine)
             self.engine = engine
             do {
                 try await engine.startPreroll()
@@ -223,6 +234,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             engine.promoteToRecording(spooler: spooler)
             state = .recording
             detector.watchForCallEnd()
+            beginRecordingSession(engine: engine, participant: detectedSourceApp)
             worker?.kick() // chunks upload incrementally during the call
             log.info("recording affirmed (source: \(detectedSourceApp ?? "unknown"))", category: "app")
         } catch {
@@ -259,6 +271,166 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         refreshUI()
     }
 
+    /// Common engine callback wiring: error surfacing, auto-end watchdog
+    /// (FEATURE 1), and the best-effort live-transcript PCM tap (FEATURE 2).
+    private func configureEngineCallbacks(_ engine: AudioEngine) {
+        engine.onError = { [weak self] message in
+            DispatchQueue.main.async { self?.handleEngineError(message) }
+        }
+        engine.onAutoEnd = { [weak self] reason in
+            DispatchQueue.main.async { self?.handleAutoEnd(reason) }
+        }
+        engine.onRecordingPCM = { [weak self] pcm in
+            // Best-effort, non-blocking: just enqueue onto the streamer (which
+            // itself hops to its own serial queue and returns immediately).
+            self?.liveStreamer?.send(pcm: pcm)
+        }
+    }
+
+    /// FEATURE 1: an auto-end watchdog (silence timeout or hard duration cap)
+    /// fired. Finalize as a *normal* end and tell the user it filed itself.
+    private func handleAutoEnd(_ reason: CallEndMonitor.Reason) {
+        guard state == .recording || state == .paused else { return }
+        let note: String
+        switch reason {
+        case .silence(let seconds):
+            note = "auto-ended after \(Int(seconds))s of two-channel silence"
+            log.info("auto-finalizing: \(note)", category: "app")
+        case .maxDuration(let seconds):
+            note = "auto-ended at the \(Int(seconds / 60))-minute max-duration cap"
+            log.warn("auto-finalizing: \(note)", category: "app")
+        }
+        finishRecording(autoDetected: true)
+        notifyAutoEnded(reason: reason)
+    }
+
+    // MARK: - Recording session side-effects (auto-end + live transcript)
+
+    /// Start the auto-end watchdog (FEATURE 1), the live-transcript stream +
+    /// window (FEATURE 2), and the menu's elapsed-time ticker. All best-effort:
+    /// the live path failing leaves capture completely intact.
+    private func beginRecordingSession(engine: AudioEngine, participant: String?) {
+        let cfg = HelperConfig.effective()
+        config = cfg
+
+        recordingStartedAt = Date()
+
+        // FEATURE 1: install the silence + max-duration watchdog.
+        let monitor = CallEndMonitor(silenceWindow: cfg.silenceAutoEndSeconds,
+                                     maxDuration: cfg.maxRecordingSeconds)
+        engine.installCallEndMonitor(monitor)
+        log.info("auto-end armed (silence \(Int(cfg.silenceAutoEndSeconds))s, max \(Int(cfg.maxRecordingSeconds))s)", category: "app")
+
+        // FEATURE 2: best-effort live transcript.
+        if cfg.liveTranscript {
+            liveWindow.reset()
+            if cfg.liveTranscriptAutoShow { liveWindow.show() }
+            let streamer = LiveTranscriptStreamer(config: cfg, participantName: participant)
+            streamer.onStatus = { [weak self] status in self?.handleLiveStatus(status) }
+            streamer.onLine = { [weak self] line in self?.liveWindow.append(line: line) }
+            liveStreamer = streamer
+            streamer.start()
+        }
+
+        startLiveTimer()
+        refreshUI()
+    }
+
+    /// Tear down the live-transcript stream + ticker (window stays where it is;
+    /// the user can keep reading the final transcript). Capture-independent.
+    private func endRecordingSession() {
+        liveStreamer?.stop()
+        liveStreamer = nil
+        recordingStartedAt = nil
+        stopLiveTimer()
+        if liveWindow.isVisible {
+            liveWindow.setStatus("■ Recording ended — filing the call…")
+        }
+    }
+
+    private func handleLiveStatus(_ status: LiveTranscriptStreamer.Status) {
+        guard recordingStartedAt != nil else { return }
+        switch status {
+        case .connecting:
+            liveWindow.setStatus("● Recording — connecting live transcript…")
+        case .live:
+            liveWindow.setStatus(liveStatusLine())
+        case .unavailable(let message):
+            liveWindow.setUnavailable(message)
+        case .idle:
+            break
+        }
+    }
+
+    private func startLiveTimer() {
+        stopLiveTimer()
+        let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
+            self?.tickLive()
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        liveTimer = timer
+        tickLive()
+    }
+
+    private func stopLiveTimer() {
+        liveTimer?.invalidate()
+        liveTimer = nil
+    }
+
+    private func tickLive() {
+        guard recordingStartedAt != nil else { return }
+        // Refresh the menu's "Recording mm:ss — Stop" label.
+        liveStopMenuItem.title = liveStopTitle()
+        // Keep the window banner's timer current when the stream is live.
+        if case .live = (liveStreamer?.status ?? .idle), liveWindow.isVisible {
+            liveWindow.setStatus(liveStatusLine())
+        }
+    }
+
+    private func elapsedString() -> String {
+        guard let start = recordingStartedAt else { return "00:00" }
+        let total = Int(Date().timeIntervalSince(start))
+        let h = total / 3600, m = (total % 3600) / 60, s = total % 60
+        return h > 0 ? String(format: "%d:%02d:%02d", h, m, s)
+                     : String(format: "%02d:%02d", m, s)
+    }
+
+    private func liveStopTitle() -> String {
+        let verb = (state == .paused) ? "Paused" : "Recording"
+        return "● \(verb) \(elapsedString()) — Stop"
+    }
+
+    private func liveStatusLine() -> String {
+        "● Recording \(elapsedString()) — live"
+    }
+
+    // MARK: - Notifications (auto-end)
+
+    /// Best-effort macOS notification when a recording auto-ends, so the user
+    /// knows it filed itself (silence timeout or the max-duration cap).
+    private func notifyAutoEnded(reason: CallEndMonitor.Reason) {
+        let center = UNUserNotificationCenter.current()
+        center.requestAuthorization(options: [.alert, .sound]) { [weak center] granted, _ in
+            guard granted, let center else { return }
+            let content = UNMutableNotificationContent()
+            content.title = "AGB Capture — recording filed"
+            switch reason {
+            case .silence(let seconds):
+                content.body = "Auto-ended after \(Int(seconds))s of silence (call appears to have ended). Filing now."
+            case .maxDuration(let seconds):
+                content.body = "Hit the \(Int(seconds / 60))-minute safety cap and auto-ended. Filing now."
+            }
+            content.sound = .default
+            let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+            center.add(request, withCompletionHandler: nil)
+        }
+    }
+
+    @objc private func toggleLiveTranscriptTapped() {
+        liveWindow.toggle()
+        refreshUI()
+    }
+
     // MARK: - Menu actions
 
     @objc private func startRecordingManually() {
@@ -286,9 +458,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 return
             }
             let engine = AudioEngine()
-            engine.onError = { [weak self] message in
-                DispatchQueue.main.async { self?.handleEngineError(message) }
-            }
+            self.configureEngineCallbacks(engine)
             self.engine = engine
             do {
                 try await engine.startPreroll()
@@ -297,6 +467,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 engine.promoteToRecording(spooler: spooler)
                 self.state = .recording
                 self.detector.watchForCallEnd()
+                self.beginRecordingSession(engine: engine, participant: nil)
                 self.worker?.kick()
                 self.log.info("manual recording started", category: "app")
             } catch {
@@ -312,6 +483,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func finishRecording(autoDetected: Bool) {
         guard state == .recording || state == .paused, let engine else { return }
         detector.disarm()
+        endRecordingSession()
 
         let report = engine.stopAndFlush()
         self.engine = nil
@@ -500,6 +672,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(stateMenuItem)
         menu.addItem(errorMenuItem)
         menu.addItem(resultMenuItem)
+
+        // Prominent live "● Recording mm:ss — Stop" item, shown only while
+        // capturing. Bold so it's unmistakable and always one click from Stop.
+        liveStopMenuItem.target = self
+        liveStopMenuItem.action = #selector(stopRecordingTapped)
+        liveStopMenuItem.attributedTitle = NSAttributedString(
+            string: "● Recording — Stop",
+            attributes: [.font: NSFont.systemFont(ofSize: 13, weight: .semibold),
+                         .foregroundColor: NSColor.systemRed]
+        )
+        liveStopMenuItem.isHidden = true
+        menu.addItem(liveStopMenuItem)
+
         menu.addItem(.separator())
 
         let start = makeItem("Start Recording", #selector(startRecordingManually), "r")
@@ -519,6 +704,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(offRecord)
 
         menu.addItem(.separator())
+        let liveItem = makeItem("Show live transcript", #selector(toggleLiveTranscriptTapped), "t")
+        liveTranscriptMenuItem = liveItem
+        menu.addItem(liveItem)
         menu.addItem(makeItem("Test Connection", #selector(testConnectionTapped), ""))
         menu.addItem(makeItem("Configure…", #selector(configureTapped), ","))
         menu.addItem(makeItem("Diagnostics", #selector(diagnosticsTapped), "d"))
@@ -578,6 +766,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         pauseMenuItem?.isEnabled = isCapturing
         pauseMenuItem?.title = (state == .paused) ? "Resume" : "Pause"
         offRecordMenuItem?.isEnabled = isCapturing
+
+        // Prominent live Stop item: visible + bold only while capturing.
+        liveStopMenuItem.isHidden = !isCapturing
+        liveStopMenuItem.isEnabled = isCapturing
+        if isCapturing {
+            liveStopMenuItem.attributedTitle = NSAttributedString(
+                string: liveStopTitle(),
+                attributes: [.font: NSFont.systemFont(ofSize: 13, weight: .semibold),
+                             .foregroundColor: NSColor.systemRed]
+            )
+        }
+        liveTranscriptMenuItem?.title = liveWindow.isVisible ? "Hide live transcript" : "Show live transcript"
     }
 
     private func presentAlert(title: String, text: String) {

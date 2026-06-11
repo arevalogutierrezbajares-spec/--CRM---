@@ -1,0 +1,274 @@
+import Foundation
+import CaptureCore
+
+/// Best-effort live transcription over a direct Deepgram streaming WebSocket
+/// (FEATURE 2). The Helper mints a short-lived Deepgram token from the CRM
+/// (`POST /api/capture/live-token`, mirroring the browser recorder's
+/// `/api/voice/live-token`) then streams a *copy* of the interleaved 16 kHz
+/// stereo PCM the recorder already produces straight to
+/// `wss://api.deepgram.com/v1/listen`.
+///
+/// HARD CONTRACT: this path is fully decoupled from capture. Token failure, a
+/// dropped socket, or any Deepgram error only flips this object to a quiet
+/// `.unavailable` state — it never throws into, blocks, or stops the recorder.
+/// `send(pcm:)` enqueues and returns immediately; if the socket is down the
+/// bytes are dropped on the floor.
+final class LiveTranscriptStreamer: NSObject {
+
+    enum Status: Equatable {
+        case idle
+        case connecting
+        case live
+        /// Best-effort path gave up; recording continues unaffected.
+        case unavailable(String)
+    }
+
+    /// Deepgram channel index → speaker label. ch0 = mic (founder), ch1 = system.
+    static func label(forChannel index: Int, participantName: String?) -> String {
+        switch index {
+        case 0: return "You"
+        case 1: return participantName ?? "Participant"
+        default: return "Channel \(index)"
+        }
+    }
+
+    /// One finalized or interim transcript line.
+    struct Line: Equatable {
+        let speaker: String
+        let text: String
+        let isFinal: Bool
+        let channel: Int
+    }
+
+    // Callbacks delivered on the main queue.
+    var onStatus: ((Status) -> Void)?
+    /// Emitted for every result: interim (isFinal=false) replaces the live tail;
+    /// final appends and clears the interim for that channel.
+    var onLine: ((Line) -> Void)?
+
+    private let config: HelperConfig
+    private let participantName: String?
+    private let session: URLSession
+    private var task: URLSessionWebSocketTask?
+    private let queue = DispatchQueue(label: "com.agb.capture-helper.live")
+    private var closed = false
+    private var opened = false
+    private var pendingBeforeOpen: [Data] = []
+    private(set) var status: Status = .idle
+
+    init(config: HelperConfig, participantName: String? = nil) {
+        self.config = config
+        self.participantName = participantName
+        let cfg = URLSessionConfiguration.ephemeral
+        cfg.timeoutIntervalForRequest = 15
+        cfg.waitsForConnectivity = false
+        self.session = URLSession(configuration: cfg)
+        super.init()
+    }
+
+    // MARK: - Lifecycle
+
+    /// Mint a token and open the stream. Returns immediately; all work is async.
+    /// Any failure is swallowed into `.unavailable`.
+    func start() {
+        setStatus(.connecting)
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let token = try await self.fetchToken()
+                self.openSocketAsync(token: token)
+            } catch {
+                HelperLog.shared.warn("live transcript token failed: \(error.localizedDescription)", category: "live")
+                self.setStatus(.unavailable("Live transcript unavailable (token)"))
+            }
+        }
+    }
+
+    private func openSocketAsync(token: String) {
+        queue.async { [weak self] in
+            guard let self, !self.closed else { return }
+            self.openSocket(token: token)
+        }
+    }
+
+    /// Stream one interleaved-stereo PCM16 batch. Non-blocking; dropped if the
+    /// socket isn't open yet (a small pre-open buffer covers the handshake gap).
+    func send(pcm: Data) {
+        guard !pcm.isEmpty else { return }
+        queue.async { [weak self] in
+            guard let self, !self.closed else { return }
+            guard self.opened, let task = self.task else {
+                // Buffer a little so the first ~1 s of a call isn't lost to the
+                // handshake; bounded so we never grow unboundedly if it stalls.
+                if self.pendingBeforeOpen.count < 40 { self.pendingBeforeOpen.append(pcm) }
+                return
+            }
+            task.send(.data(pcm)) { error in
+                if let error {
+                    HelperLog.shared.warn("live transcript send failed: \(error.localizedDescription)", category: "live")
+                }
+            }
+        }
+    }
+
+    /// Stop the stream cleanly. Safe to call repeatedly; never affects capture.
+    func stop() {
+        queue.async { [weak self] in
+            guard let self, !self.closed else { return }
+            self.closed = true
+            if let task = self.task, self.opened {
+                // Deepgram flushes finals on a CloseStream control message.
+                let msg = #"{"type":"CloseStream"}"#
+                task.send(.string(msg)) { _ in }
+            }
+            self.task?.cancel(with: .goingAway, reason: nil)
+            self.task = nil
+            self.pendingBeforeOpen.removeAll()
+            self.setStatus(.idle)
+        }
+    }
+
+    // MARK: - Token
+
+    private func fetchToken() async throws -> String {
+        guard let url = config.liveTokenURL, !config.token.isEmpty else {
+            throw LiveError.notConfigured
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 12
+        request.setValue("Bearer \(config.token)", forHTTPHeaderField: "Authorization")
+        request.setValue(AudioConstants.protocolVersion, forHTTPHeaderField: "X-Capture-Protocol")
+        request.setValue("AGBCaptureHelper/\(AudioConstants.helperVersion)", forHTTPHeaderField: "User-Agent")
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+            let code = (response as? HTTPURLResponse)?.statusCode ?? -1
+            throw LiveError.http(code)
+        }
+        struct Grant: Decodable { let token: String?; let expiresIn: Int? }
+        let grant = try JSONDecoder().decode(Grant.self, from: data)
+        guard let token = grant.token, !token.isEmpty else { throw LiveError.noToken }
+        return token
+    }
+
+    // MARK: - WebSocket
+
+    private func openSocket(token: String) {
+        guard !closed else { return }
+        // Match the post-call transcription model where possible: multichannel
+        // nova-3, multilingual, linear16 @ 16 kHz stereo, interim results.
+        var components = URLComponents(string: "wss://api.deepgram.com/v1/listen")!
+        components.queryItems = [
+            URLQueryItem(name: "model", value: "nova-3"),
+            URLQueryItem(name: "language", value: "multi"),
+            URLQueryItem(name: "multichannel", value: "true"),
+            URLQueryItem(name: "channels", value: "\(AudioConstants.channels)"),
+            URLQueryItem(name: "encoding", value: "linear16"),
+            URLQueryItem(name: "sample_rate", value: "\(AudioConstants.sampleRate)"),
+            URLQueryItem(name: "interim_results", value: "true"),
+            URLQueryItem(name: "punctuate", value: "true"),
+        ]
+        guard let url = components.url else {
+            setStatus(.unavailable("Live transcript unavailable (URL)"))
+            return
+        }
+
+        var request = URLRequest(url: url)
+        // Deepgram accepts the ephemeral grant as a bearer token on the upgrade.
+        request.setValue("Token \(token)", forHTTPHeaderField: "Authorization")
+        let task = session.webSocketTask(with: request)
+        self.task = task
+        task.resume()
+        receiveLoop(task: task)
+        HelperLog.shared.info("live transcript socket opening", category: "live")
+    }
+
+    private func receiveLoop(task: URLSessionWebSocketTask) {
+        task.receive { [weak self] result in
+            guard let self else { return }
+            self.queue.async {
+                guard !self.closed, self.task === task else { return }
+                switch result {
+                case .success(let message):
+                    if !self.opened {
+                        self.opened = true
+                        self.setStatus(.live)
+                        self.flushPending(task: task)
+                    }
+                    if case .string(let text) = message {
+                        self.handle(text: text)
+                    }
+                    self.receiveLoop(task: task)
+                case .failure(let error):
+                    HelperLog.shared.warn("live transcript socket closed: \(error.localizedDescription)", category: "live")
+                    if !self.closed {
+                        self.setStatus(.unavailable("Live transcript unavailable"))
+                    }
+                    self.task = nil
+                }
+            }
+        }
+    }
+
+    private func flushPending(task: URLSessionWebSocketTask) {
+        let batch = pendingBeforeOpen
+        pendingBeforeOpen.removeAll()
+        for data in batch {
+            task.send(.data(data)) { _ in }
+        }
+    }
+
+    private func handle(text: String) {
+        guard let data = text.data(using: .utf8),
+              let result = try? JSONDecoder().decode(DeepgramResult.self, from: data),
+              let transcript = result.channel?.alternatives?.first?.transcript,
+              !transcript.trimmingCharacters(in: .whitespaces).isEmpty else {
+            return
+        }
+        // multichannel results carry channel_index = [thisChannel, totalChannels].
+        let channel = result.channelIndex?.first ?? 0
+        let speaker = Self.label(forChannel: channel, participantName: participantName)
+        let line = Line(speaker: speaker,
+                        text: transcript,
+                        isFinal: result.isFinal ?? false,
+                        channel: channel)
+        DispatchQueue.main.async { [weak self] in self?.onLine?(line) }
+    }
+
+    // MARK: - Status
+
+    private func setStatus(_ newStatus: Status) {
+        status = newStatus
+        DispatchQueue.main.async { [weak self] in self?.onStatus?(newStatus) }
+    }
+
+    // MARK: - Types
+
+    private enum LiveError: Error, LocalizedError {
+        case notConfigured, noToken, http(Int)
+        var errorDescription: String? {
+            switch self {
+            case .notConfigured: return "CRM URL/token not set"
+            case .noToken: return "CRM returned no Deepgram token"
+            case .http(let code): return "live-token HTTP \(code)"
+            }
+        }
+    }
+
+    private struct DeepgramResult: Decodable {
+        struct Channel: Decodable {
+            struct Alternative: Decodable { let transcript: String? }
+            let alternatives: [Alternative]?
+        }
+        let channel: Channel?
+        let isFinal: Bool?
+        let channelIndex: [Int]?
+
+        enum CodingKeys: String, CodingKey {
+            case channel
+            case isFinal = "is_final"
+            case channelIndex = "channel_index"
+        }
+    }
+}
