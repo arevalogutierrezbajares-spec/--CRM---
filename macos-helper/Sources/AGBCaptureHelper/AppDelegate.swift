@@ -66,6 +66,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let liveWindow = LiveTranscriptWindow()
     private var liveStreamer: LiveTranscriptStreamer?
 
+    /// Always-visible floating Start/Stop control — works regardless of the
+    /// menu-bar icon hiding behind the notch or a swallowed global hotkey.
+    private let controlWindow = ControlWindow()
+
     /// Wall-clock recording start, for the live menu timer + elapsed display.
     private var recordingStartedAt: Date?
     /// Ticks the live "Recording mm:ss — Stop" label once a second.
@@ -107,6 +111,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         wireDetectorAndPrompt()
         hotKey = GlobalHotKey()
         hotKey?.onPressed = { [weak self] in self?.hotKeyToggled() }
+
+        // Always-on-screen Start/Stop control (notch-proof, hotkey-independent).
+        controlWindow.onToggle = { [weak self] in self?.hotKeyToggled() }
+        controlWindow.show()
 
         detector.arm()
         refreshUI()
@@ -381,6 +389,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard recordingStartedAt != nil else { return }
         // Refresh the menu's "Recording mm:ss — Stop" label.
         liveStopMenuItem.title = liveStopTitle()
+        // Keep the floating control's elapsed time current while recording.
+        controlWindow.update(stateLabel: state.label, isCapturing: true, elapsed: elapsedString())
         // Keep the window banner's timer current when the stream is live.
         if case .live = (liveStreamer?.status ?? .idle), liveWindow.isVisible {
             liveWindow.setStatus(liveStatusLine())
@@ -778,6 +788,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             )
         }
         liveTranscriptMenuItem?.title = liveWindow.isVisible ? "Hide live transcript" : "Show live transcript"
+
+        // Mirror state onto the always-visible floating control.
+        controlWindow.update(stateLabel: display.label, isCapturing: isCapturing, elapsed: elapsedString())
     }
 
     private func presentAlert(title: String, text: String) {
