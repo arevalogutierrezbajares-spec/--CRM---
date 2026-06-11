@@ -55,8 +55,23 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
-echo "==> codesign (ad-hoc; OD-3: local build for the single founder machine)"
-codesign --force --sign - "$APP_DIR"
+# Stable code signing: a self-signed cert (in a dedicated keychain) gives a
+# CERTIFICATE-based designated requirement, so macOS TCC keeps the Microphone /
+# Screen Recording grants across rebuilds (ad-hoc signing is hash-based and
+# resets the grant on every build). Set it up once with scripts/setup-signing.sh.
+# Falls back to ad-hoc if the identity isn't present on this machine.
+SIGN_IDENTITY="AGB Capture Helper"
+SIGN_KEYCHAIN="$HOME/Library/Keychains/agb-signing.keychain-db"
+SIGN_PASS_FILE="$HOME/.config/agb-capture-helper/signing-keychain.pass"
+if [[ -f "$SIGN_KEYCHAIN" && -f "$SIGN_PASS_FILE" ]] \
+   && security find-identity -v -p codesigning 2>/dev/null | grep -q "$SIGN_IDENTITY"; then
+    echo "==> codesign with stable identity '$SIGN_IDENTITY' (TCC-persistent across rebuilds)"
+    security unlock-keychain -p "$(cat "$SIGN_PASS_FILE")" "$SIGN_KEYCHAIN" 2>/dev/null || true
+    codesign --force --keychain "$SIGN_KEYCHAIN" --sign "$SIGN_IDENTITY" "$APP_DIR"
+else
+    echo "==> codesign (ad-hoc fallback; run scripts/setup-signing.sh for a TCC-persistent identity)"
+    codesign --force --sign - "$APP_DIR"
+fi
 
 echo "==> done: $APP_DIR"
 
