@@ -97,9 +97,13 @@ final class LiveTranscriptStreamer: NSObject {
         guard !pcm.isEmpty else { return }
         queue.async { [weak self] in
             guard let self, !self.closed else { return }
-            guard self.opened, let task = self.task else {
-                // Buffer a little so the first ~1 s of a call isn't lost to the
-                // handshake; bounded so we never grow unboundedly if it stalls.
+            // Send as soon as the socket task exists (resumed). URLSession queues
+            // messages until the WS handshake completes, so we must NOT wait for
+            // a *received* message first: Deepgram stays silent until it receives
+            // audio, so gating sends on `opened` deadlocked the stream and Deepgram
+            // closed it on its ~12s no-audio timeout ("Socket is not connected").
+            // Only buffer while the task doesn't exist yet (token still minting).
+            guard let task = self.task else {
                 if self.pendingBeforeOpen.count < 40 { self.pendingBeforeOpen.append(pcm) }
                 return
             }
@@ -183,6 +187,10 @@ final class LiveTranscriptStreamer: NSObject {
         let task = session.webSocketTask(with: request)
         self.task = task
         task.resume()
+        // Flush whatever we buffered while the token was minting, immediately —
+        // URLSession queues these until the handshake finishes. Starting the
+        // audio flow now is what keeps Deepgram from timing out.
+        flushPending(task: task)
         receiveLoop(task: task)
         HelperLog.shared.info("live transcript socket opening", category: "live")
     }
