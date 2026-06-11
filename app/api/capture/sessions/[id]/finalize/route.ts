@@ -5,10 +5,11 @@ import {
   claimSessionForFinalize,
   reclaimFailedSession,
 } from "@/db/queries/capture-sessions";
-import { getCallRecording } from "@/db/queries/call-recordings";
+import { getCallRecording, getContactName } from "@/db/queries/call-recordings";
 import { finalizeSession } from "@/lib/capture/finalize";
+import { isUuid, MAX_TOTAL_CHUNKS } from "@/lib/capture/validate";
 
-export const maxDuration = 300; // long calls: assembly + transcription + filing
+export const maxDuration = 800; // long calls: assembly + transcription + filing
 
 /**
  * Protocol §POST finalize — call ended; assemble, transcribe, file.
@@ -25,6 +26,9 @@ export async function POST(
   }
 
   const { id } = await params;
+  if (!isUuid(id)) {
+    return NextResponse.json({ error: "Unknown session" }, { status: 404 });
+  }
   const body = (await req.json().catch(() => null)) as {
     endedAt?: string;
     durationSecs?: number;
@@ -38,26 +42,44 @@ export async function POST(
       { status: 400 },
     );
   }
+  if (body.totalChunks! > MAX_TOTAL_CHUNKS) {
+    return NextResponse.json(
+      { error: `totalChunks exceeds ${MAX_TOTAL_CHUNKS}` },
+      { status: 400 },
+    );
+  }
 
   const session = await getCaptureSession({ id, workspaceId: identity.workspaceId });
   if (!session) {
     return NextResponse.json({ error: "Unknown session" }, { status: 404 });
   }
 
-  // Idempotent retry of an already-filed session.
+  // Idempotent retry of an already-filed session — reconstruct the SAME
+  // response shape as the first finalize, including the attached contact, so
+  // the helper's retry path isn't handed a spurious null (correctness finding).
   if (session.status === "filed" && session.recordingId) {
     const rec = await getCallRecording({
       id: session.recordingId,
       workspaceId: identity.workspaceId,
     });
+    let contact: { id: string; name: string } | null = null;
+    if (rec?.contactId) {
+      const c = await getContactName({
+        id: rec.contactId,
+        workspaceId: identity.workspaceId,
+      });
+      if (c) contact = c;
+    }
     return NextResponse.json({
       ok: true,
       recordingId: session.recordingId,
       title: rec?.title ?? "Call",
       brief: rec?.brief ?? "",
       actionItemCount: rec?.actionItemCount ?? 0,
-      contact: null,
+      contact,
+      contactAmbiguous: rec?.contactAmbiguous ?? false,
       suspectFlags: rec?.suspectFlags ?? [],
+      partial: rec?.partial ?? false,
       alreadyFiled: true,
     });
   }

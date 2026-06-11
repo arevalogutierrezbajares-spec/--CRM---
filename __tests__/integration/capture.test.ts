@@ -17,6 +17,7 @@ import {
   recordChunkHeartbeat,
   claimSessionForFinalize,
   reclaimFailedSession,
+  abandonSession,
   updateCaptureSession,
   listStaleRecordingSessions,
   listPurgeableRecordings,
@@ -138,6 +139,29 @@ describe("[integration] capture session lifecycle (NFR-CALL-OBS-1)", () => {
     expect(ids).toContain(staleId);
     expect(ids).not.toContain(freshId);
     expect(ids).not.toContain(filedId);
+  });
+
+  it("abandon vs finalize is mutually exclusive (FR-CALL-TRG-7 race)", async () => {
+    // A session already claimed for finalize cannot be abandoned — closes the
+    // race where off-the-record audio gets resurrected into a filed recording.
+    const claimedId = await makeSession();
+    expect(await claimSessionForFinalize({ id: claimedId, workspaceId: FAKE_WORKSPACE_ID })).toBe(true);
+    expect(await abandonSession({ id: claimedId, workspaceId: FAKE_WORKSPACE_ID })).toBe(false);
+    const stillFinalizing = await getCaptureSession({ id: claimedId, workspaceId: FAKE_WORKSPACE_ID });
+    expect(stillFinalizing!.status).toBe("finalizing");
+
+    // Conversely, once abandoned, finalize cannot claim it.
+    const abandonId = await makeSession();
+    expect(await abandonSession({ id: abandonId, workspaceId: FAKE_WORKSPACE_ID })).toBe(true);
+    expect(await claimSessionForFinalize({ id: abandonId, workspaceId: FAKE_WORKSPACE_ID })).toBe(false);
+    const abandoned = await getCaptureSession({ id: abandonId, workspaceId: FAKE_WORKSPACE_ID });
+    expect(abandoned!.status).toBe("abandoned");
+
+    // A failed session can still be abandoned (it's recoverable, not finalizing).
+    const failedId = await makeSession();
+    await claimSessionForFinalize({ id: failedId, workspaceId: FAKE_WORKSPACE_ID });
+    await updateCaptureSession({ id: failedId, workspaceId: FAKE_WORKSPACE_ID, patch: { status: "failed" } });
+    expect(await abandonSession({ id: failedId, workspaceId: FAKE_WORKSPACE_ID })).toBe(true);
   });
 
   it("workspace isolation: foreign workspace can't read or claim", async () => {

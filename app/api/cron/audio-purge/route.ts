@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { timingSafeEqual } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import {
@@ -24,9 +25,21 @@ const { users } = schema;
  */
 export async function GET(req: NextRequest) {
   const secret = process.env.CRON_SECRET;
-  if (secret) {
-    const auth = req.headers.get("authorization");
-    if (auth !== `Bearer ${secret}`) {
+  if (!secret) {
+    // In production a missing secret means this destructive (audio-deleting)
+    // route is wide open via the /api/cron/ middleware exemption — refuse.
+    if (process.env.NODE_ENV === "production") {
+      return NextResponse.json(
+        { error: "CRON_SECRET not configured" },
+        { status: 503 },
+      );
+    }
+  } else {
+    const auth = req.headers.get("authorization") ?? "";
+    const expected = `Bearer ${secret}`;
+    const a = Buffer.from(auth);
+    const b = Buffer.from(expected);
+    if (a.length !== b.length || !timingSafeEqual(a, b)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
   }

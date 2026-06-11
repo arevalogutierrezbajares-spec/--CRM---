@@ -158,23 +158,22 @@ export async function fileCallTranscript(opts: {
     if (chat.ok) brief = chat.text;
   }
 
-  // Create action items (linked back to the recording for provenance).
-  const createdItemIds: string[] = [];
-  for (const it of items) {
-    const t = String(it.title ?? "").slice(0, 200).trim();
-    if (!t) continue;
-    const rawDue = String(it.due_date ?? "");
-    const dueDate = /^\d{4}-\d{2}-\d{2}$/.test(rawDue) ? rawDue : null;
-    const rawPr = String(it.priority ?? "");
-    const priority = (PRIORITIES as readonly string[]).includes(rawPr)
-      ? (rawPr as (typeof PRIORITIES)[number])
-      : null;
-    const description = it.description
-      ? String(it.description).slice(0, 1000)
-      : null;
-    const [row] = await db
-      .insert(actionItems)
-      .values({
+  // Create action items (linked back to the recording for provenance). One
+  // batched insert rather than N round-trips.
+  const itemRows = items
+    .map((it) => {
+      const t = String(it.title ?? "").slice(0, 200).trim();
+      if (!t) return null;
+      const rawDue = String(it.due_date ?? "");
+      const dueDate = /^\d{4}-\d{2}-\d{2}$/.test(rawDue) ? rawDue : null;
+      const rawPr = String(it.priority ?? "");
+      const priority = (PRIORITIES as readonly string[]).includes(rawPr)
+        ? (rawPr as (typeof PRIORITIES)[number])
+        : null;
+      const description = it.description
+        ? String(it.description).slice(0, 1000)
+        : null;
+      return {
         workspaceId: opts.workspaceId,
         title: t,
         description,
@@ -182,10 +181,16 @@ export async function fileCallTranscript(opts: {
         priority,
         callRecordingId: opts.recordingId,
         createdBy: opts.userId,
-      })
-      .returning({ id: actionItems.id });
-    createdItemIds.push(row.id);
-  }
+      };
+    })
+    .filter((r): r is NonNullable<typeof r> => r !== null);
+
+  const createdItemIds =
+    itemRows.length > 0
+      ? (
+          await db.insert(actionItems).values(itemRows).returning({ id: actionItems.id })
+        ).map((r) => r.id)
+      : [];
 
   // Contact match: unique match → touch + attach; ambiguous → flag, never guess
   // (FR-CALL-DST-4). Matching never gates persistence — the row already exists.
@@ -229,6 +234,7 @@ export async function fileCallTranscript(opts: {
     brief: brief || null,
     contactId: attached?.id ?? null,
     actionItemCount: createdItemIds.length,
+    contactAmbiguous: ambiguous,
   });
 
   return {

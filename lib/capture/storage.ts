@@ -77,15 +77,22 @@ export async function removeObjects(
   return { failed };
 }
 
-/** List chunk object paths for a session (full paths, sorted by name = seq). */
-export async function listSessionChunkPaths(
+export type ChunkEntry = { path: string; size: number };
+
+/**
+ * List chunk objects for a session with their byte sizes, sorted by name (=seq,
+ * zero-padded). Sizes let the assembler preallocate one output buffer and copy
+ * chunks in one at a time, instead of holding every chunk in RAM at once
+ * (NFR-CALL-REL-1 / 3h-call memory).
+ */
+export async function listSessionChunks(
   workspaceId: string,
   sessionId: string,
-): Promise<string[]> {
+): Promise<ChunkEntry[]> {
   const supabase = serviceClient();
   if (!supabase) return [];
   const prefix = sessionPrefix(workspaceId, sessionId);
-  const out: string[] = [];
+  const out: ChunkEntry[] = [];
   let offset = 0;
   for (;;) {
     const { data, error } = await supabase.storage
@@ -93,12 +100,25 @@ export async function listSessionChunkPaths(
       .list(prefix, { limit: 100, offset, sortBy: { column: "name", order: "asc" } });
     if (error || !data || data.length === 0) break;
     for (const entry of data) {
-      if (entry.id !== null) out.push(`${prefix}/${entry.name}`);
+      if (entry.id !== null) {
+        out.push({
+          path: `${prefix}/${entry.name}`,
+          size: (entry.metadata?.size as number | undefined) ?? 0,
+        });
+      }
     }
     if (data.length < 100) break;
     offset += 100;
   }
   return out;
+}
+
+/** Back-compat: paths only (abandon/reap paths that don't need sizes). */
+export async function listSessionChunkPaths(
+  workspaceId: string,
+  sessionId: string,
+): Promise<string[]> {
+  return (await listSessionChunks(workspaceId, sessionId)).map((c) => c.path);
 }
 
 /** Short-lived signed URL (transcription fetch + in-app playback). */

@@ -2472,6 +2472,9 @@ export const callRecordings = pgTable("call_recordings", {
   suspectFlags: jsonb("suspect_flags").$type<string[]>(),
   // FR-CALL-RET-5: consent posture note ("participant informed verbally", …).
   consentNote: text("consent_note"),
+  // FR-CALL-DST-4: a name was given but matched >1 contact, so none was
+  // attached — surfaced so the founder can resolve it rather than guess.
+  contactAmbiguous: boolean("contact_ambiguous").notNull().default(false),
   // FR-CALL-OPS-5: true when salvaged from a crashed/incomplete session.
   partial: boolean("partial").notNull().default(false),
   createdBy: uuid("created_by")

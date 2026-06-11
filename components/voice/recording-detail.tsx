@@ -37,6 +37,8 @@ type RecordingDetail = {
   suspectFlags: string[];
   consentNote: string | null;
   contactId: string | null;
+  contactName: string | null;
+  contactAmbiguous: boolean;
   hasAudio: boolean;
   audioPurgeAt: string | null;
   audioPurgedAt: string | null;
@@ -134,6 +136,7 @@ export function RecordingDetail({ id }: { id: string }) {
   }
 
   const founderLabel = "You";
+  const participantLabel = rec.contactName ?? "Participant";
 
   return (
     <div className="space-y-6">
@@ -213,6 +216,15 @@ export function RecordingDetail({ id }: { id: string }) {
         </Button>
       </div>
 
+      {/* Ambiguous contact match (FR-CALL-DST-4) */}
+      {rec.contactAmbiguous && !rec.contactId && (
+        <div className="rounded-md border border-sky-500/40 bg-sky-500/10 p-3 text-sm text-sky-700">
+          A name was mentioned that matched more than one contact, so this call
+          isn&apos;t linked yet. Edit the title or open the contact to link it
+          manually.
+        </div>
+      )}
+
       {/* Suspect-capture warnings (FR-CALL-OPS-4) */}
       {rec.suspectFlags.length > 0 && (
         <div className="space-y-1 rounded-md border border-amber-500/40 bg-amber-500/10 p-3">
@@ -285,7 +297,7 @@ export function RecordingDetail({ id }: { id: string }) {
                   >
                     <div className="mb-0.5 flex items-baseline gap-2 text-[10px] uppercase tracking-wide text-[var(--muted-foreground)]">
                       <span className="font-semibold">
-                        {isFounder ? founderLabel : "Participant"}
+                        {isFounder ? founderLabel : participantLabel}
                       </span>
                       <span>{fmtTs(u.start)}</span>
                     </div>

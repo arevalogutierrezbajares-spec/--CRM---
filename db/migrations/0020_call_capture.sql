@@ -17,7 +17,8 @@ ALTER TABLE "call_recordings"
   ADD COLUMN IF NOT EXISTS "utterances" jsonb,
   ADD COLUMN IF NOT EXISTS "suspect_flags" jsonb,
   ADD COLUMN IF NOT EXISTS "consent_note" text,
-  ADD COLUMN IF NOT EXISTS "partial" boolean NOT NULL DEFAULT false;
+  ADD COLUMN IF NOT EXISTS "partial" boolean NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS "contact_ambiguous" boolean NOT NULL DEFAULT false;
 
 -- Purge cron scans for un-purged audio past its purge date.
 CREATE INDEX IF NOT EXISTS "call_recordings_purge_idx"

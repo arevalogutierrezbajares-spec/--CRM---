@@ -80,4 +80,28 @@ and marks the session `abandoned`. Zero artifacts persist (FR-CALL-TRG-7).
 
 - Sessions in `recording` with `last_chunk_at` > 30 min old → auto-finalize as
   `partial: true` (crash salvage, FR-CALL-OPS-5).
+- `failed` sessions with no recording and a stale heartbeat → re-finalized once
+  per run (a dead helper can't retry its own finalize).
 - Abandoned/orphan chunk objects → removed by the daily purge cron.
+
+## Data handling (NFR-CALL-SEC-3 / RET)
+
+- **Audio in transit**: TLS to the CRM; TLS to Deepgram (which fetches the
+  assembled call via a short-lived signed URL — the bytes never sit in a public
+  object).
+- **Audio at rest**: private Supabase bucket `agb-call-audio`, service-role
+  access only; auto-purged after the workspace retention window (default 30 d,
+  FR-CALL-RET-1). Transcripts are permanent.
+- **Deepgram**: no-training is account-level (Model Improvement Program is
+  opt-in and must stay disabled); we also pass `mip_opt_out=true` per request.
+- **Anthropic**: the Messages API does not train on inputs under the commercial
+  terms; filing requests are short-lived and not retained for training. Enable
+  Zero-Data-Retention on the account if contractually required.
+- **Declined calls**: a declined detection prompt creates no session and no
+  bytes (helper-side, NFR-CALL-PRIV-2). A `DELETE` abandon removes all chunk
+  objects and leaves only a content-free `capture_sessions` audit row
+  (status `abandoned`) — no audio, transcript, or recording (FR-CALL-TRG-7).
+- **Abandon vs finalize**: abandon is an atomic status transition that only
+  succeeds from `recording`/`failed`; a session already claimed for finalize
+  (`finalizing`) returns 409, closing the race where off-the-record audio could
+  be resurrected into a filed recording.

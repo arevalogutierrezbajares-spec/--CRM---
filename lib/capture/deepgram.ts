@@ -93,6 +93,11 @@ export async function transcribeDualChannel(opts: {
   const key = process.env.DEEPGRAM_API_KEY;
   if (!key) return { ok: false, error: "DEEPGRAM_API_KEY not set" };
 
+  // NFR-CALL-SEC-3 (no-training / no-retention): Deepgram does NOT use API
+  // request audio to train models by default — the Model Improvement Program is
+  // opt-IN and must be left disabled on the account (verify in the Deepgram
+  // console). There is no per-request flag; this is an account-level posture.
+  // See docs/CALL-CAPTURE-PROTOCOL.md §Data handling.
   const params = new URLSearchParams({
     model: "nova-3",
     language: "multi", // ES/EN code-switching (FR-CALL-TRX-4)
@@ -100,6 +105,7 @@ export async function transcribeDualChannel(opts: {
     smart_format: "true",
     punctuate: "true",
     utterances: "true",
+    mip_opt_out: "true", // belt-and-suspenders: opt out of model-improvement
   });
 
   let resp: Response;

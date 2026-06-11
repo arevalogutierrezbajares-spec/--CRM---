@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/current-user";
 import { getCallRecording } from "@/db/queries/call-recordings";
 import { createSignedAudioUrl } from "@/lib/capture/storage";
+import { isUuid } from "@/lib/capture/validate";
 
 /**
  * FR-CALL-ACC-3: in-app playback while audio is within the retention window.
@@ -15,6 +16,7 @@ export async function GET(
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
+  if (!isUuid(id)) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const rec = await getCallRecording({ id, workspaceId: user.workspaceId });
   if (!rec) return NextResponse.json({ error: "Not found" }, { status: 404 });
 

@@ -13,13 +13,12 @@ import {
 } from "@/db/queries/capture-sessions";
 import { createCallRecording } from "@/db/queries/call-recordings";
 import {
-  listSessionChunkPaths,
-  downloadObject,
+  listSessionChunks,
   putObject,
   removeObjects,
   createSignedAudioUrl,
 } from "./storage";
-import { concatWavChunks, parseWavHeader, wavDurationSecs } from "./wav";
+import { assembleSessionAudio } from "./assemble";
 import {
   assembledObjectPath,
   chunkObjectPath,
@@ -60,13 +59,14 @@ export async function finalizeSession(opts: {
     return { ok: false, status, error };
   };
 
-  // 1. Inventory chunks. Object names sort by seq (zero-padded).
-  const chunkPaths = await listSessionChunkPaths(workspaceId, session.id);
-  if (chunkPaths.length === 0) {
+  // 1. Inventory chunks (with sizes, for streaming assembly). Names sort by
+  // seq (zero-padded).
+  const chunks = await listSessionChunks(workspaceId, session.id);
+  if (chunks.length === 0) {
     return fail(409, "No chunks uploaded for this session");
   }
   if (opts.totalChunks !== null) {
-    const have = new Set(chunkPaths);
+    const have = new Set(chunks.map((c) => c.path));
     const missing: number[] = [];
     for (let seq = 0; seq < opts.totalChunks; seq++) {
       if (!have.has(chunkObjectPath(workspaceId, session.id, seq))) {
@@ -84,35 +84,27 @@ export async function finalizeSession(opts: {
     }
   }
 
-  // 2. Assemble. Sequential downloads; chunk order = name order = seq order.
-  const buffers: Uint8Array[] = [];
-  for (const path of chunkPaths) {
-    const dl = await downloadObject(path);
-    if (!dl.ok) return fail(502, `Chunk download failed: ${dl.error}`);
-    buffers.push(dl.bytes);
-  }
-  const assembled = concatWavChunks(buffers, {
+  // 2. Assemble by streaming each chunk into one preallocated buffer (peak RAM
+  // ≈ one call + one chunk, not the sum of all chunks plus a copy).
+  const asm = await assembleSessionAudio(chunks, {
     sampleRate: CAPTURE_SAMPLE_RATE,
     channels: CAPTURE_CHANNELS,
   });
-  if (!assembled) return fail(400, "Chunk format mismatch during assembly");
-
-  const info = parseWavHeader(assembled);
-  const audioDuration = info ? Math.round(wavDurationSecs(info)) : null;
-  const durationSecs = audioDuration ?? opts.durationSecs ?? null;
-
-  // 3. Store the assembled call under a recording-scoped path. We need the
-  // recording id for the path, but the row needs the transcript… so the
-  // assembled object is keyed by session id instead — stable + unique.
-  // Transient storage hiccups ("fetch failed") get a couple of retries —
-  // failing a whole call over one blip is the wrong trade.
-  const audioPath = assembledObjectPath(workspaceId, session.id);
-  let stored = await putObject(audioPath, assembled);
-  for (const delayMs of [1000, 3000]) {
-    if (stored.ok) break;
-    await new Promise((r) => setTimeout(r, delayMs));
-    stored = await putObject(audioPath, assembled);
+  if (!asm.ok) {
+    return fail(asm.error.includes("download") ? 502 : 400, asm.error);
   }
+  const assembled = asm.wav;
+  const durationSecs =
+    Math.round(asm.dataBytes / (CAPTURE_CHANNELS * 2) / CAPTURE_SAMPLE_RATE) ||
+    opts.durationSecs ||
+    null;
+
+  // 3. Store the assembled call, keyed by session id (stable + unique;
+  // deterministic so a salvage retry overwrites rather than orphans). putObject
+  // already retries transient storage failures internally — don't re-send the
+  // whole (up to ~700 MB) buffer on top of that.
+  const audioPath = assembledObjectPath(workspaceId, session.id);
+  const stored = await putObject(audioPath, assembled);
   if (!stored.ok) return fail(502, `Assembled upload failed: ${stored.error}`);
 
   // 4. Transcribe (Deepgram fetches via signed URL — audio stays out of RAM).
@@ -193,12 +185,12 @@ export async function finalizeSession(opts: {
       status: "filed",
       endedAt: opts.endedAt,
       durationSecs,
-      totalChunks: opts.totalChunks ?? chunkPaths.length,
+      totalChunks: opts.totalChunks ?? chunks.length,
       partial: opts.partial,
       recordingId,
     },
   });
-  await removeObjects(chunkPaths);
+  await removeObjects(chunks.map((c) => c.path));
 
   return {
     ok: true,

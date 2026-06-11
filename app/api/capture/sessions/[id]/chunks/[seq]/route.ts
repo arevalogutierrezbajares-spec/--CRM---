@@ -7,6 +7,7 @@ import {
 import { putObject } from "@/lib/capture/storage";
 import { parseWavHeader } from "@/lib/capture/wav";
 import { chunkObjectPath, MAX_CHUNK_BYTES } from "@/lib/capture/constants";
+import { isUuid } from "@/lib/capture/validate";
 
 /**
  * Protocol §PUT chunks/{seq} — incremental upload during the call
@@ -23,6 +24,9 @@ export async function PUT(
   }
 
   const { id, seq: seqRaw } = await params;
+  if (!isUuid(id)) {
+    return NextResponse.json({ error: "Unknown session" }, { status: 404 });
+  }
   const seq = Number(seqRaw);
   if (!Number.isInteger(seq) || seq < 0 || seq > 100_000) {
     return NextResponse.json({ error: "Invalid seq" }, { status: 400 });

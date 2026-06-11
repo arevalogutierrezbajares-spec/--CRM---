@@ -81,6 +81,7 @@ export async function updateCallRecording(input: {
   contactId?: string | null;
   actionItemCount?: number;
   consentNote?: string | null;
+  contactAmbiguous?: boolean;
 }): Promise<void> {
   const patch: Partial<CallRecordingRow> = {};
   if (input.title !== undefined) patch.title = input.title;
@@ -89,6 +90,8 @@ export async function updateCallRecording(input: {
   if (input.actionItemCount !== undefined)
     patch.actionItemCount = input.actionItemCount;
   if (input.consentNote !== undefined) patch.consentNote = input.consentNote;
+  if (input.contactAmbiguous !== undefined)
+    patch.contactAmbiguous = input.contactAmbiguous;
   if (Object.keys(patch).length === 0) return;
   await db
     .update(callRecordings)
@@ -164,6 +167,21 @@ export async function deleteCallRecording(opts: {
     deleted: rows.length === 1,
     audioPath: rows[0]?.audioPath ?? null,
   };
+}
+
+/** Look up a contact's name within a workspace (for finalize response shape). */
+export async function getContactName(opts: {
+  id: string;
+  workspaceId: string;
+}): Promise<{ id: string; name: string } | null> {
+  const [row] = await db
+    .select({ id: contacts.id, name: contacts.name })
+    .from(contacts)
+    .where(
+      and(eq(contacts.id, opts.id), eq(contacts.workspaceId, opts.workspaceId)),
+    )
+    .limit(1);
+  return row ?? null;
 }
 
 /** Full recording including transcript (for the detail/expand view). */

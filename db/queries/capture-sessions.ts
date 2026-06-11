@@ -1,4 +1,4 @@
-import { and, eq, isNull, lt, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, lt, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 
 const { captureSessions, callRecordings, workspaces } = schema;
@@ -116,6 +116,32 @@ export async function claimSessionForFinalize(opts: {
   return rows.length === 1;
 }
 
+/**
+ * Atomically abandon a session (FR-CALL-TRG-7). Only transitions from
+ * `recording`/`failed` — a session that has already been claimed for finalize
+ * (`finalizing`) or filed cannot be abandoned, which closes the race where an
+ * in-flight finalize would otherwise resurrect off-the-record audio. Returns
+ * false when no abandonable session matched (caller responds 409).
+ */
+export async function abandonSession(opts: {
+  id: string;
+  workspaceId: string;
+  error?: string | null;
+}): Promise<boolean> {
+  const rows = await db
+    .update(captureSessions)
+    .set({ status: "abandoned", error: opts.error ?? null })
+    .where(
+      and(
+        eq(captureSessions.id, opts.id),
+        eq(captureSessions.workspaceId, opts.workspaceId),
+        inArray(captureSessions.status, ["recording", "failed"]),
+      ),
+    )
+    .returning({ id: captureSessions.id });
+  return rows.length === 1;
+}
+
 /** Re-claim a failed session for a retry of finalize. */
 export async function reclaimFailedSession(opts: {
   id: string;
@@ -192,6 +218,9 @@ export async function listPurgeableRecordings(opts: {
         lt(callRecordings.audioPurgeAt, opts.now),
       ),
     )
+    // Oldest-due first + stable order so batched catch-up runs are
+    // deterministic and a row whose delete failed can't mask newer due rows.
+    .orderBy(asc(callRecordings.audioPurgeAt), asc(callRecordings.id))
     .limit(opts.limit ?? 200);
   return rows.filter((r): r is typeof r & { audioPath: string } =>
     Boolean(r.audioPath),
