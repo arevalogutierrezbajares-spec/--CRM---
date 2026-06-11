@@ -79,6 +79,91 @@ export function detectSilentChannels(
   return flags;
 }
 
+// nova-3 multichannel, ES/EN code-switching (FR-CALL-TRX-4), channel index =
+// speaker. mip_opt_out belt-and-suspenders for NFR-CALL-SEC-3 (no-training is
+// also an account-level posture — see docs/CALL-CAPTURE-PROTOCOL.md).
+function deepgramParams(): URLSearchParams {
+  return new URLSearchParams({
+    model: "nova-3",
+    language: "multi",
+    multichannel: "true",
+    smart_format: "true",
+    punctuate: "true",
+    utterances: "true",
+    mip_opt_out: "true",
+  });
+}
+
+function parseDeepgram(
+  json: {
+    results?: {
+      utterances?: DeepgramUtterance[];
+      channels?: { detected_language?: string }[];
+    };
+  } | null,
+  durationSecs: number,
+): { ok: true; result: TranscriptionResult } | { ok: false; error: string } {
+  if (!json?.results) return { ok: false, error: "Deepgram: empty results" };
+  const raw = Array.isArray(json.results.utterances) ? json.results.utterances : [];
+  const utterances: Utterance[] = raw
+    .filter((u) => (u.transcript ?? "").trim().length > 0)
+    .map((u) => ({
+      speaker: (u.channel ?? 0) === FOUNDER_CHANNEL ? "founder" : "participant",
+      channel: u.channel ?? 0,
+      start: u.start ?? 0,
+      end: u.end ?? u.start ?? 0,
+      text: (u.transcript ?? "").trim(),
+    }))
+    .sort((a, b) => a.start - b.start);
+  return {
+    ok: true,
+    result: {
+      utterances,
+      dialogueText: buildDialogue(utterances, {
+        founder: "Founder",
+        participant: "Participant",
+      }),
+      language: json.results.channels?.[0]?.detected_language ?? "multi",
+      suspectFlags: detectSilentChannels(utterances, durationSecs),
+    },
+  };
+}
+
+/**
+ * Transcribe a dual-channel WAV by POSTing the audio bytes directly to
+ * Deepgram. Decouples transcription from object storage entirely — a 21-min
+ * call is ~82 MB as raw WAV, which exceeds the storage object-size limit, but
+ * Deepgram accepts it in the request body. This is the primary path.
+ */
+export async function transcribeDualChannelBytes(opts: {
+  wav: Uint8Array;
+  durationSecs: number;
+}): Promise<
+  | { ok: true; result: TranscriptionResult }
+  | { ok: false; error: string }
+> {
+  const key = process.env.DEEPGRAM_API_KEY;
+  if (!key) return { ok: false, error: "DEEPGRAM_API_KEY not set" };
+  let resp: Response;
+  try {
+    resp = await fetch(`https://api.deepgram.com/v1/listen?${deepgramParams()}`, {
+      method: "POST",
+      headers: { Authorization: `Token ${key}`, "Content-Type": "audio/wav" },
+      // undici's fetch (Node/Vercel) accepts a Uint8Array body directly; the
+      // DOM BodyInit type is just over-conservative about the buffer's origin.
+      body: opts.wav as unknown as BodyInit,
+    });
+  } catch (e) {
+    return { ok: false, error: `Deepgram unreachable: ${String(e)}` };
+  }
+  if (!resp.ok) {
+    const body = await resp.text().catch(() => "");
+    return { ok: false, error: `Deepgram ${resp.status}: ${body.slice(0, 300)}` };
+  }
+  const json = (await resp.json().catch(() => null)) as Parameters<typeof parseDeepgram>[0];
+  return parseDeepgram(json, opts.durationSecs);
+}
+
 /**
  * Transcribe a dual-channel WAV that Deepgram fetches from `audioUrl`
  * (signed URL — keeps the audio out of this function's memory).
@@ -93,24 +178,9 @@ export async function transcribeDualChannel(opts: {
   const key = process.env.DEEPGRAM_API_KEY;
   if (!key) return { ok: false, error: "DEEPGRAM_API_KEY not set" };
 
-  // NFR-CALL-SEC-3 (no-training / no-retention): Deepgram does NOT use API
-  // request audio to train models by default — the Model Improvement Program is
-  // opt-IN and must be left disabled on the account (verify in the Deepgram
-  // console). There is no per-request flag; this is an account-level posture.
-  // See docs/CALL-CAPTURE-PROTOCOL.md §Data handling.
-  const params = new URLSearchParams({
-    model: "nova-3",
-    language: "multi", // ES/EN code-switching (FR-CALL-TRX-4)
-    multichannel: "true",
-    smart_format: "true",
-    punctuate: "true",
-    utterances: "true",
-    mip_opt_out: "true", // belt-and-suspenders: opt out of model-improvement
-  });
-
   let resp: Response;
   try {
-    resp = await fetch(`https://api.deepgram.com/v1/listen?${params}`, {
+    resp = await fetch(`https://api.deepgram.com/v1/listen?${deepgramParams()}`, {
       method: "POST",
       headers: {
         Authorization: `Token ${key}`,
@@ -126,39 +196,6 @@ export async function transcribeDualChannel(opts: {
     return { ok: false, error: `Deepgram ${resp.status}: ${body.slice(0, 300)}` };
   }
 
-  const json = (await resp.json().catch(() => null)) as {
-    results?: {
-      utterances?: DeepgramUtterance[];
-      channels?: { detected_language?: string }[];
-    };
-  } | null;
-  if (!json?.results) return { ok: false, error: "Deepgram: empty results" };
-
-  const raw = Array.isArray(json.results.utterances)
-    ? json.results.utterances
-    : [];
-  const utterances: Utterance[] = raw
-    .filter((u) => (u.transcript ?? "").trim().length > 0)
-    .map((u) => ({
-      speaker: (u.channel ?? 0) === FOUNDER_CHANNEL ? "founder" : "participant",
-      channel: u.channel ?? 0,
-      start: u.start ?? 0,
-      end: u.end ?? u.start ?? 0,
-      text: (u.transcript ?? "").trim(),
-    }))
-    .sort((a, b) => a.start - b.start);
-
-  const language = json.results.channels?.[0]?.detected_language ?? "multi";
-  return {
-    ok: true,
-    result: {
-      utterances,
-      dialogueText: buildDialogue(utterances, {
-        founder: "Founder",
-        participant: "Participant",
-      }),
-      language,
-      suspectFlags: detectSilentChannels(utterances, opts.durationSecs),
-    },
-  };
+  const json = (await resp.json().catch(() => null)) as Parameters<typeof parseDeepgram>[0];
+  return parseDeepgram(json, opts.durationSecs);
 }

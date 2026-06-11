@@ -16,7 +16,6 @@ import {
   listSessionChunks,
   putObject,
   removeObjects,
-  createSignedAudioUrl,
 } from "./storage";
 import { assembleSessionAudio } from "./assemble";
 import {
@@ -25,7 +24,7 @@ import {
   CAPTURE_SAMPLE_RATE,
   CAPTURE_CHANNELS,
 } from "./constants";
-import { transcribeDualChannel, buildDialogue } from "./deepgram";
+import { transcribeDualChannelBytes, buildDialogue } from "./deepgram";
 import { fileCallTranscript, type FileCallResult } from "./file-call";
 
 export type FinalizeOutcome =
@@ -99,22 +98,29 @@ export async function finalizeSession(opts: {
     opts.durationSecs ||
     null;
 
-  // 3. Store the assembled call, keyed by session id (stable + unique;
-  // deterministic so a salvage retry overwrites rather than orphans). putObject
-  // already retries transient storage failures internally — don't re-send the
-  // whole (up to ~700 MB) buffer on top of that.
-  const audioPath = assembledObjectPath(workspaceId, session.id);
-  const stored = await putObject(audioPath, assembled);
-  if (!stored.ok) return fail(502, `Assembled upload failed: ${stored.error}`);
-
-  // 4. Transcribe (Deepgram fetches via signed URL — audio stays out of RAM).
-  const signed = await createSignedAudioUrl(audioPath, 60 * 30);
-  if (!signed.ok) return fail(502, `Sign failed: ${signed.error}`);
-  const tx = await transcribeDualChannel({
-    audioUrl: signed.url,
+  // 3. Transcribe by POSTing the assembled bytes straight to Deepgram. This
+  // decouples transcription from object storage: a 21-min call is ~82 MB as raw
+  // WAV (over the storage object-size limit), but Deepgram accepts the bytes in
+  // the request body — so the transcript always lands regardless of call length
+  // or storage limits (FR-CALL-TRX-3/5).
+  const tx = await transcribeDualChannelBytes({
+    wav: assembled,
     durationSecs: durationSecs ?? 0,
   });
   if (!tx.ok) return fail(502, tx.error);
+
+  // 4. Store the audio best-effort for playback (FR-CALL-ACC-3). If it's too
+  // large for the storage object limit, we keep the transcript + brief and mark
+  // audio unavailable rather than failing the whole call. (Compression for long
+  // calls is a follow-up; raw WAV ~3.8 MB/min doesn't scale on its own.)
+  const audioPath = assembledObjectPath(workspaceId, session.id);
+  const stored = await putObject(audioPath, assembled);
+  const audioStored = stored.ok;
+  if (!audioStored) {
+    console.warn(
+      `[capture] audio not stored for session ${session.id} (${assembled.length} bytes): ${stored.error} — transcript retained`,
+    );
+  }
 
   const founderLabel = opts.founderLabel;
   const participantLabel = (opts.contactName ?? "").trim() || "Participant";
@@ -135,9 +141,11 @@ export async function finalizeSession(opts: {
     transcript: dialogueText,
     durationSecs,
     language: tx.result.language,
-    audioPath,
-    audioBytes: assembled.length,
-    audioPurgeAt: new Date(Date.now() + retentionDays * 24 * 60 * 60 * 1000),
+    audioPath: audioStored ? audioPath : null,
+    audioBytes: audioStored ? assembled.length : null,
+    audioPurgeAt: audioStored
+      ? new Date(Date.now() + retentionDays * 24 * 60 * 60 * 1000)
+      : null,
     channels: CAPTURE_CHANNELS,
     sourceApp: session.sourceApp,
     utterances: tx.result.utterances,
