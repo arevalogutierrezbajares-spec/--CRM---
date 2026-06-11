@@ -175,8 +175,11 @@ final class LiveTranscriptStreamer: NSObject {
         }
 
         var request = URLRequest(url: url)
-        // Deepgram accepts the ephemeral grant as a bearer token on the upgrade.
-        request.setValue("Token \(token)", forHTTPHeaderField: "Authorization")
+        // The short-lived grant is a JWT — Deepgram requires `Bearer <jwt>` on
+        // the WS upgrade (`Token <key>` is only for the permanent API key, and
+        // returns 401 "Invalid credentials" for a JWT). Verified: Bearer + these
+        // params → 101 Switching Protocols.
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         let task = session.webSocketTask(with: request)
         self.task = task
         task.resume()
