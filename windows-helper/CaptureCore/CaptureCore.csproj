@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    CaptureCore — portable, OS-agnostic capture logic.
+
+    This is the 1:1 C# port of the Swift `CaptureCore` module in
+    ../../macos-helper/Sources/CaptureCore. It deliberately has NO dependency on
+    NAudio, Windows.Forms, WASAPI, or any platform audio stack: everything in
+    here is pure logic (byte juggling, WAV codec, disk spool, HTTP client) that
+    can be unit-tested on any OS, including the Mac this was authored on.
+
+    The Windows-only glue (WASAPI capture, mic-session detection, tray UI) lives
+    in the AGBCaptureHelper project, which references this one.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>12</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <AssemblyName>AGB.CaptureCore</AssemblyName>
+    <RootNamespace>AGB.CaptureCore</RootNamespace>
+  </PropertyGroup>
+
+</Project>

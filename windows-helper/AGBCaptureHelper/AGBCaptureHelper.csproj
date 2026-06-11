@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    AGBCaptureHelper — the Windows tray app. Thin OS-glue shell over CaptureCore,
+    mirroring the macOS helper's AGBCaptureHelper target.
+
+    Windows-only: it pulls in WinForms (NotifyIcon, the record prompt + Configure
+    forms) and NAudio (WASAPI loopback for system audio + WASAPI capture for the
+    mic). It therefore targets net8.0-windows and CANNOT build on macOS/Linux.
+    The portable logic it leans on lives in CaptureCore, which DOES build/test
+    everywhere.
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>12</LangVersion>
+    <!-- Win10 2004+ is required for the per-process loopback fast-follow; the
+         v1 endpoint loopback works on any WASAPI-capable Windows 10/11. -->
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- Per-monitor DPI so the tray prompt + Configure forms render crisp; this
+         is what ApplicationConfiguration.Initialize() applies at startup. -->
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <AssemblyName>AGBCaptureHelper</AssemblyName>
+    <RootNamespace>AGB.CaptureHelper</RootNamespace>
+    <!-- Single-file friendly; not required for `dotnet run`. -->
+    <SelfContained>false</SelfContained>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Pinned: NAudio 2.2.1 is the audio stack (WasapiLoopbackCapture,
+         WasapiCapture, MediaFoundationResampler, IAudioSessionManager2). -->
+    <PackageReference Include="NAudio" Version="2.2.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CaptureCore\CaptureCore.csproj" />
+  </ItemGroup>
+
+</Project>
