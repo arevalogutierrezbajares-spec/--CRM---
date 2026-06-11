@@ -223,3 +223,60 @@ Real-call verification, not synthetic-only. All gates pass before the module is 
 | Decision D4 | RET-1..2, ACC-3, NFR-CALL-PRIV-1 |
 | Constraint map (consent) | TRG-2/7, RET-3/5, OD-1 |
 | Founder request (verbatim) | CAP-1/2/3, DST-1 |
+
+## 10. Implementation Status (2026-06-10)
+
+Built end-to-end in one session. CRM-side `33fbbc1` + Helper `906ce69` +
+review-hardening `b53da8a` (local on `main`, **not yet pushed**).
+
+**Verification done:**
+- Unit 365 green (capture: wav codec, attribution, silent-channel, validators).
+- Integration: capture token/session/lifecycle/abandon-race/retention all green
+  (2 unrelated wa-agent intent tests pre-existing-fail).
+- E2E (`scripts/e2e/capture-e2e.ts`) 40/40 against **real Deepgram + Claude** on
+  a synthesized bilingual stereo call: attribution, filing, contact attach,
+  idempotent finalize, missing-chunk resume, abandon zero-artifacts, crash
+  salvage, retention purge, delete.
+- Helper `swift test` 59/59; live `--simulate` filed 3 real calls end-to-end and
+  resumed a crashed spool with zero loss.
+- Production `next build` clean at `b53da8a` (isolated worktree).
+- 6-dimension review army (45 agents) run + all CRITICAL/HIGH + key MEDIUM
+  findings fixed in `b53da8a`.
+
+**Launch-gate status (vs §6):**
+
+| Gate | Status |
+|---|---|
+| G1 WhatsApp + AirPods, both voices attributed, filed | Server path proven via Helper simulate; **needs one real call with TCC grants** |
+| G2 Continuity cellular | Needs real call |
+| G3 Zoom app + Meet-in-browser, zero settings | Needs real calls |
+| G4 Mixed ES/EN faithful + per-actor language | ✅ proven (E2E) |
+| G5 mid-call device switch | Helper-designed; needs real call |
+| G6 Wi-Fi drop mid-call → recovered | ✅ server half (E2E); Helper queue verified via simulate |
+| G7 Helper killed mid-call → partial filed ≤60s lost | ✅ (Helper crash-resume + server salvage) |
+| G8 decline → zero artifacts | ✅ (E2E) |
+| G9 retention purge, transcript intact | ✅ (E2E) |
+| G10 2-week live trial ≥99% detection | Pending real-world use |
+
+Remaining gates need real calls with macOS TCC permissions granted to the Helper
+app — they can only be exercised on the founder's machine, not in CI.
+
+## 11. Production Cutover Runbook (operator)
+
+The new code SELECTs new `call_recordings` columns, so the migration MUST land
+on prod **before** the deploy or the live `/record` page breaks. Order:
+
+1. **Apply migration 0020 to prod Supabase** (additive only — `ADD COLUMN IF NOT
+   EXISTS`, `CREATE TABLE/INDEX/TYPE IF NOT EXISTS`; safe defaults backfill):
+   `DATABASE_URL=<prod> npx drizzle-kit push` (or run `db/migrations/0020_call_capture.sql`).
+2. **Create the private storage bucket** `agb-call-audio` (the code auto-creates
+   it on first use via the service-role client, but pre-creating is cleaner).
+3. **Push** `main` → Vercel auto-deploys.
+4. **Mint a Helper token** in Settings → Call capture; configure + grant the
+   Helper Microphone + Screen Recording (TCC binds to the `.app` bundle — install
+   via `macos-helper/make-app.sh --install-login`).
+5. **Run real-call launch gates** G1–G3, G5, G10.
+
+Env already present in prod: `DEEPGRAM_API_KEY`, `ANTHROPIC_API_KEY`,
+`SUPABASE_SERVICE_ROLE_KEY`. Confirm the Deepgram account has the Model
+Improvement Program disabled (NFR-CALL-SEC-3).
