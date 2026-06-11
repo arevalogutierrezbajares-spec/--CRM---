@@ -50,8 +50,11 @@ export default async function RecordCallPage() {
               <code>ANTHROPIC_API_KEY</code> (brief + action items).
             </li>
             <li>
-              For VoIP calls, route system audio to the mic (BlackHole) or put the
-              call on speaker.
+              Full-call capture (WhatsApp / Zoom / Meet / phone-via-Continuity,
+              both voices, headphones included) runs through the Mac Helper —
+              mint a token in Settings → Call capture, see{" "}
+              <code>macos-helper/README.md</code>. Helper calls land here
+              automatically with speaker-attributed transcripts.
             </li>
             <li>Recording announces nothing — get consent where required.</li>
           </ul>

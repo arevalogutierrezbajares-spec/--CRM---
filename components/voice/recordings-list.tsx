@@ -2,7 +2,14 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ChevronDown, FileText, Loader2, User } from "lucide-react";
+import {
+  AlertTriangle,
+  ChevronDown,
+  FileText,
+  Headphones,
+  Loader2,
+  User,
+} from "lucide-react";
 import type { CallRecordingListItem } from "@/db/queries/call-recordings";
 
 function fmtDuration(secs: number | null): string {
@@ -84,6 +91,23 @@ function RecordingRow({ rec }: { rec: CallRecordingListItem }) {
                 {rec.actionItemCount} task{rec.actionItemCount === 1 ? "" : "s"}
               </span>
             )}
+            {rec.hasAudio && (
+              <Headphones
+                className="h-3.5 w-3.5 flex-none text-[var(--muted-foreground)]"
+                aria-label="Audio available"
+              />
+            )}
+            {rec.partial && (
+              <span className="flex-none rounded-full bg-amber-500/15 px-2 py-0.5 text-xs text-amber-600">
+                partial
+              </span>
+            )}
+            {rec.suspectFlags.length > 0 && (
+              <AlertTriangle
+                className="h-3.5 w-3.5 flex-none text-amber-600"
+                aria-label="Capture warning — open for details"
+              />
+            )}
           </span>
           <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-[var(--muted-foreground)]">
             <span>{fmtWhen(rec.createdAt)}</span>
@@ -101,6 +125,14 @@ function RecordingRow({ rec }: { rec: CallRecordingListItem }) {
             ) : (
               <span>· not linked to a contact</span>
             )}
+            {rec.sourceApp && <span>· via {rec.sourceApp}</span>}
+            <Link
+              href={`/record/${rec.id}`}
+              onClick={(e) => e.stopPropagation()}
+              className="hover:text-[var(--foreground)] hover:underline"
+            >
+              · open →
+            </Link>
           </span>
         </span>
         <ChevronDown

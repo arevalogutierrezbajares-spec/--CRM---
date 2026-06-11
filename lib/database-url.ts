@@ -87,6 +87,18 @@ export function getDatabaseUrl(): string {
   const ambientUrl = process.env.DATABASE_URL;
   const localUrl = localEnv.DATABASE_URL;
 
+  // Integration tests run against a disposable local Postgres and TRUNCATE
+  // tables between tests. The .env.local preference below must never reroute
+  // them to the real Supabase database — that would truncate production. The
+  // test runner opts in explicitly and only a non-Supabase URL is honored.
+  if (
+    process.env.AGB_INTEGRATION_TEST_DB === "1" &&
+    ambientUrl &&
+    !isSupabaseDatabaseUrl(ambientUrl)
+  ) {
+    return ambientUrl;
+  }
+
   let selected = ambientUrl;
   if (
     process.env.NODE_ENV !== "production" &&

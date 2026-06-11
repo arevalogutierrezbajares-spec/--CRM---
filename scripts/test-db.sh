@@ -34,6 +34,9 @@ sleep 1
 "$PG/psql" -h localhost -p $PORT -U agb -d postgres -c "CREATE DATABASE agb_test;" > /dev/null
 
 export DATABASE_URL="postgresql://agb@localhost:$PORT/agb_test"
+# Pin lib/database-url.ts to this URL — without the opt-in it prefers the
+# .env.local Supabase URL and db/seed.ts would write to PRODUCTION.
+export AGB_INTEGRATION_TEST_DB=1
 
 echo "Applying Drizzle schema..."
 ./node_modules/.bin/drizzle-kit push --force > /dev/null

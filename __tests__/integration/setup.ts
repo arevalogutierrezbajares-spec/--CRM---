@@ -16,6 +16,10 @@ import { eq } from "drizzle-orm";
 
 process.env.DATABASE_URL =
   process.env.DATABASE_URL ?? "postgresql://agb@localhost:54329/agb_test";
+// Pin lib/database-url.ts to the runner-provided URL — without this opt-in it
+// prefers .env.local's Supabase URL, and the afterEach TRUNCATE below would
+// hit the production database.
+process.env.AGB_INTEGRATION_TEST_DB = "1";
 // Force `development` so the dev-only fake-user bypass in lib/current-user.ts
 // engages. Cannot fire in production (that file checks NODE_ENV explicitly).
 (process.env as Record<string, string>).NODE_ENV = "development";
@@ -31,6 +35,16 @@ export const FAKE_USER_ID = "00000000-0000-0000-0000-000000000000";
 export const FAKE_WORKSPACE_ID = "00000000-0000-0000-0000-0000000000aa";
 
 beforeAll(async () => {
+  // Fail-safe: refuse to run (and especially to TRUNCATE) against anything
+  // that isn't the disposable local test database.
+  const { getDatabaseUrl } = await import("@/lib/database-url");
+  const resolved = getDatabaseUrl();
+  if (!/localhost|127\.0\.0\.1/.test(resolved)) {
+    throw new Error(
+      `Integration tests resolved a non-local DATABASE_URL — refusing to run. Resolved host: ${new URL(resolved).hostname}`,
+    );
+  }
+
   const { db, schema } = await import("@/db");
   await db
     .insert(schema.users)
@@ -69,6 +83,9 @@ afterEach(async () => {
   await db.execute(
     /* sql */ `
     truncate table
+      capture_sessions,
+      capture_tokens,
+      call_recordings,
       pitch_feedback_delivery_attempts,
       pitch_feedback_ai_insights,
       pitch_feedback_responses,

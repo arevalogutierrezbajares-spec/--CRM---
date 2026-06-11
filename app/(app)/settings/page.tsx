@@ -4,9 +4,15 @@ import { TopBar } from "@/components/layout/top-bar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChangePasswordCard } from "@/components/settings/change-password-card";
 import { QuoteSettingsCard } from "@/components/settings/quote-settings-card";
+import { CaptureSettingsCard } from "@/components/settings/capture-settings-card";
+import { getWorkspaceRetentionDays } from "@/db/queries/capture-sessions";
+import { safeRead } from "@/lib/db-status";
 
 export default async function SettingsPage() {
   const user = await requireUser();
+  const retentionDays = (
+    await safeRead(() => getWorkspaceRetentionDays(user.workspaceId), 30)
+  ).data;
   return (
     <>
       <TopBar email={user.email} displayName={user.displayName} />
@@ -35,6 +41,7 @@ export default async function SettingsPage() {
               </Link>
             </CardContent>
           </Card>
+          <CaptureSettingsCard initialRetentionDays={retentionDays} />
           <QuoteSettingsCard />
           <ChangePasswordCard />
         </div>

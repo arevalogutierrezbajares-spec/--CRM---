@@ -470,6 +470,9 @@ export const workspaces = pgTable("workspaces", {
   countdownTitle: text("countdown_title"),
   countdownDate: date("countdown_date"),
   countdownSubpoints: jsonb("countdown_subpoints").$type<string[]>().notNull().default([]),
+  // FR-CALL-RET-1: how long captured call audio is kept before the purge cron
+  // deletes it (transcripts are permanent). Per-workspace, founder-configurable.
+  callAudioRetentionDays: integer("call_audio_retention_days").notNull().default(30),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -832,6 +835,8 @@ export const partnerRooms = pgTable("partner_rooms", {
   seatLimit: integer("seat_limit"),
   // null = auto-derive brand logos from shared docs; array of LoB ids = explicit pick.
   brandLobIds: jsonb("brand_lob_ids").$type<string[]>(),
+  // Preset background video for the room hero (lib/partner-room-videos). Null = none.
+  heroVideoKey: text("hero_video_key"),
   createdBy: uuid("created_by")
     .notNull()
     .references(() => users.id),
@@ -901,6 +906,8 @@ export const partnerShares = pgTable("partner_shares", {
   labelSnapshot: text("label_snapshot").notNull(),
   kindSnapshot: text("kind_snapshot").notNull(),
   categorySnapshot: text("category_snapshot"),
+  // Repository section in the partner room (REPO_SECTION_OPTIONS). Null = default.
+  roomSection: text("room_section"),
   urlSnapshot: text("url_snapshot"),
   permissions: jsonb("permissions")
     .$type<Array<"view" | "download" | "comment" | "upload">>()
@@ -1020,6 +1027,8 @@ export const partnerRoomItems = pgTable("partner_room_items", {
   kind: text("kind").notNull().default("link"),
   title: text("title").notNull(),
   description: text("description"),
+  // Repository section in the partner room (REPO_SECTION_OPTIONS). Null = default.
+  category: text("category"),
   url: text("url"),
   storagePath: text("storage_path"),
   mimeType: text("mime_type"),
@@ -2444,6 +2453,27 @@ export const callRecordings = pgTable("call_recordings", {
     onDelete: "set null",
   }),
   actionItemCount: integer("action_item_count").notNull().default(0),
+  // ── Call Capture module (CALL-CAPTURE-MODULE-V1) ──────────────────────────
+  // Storage path of the assembled dual-channel WAV; null = no audio (legacy
+  // live-transcript recordings, or audio already purged).
+  audioPath: text("audio_path"),
+  audioBytes: integer("audio_bytes"),
+  // FR-CALL-RET-1/2: when audio becomes purgeable / when it was actually purged.
+  audioPurgeAt: timestamp("audio_purge_at", { withTimezone: true }),
+  audioPurgedAt: timestamp("audio_purged_at", { withTimezone: true }),
+  // 1 = legacy mic-only; 2 = dual-channel capture (L=founder, R=participants).
+  channels: integer("channels").notNull().default(1),
+  sourceApp: text("source_app"),
+  // FR-CALL-ATT-1/2: speaker-attributed utterances [{speaker,channel,start,end,text}].
+  utterances: jsonb("utterances").$type<
+    { speaker: string; channel: number; start: number; end: number; text: string }[]
+  >(),
+  // FR-CALL-OPS-4: e.g. ["founder_channel_silent","participant_channel_silent"].
+  suspectFlags: jsonb("suspect_flags").$type<string[]>(),
+  // FR-CALL-RET-5: consent posture note ("participant informed verbally", …).
+  consentNote: text("consent_note"),
+  // FR-CALL-OPS-5: true when salvaged from a crashed/incomplete session.
+  partial: boolean("partial").notNull().default(false),
   createdBy: uuid("created_by")
     .notNull()
     .references(() => users.id),
@@ -2458,6 +2488,81 @@ export const callRecordingsRelations = relations(callRecordings, ({ one }) => ({
     references: [contacts.id],
   }),
 }));
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CALL CAPTURE (CALL-CAPTURE-MODULE-V1) — macOS Helper sessions + tokens
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const captureSessionStatus = pgEnum("capture_session_status", [
+  "recording", // chunks arriving (or expected)
+  "finalizing", // assembly/transcription/filing in flight
+  "filed", // recording row created, pipeline complete
+  "failed", // finalize errored after retries (chunks retained for retry)
+  "abandoned", // declined/off-the-record — all artifacts deleted (FR-CALL-TRG-7)
+]);
+
+// One row per Helper capture session. Doubles as the NFR-CALL-OBS-1 lifecycle
+// record: detected→affirmed is helper-side; everything from session creation on
+// is queryable here (status transitions + error + timestamps).
+export const captureSessions = pgTable(
+  "capture_sessions",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id),
+    status: captureSessionStatus("status").notNull().default("recording"),
+    sourceApp: text("source_app"),
+    sampleRate: integer("sample_rate").notNull().default(16000),
+    channels: integer("channels").notNull().default(2),
+    helperVersion: text("helper_version"),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    endedAt: timestamp("ended_at", { withTimezone: true }),
+    durationSecs: integer("duration_secs"),
+    // Heartbeat for the crash-salvage sweep (FR-CALL-OPS-5): a session still
+    // "recording" whose last chunk is >30 min old gets finalized as partial.
+    lastChunkSeq: integer("last_chunk_seq"),
+    lastChunkAt: timestamp("last_chunk_at", { withTimezone: true }),
+    totalChunks: integer("total_chunks"),
+    partial: boolean("partial").notNull().default(false),
+    recordingId: uuid("recording_id").references(() => callRecordings.id, {
+      onDelete: "set null",
+    }),
+    error: text("error"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    workspaceIdx: index("capture_sessions_workspace_idx").on(
+      t.workspaceId,
+      t.createdAt,
+    ),
+    sweepIdx: index("capture_sessions_sweep_idx").on(t.status, t.lastChunkAt),
+  }),
+);
+
+// Revocable bearer credentials for the macOS Helper (NFR-CALL-SEC-2). Only the
+// SHA-256 of the token is stored; the plaintext is shown once at mint time.
+export const captureTokens = pgTable("capture_tokens", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull().default("Mac Helper"),
+  tokenHash: text("token_hash").notNull().unique(),
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
 
 export const actionItems = pgTable("action_items", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
