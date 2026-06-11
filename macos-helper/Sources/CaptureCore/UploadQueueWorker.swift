@@ -1,0 +1,263 @@
+import Foundation
+
+/// Async upload loop. State is derived entirely from the spool on disk
+/// (manifest + chunk files), never process memory, so it is crash-safe by
+/// construction (NFR-CALL-REL-1/3, FR-CALL-OPS-5).
+///
+/// Per pass it scans `SpoolStore.pendingSessions()` (oldest first — order
+/// preserved, FR-CALL-TRX-2) and, for each session:
+///   1. creates the server session if `serverSessionId` is missing,
+///   2. uploads un-uploaded seqs in ascending order (PUT is idempotent),
+///   3. when the session has ended and everything is uploaded, finalizes
+///      (with the protocol's 409 missing-chunks recovery), records the result
+///      and deletes the spool dir,
+///   4. abandons + deletes sessions that ended with zero audio.
+///
+/// Network failures abort the pass (the link is down for everyone); the
+/// forever-loop backs off exponentially (1 s → 60 s cap) and retries.
+/// Per-session HTTP errors are recorded and do not block other sessions.
+public final class UploadQueueWorker {
+
+    public struct Outcome {
+        public let localId: String
+        public let serverSessionId: String
+        public let finalize: CaptureAPIClient.FinalizeResult
+        public let at: Date
+    }
+
+    public struct PassResult {
+        public var sessionsSeen = 0
+        public var chunksUploaded = 0
+        public var outcomes: [Outcome] = []
+        public var errors: [(localId: String, message: String)] = []
+        public var abortedByNetwork = false
+
+        public var clean: Bool { errors.isEmpty && !abortedByNetwork }
+        public var didWork: Bool { chunksUploaded > 0 || !outcomes.isEmpty }
+    }
+
+    public enum WorkerState: Equatable {
+        case idle
+        case uploading
+        case waitingRetry(seconds: TimeInterval, reason: String)
+    }
+
+    // Observability hooks (menu bar state, simulate mode).
+    public var onStateChange: ((WorkerState) -> Void)?
+    public var onChunkUploaded: ((_ localId: String, _ seq: Int) -> Void)?
+    public var onSessionFinalized: ((Outcome) -> Void)?
+    public var onError: ((String) -> Void)?
+
+    public private(set) var recentOutcomes: [Outcome] = []
+    public private(set) var lastError: String?
+
+    private let store: SpoolStore
+    private let clientProvider: () -> CaptureAPIClient?
+    private let log: HelperLog
+    private var stopped = false
+    private let stateLock = NSLock()
+    /// Wakes the forever-loop early (e.g. right after a call ends).
+    private var kicked = false
+
+    public init(store: SpoolStore,
+                clientProvider: @escaping () -> CaptureAPIClient?,
+                log: HelperLog = .shared) {
+        self.store = store
+        self.clientProvider = clientProvider
+        self.log = log
+    }
+
+    public func stop() {
+        stateLock.lock(); stopped = true; stateLock.unlock()
+    }
+
+    public func kick() {
+        stateLock.lock(); kicked = true; stateLock.unlock()
+    }
+
+    private var isStopped: Bool {
+        stateLock.lock(); defer { stateLock.unlock() }
+        return stopped
+    }
+
+    private func consumeKick() -> Bool {
+        stateLock.lock(); defer { stateLock.unlock() }
+        let was = kicked
+        kicked = false
+        return was
+    }
+
+    // MARK: - Forever loop
+
+    /// Poll + retry forever. `pollInterval` is the idle re-scan cadence
+    /// (uploads in-progress recordings incrementally, FR-CALL-TRX-1).
+    public func runForever(pollInterval: TimeInterval = 5) async {
+        var backoff = ExponentialBackoff()
+        while !isStopped {
+            let result = await processPendingOnce()
+            if result.clean {
+                backoff.reset()
+                if result.didWork { continue } // immediately re-scan after progress
+                await sleepInterruptibly(pollInterval)
+            } else {
+                let delay = backoff.nextDelay()
+                let reason = result.errors.last?.message ?? "network unreachable"
+                emitState(.waitingRetry(seconds: delay, reason: reason))
+                log.warn("upload pass failed (\(reason)); retrying in \(Int(delay))s", category: "upload")
+                await sleepInterruptibly(delay)
+            }
+        }
+    }
+
+    private func sleepInterruptibly(_ seconds: TimeInterval) async {
+        let deadline = Date().addingTimeInterval(seconds)
+        while Date() < deadline, !isStopped {
+            if consumeKick() { return }
+            try? await Task.sleep(nanoseconds: 200_000_000)
+        }
+    }
+
+    // MARK: - Single pass
+
+    @discardableResult
+    public func processPendingOnce() async -> PassResult {
+        var result = PassResult()
+        guard let client = clientProvider() else {
+            result.errors.append((localId: "-", message: "helper not configured (CRM URL + token)"))
+            recordError("helper not configured")
+            return result
+        }
+
+        let pending: [ChunkSpooler]
+        do {
+            pending = try store.pendingSessions()
+        } catch {
+            result.errors.append((localId: "-", message: "spool scan failed: \(error.localizedDescription)"))
+            recordError("spool scan failed: \(error.localizedDescription)")
+            return result
+        }
+
+        guard !pending.isEmpty else {
+            emitState(.idle)
+            return result
+        }
+
+        emitState(.uploading)
+
+        for spooler in pending {
+            result.sessionsSeen += 1
+            do {
+                try await process(spooler, client: client, result: &result)
+            } catch let apiError as CaptureAPIClient.APIError where apiError.isNetworkFailure {
+                // Whole link likely down — abort the pass, retry everything later
+                // from disk state. Order is preserved.
+                result.abortedByNetwork = true
+                result.errors.append((localId: spooler.localId,
+                                      message: apiError.localizedDescription))
+                recordError(apiError.localizedDescription)
+                break
+            } catch {
+                // Session-specific failure (4xx/5xx/decode) — record, continue
+                // with other sessions so one poisoned spool can't dam the queue.
+                result.errors.append((localId: spooler.localId,
+                                      message: error.localizedDescription))
+                recordError("session \(spooler.localId): \(error.localizedDescription)")
+            }
+        }
+
+        if result.clean { emitState(.idle) }
+        return result
+    }
+
+    private func process(_ spooler: ChunkSpooler,
+                         client: CaptureAPIClient,
+                         result: inout PassResult) async throws {
+        var snap = spooler.snapshot
+
+        // Ended with zero audio (e.g. instant stop, crash before first chunk):
+        // abandon any server session and drop the spool. Nothing to salvage.
+        if snap.endedAt != nil && snap.seqsWritten.isEmpty && spooler.pendingByteCount == 0 {
+            if let serverId = snap.serverSessionId {
+                do {
+                    try await client.abandon(sessionId: serverId)
+                } catch CaptureAPIClient.APIError.sessionNotFound {
+                    // already gone server-side — fine
+                }
+            }
+            log.info("dropped empty session \(snap.sessionLocalId)", category: "upload")
+            try? store.deleteSession(spooler)
+            return
+        }
+
+        // 1. Ensure server session exists.
+        if snap.serverSessionId == nil {
+            let meta = CaptureAPIClient.SessionMeta(manifest: snap)
+            let serverId = try await client.createSession(meta: meta)
+            try spooler.setServerSessionId(serverId)
+            log.info("session \(snap.sessionLocalId) → server \(serverId)", category: "upload")
+            snap = spooler.snapshot
+        }
+        guard let serverId = snap.serverSessionId else { return }
+
+        // 2. Upload pending seqs in order.
+        for seq in spooler.snapshot.pendingUploadSeqs {
+            let url = spooler.chunkURL(seq: seq)
+            try await client.uploadChunk(sessionId: serverId, seq: seq, fileURL: url)
+            try spooler.markUploaded(seq: seq)
+            result.chunksUploaded += 1
+            onChunkUploaded?(snap.sessionLocalId, seq)
+        }
+
+        // 3. Finalize when the call has ended and everything is uploaded.
+        snap = spooler.snapshot
+        guard snap.readyToFinalize else { return }
+
+        let body = CaptureAPIClient.FinalizeBody(
+            endedAtISO: snap.endedAt ?? ISO8601.string(from: Date()),
+            durationSecs: snap.durationSecs ?? Int(spooler.spooledSeconds.rounded()),
+            totalChunks: snap.seqsWritten.count,
+            partial: snap.partial
+        )
+
+        let finalize = try await client.finalizeRecovering(
+            sessionId: serverId,
+            body: body
+        ) { seq in
+            let url = spooler.chunkURL(seq: seq)
+            return FileManager.default.fileExists(atPath: url.path) ? url : nil
+        }
+
+        try spooler.markFinalized()
+        let outcome = Outcome(localId: snap.sessionLocalId,
+                              serverSessionId: serverId,
+                              finalize: finalize,
+                              at: Date())
+        recordOutcome(outcome)
+        result.outcomes.append(outcome)
+        log.info("finalized \(snap.sessionLocalId): \(finalize.title ?? "(untitled)") [\(finalize.recordingId ?? "?")]",
+                 category: "upload")
+
+        // 4. Confirmed upload → local buffers deleted (NFR-CALL-SEC-1).
+        try store.deleteSession(spooler)
+        onSessionFinalized?(outcome)
+    }
+
+    // MARK: - Bookkeeping
+
+    private func recordOutcome(_ outcome: Outcome) {
+        stateLock.lock()
+        recentOutcomes.append(outcome)
+        if recentOutcomes.count > 20 { recentOutcomes.removeFirst() }
+        lastError = nil
+        stateLock.unlock()
+    }
+
+    private func recordError(_ message: String) {
+        stateLock.lock(); lastError = message; stateLock.unlock()
+        onError?(message)
+    }
+
+    private func emitState(_ state: WorkerState) {
+        onStateChange?(state)
+    }
+}
