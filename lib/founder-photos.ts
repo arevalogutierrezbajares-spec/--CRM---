@@ -11,6 +11,8 @@ type Founder = {
   /** Canonical partner-facing name (matches the pitch deck) — shown instead
    *  of raw account handles like "tg.2000". */
   name: string;
+  /** Deck role — used when the room team row has no title of its own. */
+  title: string;
   emails: string[];
   /** Known account handles, matched against the whole normalized name. */
   handles: string[];
@@ -24,6 +26,7 @@ const FOUNDERS: Founder[] = [
   {
     photo: "/team/tomas.jpg",
     name: "Tomás Gutiérrez",
+    title: "Co-founder · Product & Technology",
     emails: ["tg.2000@icloud.com", "tomas.gutierrez.2000@gmail.com"],
     handles: ["tg.2000"],
     surname: "gutierrez",
@@ -32,6 +35,7 @@ const FOUNDERS: Founder[] = [
   {
     photo: "/team/jose.jpg",
     name: "José Ernesto Arévalo",
+    title: "Co-founder · Go-to-Market",
     emails: ["joearevalo21@gmail.com", "+16466752101@whatsapp.local"],
     handles: ["joearevalo21", "jose ernesto"],
     surname: "arevalo",
@@ -40,6 +44,7 @@ const FOUNDERS: Founder[] = [
   {
     photo: "/team/charles.jpg",
     name: "Charles Brewer",
+    title: "Co-founder · Go-to-Market",
     emails: ["charlesbrewerleon@gmail.com"],
     handles: ["charlesbrewerleon"],
     surname: "brewer",
@@ -64,9 +69,11 @@ function normalize(value: string) {
 export function founderProfileFor(
   displayName: string | null | undefined,
   email?: string | null,
-): { photoUrl: string; displayName: string } | null {
+): { photoUrl: string; displayName: string; title: string } | null {
   const found = resolve(displayName, email);
-  return found ? { photoUrl: found.photo, displayName: found.name } : null;
+  return found
+    ? { photoUrl: found.photo, displayName: found.name, title: found.title }
+    : null;
 }
 
 /** Photo URL only — see founderProfileFor. */

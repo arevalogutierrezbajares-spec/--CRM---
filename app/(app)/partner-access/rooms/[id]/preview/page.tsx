@@ -454,7 +454,7 @@ export default async function PartnerRoomPreviewPage({ params }: { params: Param
                 return {
                   id: t.id,
                   displayName: founder?.displayName ?? t.displayName,
-                  title: t.title,
+                  title: t.title ?? founder?.title ?? null,
                   photoUrl: founder?.photoUrl ?? null,
                 };
               })}

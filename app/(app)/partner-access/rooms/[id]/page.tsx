@@ -12,6 +12,7 @@ import {
   FolderOpen,
   Image as ImageIcon,
   MessageSquare,
+  PenLine,
   UsersRound,
 } from "lucide-react";
 import { TopBar } from "@/components/layout/top-bar";
@@ -26,6 +27,8 @@ import { HeroVideoPicker } from "@/components/partner-access/hero-video-picker";
 import { RoomGuestsManager } from "@/components/partner-access/room-guests-manager";
 import { RepositoryManager } from "@/components/partner-access/repository-manager";
 import { listRoomItems, listRoomComments } from "@/db/queries/partner-repository";
+import { listSignatureRequestsByRoom } from "@/db/queries/partner-signatures";
+import { RoomSignaturesManager } from "@/components/partner-access/room-signatures-manager";
 import { RoomAccessLinkActions } from "@/components/partner-access/room-access-link-actions";
 import { RoomDetailsForm } from "@/components/partner-access/room-details-form";
 import { RoomMessagesManager } from "@/components/partner-access/room-messages-manager";
@@ -95,7 +98,16 @@ export default async function PartnerAccessRoomPage(props: { params: Params }) {
 
   const detail = roomRes.data;
 
-  const [nextStepsRes, uploadsRes, messagesRes, itemsRes, commentsRes, brandsRes, membersRes] = detail
+  const [
+    nextStepsRes,
+    uploadsRes,
+    messagesRes,
+    itemsRes,
+    commentsRes,
+    brandsRes,
+    membersRes,
+    signatureRequestsRes,
+  ] = detail
     ? await Promise.all([
         safeRead(() => listPartnerNextSteps({ workspaceId: user.workspaceId, roomId: id }), []),
         safeRead(() => listPartnerUploads({ workspaceId: user.workspaceId, roomId: id }), []),
@@ -104,8 +116,10 @@ export default async function PartnerAccessRoomPage(props: { params: Params }) {
         safeRead(() => listRoomComments({ roomId: id }), []),
         safeRead(() => listLogoBrands({ workspaceId: user.workspaceId }), []),
         safeRead(() => listWorkspaceEmailMembers(user.workspaceId), []),
+        safeRead(() => listSignatureRequestsByRoom({ roomId: id }), []),
       ])
     : [
+        { ok: true as const, data: [] },
         { ok: true as const, data: [] },
         { ok: true as const, data: [] },
         { ok: true as const, data: [] },
@@ -367,6 +381,51 @@ export default async function PartnerAccessRoomPage(props: { params: Params }) {
                     roomSection: s.roomSection,
                   }))}
                   commentsByTarget={commentsByTarget}
+                />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <PenLine className="h-4 w-4" />
+                  Signatures
+                  {signatureRequestsRes.data.filter((r) => r.status === "pending").length > 0 && (
+                    <Badge variant="secondary" className="ml-auto">
+                      {signatureRequestsRes.data.filter((r) => r.status === "pending").length} pending
+                    </Badge>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <RoomSignaturesManager
+                  roomId={room.id}
+                  entries={[
+                    ...itemsRes.data.map((it) => ({
+                      targetKind: "item" as const,
+                      targetId: it.id,
+                      title: it.title,
+                    })),
+                    ...activeShares.map((s) => ({
+                      targetKind: "share" as const,
+                      targetId: s.id,
+                      title: s.liveLabel ?? s.labelSnapshot,
+                    })),
+                  ]}
+                  requests={signatureRequestsRes.data.map((r) => ({
+                    id: r.id,
+                    targetKind: r.targetKind,
+                    targetId: r.targetId,
+                    title: r.titleSnapshot,
+                    status: r.status,
+                    message: r.message,
+                    signerName: r.signature?.signerName ?? null,
+                    signerEmail: r.signature?.signerEmail ?? null,
+                    signedAt: r.signature?.signedAt?.toISOString() ?? null,
+                    documentSha256: r.signature?.documentSha256 ?? null,
+                    ip: r.signature?.ip ?? null,
+                    hasSignedPdf: Boolean(r.signature?.signedPdfPath),
+                  }))}
                 />
               </CardContent>
             </Card>

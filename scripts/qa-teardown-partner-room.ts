@@ -24,12 +24,30 @@ async function main() {
   if (!contact) throw new Error("contact not found");
   if (contact.name !== QA_TAG) throw new Error(`refusing: contact is "${contact.name}", not the QA tag`);
 
-  // Storage objects from partner uploads (rows cascade with the room).
-  const uploads = await db
-    .select({ storagePath: schema.partnerUploads.storagePath })
-    .from(schema.partnerUploads)
-    .where(eq(schema.partnerUploads.roomId, roomId));
-  const paths = uploads.map((u) => u.storagePath).filter((p): p is string => Boolean(p));
+  // Storage objects (rows cascade with the room): partner uploads, seeded
+  // room-item files, drawn signatures + stamped signed PDFs.
+  const [uploads, items, signatures] = await Promise.all([
+    db
+      .select({ p: schema.partnerUploads.storagePath })
+      .from(schema.partnerUploads)
+      .where(eq(schema.partnerUploads.roomId, roomId)),
+    db
+      .select({ p: schema.partnerRoomItems.storagePath })
+      .from(schema.partnerRoomItems)
+      .where(eq(schema.partnerRoomItems.roomId, roomId)),
+    db
+      .select({
+        p: schema.partnerSignatures.signatureImagePath,
+        p2: schema.partnerSignatures.signedPdfPath,
+      })
+      .from(schema.partnerSignatures)
+      .where(eq(schema.partnerSignatures.roomId, roomId)),
+  ]);
+  const paths = [
+    ...uploads.map((r) => r.p),
+    ...items.map((r) => r.p),
+    ...signatures.flatMap((r) => [r.p, r.p2]),
+  ].filter((p): p is string => Boolean(p));
   if (paths.length) {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY;

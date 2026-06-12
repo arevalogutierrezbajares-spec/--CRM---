@@ -6,6 +6,7 @@ describe("founderProfileFor", () => {
     expect(founderProfileFor("tg.2000", "tg.2000@icloud.com")).toEqual({
       photoUrl: "/team/tomas.jpg",
       displayName: "Tomás Gutiérrez",
+      title: "Co-founder · Product & Technology",
     });
     expect(founderProfileFor("joearevalo21", "joearevalo21@gmail.com")?.photoUrl).toBe(
       "/team/jose.jpg",

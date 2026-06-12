@@ -844,3 +844,82 @@ export const listShareableRoomDocsAction = withActionGuard("listShareableRoomDoc
 export const addRoomDocumentsAction = withActionGuard("addRoomDocumentsAction", _addRoomDocumentsAction);
 export const createRoomMessageAction = withActionGuard("createRoomMessageAction", _createRoomMessageAction);
 export const deleteRoomMessageAction = withActionGuard("deleteRoomMessageAction", _deleteRoomMessageAction);
+
+// ── E-signatures ─────────────────────────────────────────────────────────────
+
+async function _requestSignatureAction(opts: {
+  roomId: string;
+  targetKind: "share" | "item";
+  targetId: string;
+  title: string;
+  message?: string | null;
+}): Promise<{ ok: true; requestId: string } | { ok: false; error: string }> {
+  const user = await requireUser();
+  const room = await getPartnerRoomBasic({
+    workspaceId: user.workspaceId,
+    roomId: opts.roomId,
+  });
+  if (!room) return { ok: false, error: "Room not found" };
+  const title = opts.title.trim();
+  if (!title) return { ok: false, error: "Title is required" };
+
+  const { createSignatureRequest } = await import("@/db/queries/partner-signatures");
+  const result = await createSignatureRequest({
+    workspaceId: user.workspaceId,
+    actorId: user.id,
+    roomId: opts.roomId,
+    targetKind: opts.targetKind,
+    targetId: opts.targetId,
+    title,
+    message: opts.message ?? null,
+  });
+  if (!result.ok) return result;
+
+  revalidatePath(`/partner-access/rooms/${opts.roomId}`);
+  return { ok: true, requestId: result.request.id };
+}
+
+async function _voidSignatureRequestAction(opts: {
+  roomId: string;
+  requestId: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const user = await requireUser();
+  const { voidSignatureRequest } = await import("@/db/queries/partner-signatures");
+  const ok = await voidSignatureRequest({
+    workspaceId: user.workspaceId,
+    roomId: opts.roomId,
+    requestId: opts.requestId,
+  });
+  if (!ok) return { ok: false, error: "Request is not pending" };
+  revalidatePath(`/partner-access/rooms/${opts.roomId}`);
+  return { ok: true };
+}
+
+/** Short-lived download URL for the stamped signed PDF (owner side). */
+async function _getSignedPdfUrlAction(opts: {
+  roomId: string;
+  requestId: string;
+}): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  const user = await requireUser();
+  const room = await getPartnerRoomBasic({
+    workspaceId: user.workspaceId,
+    roomId: opts.roomId,
+  });
+  if (!room) return { ok: false, error: "Room not found" };
+
+  const { getSignatureForRequest } = await import("@/db/queries/partner-signatures");
+  const signature = await getSignatureForRequest({
+    roomId: opts.roomId,
+    requestId: opts.requestId,
+  });
+  if (!signature?.signedPdfPath) return { ok: false, error: "No signed copy yet" };
+
+  const { createSignedDownloadUrl } = await import("@/lib/project-files/storage");
+  const signed = await createSignedDownloadUrl(signature.signedPdfPath);
+  if (!signed.ok) return { ok: false, error: "File unavailable" };
+  return { ok: true, url: signed.url };
+}
+
+export const requestSignatureAction = withActionGuard("requestSignatureAction", _requestSignatureAction);
+export const voidSignatureRequestAction = withActionGuard("voidSignatureRequestAction", _voidSignatureRequestAction);
+export const getSignedPdfUrlAction = withActionGuard("getSignedPdfUrlAction", _getSignedPdfUrlAction);

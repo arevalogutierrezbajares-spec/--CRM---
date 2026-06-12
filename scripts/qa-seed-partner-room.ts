@@ -11,6 +11,8 @@
  */
 import { createHash, randomBytes } from "crypto";
 import { asc, eq, isNotNull } from "drizzle-orm";
+import { createClient } from "@supabase/supabase-js";
+import { PDFDocument, StandardFonts } from "pdf-lib";
 import { db, schema } from "@/db";
 
 const QA_TAG = "QA Crítica Móvil (BORRAR)";
@@ -99,7 +101,8 @@ async function main() {
   const passcodeHash = createHash("sha256").update(`pa-pin:${room.id}:${PIN}`).digest("hex");
   await db.update(schema.partnerRooms).set({ passcodeHash }).where(eq(schema.partnerRooms.id, room.id));
 
-  // Host team — every workspace member, founder titles where they match.
+  // Host team — founders with NO title, like the real rooms, so the QA flow
+  // exercises the founder-profile fallback (photo + name + deck title).
   for (let i = 0; i < Math.min(members.length, 3); i++) {
     await db
       .insert(schema.partnerRoomTeam)
@@ -107,7 +110,7 @@ async function main() {
         workspaceId: ws.id,
         roomId: room.id,
         userId: members[i].userId,
-        title: i === 0 ? "Co-founder · Product & Technology" : "Co-founder · Go-to-Market",
+        title: null,
         sortOrder: i,
       })
       .onConflictDoNothing();
@@ -146,6 +149,58 @@ async function main() {
       sortOrder: 1,
     },
   ]);
+
+  // A real PDF contract in storage + a pending signature request, so the
+  // e-sign flow is exercised end to end (sha-256, stamping, signed copy).
+  const supaUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supaKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (supaUrl && supaKey) {
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([595.28, 841.89]);
+    const font = await pdf.embedFont(StandardFonts.Helvetica);
+    page.drawText("ACUERDO DE ALIANZA (QA)", { x: 56, y: 770, size: 18, font });
+    page.drawText(
+      "Documento de prueba para el flujo de firma electrónica. Bórrese junto con la sala QA.",
+      { x: 56, y: 740, size: 10, font, maxWidth: 480, lineHeight: 14 },
+    );
+    const pdfBytes = await pdf.save();
+    const pdfPath = `${ws.id}/partner-rooms/${room.id}/qa-acuerdo.pdf`;
+    const supa = createClient(supaUrl, supaKey, { auth: { persistSession: false } });
+    const { error: upErr } = await supa.storage
+      .from("agb-project-files")
+      .upload(pdfPath, pdfBytes, { contentType: "application/pdf", upsert: true });
+    if (upErr) throw new Error("pdf upload failed: " + upErr.message);
+
+    const [contractItem] = await db
+      .insert(schema.partnerRoomItems)
+      .values({
+        workspaceId: ws.id,
+        roomId: room.id,
+        kind: "file",
+        title: "Acuerdo de alianza — para firma",
+        description: "Revisa el acuerdo y fírmalo electrónicamente desde tu teléfono.",
+        category: "contratos",
+        storagePath: pdfPath,
+        mimeType: "application/pdf",
+        sizeBytes: pdfBytes.length,
+        addedBy: actor,
+        sortOrder: 0,
+      })
+      .returning();
+
+    await db.insert(schema.partnerSignatureRequests).values({
+      workspaceId: ws.id,
+      roomId: room.id,
+      targetKind: "item",
+      targetId: contractItem.id,
+      titleSnapshot: contractItem.title,
+      message: "Por favor revisa y firma antes de la llamada de kickoff.",
+      requestedBy: actor,
+    });
+    console.log("contract item + signature request:", contractItem.id);
+  } else {
+    console.log("SKIP contract seed (missing supabase env)");
+  }
 
   await db.insert(schema.partnerNextSteps).values([
     { workspaceId: ws.id, roomId: room.id, text: "Revisar la propuesta de alianza", assignedTo: "partner", sortOrder: 0 },

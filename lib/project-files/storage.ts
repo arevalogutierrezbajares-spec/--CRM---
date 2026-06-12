@@ -53,6 +53,21 @@ export async function createSignedUploadUrl(
   return { ok: true, data: { path: data.path, token: data.token, signedUrl: data.signedUrl } };
 }
 
+/** Server-side direct upload of in-memory bytes (signature PNGs, stamped PDFs). */
+export async function uploadBytes(
+  path: string,
+  bytes: Uint8Array,
+  contentType: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = serviceClient();
+  if (!supabase) return { ok: false, error: "Storage not configured" };
+  const { error } = await supabase.storage
+    .from(PROJECT_FILES_BUCKET)
+    .upload(path, bytes, { contentType, upsert: true });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
 /** FR-DOC-18 — short-lived download URL, generated on click (not page load). */
 export async function createSignedDownloadUrl(
   path: string,

@@ -242,6 +242,8 @@ export const partnerAccessEventType = pgEnum("partner_access_event_type", [
   "share_updated",
   "item_added",
   "item_commented",
+  "signature_requested",
+  "document_signed",
 ]);
 
 /* ─── Pitch feedback module enums ─────────────────────────────────────── */
@@ -1085,6 +1087,64 @@ export const partnerNextSteps = pgTable("partner_next_steps", {
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
+});
+
+// E-signatures on partner-room repository entries. The request is the owner's
+// ask; the signature row is the audit record (server timestamp, signer
+// identity, document hash, IP/UA, stamped PDF copy for PDF targets).
+export const partnerSignatureRequests = pgTable(
+  "partner_signature_requests",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    roomId: uuid("room_id")
+      .notNull()
+      .references(() => partnerRooms.id, { onDelete: "cascade" }),
+    targetKind: text("target_kind").notNull(), // 'share' | 'item'
+    targetId: uuid("target_id").notNull(),
+    titleSnapshot: text("title_snapshot").notNull(),
+    message: text("message"),
+    status: text("status").notNull().default("pending"), // pending | signed | voided
+    requestedBy: uuid("requested_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    uniqTarget: uniqueIndex("partner_signature_requests_room_id_target_kind_target_id_key").on(
+      t.roomId,
+      t.targetKind,
+      t.targetId,
+    ),
+  }),
+);
+
+export const partnerSignatures = pgTable("partner_signatures", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  roomId: uuid("room_id")
+    .notNull()
+    .references(() => partnerRooms.id, { onDelete: "cascade" }),
+  requestId: uuid("request_id")
+    .notNull()
+    .unique()
+    .references(() => partnerSignatureRequests.id, { onDelete: "cascade" }),
+  memberId: uuid("member_id").references(() => partnerRoomMembers.id, {
+    onDelete: "set null",
+  }),
+  signerName: text("signer_name").notNull(),
+  signerEmail: text("signer_email"),
+  signatureImagePath: text("signature_image_path"),
+  documentSha256: text("document_sha256"),
+  signedPdfPath: text("signed_pdf_path"),
+  ip: text("ip"),
+  userAgent: text("user_agent"),
+  signedAt: timestamp("signed_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -1,9 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import {
   ArrowUpRight,
   Banknote,
   BarChart3,
+  CheckCircle2,
   Clapperboard,
   Download,
   FileSignature,
@@ -12,6 +14,7 @@ import {
   ImageIcon,
   LinkIcon,
   Palette,
+  PenLine,
   Upload,
   type LucideIcon,
 } from "lucide-react";
@@ -20,9 +23,22 @@ import { formatRelativeEs } from "@/lib/utils";
 import { repoSection, REPO_SECTION_OPTIONS } from "@/lib/partner-access";
 import { PublicUploadForm } from "@/components/partner-access/public-upload-form";
 import {
+  SignatureModal,
+  type SignatureResult,
+} from "@/components/partner-access/signature-modal";
+import {
   PartnerCommentThread,
   type RepoComment,
 } from "@/components/partner-access/partner-comment-thread";
+
+export type RepoSignature = {
+  requestId: string;
+  status: "pending" | "signed";
+  message: string | null;
+  signerName: string | null;
+  signedAt: string | null;
+  hasSignedPdf: boolean;
+};
 
 export type RepoShare = {
   id: string;
@@ -93,6 +109,8 @@ export function PublicRepository({
   items,
   uploads,
   commentsByTarget,
+  signaturesByTarget = {},
+  defaultSignerName = "",
   ownerLabel,
 }: {
   token: string;
@@ -100,8 +118,33 @@ export function PublicRepository({
   items: RepoItem[];
   uploads: RepoUpload[];
   commentsByTarget: Record<string, RepoComment[]>;
+  signaturesByTarget?: Record<string, RepoSignature>;
+  defaultSignerName?: string;
   ownerLabel: string;
 }) {
+  // Server props + a local override of what was just signed this session —
+  // display derives from override ?? prop (never seed-then-drift).
+  const [signedNow, setSignedNow] = useState<Record<string, SignatureResult>>({});
+  const [signing, setSigning] = useState<{ key: string; sig: RepoSignature; title: string } | null>(
+    null,
+  );
+
+  function signatureFor(key: string): RepoSignature | null {
+    const base = signaturesByTarget[key];
+    if (!base) return null;
+    const local = signedNow[key];
+    if (local) {
+      return {
+        ...base,
+        status: "signed",
+        signerName: local.signerName,
+        signedAt: local.signedAt,
+        hasSignedPdf: local.hasSignedPdf,
+      };
+    }
+    return base;
+  }
+
   async function postComment(targetKind: "share" | "item", targetId: string, body: string) {
     const res = await fetch(`/api/access/${token}/comments`, {
       method: "POST",
@@ -169,6 +212,10 @@ export function PublicRepository({
                       token={token}
                       item={entry.item}
                       comments={commentsByTarget[`item:${entry.item.id}`] ?? []}
+                      signature={signatureFor(`item:${entry.item.id}`)}
+                      onSign={(sig) =>
+                        setSigning({ key: `item:${entry.item.id}`, sig, title: entry.item.title })
+                      }
                       ownerLabel={ownerLabel}
                       onComment={(body) => postComment("item", entry.item.id, body)}
                     />
@@ -178,6 +225,10 @@ export function PublicRepository({
                       token={token}
                       share={entry.share}
                       comments={commentsByTarget[`share:${entry.share.id}`] ?? []}
+                      signature={signatureFor(`share:${entry.share.id}`)}
+                      onSign={(sig) =>
+                        setSigning({ key: `share:${entry.share.id}`, sig, title: entry.share.title })
+                      }
                       ownerLabel={ownerLabel}
                       onComment={(body) => postComment("share", entry.share.id, body)}
                     />
@@ -231,6 +282,85 @@ export function PublicRepository({
           )}
         </div>
       </section>
+
+      {signing && (
+        <SignatureModal
+          token={token}
+          requestId={signing.sig.requestId}
+          documentTitle={signing.title}
+          message={signing.sig.message}
+          defaultName={defaultSignerName}
+          onClose={() => setSigning(null)}
+          onSigned={(result) => {
+            setSignedNow((prev) => ({ ...prev, [signing.key]: result }));
+            setSigning(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Per-entry signature state: amber "Firma requerida" + the sign CTA while
+ * pending; green signed receipt (who + server timestamp) + stamped-PDF
+ * download once done.
+ */
+function SignatureBlock({
+  token,
+  signature,
+  onSign,
+}: {
+  token: string;
+  signature: RepoSignature | null;
+  onSign: (sig: RepoSignature) => void;
+}) {
+  if (!signature) return null;
+  if (signature.status === "signed") {
+    const when = signature.signedAt
+      ? new Date(signature.signedAt).toLocaleString("es-VE", {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+        })
+      : null;
+    return (
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">
+          <CheckCircle2 className="h-3.5 w-3.5" />
+          Firmado{signature.signerName ? ` por ${signature.signerName}` : ""}
+          {when ? ` · ${when}` : ""}
+        </span>
+        {signature.hasSignedPdf && (
+          <a
+            href={`/access/${token}/signed/${signature.requestId}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-3 py-2 text-xs hover:bg-[var(--secondary)] sm:px-2 sm:py-1"
+          >
+            <Download className="h-3.5 w-3.5" />
+            Documento firmado
+          </a>
+        )}
+      </div>
+    );
+  }
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2">
+      <span className="inline-flex items-center gap-1.5 rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
+        <FileSignature className="h-3.5 w-3.5" />
+        Firma requerida
+      </span>
+      <button
+        type="button"
+        onClick={() => onSign(signature)}
+        className="inline-flex items-center gap-1.5 rounded-md bg-[var(--primary)] px-3 py-2 text-xs font-medium text-[var(--primary-foreground)] hover:opacity-90"
+      >
+        <PenLine className="h-3.5 w-3.5" />
+        Firmar ahora
+      </button>
     </div>
   );
 }
@@ -239,12 +369,16 @@ function ItemRow({
   token,
   item,
   comments,
+  signature,
+  onSign,
   ownerLabel,
   onComment,
 }: {
   token: string;
   item: RepoItem;
   comments: RepoComment[];
+  signature: RepoSignature | null;
+  onSign: (sig: RepoSignature) => void;
   ownerLabel: string;
   onComment: (body: string) => Promise<RepoComment | null>;
 }) {
@@ -299,6 +433,8 @@ function ItemRow({
             </p>
           )}
 
+          <SignatureBlock token={token} signature={signature} onSign={onSign} />
+
           {item.kind === "file" && mk === "image" && (
             /* eslint-disable-next-line @next/next/no-img-element */
             <img
@@ -330,12 +466,16 @@ function ShareRow({
   token,
   share,
   comments,
+  signature,
+  onSign,
   ownerLabel,
   onComment,
 }: {
   token: string;
   share: RepoShare;
   comments: RepoComment[];
+  signature: RepoSignature | null;
+  onSign: (sig: RepoSignature) => void;
   ownerLabel: string;
   onComment: (body: string) => Promise<RepoComment | null>;
 }) {
@@ -399,6 +539,7 @@ function ShareRow({
               {share.description}
             </p>
           )}
+          <SignatureBlock token={token} signature={signature} onSign={onSign} />
           <PartnerCommentThread
             comments={comments}
             ownerLabel={ownerLabel}

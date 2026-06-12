@@ -13,6 +13,7 @@ import {
   recordPublicPartnerRoomView,
 } from "@/db/queries/partner-access";
 import { listPartnerNextStepsByRoom } from "@/db/queries/partner-next-steps";
+import { listSignatureRequestsByRoom } from "@/db/queries/partner-signatures";
 import { listPartnerUploadsByRoom } from "@/db/queries/partner-uploads";
 import { listPartnerRoomMessages } from "@/db/queries/partner-messages";
 import { listRoomItems, listRoomComments } from "@/db/queries/partner-repository";
@@ -148,15 +149,48 @@ export default async function PublicAccessRoomPage({
     memberEmail: member?.email ?? null,
   }).catch(() => {});
 
-  const [nextSteps, partnerUploads, messages, repoItems, repoComments, participants] =
-    await Promise.all([
-      listPartnerNextStepsByRoom({ roomId: access.room.id }).catch(() => []),
-      listPartnerUploadsByRoom({ roomId: access.room.id }).catch(() => []),
-      listPartnerRoomMessages({ roomId: access.room.id }).catch(() => []),
-      listRoomItems({ roomId: access.room.id }).catch(() => []),
-      listRoomComments({ roomId: access.room.id }).catch(() => []),
-      listClaimedRoomMembers({ roomId: access.room.id }).catch(() => []),
-    ]);
+  const [
+    nextSteps,
+    partnerUploads,
+    messages,
+    repoItems,
+    repoComments,
+    participants,
+    signatureRequests,
+  ] = await Promise.all([
+    listPartnerNextStepsByRoom({ roomId: access.room.id }).catch(() => []),
+    listPartnerUploadsByRoom({ roomId: access.room.id }).catch(() => []),
+    listPartnerRoomMessages({ roomId: access.room.id }).catch(() => []),
+    listRoomItems({ roomId: access.room.id }).catch(() => []),
+    listRoomComments({ roomId: access.room.id }).catch(() => []),
+    listClaimedRoomMembers({ roomId: access.room.id }).catch(() => []),
+    listSignatureRequestsByRoom({ roomId: access.room.id }).catch(() => []),
+  ]);
+
+  // Signature state per repository entry; voided requests stay invisible.
+  const signaturesByTarget: Record<
+    string,
+    {
+      requestId: string;
+      status: "pending" | "signed";
+      message: string | null;
+      signerName: string | null;
+      signedAt: string | null;
+      hasSignedPdf: boolean;
+    }
+  > = {};
+  for (const r of signatureRequests) {
+    if (r.status === "voided") continue;
+    signaturesByTarget[`${r.targetKind}:${r.targetId}`] = {
+      requestId: r.id,
+      status: r.status === "signed" ? "signed" : "pending",
+      message: r.message,
+      signerName: r.signature?.signerName ?? null,
+      signedAt: r.signature?.signedAt?.toISOString() ?? null,
+      hasSignedPdf: Boolean(r.signature?.signedPdfPath),
+    };
+  }
+  const pendingSignatures = signatureRequests.filter((r) => r.status === "pending").length;
 
   const mentionCandidates = [
     "Equipo",
@@ -327,6 +361,22 @@ export default async function PublicAccessRoomPage({
                   <ArrowRight className="h-3.5 w-3.5" />
                 </a>
               )}
+              {pendingSignatures > 0 && (
+                <a
+                  href="#repositorio"
+                  className={`inline-flex items-center gap-2 rounded-full border px-3.5 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 ${
+                    heroVideo
+                      ? "border-white/25 bg-white/10 text-white backdrop-blur hover:bg-white/20 focus-visible:ring-white/80"
+                      : "border-[var(--border)] bg-[var(--background)]/60 backdrop-blur hover:bg-[var(--secondary)] focus-visible:ring-[var(--ring)]"
+                  }`}
+                >
+                  <span className="grid h-5 w-5 place-items-center rounded-full bg-amber-400/90 text-[11px] font-semibold tabular-nums text-amber-950">
+                    {pendingSignatures}
+                  </span>
+                  {pendingSignatures === 1 ? "firma pendiente" : "firmas pendientes"}
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </a>
+              )}
               <span
                 className={`inline-flex items-center gap-2 rounded-full border px-3.5 py-2 text-sm transition-colors ${
                   heroVideo
@@ -402,7 +452,7 @@ export default async function PublicAccessRoomPage({
                 return {
                   id: t.id,
                   displayName: founder?.displayName ?? t.displayName,
-                  title: t.title,
+                  title: t.title ?? founder?.title ?? null,
                   photoUrl: founder?.photoUrl ?? null,
                 };
               })}
@@ -414,6 +464,7 @@ export default async function PublicAccessRoomPage({
 
         <section className="grid gap-4 lg:grid-cols-[1fr_320px]">
           <div className="space-y-4 lg:order-1">
+            <div id="repositorio" className="scroll-mt-6">
             <PublicRepository
               token={token}
               shares={repoShares}
@@ -425,8 +476,11 @@ export default async function PublicAccessRoomPage({
                 createdAt: u.createdAt.toISOString(),
               }))}
               commentsByTarget={commentsByTarget}
+              signaturesByTarget={signaturesByTarget}
+              defaultSignerName={member?.displayName ?? ""}
               ownerLabel="El equipo"
             />
+            </div>
 
             {/* Messages section */}
             <div
@@ -464,11 +518,15 @@ export default async function PublicAccessRoomPage({
           <aside className="space-y-4 lg:order-2">
             <div className="hidden lg:block">
               <RoomPeople
-                hosts={access.team.map((t) => ({
-                  id: t.id,
-                  displayName: t.displayName,
-                  title: t.title,
-                }))}
+                hosts={access.team.map((t) => {
+                  const founder = founderProfileFor(t.displayName, t.email);
+                  return {
+                    id: t.id,
+                    displayName: founder?.displayName ?? t.displayName,
+                    title: t.title ?? founder?.title ?? null,
+                    photoUrl: founder?.photoUrl ?? null,
+                  };
+                })}
                 guests={participants}
                 youId={member?.id ?? null}
               />
