@@ -1,3 +1,5 @@
+import { cache } from "react";
+import type { Metadata } from "next";
 import { ArrowRight, CheckSquare, Lock, MessageSquare } from "lucide-react";
 import { formatRelativeEs } from "@/lib/utils";
 import { roomHeroVideo } from "@/lib/partner-room-videos";
@@ -36,13 +38,67 @@ export const dynamic = "force-dynamic";
 
 type Params = Promise<{ token: string }>;
 
+// Deduped per request: generateMetadata and the page share one DB lookup.
+const getRoomAccess = cache((token: string) =>
+  getPublicPartnerRoomByToken({ token }).catch(() => null),
+);
+
+const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL ?? "https://x.caneycloud.com";
+
+/**
+ * Link previews (WhatsApp/iMessage/Slack) show the room's own identity —
+ * its name, welcome message, and hero-video poster — instead of the app-wide
+ * AGB metadata. The room name is already visible on the sign-in gate, so this
+ * exposes nothing the link alone doesn't. Private rooms stay out of search.
+ */
+export async function generateMetadata({
+  params,
+}: {
+  params: Params;
+}): Promise<Metadata> {
+  const { token } = await params;
+  const access = await getRoomAccess(token);
+  const robots = { index: false, follow: false };
+
+  if (!access) {
+    return { title: "Sala privada", robots };
+  }
+
+  const title = access.room.name;
+  const description =
+    access.room.welcomeMessage ??
+    "Documentos, novedades y una línea directa con el equipo — todo en tu sala privada.";
+  const heroVideo = roomHeroVideo(access.room.heroVideoKey);
+
+  return {
+    title,
+    description,
+    robots,
+    openGraph: {
+      title,
+      description,
+      type: "website",
+      siteName: "Sala privada",
+      ...(heroVideo
+        ? { images: [{ url: `${SITE_URL}${heroVideo.poster}`, width: 1280, height: 720 }] }
+        : {}),
+    },
+    twitter: {
+      card: heroVideo ? "summary_large_image" : "summary",
+      title,
+      description,
+    },
+  };
+}
+
 export default async function PublicAccessRoomPage({
   params,
 }: {
   params: Params;
 }) {
   const { token } = await params;
-  const access = await getPublicPartnerRoomByToken({ token }).catch(() => null);
+  const access = await getRoomAccess(token);
   if (!access) return <UnavailableRoom />;
 
   const unlocked = await isPartnerRoomUnlocked(access.room);
