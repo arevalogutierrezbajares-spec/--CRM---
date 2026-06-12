@@ -155,7 +155,7 @@ export function ClientLogoControl({
             {brandLogos.map((logo) => (
               <span
                 key={logo.lobId}
-                className="grid h-9 w-9 place-items-center overflow-hidden rounded-full border border-[var(--border)] bg-white p-1 dark:bg-[var(--card)]"
+                className="grid h-9 w-9 place-items-center overflow-hidden rounded-full border border-[var(--border)] bg-white p-1"
                 title={logo.title}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -196,7 +196,7 @@ export function ClientLogoControl({
                   aria-label={brand.title}
                   disabled={pending}
                 />
-                <span className="grid h-6 w-6 shrink-0 place-items-center overflow-hidden rounded-full border border-[var(--border)] bg-white p-0.5 dark:bg-[var(--card)]">
+                <span className="grid h-6 w-6 shrink-0 place-items-center overflow-hidden rounded-full border border-[var(--border)] bg-white p-0.5">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={brand.logoUrl} alt="" className="max-h-full max-w-full object-contain" />
                 </span>

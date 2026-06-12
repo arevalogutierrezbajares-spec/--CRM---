@@ -1,6 +1,11 @@
 import { formatRelativeEs } from "@/lib/utils";
 
-type Host = { id: string; displayName: string | null; title: string | null };
+type Host = {
+  id: string;
+  displayName: string | null;
+  title: string | null;
+  photoUrl?: string | null;
+};
 type Guest = {
   id: string;
   displayName: string | null;
@@ -53,11 +58,20 @@ export function RoomPeople({
           <ul className="mt-1.5 space-y-2.5">
             {hosts.map((m, i) => (
               <li key={m.id} className="flex items-center gap-3">
-                <span
-                  className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-sm font-semibold ${ACCENTS[i % ACCENTS.length]}`}
-                >
-                  {initials(m.displayName)}
-                </span>
+                {m.photoUrl ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={m.photoUrl}
+                    alt={m.displayName ?? "Foto del equipo"}
+                    className="h-10 w-10 shrink-0 rounded-full object-cover ring-1 ring-[var(--border)]"
+                  />
+                ) : (
+                  <span
+                    className={`grid h-10 w-10 shrink-0 place-items-center rounded-full text-sm font-semibold ${ACCENTS[i % ACCENTS.length]}`}
+                  >
+                    {initials(m.displayName)}
+                  </span>
+                )}
                 <div className="min-w-0">
                   <div className="truncate text-sm font-medium">
                     {m.displayName ?? "Tu contacto"}

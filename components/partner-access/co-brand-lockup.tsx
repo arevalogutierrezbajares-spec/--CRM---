@@ -26,7 +26,6 @@ export function CoBrandLockup({
       {hasClient && (
         <LogoCircle
           src={clientLogoUrl as string}
-          srcDark={null}
           label={clientName ? `${clientName} logo` : "Logo del cliente"}
           size={size}
           ring
@@ -49,7 +48,6 @@ export function CoBrandLockup({
             <LogoCircle
               key={logo.lobId}
               src={logo.logoUrl}
-              srcDark={logo.logoUrlDark}
               label={`${logo.title} logo`}
               size={hasClient ? size - 8 : size}
             />
@@ -62,14 +60,12 @@ export function CoBrandLockup({
 
 function LogoCircle({
   src,
-  srcDark,
   label,
   size,
   ring,
   fill,
 }: {
   src: string;
-  srcDark: string | null;
   label: string;
   size: number;
   ring?: boolean;
@@ -79,7 +75,8 @@ function LogoCircle({
   fill?: boolean;
 }) {
   // A filled circle crops to cover with no padding; a contained one letterboxes
-  // the mark on a white plate.
+  // the mark on a white plate. Brand plates stay white in dark mode too — the
+  // light logo variant is the only one rendered, so the mark is always legible.
   const imgClass = fill
     ? "h-full w-full object-cover"
     : "max-h-full max-w-full object-contain";
@@ -87,7 +84,7 @@ function LogoCircle({
     <div
       title={label}
       className={`grid shrink-0 place-items-center overflow-hidden rounded-full shadow-sm ${
-        fill ? "bg-[var(--secondary)]" : "bg-white dark:bg-[var(--card)]"
+        fill ? "bg-[var(--secondary)]" : "bg-white"
       } ${ring ? "ring-2 ring-[var(--border)]" : "ring-1 ring-[var(--border)]"}`}
       style={{
         width: size,
@@ -96,11 +93,7 @@ function LogoCircle({
       }}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={src} alt={label} className={srcDark ? `${imgClass} dark:hidden` : imgClass} />
-      {srcDark && (
-        /* eslint-disable-next-line @next/next/no-img-element */
-        <img src={srcDark} alt="" aria-hidden className={`hidden ${imgClass} dark:block`} />
-      )}
+      <img src={src} alt={label} className={imgClass} />
     </div>
   );
 }

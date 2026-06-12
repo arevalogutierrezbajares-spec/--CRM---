@@ -39,6 +39,7 @@ import { listRoomItems } from "@/db/queries/partner-repository";
 import { resolveRoomBrandLogos } from "@/db/queries/partner-access";
 import { CoBrandLockup } from "@/components/partner-access/co-brand-lockup";
 import { RoomPeople } from "@/components/partner-access/room-people";
+import { founderProfileFor } from "@/lib/founder-photos";
 import { partnerKindLabel } from "@/lib/partner-access";
 import { formatRelative, formatRelativeEs } from "@/lib/utils";
 
@@ -448,11 +449,15 @@ export default async function PartnerRoomPreviewPage({ params }: { params: Param
 
           <aside className="space-y-4">
             <RoomPeople
-              hosts={detail.team.map((t) => ({
-                id: t.id,
-                displayName: t.displayName,
-                title: t.title,
-              }))}
+              hosts={detail.team.map((t) => {
+                const founder = founderProfileFor(t.displayName, t.email);
+                return {
+                  id: t.id,
+                  displayName: founder?.displayName ?? t.displayName,
+                  title: t.title,
+                  photoUrl: founder?.photoUrl ?? null,
+                };
+              })}
               guests={detail.members
                 .filter((m) => m.email)
                 .map((m) => ({

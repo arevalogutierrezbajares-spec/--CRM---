@@ -269,36 +269,24 @@ export default async function ProjectDetailPage(props: {
             <div
               className="grid h-16 w-16 shrink-0 place-items-center rounded-xl overflow-hidden text-[36px]"
               style={{
-                background: `color-mix(in oklab, ${accent} 22%, var(--bg-card))`,
+                // Brand logos always sit on a white plate (light + dark mode)
+                // so the mark stays legible; the tinted tile is only the
+                // emoji fallback.
+                background: displayed.logoUrl
+                  ? "#FFFFFF"
+                  : `color-mix(in oklab, ${accent} 22%, var(--bg-card))`,
                 border: `1px solid color-mix(in oklab, ${accent} 50%, transparent)`,
               }}
             >
               {displayed.logoUrl ? (
-                <>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={displayed.logoUrl}
-                    alt={`${displayed.title} logo`}
-                    width={48}
-                    height={48}
-                    className={
-                      displayed.logoUrlDark
-                        ? "object-contain dark:hidden"
-                        : "object-contain"
-                    }
-                  />
-                  {displayed.logoUrlDark && (
-                    /* eslint-disable-next-line @next/next/no-img-element */
-                    <img
-                      src={displayed.logoUrlDark}
-                      alt=""
-                      aria-hidden
-                      width={48}
-                      height={48}
-                      className="object-contain hidden dark:block"
-                    />
-                  )}
-                </>
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={displayed.logoUrl}
+                  alt={`${displayed.title} logo`}
+                  width={48}
+                  height={48}
+                  className="object-contain"
+                />
               ) : (
                 <>{displayed.coverEmoji ?? "📁"}</>
               )}

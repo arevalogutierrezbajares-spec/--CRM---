@@ -1,6 +1,6 @@
 import { cache } from "react";
 import type { Metadata } from "next";
-import { ArrowRight, CheckSquare, Lock, MessageSquare } from "lucide-react";
+import { ArrowRight, Lock, MessageSquare } from "lucide-react";
 import { formatRelativeEs } from "@/lib/utils";
 import { roomHeroVideo } from "@/lib/partner-room-videos";
 import { RoomHeroVideo } from "@/components/partner-access/room-hero-video";
@@ -27,6 +27,7 @@ import { PublicRoomMessages } from "@/components/partner-access/public-room-mess
 import { RoomSignIn } from "@/components/partner-access/room-sign-in";
 import { CoBrandLockup } from "@/components/partner-access/co-brand-lockup";
 import { RoomPeople } from "@/components/partner-access/room-people";
+import { founderProfileFor } from "@/lib/founder-photos";
 import {
   PublicRepository,
   type RepoShare as RepoShareView,
@@ -181,13 +182,20 @@ export default async function PublicAccessRoomPage({
   const isFreshUpdate = nowMs - lastUpdated.getTime() < 7 * 24 * 60 * 60 * 1000;
 
   const commentsByTarget: Record<string, RepoCommentView[]> = {};
+  // Team-authored content shows the founder's partner-facing name instead of
+  // the raw account handle ("tg.2000" → "Tomás Gutiérrez").
+  const teamName = (kind: string, name: string | null) =>
+    kind !== "partner" && name
+      ? founderProfileFor(name)?.displayName ?? name
+      : name;
+
   for (const c of repoComments) {
     const key = `${c.targetKind}:${c.targetId}`;
     (commentsByTarget[key] ??= []).push({
       id: c.id,
       body: c.body,
       authorKind: c.authorKind,
-      authorName: c.authorName,
+      authorName: teamName(c.authorKind, c.authorName),
       createdAt: c.createdAt.toISOString(),
     });
   }
@@ -231,7 +239,13 @@ export default async function PublicAccessRoomPage({
     category: item.category,
   }));
 
-  const firstName = access.contact.name?.trim().split(/\s+/)[0] ?? null;
+  // Greet the signed-in guest by their own name; fall back to the contact's
+  // first word only when nobody has claimed a seat (org names can read oddly,
+  // but a personal greeting for the actual viewer always wins).
+  const firstName =
+    member?.displayName?.trim().split(/\s+/)[0] ??
+    access.contact.name?.trim().split(/\s+/)[0] ??
+    null;
   const heroVideo = roomHeroVideo(access.room.heroVideoKey);
   const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
 
@@ -354,7 +368,8 @@ export default async function PublicAccessRoomPage({
                 Último mensaje ·{" "}
                 {lastMessage.authorKind === "partner"
                   ? lastMessage.authorName ?? "Tú"
-                  : lastMessage.authorName ?? "El equipo"}{" "}
+                  : teamName(lastMessage.authorKind, lastMessage.authorName) ??
+                    "El equipo"}{" "}
                 · {formatRelativeEs(lastMessage.createdAt)}
               </span>
               <span title={lastMessage.body} className="block truncate text-sm">
@@ -382,11 +397,15 @@ export default async function PublicAccessRoomPage({
         {(access.team.length > 0 || participants.length > 0) && (
           <div className="lg:hidden">
             <RoomPeople
-              hosts={access.team.map((t) => ({
-                id: t.id,
-                displayName: t.displayName,
-                title: t.title,
-              }))}
+              hosts={access.team.map((t) => {
+                const founder = founderProfileFor(t.displayName, t.email);
+                return {
+                  id: t.id,
+                  displayName: founder?.displayName ?? t.displayName,
+                  title: t.title,
+                  photoUrl: founder?.photoUrl ?? null,
+                };
+              })}
               guests={participants}
               youId={member?.id ?? null}
             />
@@ -432,7 +451,7 @@ export default async function PublicAccessRoomPage({
                     id: m.id,
                     body: m.body,
                     authorKind: m.authorKind,
-                    authorName: m.authorName,
+                    authorName: teamName(m.authorKind, m.authorName),
                     createdAt: m.createdAt.toISOString(),
                   }))}
                 />
@@ -459,18 +478,9 @@ export default async function PublicAccessRoomPage({
               id="pasos"
               className="scroll-mt-6 rounded-xl border border-[var(--border)] bg-[var(--card)] p-4"
             >
-              <div className="flex items-center gap-2">
-                <CheckSquare className="h-4 w-4 text-[var(--muted-foreground)]" />
-                <h2 className="text-base font-semibold">Próximos pasos</h2>
-                {openSteps.length > 0 && (
-                  <span className="ml-auto rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-                    {openSteps.length} pendiente{openSteps.length === 1 ? "" : "s"}
-                  </span>
-                )}
-              </div>
-              <div className="mt-3">
-                <PublicNextSteps token={token} initialSteps={nextSteps} nowMs={nowMs} />
-              </div>
+              {/* Header + badge render inside the client component so the
+                  pending count stays in sync as the partner checks steps. */}
+              <PublicNextSteps token={token} initialSteps={nextSteps} nowMs={nowMs} />
             </div>
           </aside>
         </section>

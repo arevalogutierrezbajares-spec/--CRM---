@@ -271,7 +271,7 @@ function ItemRow({
                 href={item.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-2 py-1 text-xs hover:bg-[var(--secondary)]"
+                className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-3 py-2 text-xs hover:bg-[var(--secondary)] sm:px-2 sm:py-1"
               >
                 <ArrowUpRight className="h-3.5 w-3.5" />
                 Abrir
@@ -281,7 +281,7 @@ function ItemRow({
                 href={`/access/${token}/item/${item.id}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-2 py-1 text-xs hover:bg-[var(--secondary)]"
+                className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-3 py-2 text-xs hover:bg-[var(--secondary)] sm:px-2 sm:py-1"
               >
                 <Download className="h-3.5 w-3.5" />
                 Abrir
@@ -364,7 +364,7 @@ function ShareRow({
                   href={`/access/${token}/open/${share.id}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-2 py-1 text-xs hover:bg-[var(--secondary)]"
+                  className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-3 py-2 text-xs hover:bg-[var(--secondary)] sm:px-2 sm:py-1"
                 >
                   <ArrowUpRight className="h-3.5 w-3.5" />
                   Abrir
@@ -375,7 +375,7 @@ function ShareRow({
                   href={`/access/${token}/deck/${share.id}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-2 py-1 text-xs hover:bg-[var(--secondary)]"
+                  className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-3 py-2 text-xs hover:bg-[var(--secondary)] sm:px-2 sm:py-1"
                 >
                   <ArrowUpRight className="h-3.5 w-3.5" />
                   Ver presentación
@@ -386,7 +386,7 @@ function ShareRow({
                   href={`/access/${token}/download/${share.id}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 rounded-md bg-[var(--primary)] px-2 py-1 text-xs text-[var(--primary-foreground)] hover:opacity-90"
+                  className="inline-flex items-center gap-1 rounded-md bg-[var(--primary)] px-3 py-2 text-xs text-[var(--primary-foreground)] hover:opacity-90 sm:px-2 sm:py-1"
                 >
                   <Download className="h-3.5 w-3.5" />
                   Descargar

@@ -377,7 +377,7 @@ function IdentityStep({
               setError(null);
             }}
             aria-label="Elige tu nombre"
-            className="w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:ring-2 focus:ring-[#D4A855]/60"
+            className="w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2.5 text-base text-white outline-none focus:ring-2 focus:ring-[#D4A855]/60 sm:text-sm"
           >
             <option value="" className="bg-neutral-900">
               No estoy en la lista…
@@ -398,7 +398,7 @@ function IdentityStep({
             onChange={(e) => setName(e.target.value)}
             placeholder="Tu nombre"
             aria-label="Tu nombre"
-            className="w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2.5 text-sm text-white placeholder-white/30 outline-none focus:ring-2 focus:ring-[#D4A855]/60"
+            className="w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2.5 text-base text-white placeholder-white/30 outline-none focus:ring-2 focus:ring-[#D4A855]/60 sm:text-sm"
           />
         )}
 
@@ -409,7 +409,7 @@ function IdentityStep({
           onChange={(e) => setEmail(e.target.value)}
           placeholder="nombre@empresa.com"
           aria-label="Tu correo"
-          className="w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2.5 text-sm text-white placeholder-white/30 outline-none focus:ring-2 focus:ring-[#D4A855]/60"
+          className="w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2.5 text-base text-white placeholder-white/30 outline-none focus:ring-2 focus:ring-[#D4A855]/60 sm:text-sm"
         />
 
         {error && (

@@ -287,31 +287,20 @@ function ProjectAvatar({
         style={{
           width: size,
           height: size,
-          background: `color-mix(in oklab, ${accent} 22%, var(--bg-card))`,
+          // Brand logos always sit on a white plate (light + dark mode) so the
+          // mark stays legible; only the light logo variant is rendered.
+          background: "#FFFFFF",
           border: `1px solid color-mix(in oklab, ${accent} 50%, transparent)`,
         }}
       >
-        {/* Light-mode logo */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={p.logoUrl}
           alt={`${p.title} logo`}
           width={innerSize}
           height={innerSize}
-          className={p.logoUrlDark ? "object-contain dark:hidden" : "object-contain"}
+          className="object-contain"
         />
-        {/* Dark-mode variant (if set) */}
-        {p.logoUrlDark && (
-          /* eslint-disable-next-line @next/next/no-img-element */
-          <img
-            src={p.logoUrlDark}
-            alt=""
-            aria-hidden
-            width={innerSize}
-            height={innerSize}
-            className="object-contain hidden dark:block"
-          />
-        )}
       </div>
     );
   }

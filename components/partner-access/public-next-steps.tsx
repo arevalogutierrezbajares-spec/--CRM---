@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarClock, Check, Users } from "lucide-react";
+import { CalendarClock, Check, CheckSquare, Users } from "lucide-react";
 import { formatRelativeEs } from "@/lib/utils";
 import type { PartnerNextStep } from "@/db/queries/partner-next-steps";
 
@@ -60,9 +60,12 @@ export function PublicNextSteps({
 
   if (steps.length === 0) {
     return (
-      <p className="text-sm text-[var(--muted-foreground)]">
-        Aún no hay próximos pasos. Aquí verás lo que sigue.
-      </p>
+      <>
+        <Header openCount={0} />
+        <p className="mt-3 text-sm text-[var(--muted-foreground)]">
+          Aún no hay próximos pasos. Aquí verás lo que sigue.
+        </p>
+      </>
     );
   }
 
@@ -81,8 +84,10 @@ export function PublicNextSteps({
 
   return (
     <div>
-      <p className="mb-2 text-xs text-[var(--muted-foreground)]">
-        {openCount > 0 ? `${openCount} pendiente${openCount === 1 ? "" : "s"}` : "Todo al día ✓"}
+      {/* Header lives here (client) so the pending badge tracks toggles. */}
+      <Header openCount={openCount} />
+      <p className="mb-2 mt-3 text-xs text-[var(--muted-foreground)]">
+        {openCount > 0 ? "Marca lo que ya completaste." : "Todo al día ✓"}
       </p>
       {error && <p className="mb-2 text-xs text-red-600 dark:text-red-400">{error}</p>}
       <ul className="max-h-[360px] space-y-2 overflow-y-auto pr-1">
@@ -102,6 +107,20 @@ export function PublicNextSteps({
           );
         })}
       </ul>
+    </div>
+  );
+}
+
+function Header({ openCount }: { openCount: number }) {
+  return (
+    <div className="flex items-center gap-2">
+      <CheckSquare className="h-4 w-4 text-[var(--muted-foreground)]" />
+      <h2 className="text-base font-semibold">Próximos pasos</h2>
+      {openCount > 0 && (
+        <span className="ml-auto rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+          {openCount} pendiente{openCount === 1 ? "" : "s"}
+        </span>
+      )}
     </div>
   );
 }
@@ -132,7 +151,7 @@ function StepItem({
           disabled={loading}
           onClick={() => onToggle?.(step)}
           aria-label={done ? "Marcar como pendiente" : "Marcar como hecho"}
-          className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-colors ${
+          className={`relative mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-colors after:absolute after:-inset-3 after:content-[''] ${
             done
               ? "border-green-500 bg-green-500 text-white"
               : "border-[var(--border)] hover:border-[var(--foreground)]"

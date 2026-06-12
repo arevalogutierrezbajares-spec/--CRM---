@@ -65,7 +65,7 @@ export function PartnerCommentThread({
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="inline-flex items-center gap-1.5 rounded-md text-xs text-[var(--muted-foreground)] transition hover:text-[var(--foreground)]"
+        className="relative inline-flex items-center gap-1.5 rounded-md py-1 text-xs text-[var(--muted-foreground)] transition after:absolute after:-inset-2 after:content-[''] hover:text-[var(--foreground)]"
       >
         <MessageSquare className="h-3.5 w-3.5" />
         {merged.length > 0
@@ -111,7 +111,7 @@ export function PartnerCommentThread({
               rows={1}
               placeholder="Escribe un comentario…"
               aria-label="Escribe un comentario"
-              className="min-h-[36px] flex-1 resize-none rounded-md border border-[var(--border)] bg-[var(--background)] px-2.5 py-1.5 text-sm outline-none focus:ring-2 focus:ring-[var(--ring)]"
+              className="min-h-[36px] flex-1 resize-none rounded-md border border-[var(--border)] bg-[var(--background)] px-2.5 py-1.5 text-base outline-none focus:ring-2 focus:ring-[var(--ring)] sm:text-sm"
             />
             <button
               type="button"

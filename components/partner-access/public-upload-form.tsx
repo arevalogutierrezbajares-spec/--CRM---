@@ -161,14 +161,14 @@ export function PublicUploadForm({ token }: { token: string }) {
             placeholder="Etiqueta (opcional) p. ej. NDA firmado"
             value={label}
             onChange={(e) => setLabel(e.target.value)}
-            className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm placeholder:text-[var(--muted-foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
+            className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-base sm:text-sm placeholder:text-[var(--muted-foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
           />
           <textarea
             placeholder="Nota para el equipo (opcional)"
             value={note}
             onChange={(e) => setNote(e.target.value)}
             rows={2}
-            className="w-full resize-none rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm placeholder:text-[var(--muted-foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
+            className="w-full resize-none rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-base sm:text-sm placeholder:text-[var(--muted-foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
           />
         </div>
       )}
