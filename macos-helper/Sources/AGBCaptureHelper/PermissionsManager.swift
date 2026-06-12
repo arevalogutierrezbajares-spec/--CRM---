@@ -83,12 +83,56 @@ enum PermissionsManager {
     enable AGBCaptureHelper, then restart the helper.
     """
 
+    // MARK: - Audio capture (Core Audio process tap)
+
+    /// The Core Audio process tap (primary system-audio path, FaceTime-capable)
+    /// requires audio-capture authorization, surfaced under macOS's Audio
+    /// Recording / system-audio privacy controls. When it is unauthorized the
+    /// HAL returns a permission-class OSStatus from `AudioHardwareCreateProcessTap`
+    /// and the helper transparently falls back to ScreenCaptureKit — which CANNOT
+    /// capture FaceTime. This string tells the user how to unlock the better path.
+    static let audioCaptureInstructions = """
+    System-audio (process-tap) capture is not authorized. Without it, FaceTime and \
+    other call-app audio cannot be recorded (the helper falls back to ScreenCaptureKit, \
+    which only captures regular media playback).
+    Fix: System Settings → Privacy & Security → Screen & System Audio Recording → \
+    enable AGBCaptureHelper, then restart the helper. (Audio-capture authorization for \
+    the process tap is granted alongside this control on macOS 14.4+.)
+    """
+
+    /// Heuristic: did a process-tap `start()` failure look like a permission /
+    /// authorization denial (vs. a transient HAL error)? Core Audio returns
+    /// permission-class statuses; treat the common ones as "unauthorized" so the
+    /// caller can log the actionable instructions above.
+    static func processTapLikelyUnauthorized(_ error: Error) -> Bool {
+        let code = (error as NSError).code
+        // kAudioHardwareIllegalOperationError ('what'), 'priv'/permission-class,
+        // and the generic not-permitted POSIX code all indicate authorization.
+        let fourCC: (String) -> Int = { s in
+            s.utf8.reduce(0) { ($0 << 8) | Int($1) }
+        }
+        let permissionLikeCodes: Set<Int> = [
+            fourCC("what"),  // kAudioHardwareIllegalOperationError
+            fourCC("priv"),  // private/permission
+            fourCC("nope"),  // kAudioHardwareNotRunningError-adjacent denials
+            1,               // EPERM
+        ]
+        return permissionLikeCodes.contains(code)
+    }
+
     // MARK: - Diagnostics (FR-CALL-OPS-6)
 
     static func statusReport() -> String {
-        """
+        let tapNote: String
+        if #available(macOS 14.4, *) {
+            tapNote = "process tap available (system-audio incl. FaceTime; needs Audio/Screen Recording auth)"
+        } else {
+            tapNote = "process tap unavailable on this macOS (<14.4) — ScreenCaptureKit fallback only"
+        }
+        return """
         Microphone:        \(microphoneStatus().rawValue)
         Screen Recording:  \(screenRecordingGranted() ? "granted" : "denied or not yet requested")
+        System audio tap:  \(tapNote)
         """
     }
 

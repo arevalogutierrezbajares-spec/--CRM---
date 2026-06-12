@@ -58,6 +58,14 @@ final class AudioEngine: NSObject {
     private var avEngine: AVAudioEngine?
     private var scStream: SCStream?
     private var streamOutputBox: StreamOutputBox?
+    /// Core Audio process tap — the PRIMARY system-audio source (reaches
+    /// FaceTime / communication-path audio that SCStream cannot). Stored as
+    /// `Any?` so the type's macOS 14.4 availability doesn't leak into the
+    /// stored-property declaration; cast back at use sites under `#available`.
+    private var processTapBox: AnyObject?
+    /// True once the process tap is the active system-audio source. When false,
+    /// the SCStream fallback is active.
+    private var processTapActive = false
     private var micConverter: AVAudioConverter?
     private var micConverterInputFormat: AVAudioFormat?
     private var sysConverter: AVAudioConverter?
@@ -102,7 +110,7 @@ final class AudioEngine: NSObject {
         mode = .preroll
 
         try startMicEngine()
-        try await startSystemStream()
+        try await startSystemAudioSource()
         startPump()
         HelperLog.shared.info("engine started (preroll)", category: "audio")
     }
@@ -198,6 +206,12 @@ final class AudioEngine: NSObject {
             avEngine = nil
         }
 
+        if #available(macOS 14.4, *), let tap = processTapBox as? ProcessAudioTap {
+            tap.stop()
+        }
+        processTapBox = nil
+        processTapActive = false
+
         if let stream = scStream {
             scStream = nil
             stream.stopCapture { _ in }
@@ -266,7 +280,50 @@ final class AudioEngine: NSObject {
         }
     }
 
-    // MARK: - System audio path (SCStream → 16 kHz mono Int16 → R channel)
+    // MARK: - System audio path (→ 16 kHz mono Int16 → R channel)
+
+    /// Start the R-channel (system-audio) source. PRIMARY: a Core Audio process
+    /// tap (macOS 14.4+) that reaches FaceTime / communication-path audio.
+    /// FALLBACK: ScreenCaptureKit (covers media but not FaceTime) when the tap is
+    /// unavailable (older OS) or fails to start (permission denied / HAL error).
+    /// Either way the produced 16 kHz-mono-Int16 bytes feed the SAME sink
+    /// (`interleaver.appendSystem`) and everything downstream is unchanged.
+    private func startSystemAudioSource() async throws {
+        if #available(macOS 14.4, *) {
+            let tap = ProcessAudioTap()
+            tap.onSystemPCM = { [weak self] pcm in
+                guard let self, self.mode != .stopped else { return }
+                self.interleaver.appendSystem(pcm)
+            }
+            tap.onFatalError = { [weak self] message in
+                // A failure *after* a successful start (rare): surface but keep
+                // the session alive — the mic channel still records.
+                self?.onError?("System-audio process tap error: \(message)")
+            }
+            do {
+                try tap.start()
+                processTapBox = tap
+                processTapActive = true
+                HelperLog.shared.info("[audio] system-audio via process-tap (FaceTime-capable)", category: "audio")
+                return
+            } catch {
+                HelperLog.shared.warn(
+                    "process-tap unavailable (\(error.localizedDescription)) — falling back to ScreenCaptureKit",
+                    category: "audio"
+                )
+                if PermissionsManager.processTapLikelyUnauthorized(error) {
+                    HelperLog.shared.warn(PermissionsManager.audioCaptureInstructions, category: "audio")
+                }
+            }
+        }
+
+        // Fallback: ScreenCaptureKit (non-FaceTime system audio).
+        processTapActive = false
+        try await startSystemStream()
+        HelperLog.shared.info("[audio] system-audio via ScreenCaptureKit (FaceTime NOT captured)", category: "audio")
+    }
+
+    // MARK: - System audio fallback (SCStream → 16 kHz mono Int16 → R channel)
 
     /// Bridges SCStreamOutput (which retains its outputs) without a cycle.
     private final class StreamOutputBox: NSObject, SCStreamOutput {
