@@ -24,8 +24,18 @@ system audio (ScreenCaptureKit) ─→ 16 kHz mono ──┘                  �
 
 - An app opens the microphone → CoreAudio detector fires → floating prompt
   "Call detected (WhatsApp). Record?" while the pre-roll buffer is already
-  filling in memory. Affirm and nothing is lost; dismiss (or 60 s timeout) and
-  zero bytes are persisted.
+  filling in memory. **The prompt persists for as long as the call is live**
+  (the pre-roll ring keeps rolling in RAM, and the prompt shows how much is
+  buffered) — affirm minutes in and the last 60 s are still included. It goes
+  away on its own when the call ends unanswered; dismiss it and it stays away
+  for the rest of *that* call (detection re-arms once the mic is released).
+  Either way zero bytes are persisted. A safety cap (`maxRecordingSeconds`,
+  10 min pre-14.4) bounds the tap absolutely.
+- While the prompt is up, the always-visible control window's big button also
+  turns into **● Record This Call** — two unmissable ways to say yes. The
+  prompt sits at `.statusBar` window level (above other apps' floating call
+  windows) and is laid out by `PanelLayout` directly below the control window,
+  so the panels can never cover each other.
 - Chunks upload **during** the call; a crash loses at most the un-chunked tail
   (≤30 s). Spool + manifest survive restart; uploads resume automatically and
   in order, with 1→60 s exponential backoff while offline.
@@ -203,6 +213,7 @@ AGB_CRM_URL=http://127.0.0.1:8899 AGB_CRM_TOKEN=agbcap_test \
 |---|---|---|
 | Menu shows ⚠ "401 — capture token invalid or revoked" | token revoked/rotated | mint a new token in CRM Settings → `/settings`, paste into Configure… |
 | Prompt never appears on calls | helper not running, or detector disarmed | check menu bar for ○; relaunch; reboot test (login item) |
+| Prompt missing right after dismissing one | by design: a dismissed prompt stays away for the rest of that call | use the control window's button or ⌘⇧R to start anyway; detection re-arms when the mic is released |
 | "Microphone access is missing" | TCC denied | System Settings → Privacy & Security → **Microphone** → enable AGBCaptureHelper, restart helper (FR-CALL-OPS-2) |
 | "Screen Recording access is missing" / participants' side silent | system-audio gate | System Settings → Privacy & Security → **Screen & System Audio Recording** → enable AGBCaptureHelper, restart helper |
 | Recording shows "Suspect audio: mic(L) NEAR-SILENT" | muted mic / wrong input device | check input device + mute state; server also flags at filing (FR-CALL-OPS-4) |

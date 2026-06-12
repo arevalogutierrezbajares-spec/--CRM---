@@ -1,18 +1,38 @@
 import AppKit
+import CaptureCore
 
-/// A small, always-visible floating control with one big Start/Stop button and
-/// the current state. Exists because a menu-bar-only (LSUIElement) app is hard
+/// A small, always-visible floating control with one big button and the
+/// current state. Exists because a menu-bar-only (LSUIElement) app is hard
 /// to drive on a notched MacBook — the status item hides behind the notch and a
 /// global hotkey can be swallowed by other apps. This window is always on
 /// screen, one click from recording, and never depends on the menu bar.
+///
+/// The button mirrors the helper's state machine: Start Recording when idle,
+/// **Record This Call** while a detection prompt is up (same affirm path as
+/// the prompt's Record button — two visible ways to say yes), and Stop with
+/// the elapsed time while capturing. Positioned by PanelLayout so it can
+/// never overlap the prompt.
+///
 /// All methods are invoked on the main thread (from AppDelegate), matching
 /// LiveTranscriptWindow's non-isolated pattern.
 final class ControlWindow: NSObject {
+
+    /// What the single big button currently means.
+    enum Mode: Equatable {
+        case idle(label: String)
+        case detected
+        case capturing(elapsed: String)
+    }
+
+    /// Stable title used by PromptController to find this window's frame.
+    static let windowTitle = "AGB Capture"
+
     private var panel: NSPanel?
     private var button: NSButton?
     private var stateLabel: NSTextField?
 
-    /// Tapped Start/Stop — wired to the same toggle path as the hotkey/menu.
+    /// Tapped the big button — wired to the same toggle path as the
+    /// hotkey/menu (start, affirm-while-detected, or stop).
     var onToggle: (() -> Void)?
 
     func show() {
@@ -27,7 +47,7 @@ final class ControlWindow: NSObject {
             backing: .buffered,
             defer: false
         )
-        panel.title = "AGB Capture"
+        panel.title = Self.windowTitle
         panel.isFloatingPanel = true
         panel.level = .floating
         panel.hidesOnDeactivate = false
@@ -66,10 +86,12 @@ final class ControlWindow: NSObject {
         ])
 
         panel.contentView?.addSubview(container)
-        // Park it top-right, just under the menu bar, clear of the notch.
+        // Top-right, just under the menu bar, clear of the notch. The prompt
+        // stacks below this frame (PanelLayout) — the two never overlap.
         if let screen = NSScreen.main {
-            let f = screen.visibleFrame
-            panel.setFrameOrigin(NSPoint(x: f.maxX - 250, y: f.maxY - 130))
+            let frame = PanelLayout.controlFrame(visible: screen.visibleFrame,
+                                                 size: panel.frame.size)
+            panel.setFrameOrigin(frame.origin)
         }
         panel.orderFrontRegardless()
         self.panel = panel
@@ -79,16 +101,21 @@ final class ControlWindow: NSObject {
         onToggle?()
     }
 
-    /// Reflect the recorder state. `isCapturing` switches the button to Stop and
-    /// shows elapsed time; otherwise it's a red "Start Recording".
-    func update(stateLabel label: String, isCapturing: Bool, elapsed: String) {
+    /// Reflect the recorder state on the big button + caption.
+    func update(_ mode: Mode) {
         guard let button else { return }
-        stateLabel?.stringValue = isCapturing ? "Recording — click to stop" : label
-        if isCapturing {
-            button.title = "■ Stop Recording  \(elapsed)"
-            button.contentTintColor = .systemRed
-        } else {
+        switch mode {
+        case .idle(let label):
+            stateLabel?.stringValue = label
             button.title = "● Start Recording"
+            button.contentTintColor = .systemRed
+        case .detected:
+            stateLabel?.stringValue = "Call detected — record it?"
+            button.title = "● Record This Call"
+            button.contentTintColor = .systemRed
+        case .capturing(let elapsed):
+            stateLabel?.stringValue = "Recording — click to stop"
+            button.title = "■ Stop Recording  \(elapsed)"
             button.contentTintColor = .systemRed
         }
     }

@@ -31,6 +31,10 @@ final class MicActivityDetector {
     private var pollTimer: DispatchSourceTimer?
     private var armed = false
     private var watchingForEnd = false
+    /// Waiting for the mic to go quiet before re-arming detection — used after
+    /// an explicit prompt dismissal so the *same* ongoing call can never
+    /// re-trigger the prompt the founder just declined (PromptPolicy.Rearm).
+    private var waitingForQuiet = false
 
     private var currentDevice = AudioObjectID(kAudioObjectUnknown)
     private var deviceListenerInstalled = false
@@ -56,6 +60,7 @@ final class MicActivityDetector {
             guard let self, !self.armed else { return }
             self.armed = true
             self.watchingForEnd = false
+            self.waitingForQuiet = false
             self.runningSince = nil
             self.installDefaultDeviceListener()
             self.rebindDefaultDevice()
@@ -64,31 +69,59 @@ final class MicActivityDetector {
         }
     }
 
+    /// Re-arm detection only once the mic has been released for a couple of
+    /// seconds. Device-level (`kAudioDevicePropertyDeviceIsRunningSomewhere`),
+    /// so it works on every macOS version — the caller must have torn down
+    /// its own audio engine first or the device never goes quiet.
+    func armAfterMicReleased() {
+        queue.async { [weak self] in
+            guard let self else { return }
+            self.armed = false
+            self.watchingForEnd = false
+            self.waitingForQuiet = true
+            self.quietSince = nil
+            self.installDefaultDeviceListener()
+            self.rebindDefaultDevice()
+            self.startPolling()
+            HelperLog.shared.info("detector waiting for mic release before re-arming", category: "detect")
+        }
+    }
+
     func disarm() {
         queue.async { [weak self] in
             guard let self else { return }
             self.armed = false
             self.watchingForEnd = false
+            self.waitingForQuiet = false
             self.stopPolling()
             self.removeDeviceListener()
             HelperLog.shared.info("detector disarmed", category: "detect")
         }
     }
 
-    /// While recording, watch for the *other* app releasing the mic so the
-    /// capture can auto-finalize (FR-CALL-TRG-5). Only effective on 14.4+
-    /// where per-process input state is observable; otherwise a no-op
-    /// (manual stop still works).
+    /// While recording — or while the record prompt is up — watch for the
+    /// *other* app releasing the mic so the capture can auto-finalize
+    /// (FR-CALL-TRG-5) or the unanswered prompt can auto-dismiss. Only
+    /// effective on 14.4+ where per-process input state is observable;
+    /// otherwise a no-op (manual stop still works; the prompt falls back to
+    /// PromptPolicy's safety cap).
     func watchForCallEnd() {
         queue.async { [weak self] in
             guard let self else { return }
             guard #available(macOS 14.4, *) else { return }
             self.armed = false
+            self.waitingForQuiet = false
             self.watchingForEnd = true
             self.quietSince = nil
             self.startPolling()
             HelperLog.shared.info("watching for call end (process objects)", category: "detect")
         }
+    }
+
+    /// Whether the call-end watch can actually observe per-process mic state.
+    static var callEndWatchAvailable: Bool {
+        if #available(macOS 14.4, *) { return true }
+        return false
     }
 
     // MARK: - Polling + evaluation
@@ -112,6 +145,27 @@ final class MicActivityDetector {
             evaluateDetection()
         } else if watchingForEnd {
             evaluateCallEnd()
+        } else if waitingForQuiet {
+            evaluateQuietWait()
+        }
+    }
+
+    /// Device went quiet for 2 s → flip straight into normal armed detection.
+    private func evaluateQuietWait() {
+        guard currentDevice != AudioObjectID(kAudioObjectUnknown) else {
+            rebindDefaultDevice()
+            return
+        }
+        if Self.isRunningSomewhere(device: currentDevice) {
+            quietSince = nil
+            return
+        }
+        if quietSince == nil { quietSince = Date() }
+        if let since = quietSince, Date().timeIntervalSince(since) >= debounceSeconds {
+            waitingForQuiet = false
+            armed = true
+            runningSince = nil
+            HelperLog.shared.info("mic released — detector re-armed", category: "detect")
         }
     }
 

@@ -184,15 +184,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.handleDetection(sourceApp: sourceApp)
         }
         detector.onCallLikelyEnded = { [weak self] in
-            guard let self, self.state == .recording || self.state == .paused else { return }
-            self.log.info("auto-finalizing: call end detected", category: "app")
-            self.finishRecording(autoDetected: true)
+            guard let self else { return }
+            switch self.state {
+            case .recording, .paused:
+                self.log.info("auto-finalizing: call end detected", category: "app")
+                self.finishRecording(autoDetected: true)
+            case .detected:
+                // The call ended while the prompt was still up — the founder
+                // never answered it, so it goes away by itself.
+                self.prompt.dismissPanel()
+                self.declineRecording(reason: .callEnded)
+            default:
+                break
+            }
         }
         prompt.onRecord = { [weak self] in
             self?.affirmRecording()
         }
-        prompt.onDismiss = { [weak self] timedOut in
-            self?.declineRecording(timedOut: timedOut)
+        prompt.onDecline = { [weak self] reason in
+            self?.declineRecording(reason: reason)
         }
     }
 
@@ -224,7 +234,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.engine = engine
             do {
                 try await engine.startPreroll()
-                self.prompt.show(sourceApp: self.detectedSourceApp)
+                // The prompt persists while the call is live (pre-roll keeps
+                // rolling in RAM); only an absolute safety cap bounds it.
+                let cap = PromptPolicy.safetyCapSeconds(
+                    maxRecordingSeconds: HelperConfig.effective().maxRecordingSeconds,
+                    callEndWatchAvailable: MicActivityDetector.callEndWatchAvailable
+                )
+                self.prompt.show(sourceApp: self.detectedSourceApp,
+                                 capSeconds: cap,
+                                 bufferedSeconds: { [weak engine] in engine?.preRollSeconds ?? 0 })
+                // Auto-dismiss the prompt if the call ends unanswered.
+                self.detector.watchForCallEnd()
             } catch {
                 self.captureUnavailable("Could not start capture: \(error.localizedDescription)\n\n\(PermissionsManager.statusReport())")
             }
@@ -250,14 +270,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func declineRecording(timedOut: Bool) {
+    private func declineRecording(reason: PromptPolicy.DeclineReason) {
         guard state == .detected else { return }
         engine?.abortAndClear()
         engine = nil
         detectedSourceApp = nil
         state = .idle
-        log.info("prompt \(timedOut ? "timed out" : "declined") — zero bytes persisted", category: "app")
-        detector.arm()
+        let what: String
+        switch reason {
+        case .userDismissed: what = "prompt declined"
+        case .callEnded: what = "call ended before Record was pressed"
+        case .safetyCap: what = "prompt hit the safety cap"
+        }
+        log.info("\(what) — zero bytes persisted", category: "app")
+        // A dismissed (or capped) prompt must not come back for the same
+        // ongoing call — wait for the mic to be released before re-arming.
+        switch PromptPolicy.rearm(after: reason) {
+        case .immediately:
+            detector.arm()
+        case .afterMicReleased:
+            detector.armAfterMicReleased()
+        }
     }
 
     private func captureUnavailable(_ message: String) {
@@ -266,7 +299,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         prompt.dismissPanel()
         state = .error
         lastError = message
-        detector.arm()
+        // The failed call's mic is likely still live — re-arming immediately
+        // would re-detect it in seconds and loop the error alert.
+        detector.armAfterMicReleased()
         presentAlert(title: "Capture unavailable", text: message)
     }
 
@@ -390,7 +425,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Refresh the menu's "Recording mm:ss — Stop" label.
         liveStopMenuItem.title = liveStopTitle()
         // Keep the floating control's elapsed time current while recording.
-        controlWindow.update(stateLabel: state.label, isCapturing: true, elapsed: elapsedString())
+        controlWindow.update(.capturing(elapsed: elapsedString()))
         // Keep the window banner's timer current when the stream is live.
         if case .live = (liveStreamer?.status ?? .idle), liveWindow.isVisible {
             liveWindow.setStatus(liveStatusLine())
@@ -515,7 +550,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         detectedSourceApp = nil
         state = .uploading
         worker?.kick()
-        detector.arm()
+        // Wait for the mic to be released before re-arming: a manual stop
+        // mid-call (or WhatsApp holding the mic open after hangup) must not
+        // re-detect the same call and prompt again seconds later. When the
+        // mic is already quiet this arms within ~2 s anyway.
+        detector.armAfterMicReleased()
     }
 
     @objc private func pauseResumeTapped() {
@@ -789,8 +828,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         liveTranscriptMenuItem?.title = liveWindow.isVisible ? "Hide live transcript" : "Show live transcript"
 
-        // Mirror state onto the always-visible floating control.
-        controlWindow.update(stateLabel: display.label, isCapturing: isCapturing, elapsed: elapsedString())
+        // Mirror state onto the always-visible floating control: its big
+        // button is Start when idle, "Record This Call" while the prompt is
+        // up (a second, unmissable affirm path), Stop while capturing.
+        let controlMode: ControlWindow.Mode
+        if isCapturing {
+            controlMode = .capturing(elapsed: elapsedString())
+        } else if state == .detected {
+            controlMode = .detected
+        } else {
+            controlMode = .idle(label: display.label)
+        }
+        controlWindow.update(controlMode)
     }
 
     private func presentAlert(title: String, text: String) {

@@ -86,10 +86,12 @@ final class LiveTranscriptWindow: NSObject {
         ])
         panel.contentView = container
 
-        // Bottom-right of the main screen, above the prompt's corner.
+        // Bottom-right of the main screen — PanelLayout keeps it clear of the
+        // control/prompt stack in the top-right corner.
         if let screen = NSScreen.main {
-            let frame = screen.visibleFrame
-            panel.setFrameOrigin(NSPoint(x: frame.maxX - 360 - 24, y: frame.minY + 24))
+            let frame = PanelLayout.transcriptFrame(visible: screen.visibleFrame,
+                                                    size: panel.frame.size)
+            panel.setFrameOrigin(frame.origin)
         }
         self.panel = panel
         render()
