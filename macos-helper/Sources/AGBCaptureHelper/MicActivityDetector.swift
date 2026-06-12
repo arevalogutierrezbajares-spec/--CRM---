@@ -150,7 +150,10 @@ final class MicActivityDetector {
         }
     }
 
-    /// Device went quiet for 2 s → flip straight into normal armed detection.
+    /// Device quiet for `endQuietSeconds` → flip into normal armed detection.
+    /// Uses the same 5 s threshold as call-end detection so a brief mid-call
+    /// mic gap (AirPods switch, route change, hold) can never re-arm and
+    /// re-prompt the call the founder just dismissed.
     private func evaluateQuietWait() {
         guard currentDevice != AudioObjectID(kAudioObjectUnknown) else {
             rebindDefaultDevice()
@@ -161,7 +164,7 @@ final class MicActivityDetector {
             return
         }
         if quietSince == nil { quietSince = Date() }
-        if let since = quietSince, Date().timeIntervalSince(since) >= debounceSeconds {
+        if let since = quietSince, Date().timeIntervalSince(since) >= endQuietSeconds {
             waitingForQuiet = false
             armed = true
             runningSince = nil
