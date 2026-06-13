@@ -31,6 +31,7 @@ async function ensureBucket(supabase: SupabaseClient): Promise<void> {
 export async function putObject(
   path: string,
   bytes: Uint8Array,
+  contentType = "audio/wav",
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const supabase = serviceClient();
   if (!supabase) return { ok: false, error: "Storage not configured" };
@@ -43,7 +44,7 @@ export async function putObject(
     if (delayMs > 0) await new Promise((r) => setTimeout(r, delayMs));
     const { error } = await supabase.storage
       .from(CALL_AUDIO_BUCKET)
-      .upload(path, bytes, { contentType: "audio/wav", upsert: true });
+      .upload(path, bytes, { contentType, upsert: true });
     if (!error) return { ok: true };
     lastError = error.message;
   }

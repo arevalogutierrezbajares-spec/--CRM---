@@ -75,3 +75,11 @@ export function assembledObjectPath(
 ): string {
   return `${workspaceId}/calls/${recordingId}.wav`;
 }
+
+/** Compact MP3 playback object for long calls (the WAV is too big to store). */
+export function assembledMp3ObjectPath(
+  workspaceId: string,
+  recordingId: string,
+): string {
+  return `${workspaceId}/calls/${recordingId}.mp3`;
+}

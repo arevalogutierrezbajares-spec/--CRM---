@@ -21,12 +21,15 @@ import {
 import { assembleSessionAudio } from "./assemble";
 import {
   assembledObjectPath,
+  assembledMp3ObjectPath,
   chunkObjectPath,
   CAPTURE_SAMPLE_RATE,
   CAPTURE_CHANNELS,
+  WAV_HEADER_BYTES,
   TRANSCRIBE_WINDOW_BYTES,
   STORE_AUDIO_MAX_BYTES,
 } from "./constants";
+import { Mp3StreamEncoder, estimatedMp3Bytes } from "./mp3";
 import {
   transcribeDualChannelBytes,
   buildDialogue,
@@ -48,8 +51,9 @@ import { fileCallTranscript, type FileCallResult } from "./file-call";
 export async function transcribeWindowed(
   chunks: ChunkEntry[],
   fmt: { sampleRate: number; channels: number },
+  opts: { encodeMp3?: boolean } = {},
 ): Promise<
-  | { ok: true; result: TranscriptionResult; durationSecs: number }
+  | { ok: true; result: TranscriptionResult; durationSecs: number; mp3: Uint8Array | null }
   | { ok: false; status: number; error: string }
 > {
   // Size estimate per chunk for windowing decisions — when the storage listing
@@ -76,6 +80,9 @@ export async function transcribeWindowed(
   let offsetSecs = 0;
   let totalDataBytes = 0;
   let language: string | null = null;
+  // Encode a compact playback MP3 alongside transcription, fed window-by-window
+  // so the whole call is never held in memory (the OOM we're avoiding).
+  const mp3Encoder = opts.encodeMp3 ? new Mp3StreamEncoder(fmt.sampleRate) : null;
 
   for (const win of windows) {
     const asm = await assembleSessionAudio(win, fmt);
@@ -96,6 +103,8 @@ export async function transcribeWindowed(
     for (const u of txr.result.utterances) {
       merged.push({ ...u, start: u.start + offsetSecs, end: u.end + offsetSecs });
     }
+    // Feed the window's PCM (past the 44-byte WAV header) to the MP3 encoder.
+    mp3Encoder?.addStereoPcm(asm.wav.subarray(WAV_HEADER_BYTES));
     offsetSecs += winDurationSecs;
     totalDataBytes += asm.dataBytes;
     // asm.wav is dropped here → reclaimed before the next window assembles.
@@ -106,6 +115,7 @@ export async function transcribeWindowed(
   return {
     ok: true,
     durationSecs,
+    mp3: mp3Encoder ? mp3Encoder.finish() : null,
     result: {
       utterances: merged,
       dialogueText: buildDialogue(merged, {
@@ -225,13 +235,33 @@ export async function finalizeSession(opts: {
       );
     }
   } else {
-    const w = await transcribeWindowed(chunks, fmt);
+    // Long call: window the transcription AND encode a compact playback MP3 in
+    // the same pass — unless the call is so long the MP3 still wouldn't fit, in
+    // which case we keep the transcript and skip audio (graceful).
+    const estDurationSecs = totalBytes / (CAPTURE_CHANNELS * 2 * CAPTURE_SAMPLE_RATE);
+    const wantMp3 = estimatedMp3Bytes(estDurationSecs) <= STORE_AUDIO_MAX_BYTES;
+    const w = await transcribeWindowed(chunks, fmt, { encodeMp3: wantMp3 });
     if (!w.ok) return fail(w.status, w.error);
     txResult = w.result;
     durationSecs = w.durationSecs || opts.durationSecs || null;
-    console.warn(
-      `[capture] long call session ${session.id} (~${Math.round(totalBytes / 1048576)} MB) transcribed windowed; audio not stored — transcript retained`,
-    );
+
+    if (w.mp3 && w.mp3.length <= STORE_AUDIO_MAX_BYTES) {
+      audioPath = assembledMp3ObjectPath(workspaceId, session.id);
+      const stored = await putObject(audioPath, w.mp3, "audio/mpeg");
+      if (stored.ok) {
+        audioStored = true;
+        audioBytes = w.mp3.length;
+      } else {
+        audioPath = null;
+        console.warn(
+          `[capture] long-call MP3 not stored for session ${session.id} (${w.mp3.length} bytes): ${stored.error} — transcript retained`,
+        );
+      }
+    } else {
+      console.warn(
+        `[capture] long call session ${session.id} (~${Math.round(totalBytes / 1048576)} MB) transcribed windowed; audio too long to store as MP3 — transcript retained`,
+      );
+    }
   }
 
   const founderLabel = opts.founderLabel;

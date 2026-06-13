@@ -118,6 +118,33 @@ describe("[unit] transcribeWindowed — memory-bounded long-call transcription",
     expect(out.status).toBe(502);
   });
 
+  it("encodes a playback MP3 when encodeMp3 is set, and null otherwise", async () => {
+    const chunks = Array.from({ length: 8 }, () => chunk(2 * 1024 * 1024));
+    // Real (silent) stereo PCM so the real MP3 encoder has something to chew on.
+    const oneSecPcm = new Uint8Array(BYTES_PER_SEC + 44);
+    assembleMock.mockResolvedValue({
+      ok: true,
+      wav: oneSecPcm,
+      dataBytes: BYTES_PER_SEC,
+    });
+    transcribeBytesMock.mockResolvedValue({
+      ok: true,
+      result: { utterances: [], dialogueText: "", language: "multi", suspectFlags: [] },
+    });
+
+    const withMp3 = await transcribeWindowed(chunks, FMT, { encodeMp3: true });
+    expect(withMp3.ok).toBe(true);
+    if (!withMp3.ok) return;
+    expect(withMp3.mp3).not.toBeNull();
+    expect(withMp3.mp3!.length).toBeGreaterThan(0);
+    expect(withMp3.mp3![0]).toBe(0xff); // MP3 frame sync
+
+    const withoutMp3 = await transcribeWindowed(chunks, FMT);
+    expect(withoutMp3.ok).toBe(true);
+    if (!withoutMp3.ok) return;
+    expect(withoutMp3.mp3).toBeNull();
+  });
+
   it("keeps zero-size-listing chunks bounded by count (nominal 2 MB each)", async () => {
     // 20 chunks reported as size 0 → nominal 2 MB → 1 window holds 16, then 4.
     const chunks = Array.from({ length: 20 }, () => chunk(0));
