@@ -15,6 +15,19 @@ import "server-only";
 import lamejs from "@breezystack/lamejs";
 import { CAPTURE_SAMPLE_RATE } from "./constants";
 
+// The package's ESM build (what Next/vitest load) exposes Mp3Encoder on the
+// default export; guard against an extra interop wrapper just in case.
+const Mp3Encoder =
+  (lamejs as unknown as { Mp3Encoder?: typeof lamejs.Mp3Encoder }).Mp3Encoder ??
+  (lamejs as unknown as { default?: { Mp3Encoder: typeof lamejs.Mp3Encoder } }).default
+    ?.Mp3Encoder;
+
+if (!Mp3Encoder) {
+  throw new Error(
+    "@breezystack/lamejs: Mp3Encoder not found on the module export (interop shape changed?)",
+  );
+}
+
 /** Playback MP3 bitrate (kbps, mono). 32 kbps ≈ 4 KB/s → 50 MB ≈ 3.5 h. */
 export const MP3_BITRATE_KBPS = 32;
 
@@ -30,7 +43,8 @@ export class Mp3StreamEncoder {
   private total = 0;
 
   constructor(sampleRate: number = CAPTURE_SAMPLE_RATE) {
-    this.enc = new lamejs.Mp3Encoder(1, sampleRate, MP3_BITRATE_KBPS);
+    // Non-null: the module-level guard above throws if Mp3Encoder is undefined.
+    this.enc = new Mp3Encoder!(1, sampleRate, MP3_BITRATE_KBPS);
   }
 
   /**
