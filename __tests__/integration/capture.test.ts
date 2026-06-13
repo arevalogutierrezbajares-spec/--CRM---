@@ -17,6 +17,8 @@ import {
   recordChunkHeartbeat,
   claimSessionForFinalize,
   reclaimFailedSession,
+  reclaimStaleFinalizingSession,
+  listStaleFinalizingSessions,
   abandonSession,
   updateCaptureSession,
   listStaleRecordingSessions,
@@ -139,6 +141,96 @@ describe("[integration] capture session lifecycle (NFR-CALL-OBS-1)", () => {
     expect(ids).toContain(staleId);
     expect(ids).not.toContain(freshId);
     expect(ids).not.toContain(filedId);
+  });
+
+  it("a fresh `finalizing` lease is NOT reclaimable; an expired one IS (crash recovery)", async () => {
+    // This is the bug that wedged the 77-min WhatsApp call: a finalize that
+    // crashed (OOM) left the session in `finalizing` forever. The lease makes a
+    // dead claim recoverable while never stealing a genuinely in-flight one.
+    const id = await makeSession();
+    expect(await claimSessionForFinalize({ id, workspaceId: FAKE_WORKSPACE_ID })).toBe(true);
+
+    // Lease just stamped → a 20-min-old cutoff must NOT reclaim it.
+    const freshCutoff = new Date(Date.now() - 20 * 60 * 1000);
+    expect(
+      await reclaimStaleFinalizingSession({
+        id,
+        workspaceId: FAKE_WORKSPACE_ID,
+        leaseCutoff: freshCutoff,
+      }),
+    ).toBe(false);
+
+    // Backdate the lease to simulate a finalize that died 30 min ago.
+    await db
+      .update(captureSessions)
+      .set({ finalizeStartedAt: new Date(Date.now() - 30 * 60 * 1000) })
+      .where(eq(captureSessions.id, id));
+    expect(
+      await reclaimStaleFinalizingSession({
+        id,
+        workspaceId: FAKE_WORKSPACE_ID,
+        leaseCutoff: freshCutoff,
+      }),
+    ).toBe(true);
+
+    // Reclaim re-stamps the lease, so an immediate second reclaim fails again
+    // (only one retrier wins — no double finalize).
+    expect(
+      await reclaimStaleFinalizingSession({
+        id,
+        workspaceId: FAKE_WORKSPACE_ID,
+        leaseCutoff: freshCutoff,
+      }),
+    ).toBe(false);
+  });
+
+  it("stale-finalizing sweep finds only lease-expired `finalizing` sessions", async () => {
+    const wedgedId = await makeSession();
+    const inflightId = await makeSession();
+    await claimSessionForFinalize({ id: wedgedId, workspaceId: FAKE_WORKSPACE_ID });
+    await claimSessionForFinalize({ id: inflightId, workspaceId: FAKE_WORKSPACE_ID });
+    // wedged: lease 30 min old (crashed); inflight: lease just now (running).
+    await db
+      .update(captureSessions)
+      .set({ finalizeStartedAt: new Date(Date.now() - 30 * 60 * 1000) })
+      .where(eq(captureSessions.id, wedgedId));
+
+    const cutoff = new Date(Date.now() - 20 * 60 * 1000);
+    const ids = (await listStaleFinalizingSessions({ olderThan: cutoff })).map(
+      (s) => s.id,
+    );
+    expect(ids).toContain(wedgedId);
+    expect(ids).not.toContain(inflightId);
+  });
+
+  it("a filed `finalizing` session is never swept (already produced a recording)", async () => {
+    // recordingId set → listStaleFinalizingSessions must ignore it even if the
+    // lease looks old, so the sweep can't double-file.
+    const id = await makeSession();
+    await claimSessionForFinalize({ id, workspaceId: FAKE_WORKSPACE_ID });
+    await db
+      .update(captureSessions)
+      .set({
+        finalizeStartedAt: new Date(Date.now() - 60 * 60 * 1000),
+        recordingId: null, // ensure column exists; then set a real-ish one below
+      })
+      .where(eq(captureSessions.id, id));
+    // Give it a recordingId via a real recording row to satisfy the FK.
+    const recId = await createCallRecording({
+      workspaceId: FAKE_WORKSPACE_ID,
+      createdBy: FAKE_USER_ID,
+      transcript: "x",
+    });
+    await db
+      .update(captureSessions)
+      .set({ recordingId: recId })
+      .where(eq(captureSessions.id, id));
+
+    const cutoff = new Date(Date.now() - 20 * 60 * 1000);
+    const ids = (await listStaleFinalizingSessions({ olderThan: cutoff })).map(
+      (s) => s.id,
+    );
+    expect(ids).not.toContain(id);
   });
 
   it("abandon vs finalize is mutually exclusive (FR-CALL-TRG-7 race)", async () => {

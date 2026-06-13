@@ -2589,6 +2589,12 @@ export const captureSessions = pgTable(
     // "recording" whose last chunk is >30 min old gets finalized as partial.
     lastChunkSeq: integer("last_chunk_seq"),
     lastChunkAt: timestamp("last_chunk_at", { withTimezone: true }),
+    // Lease timestamp for the `finalizing` claim. Set when finalize is claimed
+    // so a crashed finalize (which leaves status stuck at `finalizing`) becomes
+    // reclaimable once the lease expires (FINALIZE_LEASE_MINUTES). Without it a
+    // session whose finalize OOM'd is wedged forever and the helper loops on
+    // 409 "already in progress" indefinitely.
+    finalizeStartedAt: timestamp("finalize_started_at", { withTimezone: true }),
     totalChunks: integer("total_chunks"),
     partial: boolean("partial").notNull().default(false),
     recordingId: uuid("recording_id").references(() => callRecordings.id, {
@@ -2605,6 +2611,11 @@ export const captureSessions = pgTable(
       t.createdAt,
     ),
     sweepIdx: index("capture_sessions_sweep_idx").on(t.status, t.lastChunkAt),
+    // Finds `finalizing` sessions whose lease has expired (crash-wedged).
+    finalizeSweepIdx: index("capture_sessions_finalize_sweep_idx").on(
+      t.status,
+      t.finalizeStartedAt,
+    ),
   }),
 );
 

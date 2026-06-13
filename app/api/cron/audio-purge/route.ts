@@ -7,12 +7,17 @@ import {
   markAudioPurged,
   listStaleRecordingSessions,
   listStaleFailedSessions,
+  listStaleFinalizingSessions,
   claimSessionForFinalize,
   reclaimFailedSession,
+  reclaimStaleFinalizingSession,
 } from "@/db/queries/capture-sessions";
 import { listSessionChunkPaths, removeObjects } from "@/lib/capture/storage";
 import { finalizeSession } from "@/lib/capture/finalize";
-import { SESSION_STALE_MINUTES } from "@/lib/capture/constants";
+import {
+  SESSION_STALE_MINUTES,
+  FINALIZE_LEASE_MINUTES,
+} from "@/lib/capture/constants";
 
 export const maxDuration = 300;
 
@@ -69,25 +74,41 @@ export async function GET(req: NextRequest) {
   // 2. Crash salvage: sessions still `recording` with a stale heartbeat get
   // finalized as partial so the founder never silently loses a captured call.
   const staleCutoff = new Date(now.getTime() - SESSION_STALE_MINUTES * 60 * 1000);
-  // Includes failed-without-recording sessions: a dead helper can't retry its
-  // own finalize, so the sweep re-attempts those once per run.
+  const finalizingCutoff = new Date(
+    now.getTime() - FINALIZE_LEASE_MINUTES * 60 * 1000,
+  );
+  // Includes:
+  // - failed-without-recording sessions: a dead helper can't retry its own
+  //   finalize, so the sweep re-attempts those once per run.
+  // - finalizing sessions past their lease: a finalize that crashed mid-run
+  //   (OOM/timeout) is wedged in `finalizing`; without this it's never retried.
   const stale = [
     ...(await listStaleRecordingSessions({ olderThan: staleCutoff })),
     ...(await listStaleFailedSessions({ olderThan: staleCutoff })),
+    ...(await listStaleFinalizingSessions({ olderThan: finalizingCutoff })),
   ];
   let salvaged = 0;
   const salvageErrors: string[] = [];
   for (const session of stale) {
-    const claimed =
-      session.status === "recording"
-        ? await claimSessionForFinalize({
-            id: session.id,
-            workspaceId: session.workspaceId,
-          })
-        : await reclaimFailedSession({
-            id: session.id,
-            workspaceId: session.workspaceId,
-          });
+    let claimed: boolean;
+    if (session.status === "recording") {
+      claimed = await claimSessionForFinalize({
+        id: session.id,
+        workspaceId: session.workspaceId,
+      });
+    } else if (session.status === "failed") {
+      claimed = await reclaimFailedSession({
+        id: session.id,
+        workspaceId: session.workspaceId,
+      });
+    } else {
+      // status === "finalizing" — only win if the lease is genuinely expired.
+      claimed = await reclaimStaleFinalizingSession({
+        id: session.id,
+        workspaceId: session.workspaceId,
+        leaseCutoff: finalizingCutoff,
+      });
+    }
     if (!claimed) continue;
     const [creator] = await db
       .select({ displayName: users.displayName })

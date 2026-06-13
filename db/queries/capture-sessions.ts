@@ -104,7 +104,8 @@ export async function claimSessionForFinalize(opts: {
 }): Promise<boolean> {
   const rows = await db
     .update(captureSessions)
-    .set({ status: "finalizing" })
+    // Stamp the lease so a crash that wedges this in `finalizing` is recoverable.
+    .set({ status: "finalizing", finalizeStartedAt: new Date() })
     .where(
       and(
         eq(captureSessions.id, opts.id),
@@ -149,7 +150,7 @@ export async function reclaimFailedSession(opts: {
 }): Promise<boolean> {
   const rows = await db
     .update(captureSessions)
-    .set({ status: "finalizing", error: null })
+    .set({ status: "finalizing", error: null, finalizeStartedAt: new Date() })
     .where(
       and(
         eq(captureSessions.id, opts.id),
@@ -159,6 +160,55 @@ export async function reclaimFailedSession(opts: {
     )
     .returning({ id: captureSessions.id });
   return rows.length === 1;
+}
+
+/**
+ * Re-claim a session whose `finalizing` LEASE has expired — i.e. a finalize
+ * that crashed (OOM / timeout / process kill) after claiming and never
+ * released the claim. Atomic: only the caller that wins the stale→fresh lease
+ * transition proceeds, so a helper retry and the cron sweep can't double-run
+ * finalize. A NULL `finalizeStartedAt` (claimed before this column existed)
+ * counts as expired. Re-stamps the lease so this caller now owns it.
+ */
+export async function reclaimStaleFinalizingSession(opts: {
+  id: string;
+  workspaceId: string;
+  leaseCutoff: Date;
+}): Promise<boolean> {
+  const rows = await db
+    .update(captureSessions)
+    .set({ finalizeStartedAt: new Date(), error: null })
+    .where(
+      and(
+        eq(captureSessions.id, opts.id),
+        eq(captureSessions.workspaceId, opts.workspaceId),
+        eq(captureSessions.status, "finalizing"),
+        sql`(${captureSessions.finalizeStartedAt} IS NULL OR ${captureSessions.finalizeStartedAt} < ${opts.leaseCutoff.toISOString()}::timestamptz)`,
+      ),
+    )
+    .returning({ id: captureSessions.id });
+  return rows.length === 1;
+}
+
+/**
+ * Sessions wedged in `finalizing` past the lease (crashed mid-finalize) →
+ * crash salvage. Mirrors the stale-recording sweep; without it a finalize that
+ * OOM'd is never retried by anything.
+ */
+export async function listStaleFinalizingSessions(opts: {
+  olderThan: Date;
+}): Promise<CaptureSessionRow[]> {
+  return db
+    .select()
+    .from(captureSessions)
+    .where(
+      and(
+        eq(captureSessions.status, "finalizing"),
+        isNull(captureSessions.recordingId),
+        sql`(${captureSessions.finalizeStartedAt} IS NULL OR ${captureSessions.finalizeStartedAt} < ${opts.olderThan.toISOString()}::timestamptz)`,
+      ),
+    )
+    .limit(20);
 }
 
 /** Sessions stuck in `recording` with a stale heartbeat → crash salvage. */

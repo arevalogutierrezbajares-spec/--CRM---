@@ -16,6 +16,7 @@ import {
   listSessionChunks,
   putObject,
   removeObjects,
+  type ChunkEntry,
 } from "./storage";
 import { assembleSessionAudio } from "./assemble";
 import {
@@ -23,9 +24,100 @@ import {
   chunkObjectPath,
   CAPTURE_SAMPLE_RATE,
   CAPTURE_CHANNELS,
+  TRANSCRIBE_WINDOW_BYTES,
+  STORE_AUDIO_MAX_BYTES,
 } from "./constants";
-import { transcribeDualChannelBytes, buildDialogue } from "./deepgram";
+import {
+  transcribeDualChannelBytes,
+  buildDialogue,
+  detectSilentChannels,
+  type Utterance,
+  type TranscriptionResult,
+} from "./deepgram";
 import { fileCallTranscript, type FileCallResult } from "./file-call";
+
+/**
+ * Memory-bounded transcription for long calls: group chunks into windows of
+ * ≤ TRANSCRIBE_WINDOW_BYTES, assemble + transcribe each window on its own, and
+ * stitch the utterances back together with cumulative time offsets. Peak RAM is
+ * one window (~32 MB), never the whole call — so finalize cannot OOM no matter
+ * how long the call ran. Channel-indexed attribution is preserved across
+ * windows; only an utterance straddling a 30 s chunk boundary could split, a
+ * negligible cosmetic effect on the dialogue.
+ */
+export async function transcribeWindowed(
+  chunks: ChunkEntry[],
+  fmt: { sampleRate: number; channels: number },
+): Promise<
+  | { ok: true; result: TranscriptionResult; durationSecs: number }
+  | { ok: false; status: number; error: string }
+> {
+  // Size estimate per chunk for windowing decisions — when the storage listing
+  // didn't populate sizes (size 0), assume a nominal 2 MB so windows stay
+  // bounded by count instead of collapsing into one giant window.
+  const NOMINAL_CHUNK_BYTES = 2 * 1024 * 1024;
+  const windows: ChunkEntry[][] = [];
+  let cur: ChunkEntry[] = [];
+  let curBytes = 0;
+  for (const c of chunks) {
+    const sz = Math.max(c.size, NOMINAL_CHUNK_BYTES);
+    if (cur.length > 0 && curBytes + sz > TRANSCRIBE_WINDOW_BYTES) {
+      windows.push(cur);
+      cur = [];
+      curBytes = 0;
+    }
+    cur.push(c);
+    curBytes += sz;
+  }
+  if (cur.length > 0) windows.push(cur);
+
+  const bytesPerSec = fmt.channels * 2 * fmt.sampleRate;
+  const merged: Utterance[] = [];
+  let offsetSecs = 0;
+  let totalDataBytes = 0;
+  let language: string | null = null;
+
+  for (const win of windows) {
+    const asm = await assembleSessionAudio(win, fmt);
+    if (!asm.ok) {
+      return {
+        ok: false,
+        status: asm.error.includes("download") ? 502 : 400,
+        error: asm.error,
+      };
+    }
+    const winDurationSecs = asm.dataBytes / bytesPerSec;
+    const txr = await transcribeDualChannelBytes({
+      wav: asm.wav,
+      durationSecs: Math.round(winDurationSecs),
+    });
+    if (!txr.ok) return { ok: false, status: 502, error: txr.error };
+    if (language === null) language = txr.result.language;
+    for (const u of txr.result.utterances) {
+      merged.push({ ...u, start: u.start + offsetSecs, end: u.end + offsetSecs });
+    }
+    offsetSecs += winDurationSecs;
+    totalDataBytes += asm.dataBytes;
+    // asm.wav is dropped here → reclaimed before the next window assembles.
+  }
+
+  const durationSecs = Math.round(totalDataBytes / bytesPerSec);
+  merged.sort((a, b) => a.start - b.start);
+  return {
+    ok: true,
+    durationSecs,
+    result: {
+      utterances: merged,
+      dialogueText: buildDialogue(merged, {
+        founder: "Founder",
+        participant: "Participant",
+      }),
+      language: language ?? "multi",
+      // Silence detection must run over the WHOLE call, not per window.
+      suspectFlags: detectSilentChannels(merged, durationSecs),
+    },
+  };
+}
 
 export type FinalizeOutcome =
   | {
@@ -83,50 +175,70 @@ export async function finalizeSession(opts: {
     }
   }
 
-  // 2. Assemble by streaming each chunk into one preallocated buffer (peak RAM
-  // ≈ one call + one chunk, not the sum of all chunks plus a copy).
-  const asm = await assembleSessionAudio(chunks, {
-    sampleRate: CAPTURE_SAMPLE_RATE,
-    channels: CAPTURE_CHANNELS,
-  });
-  if (!asm.ok) {
-    return fail(asm.error.includes("download") ? 502 : 400, asm.error);
-  }
-  const assembled = asm.wav;
-  const durationSecs =
-    Math.round(asm.dataBytes / (CAPTURE_CHANNELS * 2) / CAPTURE_SAMPLE_RATE) ||
-    opts.durationSecs ||
-    null;
+  // 2–4. Transcribe (memory-bounded) + store audio best-effort.
+  //
+  // A call only fits in one buffer when it's small. The whole-call assembly +
+  // Deepgram POST is what OOM'd finalize on long calls (a 77-min call is
+  // ~295 MB, and the fetch body copy pushes peak RAM past the function limit →
+  // the function is killed and the session wedges in `finalizing`). So:
+  //   • small call (≤ STORE_AUDIO_MAX_BYTES): assemble once, store for playback,
+  //     transcribe single-shot (unchanged behaviour for the common case).
+  //   • long / unknown-size call: transcribe in windows (peak RAM = one window)
+  //     and skip stored audio — transcript + brief always land regardless of
+  //     length (FR-CALL-TRX-3/5). Long-call playback is a tracked follow-up.
+  const totalBytes = chunks.reduce((n, c) => n + Math.max(c.size, 0), 0);
+  const fmt = { sampleRate: CAPTURE_SAMPLE_RATE, channels: CAPTURE_CHANNELS };
 
-  // 3. Transcribe by POSTing the assembled bytes straight to Deepgram. This
-  // decouples transcription from object storage: a 21-min call is ~82 MB as raw
-  // WAV (over the storage object-size limit), but Deepgram accepts the bytes in
-  // the request body — so the transcript always lands regardless of call length
-  // or storage limits (FR-CALL-TRX-3/5).
-  const tx = await transcribeDualChannelBytes({
-    wav: assembled,
-    durationSecs: durationSecs ?? 0,
-  });
-  if (!tx.ok) return fail(502, tx.error);
+  let txResult: TranscriptionResult;
+  let durationSecs: number | null;
+  let audioPath: string | null = null;
+  let audioStored = false;
+  let audioBytes: number | null = null;
 
-  // 4. Store the audio best-effort for playback (FR-CALL-ACC-3). If it's too
-  // large for the storage object limit, we keep the transcript + brief and mark
-  // audio unavailable rather than failing the whole call. (Compression for long
-  // calls is a follow-up; raw WAV ~3.8 MB/min doesn't scale on its own.)
-  const audioPath = assembledObjectPath(workspaceId, session.id);
-  const stored = await putObject(audioPath, assembled);
-  const audioStored = stored.ok;
-  if (!audioStored) {
+  if (totalBytes > 0 && totalBytes <= STORE_AUDIO_MAX_BYTES) {
+    const asm = await assembleSessionAudio(chunks, fmt);
+    if (!asm.ok) {
+      return fail(asm.error.includes("download") ? 502 : 400, asm.error);
+    }
+    durationSecs =
+      Math.round(asm.dataBytes / (CAPTURE_CHANNELS * 2) / CAPTURE_SAMPLE_RATE) ||
+      opts.durationSecs ||
+      null;
+    const tx = await transcribeDualChannelBytes({
+      wav: asm.wav,
+      durationSecs: durationSecs ?? 0,
+    });
+    if (!tx.ok) return fail(502, tx.error);
+    txResult = tx.result;
+
+    // Store the audio best-effort for playback (FR-CALL-ACC-3). If storage
+    // rejects it we keep transcript + brief rather than failing the call.
+    audioPath = assembledObjectPath(workspaceId, session.id);
+    const stored = await putObject(audioPath, asm.wav);
+    if (stored.ok) {
+      audioStored = true;
+      audioBytes = asm.wav.length;
+    } else {
+      audioPath = null;
+      console.warn(
+        `[capture] audio not stored for session ${session.id} (${asm.wav.length} bytes): ${stored.error} — transcript retained`,
+      );
+    }
+  } else {
+    const w = await transcribeWindowed(chunks, fmt);
+    if (!w.ok) return fail(w.status, w.error);
+    txResult = w.result;
+    durationSecs = w.durationSecs || opts.durationSecs || null;
     console.warn(
-      `[capture] audio not stored for session ${session.id} (${assembled.length} bytes): ${stored.error} — transcript retained`,
+      `[capture] long call session ${session.id} (~${Math.round(totalBytes / 1048576)} MB) transcribed windowed; audio not stored — transcript retained`,
     );
   }
 
   const founderLabel = opts.founderLabel;
   const participantLabel = (opts.contactName ?? "").trim() || "Participant";
   const dialogueText =
-    tx.result.utterances.length > 0
-      ? buildDialogue(tx.result.utterances, {
+    txResult.utterances.length > 0
+      ? buildDialogue(txResult.utterances, {
           founder: founderLabel,
           participant: participantLabel,
         })
@@ -140,16 +252,16 @@ export async function finalizeSession(opts: {
     createdBy: session.createdBy,
     transcript: dialogueText,
     durationSecs,
-    language: tx.result.language,
+    language: txResult.language,
     audioPath: audioStored ? audioPath : null,
-    audioBytes: audioStored ? assembled.length : null,
+    audioBytes: audioStored ? audioBytes : null,
     audioPurgeAt: audioStored
       ? new Date(Date.now() + retentionDays * 24 * 60 * 60 * 1000)
       : null,
     channels: CAPTURE_CHANNELS,
     sourceApp: session.sourceApp,
-    utterances: tx.result.utterances,
-    suspectFlags: tx.result.suspectFlags.length ? tx.result.suspectFlags : null,
+    utterances: txResult.utterances,
+    suspectFlags: txResult.suspectFlags.length ? txResult.suspectFlags : null,
     partial: opts.partial,
   });
 
@@ -204,7 +316,7 @@ export async function finalizeSession(opts: {
     ok: true,
     recordingId,
     result,
-    suspectFlags: tx.result.suspectFlags,
+    suspectFlags: txResult.suspectFlags,
     partial: opts.partial,
   };
 }

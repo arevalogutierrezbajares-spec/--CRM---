@@ -4,10 +4,12 @@ import {
   getCaptureSession,
   claimSessionForFinalize,
   reclaimFailedSession,
+  reclaimStaleFinalizingSession,
 } from "@/db/queries/capture-sessions";
 import { getCallRecording, getContactName } from "@/db/queries/call-recordings";
 import { finalizeSession } from "@/lib/capture/finalize";
 import { isUuid, MAX_TOTAL_CHUNKS } from "@/lib/capture/validate";
+import { FINALIZE_LEASE_MINUTES } from "@/lib/capture/constants";
 
 export const maxDuration = 800; // long calls: assembly + transcription + filing
 
@@ -86,18 +88,26 @@ export async function POST(
   if (session.status === "abandoned") {
     return NextResponse.json({ error: "Session abandoned" }, { status: 409 });
   }
-  if (session.status === "finalizing") {
-    return NextResponse.json(
-      { error: "Finalize already in progress" },
-      { status: 409 },
-    );
-  }
 
-  // Exactly-once claim (recording→finalizing, or failed→finalizing for retry).
-  const claimed =
-    session.status === "recording"
-      ? await claimSessionForFinalize({ id, workspaceId: identity.workspaceId })
-      : await reclaimFailedSession({ id, workspaceId: identity.workspaceId });
+  // Exactly-once claim. recording → fresh claim; failed → retry; finalizing →
+  // reclaim ONLY if the prior claim's lease has expired (a finalize that
+  // crashed mid-run and never released the claim). A genuinely in-flight
+  // finalize (lease still valid) is left alone and the helper gets 409. This
+  // is what unwedges the OOM-crash loop instead of returning 409 forever.
+  let claimed: boolean;
+  if (session.status === "recording") {
+    claimed = await claimSessionForFinalize({ id, workspaceId: identity.workspaceId });
+  } else if (session.status === "failed") {
+    claimed = await reclaimFailedSession({ id, workspaceId: identity.workspaceId });
+  } else {
+    // status === "finalizing"
+    const leaseCutoff = new Date(Date.now() - FINALIZE_LEASE_MINUTES * 60_000);
+    claimed = await reclaimStaleFinalizingSession({
+      id,
+      workspaceId: identity.workspaceId,
+      leaseCutoff,
+    });
+  }
   if (!claimed) {
     return NextResponse.json(
       { error: "Finalize already in progress" },
