@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireUser } from "@/lib/current-user";
 import { TopBar } from "@/components/layout/top-bar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,9 +29,9 @@ export default async function CapturePage() {
             Record both sides of your calls — WhatsApp, Zoom, Meet, FaceTime,
             phone-via-Continuity — straight from your Mac, even with headphones.
             Each call is transcribed and filed to{" "}
-            <a href="/record" className="underline hover:text-[var(--foreground)]">
-              Record Call
-            </a>{" "}
+            <Link href="/meetings" className="underline hover:text-[var(--foreground)]">
+              Meetings
+            </Link>{" "}
             with a brief and action items.
           </p>
         </header>
@@ -122,7 +123,7 @@ export default async function CapturePage() {
                 always auto-detect their end, so stop it yourself.
               </li>
               <li>
-                It files to <a href="/record" className="underline">Record Call</a> with
+                It files to <Link href="/meetings" className="underline">Meetings</Link> with
                 both voices, a brief, and action items.
               </li>
             </ol>

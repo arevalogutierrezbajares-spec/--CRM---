@@ -60,7 +60,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/presentations", label: "Presentations", icon: Presentation },
       { href: "/town-hall", label: "Town Hall", icon: Megaphone },
       { href: "/agent", label: "Agent", icon: Bot },
-      { href: "/record", label: "Record Call", icon: Mic },
+      { href: "/meetings/record", label: "Record Call", icon: Mic },
       { href: "/capture", label: "Call Capture", icon: Headphones },
     ],
   },

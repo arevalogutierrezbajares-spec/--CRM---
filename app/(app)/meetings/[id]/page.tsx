@@ -369,7 +369,7 @@ export default async function MeetingDetailPage(props: {
                           {recordings.map((r) => (
                             <Link
                               key={r.id}
-                              href={`/record/${r.id}`}
+                              href={`/meetings/recordings/${r.id}`}
                               className="block rounded-md border border-[var(--border)] px-3 py-2 hover:border-[var(--primary)]"
                             >
                               <div className="truncate font-medium">{r.title}</div>

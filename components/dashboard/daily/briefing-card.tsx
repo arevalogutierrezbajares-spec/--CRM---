@@ -35,7 +35,7 @@ export function BriefingCard({
             </div>
             {actionItems.length === 0 && tasks.length === 0 && blocked.length === 0 && meetings.length === 0 && (
               <div className="grid gap-1.5 sm:grid-cols-3">
-                <QuickAction href="/record" icon={Mic} label="Record call" />
+                <QuickAction href="/meetings/record" icon={Mic} label="Record call" />
                 <QuickAction href="/town-hall?extract=1" icon={Sparkles} label="Paste notes" />
                 <QuickAction href="/meetings/new" icon={CalendarPlus} label="Create meeting" />
               </div>

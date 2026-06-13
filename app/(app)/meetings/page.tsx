@@ -25,7 +25,7 @@ export default async function MeetingsPage() {
         action={
           <div className="flex items-center gap-2">
             <Button asChild size="sm" variant="outline">
-              <Link href="/record">
+              <Link href="/meetings/record">
                 <Mic className="h-4 w-4" /> Record
               </Link>
             </Button>
@@ -63,7 +63,7 @@ export default async function MeetingsPage() {
                   </Link>
                 </Button>
                 <Button asChild size="sm" variant="outline">
-                  <Link href="/record">
+                  <Link href="/meetings/record">
                     <Mic className="h-4 w-4" /> Record call
                   </Link>
                 </Button>

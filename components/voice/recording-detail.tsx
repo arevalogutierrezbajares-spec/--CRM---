@@ -124,7 +124,7 @@ export function RecordingDetail({ id }: { id: string }) {
     }
     setDeleting(true);
     const res = await fetch(`/api/voice/recording/${id}`, { method: "DELETE" });
-    if (res.ok) router.push("/record");
+    if (res.ok) router.push("/meetings");
     else setDeleting(false);
   }
 
@@ -257,7 +257,6 @@ export function RecordingDetail({ id }: { id: string }) {
         </div>
         {rec.hasAudio ? (
           <>
-            {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
             <audio controls preload="none" className="w-full" src={`/api/voice/recording/${rec.id}/audio`} />
             {rec.audioPurgeAt && (
               <p className="mt-2 text-xs text-[var(--muted-foreground)]">

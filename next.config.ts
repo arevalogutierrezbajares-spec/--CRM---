@@ -19,6 +19,18 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  // The call-recording module moved under Meetings (every recording is now a
+  // meeting). Keep the old /record paths working for bookmarks + the Mac Helper.
+  async redirects() {
+    return [
+      { source: "/record", destination: "/meetings/record", permanent: true },
+      {
+        source: "/record/:id",
+        destination: "/meetings/recordings/:id",
+        permanent: true,
+      },
+    ];
+  },
 };
 
 export default nextConfig;
