@@ -10,6 +10,7 @@ type Lang = "es" | "en" | "multi";
 
 type SaveResult = {
   recordingId: string;
+  meetingId: string | null;
   title: string;
   brief: string;
   actionItemCount: number;
@@ -236,6 +237,7 @@ export function LiveCallRecorder() {
       if (!r.ok || !body.ok) throw new Error(body.error || `Save failed (${r.status})`);
       setResult({
         recordingId: body.recordingId,
+        meetingId: body.meetingId,
         title: body.title,
         brief: body.brief,
         actionItemCount: body.actionItemCount,
@@ -243,7 +245,7 @@ export function LiveCallRecorder() {
         contactAmbiguous: body.contactAmbiguous,
       });
       setState("done");
-      router.refresh(); // surface the new recording in the list below
+      router.refresh(); // the call now appears under Meetings
     } catch (e) {
       setError(e instanceof Error ? e.message : "Save failed");
       setState("error");
@@ -345,8 +347,17 @@ export function LiveCallRecorder() {
             .
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
+            {result.meetingId && (
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => router.push(`/meetings/${result.meetingId}`)}
+              >
+                View meeting
+              </Button>
+            )}
             {result.actionItemCount > 0 && (
-              <Button type="button" size="sm" onClick={() => router.push("/action-items")}>
+              <Button type="button" size="sm" variant="outline" onClick={() => router.push("/action-items")}>
                 View action items
               </Button>
             )}

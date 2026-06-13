@@ -49,6 +49,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     ok: true,
     recordingId,
+    meetingId: result.meetingId,
     title: result.title,
     brief: result.brief,
     actionItemCount: result.actionItemCount,
