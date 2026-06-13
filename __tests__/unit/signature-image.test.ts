@@ -4,12 +4,10 @@ import {
   formatSignedAt,
   SIGNATURE_PNG_MAX_BYTES,
 } from "@/lib/signatures/signature-image";
+import { makeTestSignaturePng } from "../helpers/png";
 
-// Smallest valid PNG header + IHDR start — enough to pass the magic check.
-const PNG_BYTES = Uint8Array.from([
-  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
-]);
-const pngDataUrl = `data:image/png;base64,${Buffer.from(PNG_BYTES).toString("base64")}`;
+const PNG_BYTES = makeTestSignaturePng();
+const pngDataUrl = `data:image/png;base64,${PNG_BYTES.toString("base64")}`;
 
 describe("decodeSignatureDataUrl", () => {
   it("decodes a well-formed PNG data URL", () => {
@@ -21,7 +19,7 @@ describe("decodeSignatureDataUrl", () => {
   });
 
   it("rejects non-PNG mime types", () => {
-    const jpeg = `data:image/jpeg;base64,${Buffer.from(PNG_BYTES).toString("base64")}`;
+    const jpeg = `data:image/jpeg;base64,${PNG_BYTES.toString("base64")}`;
     expect(decodeSignatureDataUrl(jpeg)).toBeNull();
   });
 
@@ -30,17 +28,23 @@ describe("decodeSignatureDataUrl", () => {
     expect(decodeSignatureDataUrl(fake)).toBeNull();
   });
 
-  it("rejects garbage and empty strings", () => {
-    expect(decodeSignatureDataUrl("")).toBeNull();
-    expect(decodeSignatureDataUrl("data:image/png;base64,@@@@")).toBeNull();
-    expect(decodeSignatureDataUrl("hola")).toBeNull();
+  it("rejects a PNG magic header with a truncated body", () => {
+    const truncated = Uint8Array.from([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
+    ]);
+    const url = `data:image/png;base64,${Buffer.from(truncated).toString("base64")}`;
+    expect(decodeSignatureDataUrl(url)).toBeNull();
+  });
+
+  it("rejects the malformed-body payload that sends pdf-lib into an infinite loop", () => {
+    // Valid magic, garbage chunk structure — embedPng() never returns on this.
+    const malicious =
+      "iVBORw0KGgoAAAANSUhEUgAAAMgAAABQCAYAAACzg5PFAAAAvElEQVR4nO3YsQ3CMBRF0e+IBVKzCDOwCh0bMAgSEjuwAT0DUNAgKjpqGsQOLpDcurOLnNNYsq3vd2XLSimlYrvdPquqOiL+VVU9R8RzRDxFxENE3EfEXUTcRsRNRFxHxFVEXEbERUScR8RZRJxGxElEHEfEUUQcRsRBROxHxF5E7EbETkRsR8RWRGxGxEZErEfEWkSsRsRKRCxHxFJELEbEQkTMR8RcRMxGxExETEfEVERMRsRERIxHxFhE/AAmrnFGq1iU0wAAAABJRU5ErkJggg==";
+    expect(decodeSignatureDataUrl(`data:image/png;base64,${malicious}`)).toBeNull();
   });
 
   it("rejects payloads above the size cap", () => {
-    const big = Buffer.concat([
-      Buffer.from(PNG_BYTES),
-      Buffer.alloc(SIGNATURE_PNG_MAX_BYTES),
-    ]);
+    const big = Buffer.concat([PNG_BYTES, Buffer.alloc(SIGNATURE_PNG_MAX_BYTES)]);
     const url = `data:image/png;base64,${big.toString("base64")}`;
     expect(decodeSignatureDataUrl(url)).toBeNull();
   });

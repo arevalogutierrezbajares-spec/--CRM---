@@ -21,6 +21,9 @@ import type {
 export type PartnerAccessRoom = typeof schema.partnerRooms.$inferSelect & {
   shareCount: number;
   memberCount: number;
+  /** Signature request state for the board (dashboard query only). */
+  pendingSignatures?: number;
+  signedSignatures?: number;
 };
 
 export type PartnerAccessShare = typeof schema.partnerShares.$inferSelect & {
@@ -151,6 +154,33 @@ export async function listPartnerAccessForContact(opts: {
   };
 }
 
+/** Per-room signature request tallies for the board's status chips. */
+async function countSignaturesByRoom(
+  roomIds: string[],
+): Promise<Map<string, { pending: number; signed: number }>> {
+  const counts = new Map<string, { pending: number; signed: number }>();
+  if (!roomIds.length) return counts;
+  const rows = await db
+    .select({
+      roomId: schema.partnerSignatureRequests.roomId,
+      status: schema.partnerSignatureRequests.status,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(schema.partnerSignatureRequests)
+    .where(inArray(schema.partnerSignatureRequests.roomId, roomIds))
+    .groupBy(
+      schema.partnerSignatureRequests.roomId,
+      schema.partnerSignatureRequests.status,
+    );
+  for (const row of rows) {
+    const entry = counts.get(row.roomId) ?? { pending: 0, signed: 0 };
+    if (row.status === "pending") entry.pending += row.count;
+    if (row.status === "signed") entry.signed += row.count;
+    counts.set(row.roomId, entry);
+  }
+  return counts;
+}
+
 export async function listPartnerAccessDashboard(opts: {
   workspaceId: string;
 }): Promise<PartnerAccessOverview> {
@@ -197,6 +227,9 @@ export async function listPartnerAccessDashboard(opts: {
           .where(inArray(schema.partnerRoomMembers.roomId, roomIds))
       : Promise.resolve([]),
   ]);
+  const signatureCounts = await countSignaturesByRoom(roomIds).catch(
+    () => new Map<string, { pending: number; signed: number }>(),
+  );
 
   const shareCountByRoom = new Map<string, number>();
   const memberCountByRoom = new Map<string, number>();
@@ -213,6 +246,8 @@ export async function listPartnerAccessDashboard(opts: {
       ...room,
       shareCount: shareCountByRoom.get(room.id) ?? 0,
       memberCount: memberCountByRoom.get(room.id) ?? 0,
+      pendingSignatures: signatureCounts.get(room.id)?.pending ?? 0,
+      signedSignatures: signatureCounts.get(room.id)?.signed ?? 0,
     })),
     shares: shares.map((row) => ({
       ...row.share,

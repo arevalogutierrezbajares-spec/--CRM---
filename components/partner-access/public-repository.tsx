@@ -23,9 +23,9 @@ import { formatRelativeEs } from "@/lib/utils";
 import { repoSection, REPO_SECTION_OPTIONS } from "@/lib/partner-access";
 import { PublicUploadForm } from "@/components/partner-access/public-upload-form";
 import {
-  SignatureModal,
+  SignDocumentModal,
   type SignatureResult,
-} from "@/components/partner-access/signature-modal";
+} from "@/components/partner-access/sign-document-modal";
 import {
   PartnerCommentThread,
   type RepoComment,
@@ -284,7 +284,7 @@ export function PublicRepository({
       </section>
 
       {signing && (
-        <SignatureModal
+        <SignDocumentModal
           token={token}
           requestId={signing.sig.requestId}
           documentTitle={signing.title}

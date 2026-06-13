@@ -298,3 +298,27 @@ export async function createPartnerSignature(input: {
 
   return { ok: true, signature: result };
 }
+
+/**
+ * Attach the stamped-PDF path after the fact. Stamping runs AFTER the
+ * signature record is committed (it's best-effort by design — a pdf-lib
+ * failure or hang must never lose a completed signature), so the path
+ * lands in a follow-up update.
+ */
+export async function setSignaturePdfPath(input: {
+  signatureId: string;
+  roomId: string;
+  signedPdfPath: string;
+}): Promise<boolean> {
+  const [updated] = await db
+    .update(schema.partnerSignatures)
+    .set({ signedPdfPath: input.signedPdfPath })
+    .where(
+      and(
+        eq(schema.partnerSignatures.id, input.signatureId),
+        eq(schema.partnerSignatures.roomId, input.roomId),
+      ),
+    )
+    .returning({ id: schema.partnerSignatures.id });
+  return Boolean(updated);
+}

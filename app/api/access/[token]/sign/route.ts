@@ -1,16 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { and, eq } from "drizzle-orm";
 import { z } from "zod";
-import { db, schema } from "@/db";
 import {
   getPartnerRoomMember,
-  getPublicPartnerShareByToken,
   resolvePartnerRoomByToken,
 } from "@/db/queries/partner-access";
 import {
   countRecentSignatures,
   createPartnerSignature,
   getSignatureRequest,
+  setSignaturePdfPath,
 } from "@/db/queries/partner-signatures";
 import {
   getPartnerMemberIdFromCookies,
@@ -18,7 +16,11 @@ import {
 } from "@/lib/partner-room-gate.server";
 import { decodeSignatureDataUrl } from "@/lib/signatures/signature-image";
 import { sha256Hex, stampSignedPdf } from "@/lib/signatures/stamp.server";
-import { createSignedDownloadUrl, uploadBytes } from "@/lib/project-files/storage";
+import {
+  fetchSignatureTargetBytes,
+  isPdfBytes,
+} from "@/lib/signatures/target.server";
+import { uploadBytes } from "@/lib/project-files/storage";
 
 const Body = z.object({
   requestId: z.string().uuid(),
@@ -27,11 +29,21 @@ const Body = z.object({
   // data:image/png;base64,… — decoded + magic-checked server-side.
   signatureDataUrl: z.string().min(64).max(450_000),
   consent: z.literal(true),
+  // Where the signer dropped their signature on the document, in page-relative
+  // fractions (in-document signing). Absent for pad-only fallback signing.
+  placement: z
+    .object({
+      pageIndex: z.number().int().min(0).max(4999),
+      x: z.number().min(0).max(1),
+      y: z.number().min(0).max(1),
+      width: z.number().min(0.05).max(1),
+    })
+    .optional()
+    .nullable(),
 });
 
 const RATE_WINDOW_SECONDS = 60;
 const RATE_MAX_IN_WINDOW = 5;
-const DOC_FETCH_MAX_BYTES = 30 * 1024 * 1024;
 
 type Params = Promise<{ token: string }>;
 
@@ -99,42 +111,12 @@ export async function POST(req: NextRequest, props: { params: Params }) {
 
   // Resolve the exact bytes being signed so the audit record carries their
   // SHA-256 — and, for PDFs, so we can stamp a signed copy.
-  let storagePath: string | null = null;
-  if (request.targetKind === "item") {
-    const [item] = await db
-      .select({ storagePath: schema.partnerRoomItems.storagePath })
-      .from(schema.partnerRoomItems)
-      .where(
-        and(
-          eq(schema.partnerRoomItems.id, request.targetId),
-          eq(schema.partnerRoomItems.roomId, room.id),
-        ),
-      )
-      .limit(1);
-    storagePath = item?.storagePath ?? null;
-  } else {
-    const row = await getPublicPartnerShareByToken({
-      token,
-      shareId: request.targetId,
-    }).catch(() => null);
-    storagePath = row?.storagePath ?? null;
-  }
-
-  let docBytes: Uint8Array | null = null;
-  if (storagePath) {
-    const signed = await createSignedDownloadUrl(storagePath);
-    if (signed.ok) {
-      try {
-        const res = await fetch(signed.url);
-        if (res.ok) {
-          const buf = await res.arrayBuffer();
-          if (buf.byteLength <= DOC_FETCH_MAX_BYTES) docBytes = new Uint8Array(buf);
-        }
-      } catch {
-        docBytes = null;
-      }
-    }
-  }
+  const docBytes = await fetchSignatureTargetBytes({
+    token,
+    roomId: room.id,
+    targetKind: request.targetKind,
+    targetId: request.targetId,
+  });
   const documentSha256 = docBytes ? sha256Hex(docBytes) : null;
 
   // The server clock IS the signature timestamp — never client-supplied.
@@ -153,16 +135,31 @@ export async function POST(req: NextRequest, props: { params: Params }) {
     );
   }
 
-  // PDF targets get a stamped signed copy (original pages + certificate page).
+  // Commit the signature record FIRST — it (hash + server timestamp + image)
+  // is the legal artifact. Stamping is best-effort decoration; a pdf-lib
+  // failure after this point can degrade the download, never the signature.
+  const result = await createPartnerSignature({
+    workspaceId: room.workspaceId,
+    roomId: room.id,
+    requestId: request.id,
+    memberId: member?.id ?? null,
+    signerName: parsed.data.signerName,
+    signerEmail: parsed.data.signerEmail ?? member?.email ?? null,
+    signatureImagePath,
+    documentSha256,
+    signedPdfPath: null,
+    ip,
+    userAgent,
+    signedAt,
+  });
+  if (!result.ok) {
+    return NextResponse.json({ error: result.error }, { status: 409 });
+  }
+
+  // PDF targets get a stamped signed copy: the signature drawn into the page
+  // the signer chose (when placed in-document) + the appended certificate page.
   let signedPdfPath: string | null = null;
-  const isPdf =
-    docBytes &&
-    docBytes.length > 4 &&
-    docBytes[0] === 0x25 && // %PDF
-    docBytes[1] === 0x50 &&
-    docBytes[2] === 0x44 &&
-    docBytes[3] === 0x46;
-  if (docBytes && isPdf) {
+  if (isPdfBytes(docBytes)) {
     try {
       const stamped = await stampSignedPdf({
         pdfBytes: docBytes,
@@ -174,33 +171,21 @@ export async function POST(req: NextRequest, props: { params: Params }) {
         documentSha256: documentSha256 as string,
         ip,
         userAgent,
+        placement: parsed.data.placement ?? null,
       });
       const path = `${basePath}-firmado.pdf`;
       const up = await uploadBytes(path, stamped, "application/pdf");
-      if (up.ok) signedPdfPath = path;
+      if (up.ok) {
+        const recorded = await setSignaturePdfPath({
+          signatureId: result.signature.id,
+          roomId: room.id,
+          signedPdfPath: path,
+        });
+        if (recorded) signedPdfPath = path;
+      }
     } catch {
-      // The signature record (with hash + timestamp) is the legal artifact;
-      // a failed stamp must not block signing.
       signedPdfPath = null;
     }
-  }
-
-  const result = await createPartnerSignature({
-    workspaceId: room.workspaceId,
-    roomId: room.id,
-    requestId: request.id,
-    memberId: member?.id ?? null,
-    signerName: parsed.data.signerName,
-    signerEmail: parsed.data.signerEmail ?? member?.email ?? null,
-    signatureImagePath,
-    documentSha256,
-    signedPdfPath,
-    ip,
-    userAgent,
-    signedAt,
-  });
-  if (!result.ok) {
-    return NextResponse.json({ error: result.error }, { status: 409 });
   }
 
   return NextResponse.json({

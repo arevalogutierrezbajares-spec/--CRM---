@@ -1,8 +1,8 @@
 /**
- * PDF stamping for partner-room e-signatures. Appends a certificate page to
- * the signed PDF: signer identity, server timestamp (UTC + Caracas), the
- * SHA-256 of the exact bytes that were signed, request metadata, and the
- * drawn signature image. The original pages are untouched.
+ * PDF stamping for partner-room e-signatures. Draws the signature into the
+ * document page the signer chose (when a placement is provided), then appends
+ * a certificate page: signer identity, server timestamp (UTC + Caracas), the
+ * SHA-256 of the exact bytes that were signed, and request metadata.
  */
 import "server-only";
 import { createHash } from "crypto";
@@ -11,6 +11,23 @@ import { formatSignedAt } from "./signature-image";
 
 export function sha256Hex(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");
+}
+
+/**
+ * Where the signer placed their signature, in page-relative fractions so the
+ * client never needs to know real PDF point sizes. x/y are the top-left
+ * corner measured from the page's top-left; width is a fraction of page
+ * width. Height follows from the PNG's aspect ratio.
+ */
+export type SignaturePlacement = {
+  pageIndex: number;
+  x: number;
+  y: number;
+  width: number;
+};
+
+function clamp(v: number, lo: number, hi: number): number {
+  return Math.min(Math.max(v, lo), hi);
 }
 
 export async function stampSignedPdf(opts: {
@@ -23,11 +40,33 @@ export async function stampSignedPdf(opts: {
   documentSha256: string;
   ip: string | null;
   userAgent: string | null;
+  placement?: SignaturePlacement | null;
 }): Promise<Uint8Array> {
   const doc = await PDFDocument.load(opts.pdfBytes, { ignoreEncryption: true });
   const helvetica = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
   const sig = await doc.embedPng(opts.signaturePng);
+  const when = formatSignedAt(opts.signedAt);
+
+  if (opts.placement) {
+    const pages = doc.getPages();
+    const target =
+      pages[clamp(Math.round(opts.placement.pageIndex), 0, pages.length - 1)];
+    const { width: pw, height: ph } = target.getSize();
+    const w = clamp(opts.placement.width, 0.05, 1) * pw;
+    const h = w * (sig.height / sig.width);
+    const x = clamp(clamp(opts.placement.x, 0, 1) * pw, 0, Math.max(pw - w, 0));
+    // placement.y is measured from the page top; pdf-lib's origin is bottom-left.
+    const y = clamp(ph - clamp(opts.placement.y, 0, 1) * ph - h, 0, Math.max(ph - h, 0));
+    target.drawImage(sig, { x, y, width: w, height: h });
+    target.drawText(`${opts.signerName} · ${when.local}`, {
+      x,
+      y: Math.max(y - 9, 2),
+      size: 6,
+      font: helvetica,
+      color: rgb(0.42, 0.42, 0.46),
+    });
+  }
 
   const page = doc.addPage([595.28, 841.89]); // A4
   const { width, height } = page.getSize();
@@ -56,7 +95,6 @@ export async function stampSignedPdf(opts: {
   text("ACTA DE FIRMA ELECTRÓNICA", { size: 16, font: bold, gap: 30 });
   text(`Documento: ${opts.title}`, { size: 11, font: bold, gap: 26 });
 
-  const when = formatSignedAt(opts.signedAt);
   const rows: [string, string][] = [
     ["Firmante", opts.signerName],
     ["Correo", opts.signerEmail ?? "—"],

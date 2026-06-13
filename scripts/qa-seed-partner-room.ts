@@ -156,13 +156,30 @@ async function main() {
   const supaKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (supaUrl && supaKey) {
     const pdf = await PDFDocument.create();
-    const page = pdf.addPage([595.28, 841.89]);
     const font = await pdf.embedFont(StandardFonts.Helvetica);
-    page.drawText("ACUERDO DE ALIANZA (QA)", { x: 56, y: 770, size: 18, font });
-    page.drawText(
+    // Two pages so page placement (sign on page 2) is exercised end to end.
+    const p1 = pdf.addPage([595.28, 841.89]);
+    p1.drawText("ACUERDO DE ALIANZA (QA)", { x: 56, y: 770, size: 18, font });
+    p1.drawText(
       "Documento de prueba para el flujo de firma electrónica. Bórrese junto con la sala QA.",
       { x: 56, y: 740, size: 10, font, maxWidth: 480, lineHeight: 14 },
     );
+    for (let i = 0; i < 16; i++) {
+      p1.drawText(
+        `Cláusula 1.${i + 1} — texto de prueba para el flujo de firma en el documento.`,
+        { x: 56, y: 700 - i * 26, size: 10, font },
+      );
+    }
+    const p2 = pdf.addPage([595.28, 841.89]);
+    p2.drawText("PÁGINA 2 — FIRMAS", { x: 56, y: 770, size: 16, font });
+    for (let i = 0; i < 12; i++) {
+      p2.drawText(
+        `Cláusula 2.${i + 1} — términos adicionales del acuerdo de prueba.`,
+        { x: 56, y: 720 - i * 26, size: 10, font },
+      );
+    }
+    p2.drawText("Firma del embajador:", { x: 56, y: 200, size: 11, font });
+    p2.drawLine({ start: { x: 56, y: 160 }, end: { x: 320, y: 160 }, thickness: 1 });
     const pdfBytes = await pdf.save();
     const pdfPath = `${ws.id}/partner-rooms/${room.id}/qa-acuerdo.pdf`;
     const supa = createClient(supaUrl, supaKey, { auth: { persistSession: false } });

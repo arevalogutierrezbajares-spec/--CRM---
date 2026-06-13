@@ -101,6 +101,13 @@ export default async function PartnerAccessPage() {
                             </div>
                           </div>
                           <div className="flex shrink-0 items-center gap-1">
+                            {(room.pendingSignatures ?? 0) > 0 ? (
+                              <Badge variant="warning">
+                                {room.pendingSignatures} awaiting signature
+                              </Badge>
+                            ) : (room.signedSignatures ?? 0) > 0 ? (
+                              <Badge variant="success">signed</Badge>
+                            ) : null}
                             <Badge variant={statusVariant(room.status)}>
                               {room.status}
                             </Badge>
