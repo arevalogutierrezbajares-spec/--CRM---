@@ -150,9 +150,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 case .waitingRetry(_, let reason):
                     self.uploaderBusy = true
                     self.lastError = "Upload retrying: \(reason)"
+                case .stalled(let reason):
+                    // Surfaced ⚠: a call has been unable to file for a while.
+                    // It's still saved locally and still retrying.
+                    self.uploaderBusy = true
+                    self.state = .error
+                    self.lastError = "Call stuck filing (saved locally, still retrying): \(reason)"
                 }
                 self.refreshUI()
             }
+        }
+        worker.onStalled = { [weak self] reason in
+            DispatchQueue.main.async { self?.notifyUploadStalled(reason: reason) }
         }
         worker.onSessionFinalized = { [weak self] outcome in
             DispatchQueue.main.async {
@@ -465,6 +474,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             case .maxDuration(let seconds):
                 content.body = "Hit the \(Int(seconds / 60))-minute safety cap and auto-ended. Filing now."
             }
+            content.sound = .default
+            let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+            center.add(request, withCompletionHandler: nil)
+        }
+    }
+
+    private func notifyUploadStalled(reason: String) {
+        let center = UNUserNotificationCenter.current()
+        center.requestAuthorization(options: [.alert, .sound]) { [weak center] granted, _ in
+            guard granted, let center else { return }
+            let content = UNMutableNotificationContent()
+            content.title = "AGB Capture — a call is stuck filing"
+            content.body = "A recorded call hasn't filed yet (\(reason)). It's saved locally and will keep retrying — check the helper if this persists."
             content.sound = .default
             let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
             center.add(request, withCompletionHandler: nil)

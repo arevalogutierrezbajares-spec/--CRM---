@@ -40,6 +40,11 @@ public final class UploadQueueWorker {
         case idle
         case uploading
         case waitingRetry(seconds: TimeInterval, reason: String)
+        /// Uploads have been failing continuously past the stall threshold —
+        /// the queue keeps retrying (a call is never dropped), but we escalate
+        /// to a visible alert so the founder is never silently blind to a call
+        /// that can't file (the failure mode that hid a 77-min call for hours).
+        case stalled(reason: String)
     }
 
     // Observability hooks (menu bar state, simulate mode).
@@ -47,6 +52,9 @@ public final class UploadQueueWorker {
     public var onChunkUploaded: ((_ localId: String, _ seq: Int) -> Void)?
     public var onSessionFinalized: ((Outcome) -> Void)?
     public var onError: ((String) -> Void)?
+    /// Fired ONCE per stall episode (continuous failures past the threshold),
+    /// so the app can post a single user notification rather than log spam.
+    public var onStalled: ((String) -> Void)?
 
     public private(set) var recentOutcomes: [Outcome] = []
     public private(set) var lastError: String?
@@ -91,18 +99,42 @@ public final class UploadQueueWorker {
 
     /// Poll + retry forever. `pollInterval` is the idle re-scan cadence
     /// (uploads in-progress recordings incrementally, FR-CALL-TRX-1).
-    public func runForever(pollInterval: TimeInterval = 5) async {
+    /// `stallThreshold` is how long uploads may fail continuously before we
+    /// escalate from a quiet retry to a visible `.stalled` alert (the queue
+    /// still retries forever — escalation is purely about surfacing it).
+    public func runForever(
+        pollInterval: TimeInterval = 5,
+        stallThreshold: TimeInterval = 600
+    ) async {
         var backoff = ExponentialBackoff()
+        var firstFailureAt: Date?
+        var stallNotified = false
         while !isStopped {
             let result = await processPendingOnce()
             if result.clean {
                 backoff.reset()
+                firstFailureAt = nil
+                stallNotified = false
                 if result.didWork { continue } // immediately re-scan after progress
                 await sleepInterruptibly(pollInterval)
             } else {
                 let delay = backoff.nextDelay()
                 let reason = result.errors.last?.message ?? "network unreachable"
-                emitState(.waitingRetry(seconds: delay, reason: reason))
+                let since = firstFailureAt ?? Date()
+                firstFailureAt = since
+                let stalledFor = Date().timeIntervalSince(since)
+                if stalledFor >= stallThreshold {
+                    // Past the threshold: surface a visible alert. Fire the
+                    // user-notification hook only once per episode.
+                    emitState(.stalled(reason: reason))
+                    if !stallNotified {
+                        stallNotified = true
+                        log.warn("upload STALLED \(Int(stalledFor))s on: \(reason) — surfacing alert", category: "upload")
+                        onStalled?(reason)
+                    }
+                } else {
+                    emitState(.waitingRetry(seconds: delay, reason: reason))
+                }
                 log.warn("upload pass failed (\(reason)); retrying in \(Int(delay))s", category: "upload")
                 await sleepInterruptibly(delay)
             }
