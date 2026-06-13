@@ -1,6 +1,6 @@
 # AGB CRM
 
-Internal CRM for **Arevalo Gutierrez Bajares (AGB)** — chief-of-staff tool spanning CaneyCloud + VAV + BD warm network + project tracking.
+Internal CRM for **Arevalo Gutierrez Brewer (AGB)** — chief-of-staff tool spanning CaneyCloud + VAV + BD warm network + project tracking.
 
 **Status:** Phase 0 — Foundation (scaffolded, schema authored, not yet deployed)
 **Team:** 2 Founders (Tomas + cofounder)

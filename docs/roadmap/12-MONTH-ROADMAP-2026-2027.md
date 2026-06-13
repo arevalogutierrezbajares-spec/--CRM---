@@ -571,11 +571,15 @@ Community internet is a charitable purpose (free access, no commercial return). 
 
 > Note: Figures are net revenue (not GMV). CaneyCapital fees begin Q1 2027 from loan origination + first M1 raise management. VAV net = GMV × blended 11% after creator payouts.
 
-## Cumulative ARR trajectory
-- End Q3 2026: ~$8K ARR (MRR × 12 equivalent)
-- End Q4 2026: ~$55K ARR
-- End Q1 2027: ~$147K ARR
-- End Q2 2027: ~$305K ARR
+## Annualized run-rate trajectory
+<!-- Corrected 2026-06-10: previous bullets (~$8K/~$55K/~$147K/~$305K) didn't
+     reconcile with the quarterly table above. These are now table total × 12. -->
+- End Q3 2026: ~$32K annualized ($2,680/mo × 12)
+- End Q4 2026: ~$110K annualized ($9,200/mo × 12)
+- End Q1 2027: ~$295K annualized ($24,550/mo × 12)
+- End Q2 2027: ~$610K annualized ($50,850/mo × 12)
+
+> "Annualized run-rate" not "ARR": the total includes VAV GMV-net, cert fees and one-time fees, which aren't recurring revenue. Pure SaaS ARR (PMS + Experiences + Restaurant MRR × 12) is lower: ~$18K (Q3 2026) → ~$59K (Q4 2026) → ~$156K (Q1 2027) → ~$354K (Q2 2027).
 
 ---
 
