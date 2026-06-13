@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -26,11 +27,21 @@ export type ContactFormInitial = {
   relationshipType?: "friend" | "lead" | "partner" | "prospect";
   introChainFromText?: string | null;
   notesPath?: string | null;
+  primaryOrgId?: string | null;
   channels?: { kind: ChannelKind; value: string }[];
   tagIds?: string[];
 };
 
-export type TagOption = { id: string; name: string; color?: string | null };
+export type TagOption = {
+  id: string;
+  name: string;
+  color?: string | null;
+  category?: string | null;
+};
+export type OrgOption = { id: string; name: string };
+const UNCATEGORIZED = "Other";
+
+const NO_ORG = "__none__";
 
 type Action = (formData: FormData) => Promise<unknown>;
 
@@ -38,11 +49,13 @@ export function ContactForm({
   initial,
   action,
   availableTags,
+  orgOptions = [],
   submitLabel = "Save",
 }: {
   initial?: ContactFormInitial;
   action: Action;
   availableTags: TagOption[];
+  orgOptions?: OrgOption[];
   submitLabel?: string;
 }) {
   const router = useRouter();
@@ -56,7 +69,26 @@ export function ContactForm({
   const [selectedTags, setSelectedTags] = useState<Set<string>>(
     new Set(initial?.tagIds ?? []),
   );
+  const [orgId, setOrgId] = useState<string>(initial?.primaryOrgId ?? NO_ORG);
+  // Don't let a contact link to itself.
+  const orgChoices = orgOptions.filter((o) => o.id !== initial?.id);
   const formId = useId();
+
+  // Group the tag chips by category (uncategorized last).
+  const tagGroups = (() => {
+    const byCat = new Map<string, TagOption[]>();
+    for (const t of availableTags) {
+      const key = t.category?.trim() || UNCATEGORIZED;
+      const arr = byCat.get(key);
+      if (arr) arr.push(t);
+      else byCat.set(key, [t]);
+    }
+    return [...byCat.entries()].sort(([a], [b]) => {
+      if (a === UNCATEGORIZED) return 1;
+      if (b === UNCATEGORIZED) return -1;
+      return a.localeCompare(b);
+    });
+  })();
 
   function addChannel() {
     setChannels((prev) => [...prev, { kind: "email", value: "" }]);
@@ -89,6 +121,7 @@ export function ContactForm({
           }
         }
         for (const id of selectedTags) formData.append("tagId", id);
+        formData.set("primaryOrgId", orgId === NO_ORG ? "" : orgId);
 
         startTransition(async () => {
           try {
@@ -149,6 +182,29 @@ export function ContactForm({
             defaultValue={initial?.organization ?? ""}
             placeholder="Optional — Acme Inc., Posada La Rosa…"
           />
+        </div>
+        <div className="space-y-1.5 sm:col-span-2">
+          <Label htmlFor="primaryOrg">Part of organization</Label>
+          <Select value={orgId} onValueChange={setOrgId}>
+            <SelectTrigger id="primaryOrg">
+              <SelectValue placeholder="None" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NO_ORG}>None</SelectItem>
+              {orgChoices.map((o) => (
+                <SelectItem key={o.id} value={o.id}>
+                  {o.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-[var(--muted-foreground)]">
+            Link this person to an organization contact (its logo and partner room
+            carry over).{" "}
+            <Link href="/contacts/new?type=org" className="underline hover:text-[var(--foreground)]">
+              + New organization
+            </Link>
+          </p>
         </div>
         <div className="space-y-1.5 sm:col-span-2">
           <Label htmlFor="introChainFromText">Intro chain (free text)</Label>
@@ -235,25 +291,34 @@ export function ContactForm({
       {availableTags.length > 0 && (
         <section className="space-y-3">
           <Label>Tags</Label>
-          <div className="flex flex-wrap gap-2">
-            {availableTags.map((t) => {
-              const active = selectedTags.has(t.id);
-              return (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => toggleTag(t.id)}
-                  className="focus:outline-none"
-                >
-                  <Badge
-                    variant={active ? "default" : "outline"}
-                    className="cursor-pointer transition-opacity hover:opacity-80"
-                  >
-                    {t.name}
-                  </Badge>
-                </button>
-              );
-            })}
+          <div className="space-y-3">
+            {tagGroups.map(([category, groupTags]) => (
+              <div key={category} className="space-y-1.5">
+                <p className="text-[10px] font-medium uppercase tracking-wide text-[var(--muted-foreground)]">
+                  {category}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {groupTags.map((t) => {
+                    const active = selectedTags.has(t.id);
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => toggleTag(t.id)}
+                        className="focus:outline-none"
+                      >
+                        <Badge
+                          variant={active ? "default" : "outline"}
+                          className="cursor-pointer transition-opacity hover:opacity-80"
+                        >
+                          {t.name}
+                        </Badge>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
         </section>
       )}

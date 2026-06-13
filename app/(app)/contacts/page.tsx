@@ -60,11 +60,13 @@ export default async function ContactsPage(props: {
     name: c.name,
     type: c.type,
     organization: c.organization,
+    org: c.org ? { id: c.org.id, name: c.org.name } : null,
+    logoUrl: c.effectiveLogoUrl,
     relationshipType: c.relationshipType,
     lastTouchAt: c.lastTouchAt,
     updatedAt: c.updatedAt,
     channels: c.channels.map((ch) => ({ kind: ch.kind, value: ch.value, isPrimary: ch.isPrimary })),
-    tags: c.tags.map((t) => ({ id: t.id, name: t.name, kind: t.kind, color: t.color })),
+    tags: c.tags.map((t) => ({ id: t.id, name: t.name, kind: t.kind, color: t.color, category: t.category })),
     projects: c.projects.map((p) => ({ id: p.id, title: p.title, parentTitle: p.parentTitle })),
   }));
 
@@ -88,7 +90,7 @@ export default async function ContactsPage(props: {
           </div>
         }
       />
-      <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-8">
+      <main className="mx-auto w-full max-w-[1600px] flex-1 px-6 py-8">
         <header className="mb-6 flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Contacts</h1>

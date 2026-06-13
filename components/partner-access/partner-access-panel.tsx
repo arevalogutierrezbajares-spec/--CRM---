@@ -26,15 +26,25 @@ function statusVariant(status: string) {
 export function PartnerAccessPanel({
   access,
   contact,
+  roomContact,
+  orgName,
   nextStepCountByRoom = {},
   uploadCountByRoom = {},
 }: {
   access: PartnerAccessOverview;
   contact?: NewRoomContactOption;
+  /**
+   * Contact a newly-created room attaches to. For a person linked to an org,
+   * pass the org so teammates share one room. Defaults to `contact`.
+   */
+  roomContact?: NewRoomContactOption;
+  /** Org name, for labelling rooms surfaced via the organization. */
+  orgName?: string | null;
   nextStepCountByRoom?: Record<string, number>;
   uploadCountByRoom?: Record<string, number>;
 }) {
   const lastShare = access.shares[0];
+  const newRoomContact = roomContact ?? contact;
 
   return (
     <Card>
@@ -45,9 +55,9 @@ export function PartnerAccessPanel({
             <span className="truncate">Partner Access</span>
           </span>
           <span className="flex shrink-0 items-center gap-1">
-            {contact && (
+            {newRoomContact && (
               <NewRoomDialog
-                fixedContact={contact}
+                fixedContact={newRoomContact}
                 triggerVariant="ghost"
                 triggerLabel="New"
               />
@@ -93,7 +103,14 @@ export function PartnerAccessPanel({
                           <Link href={`/partner-access/rooms/${room.id}`} className="block hover:underline">
                             <div className="flex items-center justify-between gap-2">
                               <div className="min-w-0">
-                                <div className="truncate text-sm font-medium">{room.name}</div>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="truncate text-sm font-medium">{room.name}</span>
+                                  {room.viaOrg && (
+                                    <Badge variant="outline" className="shrink-0 text-[10px]">
+                                      via {orgName ?? "org"}
+                                    </Badge>
+                                  )}
+                                </div>
                                 <div className="text-xs text-[var(--muted-foreground)]">
                                   {partnerKindLabel(room.partnerKind)} · {room.shareCount} shared
                                 </div>

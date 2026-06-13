@@ -33,6 +33,8 @@ import { SavedViews } from "@/components/grid/saved-views";
 import { ExportButton } from "@/components/grid/export-button";
 import { VenturePillBar } from "@/components/tags/venture-pill-bar";
 import { ContactsSearch } from "@/components/contacts/contacts-search";
+import { QuickTagPopover } from "@/components/contacts/quick-tag-popover";
+import { TagManager } from "@/components/tags/tag-manager";
 import { LeadVisibilitySegmented } from "@/components/contacts/lead-visibility-segmented";
 import { TypeSegmented } from "@/components/contacts/type-segmented";
 import { ReachIcons } from "@/components/contacts/reach-icons";
@@ -61,6 +63,7 @@ type Tag = {
   name: string;
   kind: "venture" | "custom";
   color?: string | null;
+  category?: string | null;
 };
 
 /** The trimmed per-row payload the grid actually renders. The server page maps
@@ -71,6 +74,10 @@ export type ContactGridRow = {
   name: string;
   type: "person" | "org";
   organization: string | null;
+  /** Structured org link, if any (preferred over the free-text `organization`). */
+  org: { id: string; name: string } | null;
+  /** Own logo falling back to the linked org's logo. */
+  logoUrl: string | null;
   relationshipType: "friend" | "lead" | "partner" | "prospect";
   lastTouchAt: Date | string | null;
   updatedAt: Date | string;
@@ -78,6 +85,11 @@ export type ContactGridRow = {
   tags: Tag[];
   projects: { id: string; title: string; parentTitle: string | null }[];
 };
+
+/** Display name for a contact's organization: linked org wins, else free text. */
+function orgLabel(c: ContactGridRow): string | null {
+  return c.org?.name ?? c.organization ?? null;
+}
 
 type Props = {
   initialContacts: ContactGridRow[];
@@ -179,7 +191,7 @@ export function ContactsGrid({
     if (q) {
       rows = rows.filter((c) => {
         if (c.name.toLowerCase().includes(q)) return true;
-        if ((c.organization ?? "").toLowerCase().includes(q)) return true;
+        if ((orgLabel(c) ?? "").toLowerCase().includes(q)) return true;
         for (const ch of c.channels) if (ch.value.toLowerCase().includes(q)) return true;
         for (const t of c.tags) if (t.name.toLowerCase().includes(q)) return true;
         for (const p of c.projects) if (p.title.toLowerCase().includes(q)) return true;
@@ -191,13 +203,13 @@ export function ContactsGrid({
       relationship: (r, v) => splitList(v).includes(r.relationshipType),
       type: (r, v) => r.type === v,
       org: (r, v) =>
-        (r.organization ?? "").toLowerCase().includes(v.toLowerCase()),
+        (orgLabel(r) ?? "").toLowerCase().includes(v.toLowerCase()),
       project: (r, v) => r.projects.some((p) => splitList(v).includes(p.id)),
     });
     return applySort<ContactGridRow>(rows, sort, {
       name: (r) => r.name.toLowerCase(),
       relationship: (r) => r.relationshipType,
-      organization: (r) => (r.organization ?? "").toLowerCase(),
+      organization: (r) => (orgLabel(r) ?? "").toLowerCase(),
       // Sort by what the column displays: latest of touch vs profile edit.
       lastTouch: (r) => latestOf(r.lastTouchAt, r.updatedAt),
       updated: (r) => new Date(r.updatedAt),
@@ -209,7 +221,7 @@ export function ContactsGrid({
       groupBy<ContactGridRow>(sorted, group, (r) => {
         if (group === "relationship") return r.relationshipType;
         if (group === "type") return r.type;
-        if (group === "org") return r.organization ?? "—";
+        if (group === "org") return orgLabel(r) ?? "—";
         if (group === "project") return r.projects[0]?.title ?? "No project";
         return "";
       }),
@@ -431,6 +443,24 @@ export function ContactsGrid({
     [router, pathname, sp],
   );
 
+  // Tag filter options clustered by category (category shown as a right hint).
+  const tagFilterOptions = useMemo(
+    () =>
+      [...allTags]
+        .sort((a, b) => {
+          const ca = a.category ?? "￿"; // uncategorized sinks to the end
+          const cb = b.category ?? "￿";
+          return ca.localeCompare(cb) || a.name.localeCompare(b.name);
+        })
+        .map((t) => ({
+          value: t.name,
+          label: t.name,
+          color: t.color,
+          hint: t.category ?? undefined,
+        })),
+    [allTags],
+  );
+
   const totalCount = initialContacts.length;
   const matchedCount = sorted.length;
   const hasActiveQuery =
@@ -464,7 +494,7 @@ export function ContactsGrid({
             />
             <MultiSelect
               label="Tags"
-              options={allTags.map((t) => ({ value: t.name, label: t.name, color: t.color }))}
+              options={tagFilterOptions}
               selected={tagNames}
               onChange={setTagFilter}
             />
@@ -472,6 +502,7 @@ export function ContactsGrid({
             <FilterBar options={[]} groupOptions={GROUP_OPTIONS} />
           </div>
           <div className="flex items-center gap-2">
+            <TagManager tags={allTags} />
             <ExportButton endpoint="/api/export/contacts" />
             <SavedViews namespace="contacts" />
           </div>
@@ -514,6 +545,7 @@ export function ContactsGrid({
               <MobileCard
                 key={c.id}
                 contact={c}
+                allTags={allTags}
                 selected={selected.has(c.id)}
                 onToggle={() => toggleRow(c.id)}
                 onTagClick={handleTagClick}
@@ -623,9 +655,13 @@ export function ContactsGrid({
                           </button>
                         </td>
                         <td className="px-2 py-3">
-                          <ContactAvatar name={c.name} type={c.type as "person" | "org"} />
+                          <ContactAvatar
+                            name={c.name}
+                            type={c.type as "person" | "org"}
+                            logoUrl={c.logoUrl}
+                          />
                         </td>
-                        <td className="max-w-[240px] px-4 py-3">
+                        <td className="max-w-[320px] px-4 py-3">
                           <Link
                             href={`/contacts/${c.id}`}
                             className="block max-w-full truncate font-medium hover:underline"
@@ -633,12 +669,12 @@ export function ContactsGrid({
                           >
                             {c.name}
                           </Link>
-                          {c.organization && (
+                          {orgLabel(c) && (
                             <div
                               className="max-w-full truncate text-xs text-[var(--muted-foreground)]"
-                              title={c.organization}
+                              title={orgLabel(c) ?? undefined}
                             >
-                              {c.organization}
+                              {orgLabel(c)}
                             </div>
                           )}
                           <ProjectPills projects={c.projects} className="mt-1" />
@@ -646,13 +682,30 @@ export function ContactsGrid({
                         <td className="px-4 py-3">
                           <Badge variant="outline">{c.relationshipType}</Badge>
                         </td>
-                        <td className="max-w-[180px] px-4 py-3 text-sm text-[var(--muted-foreground)]">
-                          <span className="block truncate" title={c.organization ?? undefined}>
-                            {c.organization ?? "—"}
-                          </span>
+                        <td className="max-w-[220px] px-4 py-3 text-sm text-[var(--muted-foreground)]">
+                          {c.org ? (
+                            <Link
+                              href={`/contacts/${c.org.id}`}
+                              className="block truncate hover:text-[var(--foreground)] hover:underline"
+                              title={c.org.name}
+                            >
+                              {c.org.name}
+                            </Link>
+                          ) : (
+                            <span className="block truncate" title={c.organization ?? undefined}>
+                              {c.organization ?? "—"}
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-3">
-                          <TagPills tags={c.tags} onTagClick={handleTagClick} />
+                          <div className="flex items-center gap-1">
+                            <TagPills tags={c.tags} onTagClick={handleTagClick} />
+                            <QuickTagPopover
+                              contactId={c.id}
+                              contactTagIds={c.tags.map((t) => t.id)}
+                              allTags={allTags}
+                            />
+                          </div>
                         </td>
                         <td className="px-4 py-3">
                           <ReachIcons channels={c.channels} />
@@ -807,11 +860,13 @@ function ProjectPills({
 // ─── mobile card ─────────────────────────────────────────────────────────────
 function MobileCard({
   contact: c,
+  allTags,
   selected,
   onToggle,
   onTagClick,
 }: {
   contact: ContactGridRow;
+  allTags: Tag[];
   selected: boolean;
   onToggle: () => void;
   onTagClick: (t: Tag) => void;
@@ -835,7 +890,7 @@ function MobileCard({
           <Square className="h-4 w-4" />
         )}
       </button>
-      <ContactAvatar name={c.name} type={c.type as "person" | "org"} />
+      <ContactAvatar name={c.name} type={c.type as "person" | "org"} logoUrl={c.logoUrl} />
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-2">
           <Link
@@ -847,14 +902,21 @@ function MobileCard({
           </Link>
           <LastTouchCell touchedAt={c.lastTouchAt} editedAt={c.updatedAt} />
         </div>
-        {c.organization && (
-          <p className="mt-0.5 truncate text-xs text-[var(--muted-foreground)]" title={c.organization}>
-            {c.organization}
+        {orgLabel(c) && (
+          <p className="mt-0.5 truncate text-xs text-[var(--muted-foreground)]" title={orgLabel(c) ?? undefined}>
+            {orgLabel(c)}
           </p>
         )}
         <ProjectPills projects={c.projects} className="mt-1.5" />
         <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2">
-          <TagPills tags={c.tags} onTagClick={onTagClick} />
+          <div className="flex items-center gap-1">
+            <TagPills tags={c.tags} onTagClick={onTagClick} />
+            <QuickTagPopover
+              contactId={c.id}
+              contactTagIds={c.tags.map((t) => t.id)}
+              allTags={allTags}
+            />
+          </div>
           <ReachIcons channels={c.channels} />
         </div>
       </div>

@@ -27,6 +27,7 @@ export const contactFormSchema = z.object({
   relationshipType: relationshipTypeEnum.default("prospect"),
   introChainFromText: z.string().max(240).optional().nullable(),
   notesPath: z.string().max(255).optional().nullable(),
+  primaryOrgId: z.string().uuid().optional().nullable(),
   channels: z.array(contactChannelInputSchema).optional().default([]),
   tagIds: z.array(z.string().uuid()).optional().default([]),
 });
@@ -53,6 +54,7 @@ export function parseContactFormData(fd: FormData): ContactFormInput {
     relationshipType: (fd.get("relationshipType") as string) || "prospect",
     introChainFromText: (fd.get("introChainFromText") as string) || null,
     notesPath: (fd.get("notesPath") as string) || null,
+    primaryOrgId: (fd.get("primaryOrgId") as string) || null,
     channels,
     tagIds: fd.getAll("tagId").map(String).filter(Boolean),
   });

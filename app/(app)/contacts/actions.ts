@@ -5,6 +5,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
 import { requireUser } from "@/lib/current-user";
+import { updateContactLogo } from "@/db/queries/partner-access";
+import { removeObjects } from "@/lib/project-files/storage";
 import {
   parseContactFormData,
   type ContactFormInput,
@@ -64,6 +66,7 @@ export async function createContact(_: ActionResult | null, formData: FormData):
       createdBy: user.id,
       introChainFromText: parsed.introChainFromText ?? null,
       notesPath: parsed.notesPath ?? null,
+      primaryOrgId: parsed.primaryOrgId ?? null,
     })
     .returning({ id: contacts.id });
 
@@ -99,6 +102,8 @@ export async function updateContact(
       relationshipType: parsed.relationshipType,
       introChainFromText: parsed.introChainFromText ?? null,
       notesPath: parsed.notesPath ?? null,
+      // A contact can't be its own organization.
+      primaryOrgId: parsed.primaryOrgId === id ? null : parsed.primaryOrgId ?? null,
       updatedAt: new Date(),
     })
     .where(and(eq(contacts.id, id), eq(contacts.workspaceId, user.workspaceId)))
@@ -138,6 +143,30 @@ export async function unarchiveContact(id: string): Promise<ActionResult> {
   if (!row) return { ok: false, error: "Contact not found" };
   revalidatePath("/contacts");
   return { ok: true, id: row.id };
+}
+
+/**
+ * Set a contact's logo to an external URL, or clear it (null). Upload-based
+ * logos go through POST /api/contact-logo/[contactId]; this covers the
+ * paste-a-URL and remove cases. Clears the stored object on replace/remove.
+ * The logo lives on the contact row, so it stays in sync with partner rooms.
+ */
+export async function setContactLogo(
+  contactId: string,
+  logoUrl: string | null,
+): Promise<ActionResult> {
+  const user = await requireUser();
+  const res = await updateContactLogo({
+    workspaceId: user.workspaceId,
+    contactId,
+    logoUrl: logoUrl?.trim() || null,
+    logoStoragePath: null,
+  });
+  if (!res) return { ok: false, error: "Contact not found" };
+  if (res.previousPath) await removeObjects([res.previousPath]).catch(() => {});
+  revalidatePath("/contacts");
+  revalidatePath(`/contacts/${contactId}`);
+  return { ok: true, id: contactId };
 }
 
 export type BulkResult =

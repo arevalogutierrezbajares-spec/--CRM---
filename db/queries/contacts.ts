@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, sql as rawSql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql as rawSql, type SQL } from "drizzle-orm";
 import { db, schema } from "@/db";
 
 const { contacts, contactChannels, contactTags, tags } = schema;
@@ -15,11 +15,69 @@ export type ContactProjectRef = {
   role: string | null;
 };
 
+/** The org-type contact a person is linked to (via contacts.primaryOrgId). */
+export type ContactOrgRef = {
+  id: string;
+  name: string;
+  logoUrl: string | null;
+};
+
 export type ContactListItem = ContactRow & {
   channels: ContactChannelRow[];
   tags: TagRow[];
   projects: ContactProjectRef[];
+  /** Resolved organization the contact is linked to, if any. */
+  org: ContactOrgRef | null;
+  /** Own logo, falling back to the linked org's logo. */
+  effectiveLogoUrl: string | null;
 };
+
+/** Lightweight org-contact option for the "link to organization" selector. */
+export type OrgContactOption = {
+  id: string;
+  name: string;
+  logoUrl: string | null;
+};
+
+/**
+ * Org-type contacts in the workspace — powers the contact form's
+ * "link to organization" selector.
+ */
+export async function listOrgContacts(opts: {
+  workspaceId: string;
+}): Promise<OrgContactOption[]> {
+  const rows = await db
+    .select({ id: contacts.id, name: contacts.name, logoUrl: contacts.logoUrl })
+    .from(contacts)
+    .where(
+      and(
+        eq(contacts.workspaceId, opts.workspaceId),
+        eq(contacts.type, "org"),
+        eq(contacts.archived, false),
+      ),
+    )
+    .orderBy(asc(contacts.name));
+  return rows;
+}
+
+/**
+ * Resolve primaryOrgId → org ref for a set of contacts, in one query.
+ * Returns a map keyed by org contact id.
+ */
+async function loadOrgRefs(opts: {
+  workspaceId: string;
+  orgIds: string[];
+}): Promise<Map<string, ContactOrgRef>> {
+  const unique = [...new Set(opts.orgIds.filter(Boolean))];
+  if (unique.length === 0) return new Map();
+  const rows = await db
+    .select({ id: contacts.id, name: contacts.name, logoUrl: contacts.logoUrl })
+    .from(contacts)
+    .where(
+      and(eq(contacts.workspaceId, opts.workspaceId), inArray(contacts.id, unique)),
+    );
+  return new Map(rows.map((r) => [r.id, r]));
+}
 
 export type ContactProjectOption = {
   id: string;
@@ -122,12 +180,22 @@ export async function listContacts(opts: {
     else projectsByContact.set(ref.contactId, [ref.project]);
   }
 
-  return rows.map((row) => ({
-    ...row,
-    channels: channels.filter((c) => c.contactId === row.id),
-    tags: tagsByContact.get(row.id) ?? [],
-    projects: projectsByContact.get(row.id) ?? [],
-  }));
+  const orgRefs = await loadOrgRefs({
+    workspaceId: opts.workspaceId,
+    orgIds: rows.map((r) => r.primaryOrgId).filter((id): id is string => !!id),
+  });
+
+  return rows.map((row) => {
+    const org = row.primaryOrgId ? orgRefs.get(row.primaryOrgId) ?? null : null;
+    return {
+      ...row,
+      channels: channels.filter((c) => c.contactId === row.id),
+      tags: tagsByContact.get(row.id) ?? [],
+      projects: projectsByContact.get(row.id) ?? [],
+      org,
+      effectiveLogoUrl: row.logoUrl ?? org?.logoUrl ?? null,
+    };
+  });
 }
 
 export async function getContact(opts: { id: string; workspaceId: string }) {
@@ -152,11 +220,36 @@ export async function getContact(opts: { id: string; workspaceId: string }) {
       contactIds: [row.id],
     }),
   ]);
+  // Resolve the linked org (if a person) and the member list (if an org).
+  const [orgRefs, members] = await Promise.all([
+    row.primaryOrgId
+      ? loadOrgRefs({ workspaceId: opts.workspaceId, orgIds: [row.primaryOrgId] })
+      : Promise.resolve(new Map<string, ContactOrgRef>()),
+    row.type === "org"
+      ? db
+          .select({ id: contacts.id, name: contacts.name, type: contacts.type })
+          .from(contacts)
+          .where(
+            and(
+              eq(contacts.workspaceId, opts.workspaceId),
+              eq(contacts.primaryOrgId, row.id),
+              eq(contacts.archived, false),
+            ),
+          )
+          .orderBy(asc(contacts.name))
+      : Promise.resolve([] as { id: string; name: string; type: "person" | "org" }[]),
+  ]);
+
+  const org = row.primaryOrgId ? orgRefs.get(row.primaryOrgId) ?? null : null;
+
   return {
     ...row,
     channels,
     tags: ctags.map((t) => t.tag),
     projects: projectRefs.map((ref) => ref.project),
+    org,
+    effectiveLogoUrl: row.logoUrl ?? org?.logoUrl ?? null,
+    members,
   };
 }
 

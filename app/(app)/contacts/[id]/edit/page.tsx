@@ -6,7 +6,7 @@ import { TopBar } from "@/components/layout/top-bar";
 import { Card, CardContent } from "@/components/ui/card";
 import { ContactForm } from "@/components/contacts/contact-form";
 import { DbBanner } from "@/components/db-banner";
-import { getContact } from "@/db/queries/contacts";
+import { getContact, listOrgContacts } from "@/db/queries/contacts";
 import { listTags } from "@/db/queries/tags";
 import { safeRead } from "@/lib/db-status";
 import { updateContact } from "../../actions";
@@ -17,9 +17,10 @@ export default async function EditContactPage(props: { params: Params }) {
   const user = await requireUser();
   const { id } = await props.params;
 
-  const [contactRes, tagsRes] = await Promise.all([
+  const [contactRes, tagsRes, orgOptionsRes] = await Promise.all([
     safeRead(() => getContact({ id, workspaceId: user.workspaceId }), null),
     safeRead(() => listTags(), []),
+    safeRead(() => listOrgContacts({ workspaceId: user.workspaceId }), []),
   ]);
 
   if (contactRes.ok && !contactRes.data) notFound();
@@ -62,6 +63,7 @@ export default async function EditContactPage(props: { params: Params }) {
                       relationshipType: contact.relationshipType,
                       introChainFromText: contact.introChainFromText,
                       notesPath: contact.notesPath,
+                      primaryOrgId: contact.primaryOrgId,
                       channels: contact.channels.map((c) => ({
                         kind: c.kind as "email" | "phone" | "whatsapp" | "instagram" | "domain",
                         value: c.value,
@@ -71,6 +73,7 @@ export default async function EditContactPage(props: { params: Params }) {
                   : undefined
               }
               availableTags={tagsRes.data}
+              orgOptions={orgOptionsRes.data}
               action={action}
               submitLabel="Save changes"
             />

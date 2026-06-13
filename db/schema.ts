@@ -13,6 +13,7 @@ import {
   primaryKey,
   uniqueIndex,
   index,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 
@@ -541,7 +542,12 @@ export const contacts = pgTable("contacts", {
   organization: text("organization"),
   logoUrl: text("logo_url"), // client/company brand logo for co-branded rooms (URL or proxy path)
   logoStoragePath: text("logo_storage_path"), // set when the logo was uploaded (served via proxy)
-  primaryOrgId: uuid("primary_org_id"),
+  // Structured link from a person to their organization (an org-type contact).
+  // Self-reference; set null if the org contact is deleted so the person survives.
+  primaryOrgId: uuid("primary_org_id").references(
+    (): AnyPgColumn => contacts.id,
+    { onDelete: "set null" },
+  ),
   relationshipType: relationshipType("relationship_type")
     .notNull()
     .default("prospect"),
@@ -581,6 +587,8 @@ export const tags = pgTable("tags", {
   name: text("name").notNull().unique(),
   kind: tagKind("kind").notNull().default("venture"),
   color: text("color"),
+  // Optional grouping for the tag picker (e.g. "Sector", "Status"). Free-form.
+  category: text("category"),
 });
 
 export const contactTags = pgTable(

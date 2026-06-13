@@ -6,12 +6,20 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ContactForm } from "@/components/contacts/contact-form";
 import { DbBanner } from "@/components/db-banner";
 import { listTags } from "@/db/queries/tags";
+import { listOrgContacts } from "@/db/queries/contacts";
 import { safeRead } from "@/lib/db-status";
 import { createContact } from "../actions";
 
-export default async function NewContactPage() {
+type SearchParams = Promise<{ type?: string }>;
+
+export default async function NewContactPage(props: { searchParams: SearchParams }) {
   const user = await requireUser();
-  const tagsRes = await safeRead(() => listTags(), []);
+  const sp = await props.searchParams;
+  const initialType = sp.type === "org" ? "org" : "person";
+  const [tagsRes, orgOptionsRes] = await Promise.all([
+    safeRead(() => listTags(), []),
+    safeRead(() => listOrgContacts({ workspaceId: user.workspaceId }), []),
+  ]);
 
   async function action(formData: FormData) {
     "use server";
@@ -41,7 +49,9 @@ export default async function NewContactPage() {
         <Card>
           <CardContent className="pt-6">
             <ContactForm
+              initial={{ type: initialType }}
               availableTags={tagsRes.data}
+              orgOptions={orgOptionsRes.data}
               action={action}
               submitLabel="Create contact"
             />

@@ -8,6 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { DbBanner } from "@/components/db-banner";
+import { ContactAvatar } from "@/components/contacts/avatar";
+import { ContactLogoUploader } from "@/components/contacts/contact-logo-uploader";
 import { TouchForm } from "@/components/touches/touch-form";
 import { TouchList } from "@/components/touches/touch-list";
 import { VoiceRecorder } from "@/components/touches/voice-recorder";
@@ -35,8 +37,15 @@ export default async function ContactDetailPage(props: { params: Params }) {
   const user = await requireUser();
   const { id } = await props.params;
 
-  const [contactRes, touchesRes, warmPathRes, reciprocityRes, meetingsRes, accessRes, pitchFeedbackRes] = await Promise.all([
-    safeRead(() => getContact({ id, workspaceId: user.workspaceId }), null),
+  // Fetch the contact first so the partner-access query can include the
+  // organization's shared room for a linked person.
+  const contactRes = await safeRead(
+    () => getContact({ id, workspaceId: user.workspaceId }),
+    null,
+  );
+  const orgContactId = contactRes.data?.primaryOrgId ?? undefined;
+
+  const [touchesRes, warmPathRes, reciprocityRes, meetingsRes, accessRes, pitchFeedbackRes] = await Promise.all([
     safeRead(() => listTouchesForContact({ contactId: id, workspaceId: user.workspaceId }), []),
     safeRead(
       () => findWarmPath({ workspaceId: user.workspaceId, toContactId: id }),
@@ -53,10 +62,15 @@ export default async function ContactDetailPage(props: { params: Params }) {
       },
     ),
     safeRead(() => listMeetingsForContact({ contactId: id, workspaceId: user.workspaceId }), []),
-    safeRead(() => listPartnerAccessForContact({ contactId: id, workspaceId: user.workspaceId }), {
-      rooms: [],
-      shares: [],
-    }),
+    safeRead(
+      () =>
+        listPartnerAccessForContact({
+          contactId: id,
+          workspaceId: user.workspaceId,
+          orgContactId,
+        }),
+      { rooms: [], shares: [] },
+    ),
     safeRead(() => listPitchFeedbackForContact({ contactId: id, workspaceId: user.workspaceId }), {
       campaigns: [],
       invites: [],
@@ -140,19 +154,38 @@ export default async function ContactDetailPage(props: { params: Params }) {
 
         {contact && (
           <>
-            <header className="mt-4 mb-6">
-              <div className="flex items-center gap-3">
-                <h1 className="text-2xl font-semibold tracking-tight">
-                  {contact.name}
-                </h1>
-                <Badge variant="outline">{contact.relationshipType}</Badge>
-                {contact.archived && <Badge variant="warning">archived</Badge>}
+            <header className="mt-4 mb-6 flex items-start gap-3">
+              <ContactAvatar
+                name={contact.name}
+                type={contact.type}
+                logoUrl={contact.effectiveLogoUrl}
+                size={44}
+              />
+              <div>
+                <div className="flex items-center gap-3">
+                  <h1 className="text-2xl font-semibold tracking-tight">
+                    {contact.name}
+                  </h1>
+                  <Badge variant="outline">{contact.relationshipType}</Badge>
+                  {contact.archived && <Badge variant="warning">archived</Badge>}
+                </div>
+                {contact.org ? (
+                  <p className="mt-1 text-sm text-[var(--muted-foreground)]">
+                    <Link
+                      href={`/contacts/${contact.org.id}`}
+                      className="hover:text-[var(--foreground)] hover:underline"
+                    >
+                      {contact.org.name}
+                    </Link>
+                  </p>
+                ) : (
+                  contact.organization && (
+                    <p className="mt-1 text-sm text-[var(--muted-foreground)]">
+                      {contact.organization}
+                    </p>
+                  )
+                )}
               </div>
-              {contact.organization && (
-                <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-                  {contact.organization}
-                </p>
-              )}
             </header>
 
             <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
@@ -252,9 +285,60 @@ export default async function ContactDetailPage(props: { params: Params }) {
                     name: contact.name,
                     organization: contact.organization,
                   }}
+                  roomContact={
+                    contact.org
+                      ? {
+                          id: contact.org.id,
+                          name: contact.org.name,
+                          organization: null,
+                        }
+                      : undefined
+                  }
+                  orgName={contact.org?.name ?? null}
                   nextStepCountByRoom={nextStepCountByRoom}
                   uploadCountByRoom={uploadCountByRoom}
                 />
+                {contact.type === "org" && contact.members.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Team · {contact.members.length}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-1.5">
+                      {contact.members.map((m) => (
+                        <Link
+                          key={m.id}
+                          href={`/contacts/${m.id}`}
+                          className="flex items-center gap-2 rounded-md px-1.5 py-1 text-sm hover:bg-[var(--secondary)]"
+                        >
+                          <ContactAvatar name={m.name} type={m.type} size={22} />
+                          <span className="truncate">{m.name}</span>
+                        </Link>
+                      ))}
+                    </CardContent>
+                  </Card>
+                )}
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Logo</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ContactLogoUploader
+                      contactId={contact.id}
+                      contactName={contact.name}
+                      logoUrl={contact.logoUrl}
+                      inheritedLogoUrl={
+                        !contact.logoUrl && contact.org?.logoUrl
+                          ? contact.org.logoUrl
+                          : null
+                      }
+                      inheritedFromName={
+                        !contact.logoUrl && contact.org?.logoUrl ? contact.org.name : null
+                      }
+                    />
+                  </CardContent>
+                </Card>
+
                 <Card>
                   <CardHeader>
                     <CardTitle>Channels</CardTitle>

@@ -29,13 +29,31 @@ function initials(name: string): string {
 export function ContactAvatar({
   name,
   type,
+  logoUrl,
   size = 28,
 }: {
   name: string;
   type: "person" | "org";
+  logoUrl?: string | null;
   size?: number;
 }) {
   const style = { width: size, height: size } as const;
+  if (logoUrl) {
+    return (
+      <span
+        className="inline-flex items-center justify-center overflow-hidden rounded-md border border-[var(--border)] bg-white"
+        style={style}
+        aria-hidden
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={logoUrl}
+          alt={`${name} logo`}
+          className="h-full w-full object-contain p-0.5"
+        />
+      </span>
+    );
+  }
   if (type === "org") {
     return (
       <span

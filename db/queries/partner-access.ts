@@ -24,6 +24,8 @@ export type PartnerAccessRoom = typeof schema.partnerRooms.$inferSelect & {
   /** Signature request state for the board (dashboard query only). */
   pendingSignatures?: number;
   signedSignatures?: number;
+  /** True when surfaced via the contact's organization (room belongs to the org). */
+  viaOrg?: boolean;
 };
 
 export type PartnerAccessShare = typeof schema.partnerShares.$inferSelect & {
@@ -69,14 +71,24 @@ export type PartnerAccessRoomDetail = {
 export async function listPartnerAccessForContact(opts: {
   workspaceId: string;
   contactId: string;
+  /**
+   * When set, also surface rooms/shares belonging to the contact's organization
+   * (an org-type contact). Lets every linked teammate see the shared org room.
+   */
+  orgContactId?: string;
 }): Promise<PartnerAccessOverview> {
+  const contactIds =
+    opts.orgContactId && opts.orgContactId !== opts.contactId
+      ? [opts.contactId, opts.orgContactId]
+      : [opts.contactId];
+
   const rooms = await db
     .select()
     .from(schema.partnerRooms)
     .where(
       and(
         eq(schema.partnerRooms.workspaceId, opts.workspaceId),
-        eq(schema.partnerRooms.primaryContactId, opts.contactId),
+        inArray(schema.partnerRooms.primaryContactId, contactIds),
       ),
     )
     .orderBy(desc(schema.partnerRooms.updatedAt));
@@ -109,7 +121,7 @@ export async function listPartnerAccessForContact(opts: {
       .where(
         and(
           eq(schema.partnerShares.workspaceId, opts.workspaceId),
-          eq(schema.partnerShares.contactId, opts.contactId),
+          inArray(schema.partnerShares.contactId, contactIds),
         ),
       )
       .orderBy(desc(schema.partnerShares.sharedAt)),
@@ -139,6 +151,7 @@ export async function listPartnerAccessForContact(opts: {
       ...room,
       shareCount: shareCountByRoom.get(room.id) ?? 0,
       memberCount: memberCountByRoom.get(room.id) ?? 0,
+      viaOrg: room.primaryContactId !== opts.contactId,
     })),
     shares: shares.map((row) => ({
       ...row.share,
