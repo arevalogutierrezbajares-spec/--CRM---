@@ -302,3 +302,21 @@ export async function getWorkspaceRetentionDays(
     .limit(1);
   return row?.days ?? 30;
 }
+
+/** Capture audio settings: retention window + whether to store audio at all. */
+export async function getWorkspaceCaptureSettings(
+  workspaceId: string,
+): Promise<{ retentionDays: number; storeCallAudio: boolean }> {
+  const [row] = await db
+    .select({
+      days: workspaces.callAudioRetentionDays,
+      store: workspaces.storeCallAudio,
+    })
+    .from(workspaces)
+    .where(eq(workspaces.id, workspaceId))
+    .limit(1);
+  return {
+    retentionDays: row?.days ?? 30,
+    storeCallAudio: row?.store ?? true,
+  };
+}

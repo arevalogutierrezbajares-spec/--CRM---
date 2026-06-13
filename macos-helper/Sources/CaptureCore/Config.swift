@@ -37,6 +37,15 @@ public struct HelperConfig: Codable, Equatable {
     /// Default true (only meaningful when `liveTranscript` is on).
     public var liveTranscriptAutoShow: Bool
 
+    // MARK: - Local audio archive (transcript-only mode)
+
+    /// Keep a playable copy of each call on this Mac (in ~/Documents/AGB Call
+    /// Recordings) after it files. Pair with the CRM's transcript-only setting
+    /// to keep audio local and out of cloud storage. Default false (audio is
+    /// stored in the CRM as before). The chunks still upload for transcription;
+    /// this only adds a local save before the spool is cleaned up.
+    public var keepAudioLocal: Bool
+
     public init(crmBaseUrl: String = "",
                 token: String = "",
                 retentionNote: String? = nil,
@@ -45,7 +54,8 @@ public struct HelperConfig: Codable, Equatable {
                 silenceAutoEndSeconds: Double = HelperConfig.defaultSilenceAutoEndSeconds,
                 maxRecordingSeconds: Double = HelperConfig.defaultMaxRecordingSeconds,
                 liveTranscript: Bool = true,
-                liveTranscriptAutoShow: Bool = true) {
+                liveTranscriptAutoShow: Bool = true,
+                keepAudioLocal: Bool = false) {
         self.crmBaseUrl = crmBaseUrl
         self.token = token
         self.retentionNote = retentionNote
@@ -55,6 +65,7 @@ public struct HelperConfig: Codable, Equatable {
         self.maxRecordingSeconds = maxRecordingSeconds
         self.liveTranscript = liveTranscript
         self.liveTranscriptAutoShow = liveTranscriptAutoShow
+        self.keepAudioLocal = keepAudioLocal
     }
 
     /// 90 s of two-channel silence ≈ a clearly-ended call, well past any natural pause.
@@ -77,6 +88,7 @@ public struct HelperConfig: Codable, Equatable {
         maxRecordingSeconds = maxDur > 0 ? maxDur : HelperConfig.defaultMaxRecordingSeconds
         liveTranscript = (try? c.decodeIfPresent(Bool.self, forKey: .liveTranscript)) ?? true
         liveTranscriptAutoShow = (try? c.decodeIfPresent(Bool.self, forKey: .liveTranscriptAutoShow)) ?? true
+        keepAudioLocal = (try? c.decodeIfPresent(Bool.self, forKey: .keepAudioLocal)) ?? false
     }
 
     public var isComplete: Bool {

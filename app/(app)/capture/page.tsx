@@ -3,7 +3,7 @@ import { requireUser } from "@/lib/current-user";
 import { TopBar } from "@/components/layout/top-bar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CaptureSettingsCard } from "@/components/settings/capture-settings-card";
-import { getWorkspaceRetentionDays } from "@/db/queries/capture-sessions";
+import { getWorkspaceCaptureSettings } from "@/db/queries/capture-sessions";
 import { getLatestHelperRelease } from "@/lib/capture/downloads";
 import { safeRead } from "@/lib/db-status";
 import { Download, Headphones } from "lucide-react";
@@ -12,8 +12,11 @@ export const dynamic = "force-dynamic";
 
 export default async function CapturePage() {
   const user = await requireUser();
-  const retentionDays = (
-    await safeRead(() => getWorkspaceRetentionDays(user.workspaceId), 30)
+  const captureSettings = (
+    await safeRead(() => getWorkspaceCaptureSettings(user.workspaceId), {
+      retentionDays: 30,
+      storeCallAudio: true,
+    })
   ).data;
   const release = await getLatestHelperRelease().catch(() => null);
 
@@ -101,7 +104,10 @@ export default async function CapturePage() {
               URL is <code>{process.env.NEXT_PUBLIC_SITE_URL ?? "your CRM URL"}</code>.
               Hit <strong>Test Connection</strong> — it should go green.
             </p>
-            <CaptureSettingsCard initialRetentionDays={retentionDays} />
+            <CaptureSettingsCard
+              initialRetentionDays={captureSettings.retentionDays}
+              initialStoreCallAudio={captureSettings.storeCallAudio}
+            />
           </CardContent>
         </Card>
 

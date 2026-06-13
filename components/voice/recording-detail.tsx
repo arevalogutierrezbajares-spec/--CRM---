@@ -270,6 +270,12 @@ export function RecordingDetail({ id }: { id: string }) {
             Audio expired on {fmtDate(rec.audioPurgedAt)} per the retention policy.
             The transcript below is permanent.
           </p>
+        ) : rec.sourceApp ? (
+          <p className="text-sm text-[var(--muted-foreground)]">
+            Audio wasn&apos;t stored in the CRM (transcript-only mode). If the Mac
+            Helper kept a local copy, it&apos;s in your Call Recordings folder on
+            that Mac. The transcript below is permanent.
+          </p>
         ) : (
           <p className="text-sm text-[var(--muted-foreground)]">
             No audio stored for this recording (live-transcribed call).

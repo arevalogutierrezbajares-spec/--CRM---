@@ -8,7 +8,7 @@ import "server-only";
 import {
   getCaptureSession,
   updateCaptureSession,
-  getWorkspaceRetentionDays,
+  getWorkspaceCaptureSettings,
   type CaptureSessionRow,
 } from "@/db/queries/capture-sessions";
 import { createCallRecording } from "@/db/queries/call-recordings";
@@ -199,6 +199,12 @@ export async function finalizeSession(opts: {
   const totalBytes = chunks.reduce((n, c) => n + Math.max(c.size, 0), 0);
   const fmt = { sampleRate: CAPTURE_SAMPLE_RATE, channels: CAPTURE_CHANNELS };
 
+  // Audio is always transcribed, but only persisted when the workspace opts in.
+  // Transcript-only mode skips the bucket upload entirely (and the MP3 encode),
+  // so there's no recurring storage cost — the Helper keeps the local copy.
+  const { retentionDays, storeCallAudio } =
+    await getWorkspaceCaptureSettings(workspaceId);
+
   let txResult: TranscriptionResult;
   let durationSecs: number | null;
   let audioPath: string | null = null;
@@ -221,31 +227,35 @@ export async function finalizeSession(opts: {
     if (!tx.ok) return fail(502, tx.error);
     txResult = tx.result;
 
-    // Store the audio best-effort for playback (FR-CALL-ACC-3). If storage
-    // rejects it we keep transcript + brief rather than failing the call.
-    audioPath = assembledObjectPath(workspaceId, session.id);
-    const stored = await putObject(audioPath, asm.wav);
-    if (stored.ok) {
-      audioStored = true;
-      audioBytes = asm.wav.length;
-    } else {
-      audioPath = null;
-      console.warn(
-        `[capture] audio not stored for session ${session.id} (${asm.wav.length} bytes): ${stored.error} — transcript retained`,
-      );
+    // Store the audio best-effort for playback (FR-CALL-ACC-3), unless the
+    // workspace is transcript-only. If storage rejects it we keep transcript +
+    // brief rather than failing the call.
+    if (storeCallAudio) {
+      audioPath = assembledObjectPath(workspaceId, session.id);
+      const stored = await putObject(audioPath, asm.wav);
+      if (stored.ok) {
+        audioStored = true;
+        audioBytes = asm.wav.length;
+      } else {
+        audioPath = null;
+        console.warn(
+          `[capture] audio not stored for session ${session.id} (${asm.wav.length} bytes): ${stored.error} — transcript retained`,
+        );
+      }
     }
   } else {
     // Long call: window the transcription AND encode a compact playback MP3 in
     // the same pass — unless the call is so long the MP3 still wouldn't fit, in
     // which case we keep the transcript and skip audio (graceful).
     const estDurationSecs = totalBytes / (CAPTURE_CHANNELS * 2 * CAPTURE_SAMPLE_RATE);
-    const wantMp3 = estimatedMp3Bytes(estDurationSecs) <= STORE_AUDIO_MAX_BYTES;
+    const wantMp3 =
+      storeCallAudio && estimatedMp3Bytes(estDurationSecs) <= STORE_AUDIO_MAX_BYTES;
     const w = await transcribeWindowed(chunks, fmt, { encodeMp3: wantMp3 });
     if (!w.ok) return fail(w.status, w.error);
     txResult = w.result;
     durationSecs = w.durationSecs || opts.durationSecs || null;
 
-    if (w.mp3 && w.mp3.length <= STORE_AUDIO_MAX_BYTES) {
+    if (storeCallAudio && w.mp3 && w.mp3.length <= STORE_AUDIO_MAX_BYTES) {
       audioPath = assembledMp3ObjectPath(workspaceId, session.id);
       const stored = await putObject(audioPath, w.mp3, "audio/mpeg");
       if (stored.ok) {
@@ -276,7 +286,6 @@ export async function finalizeSession(opts: {
 
   // 5. Durable-first recording row (FR-CALL-TRX-5): transcript + audio +
   // attribution persisted BEFORE any LLM filing.
-  const retentionDays = await getWorkspaceRetentionDays(workspaceId);
   const recordingId = await createCallRecording({
     workspaceId,
     createdBy: session.createdBy,

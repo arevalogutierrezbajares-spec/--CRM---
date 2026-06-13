@@ -137,6 +137,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let worker = UploadQueueWorker(store: store, clientProvider: {
             CaptureAPIClient(config: HelperConfig.effective())
         })
+        // Transcript-only mode: keep a local copy of the call before its spool is
+        // cleared. Config is read fresh so toggling Configure… takes effect live.
+        worker.archiveLocally = { spooler, finalize in
+            guard HelperConfig.effective().keepAudioLocal else { return }
+            do {
+                let url = try LocalAudioArchive.save(spooler: spooler, title: finalize.title)
+                HelperLog.shared.info("kept local audio copy: \(url.lastPathComponent)", category: "upload")
+            } catch {
+                HelperLog.shared.warn("local audio copy failed: \(error.localizedDescription)", category: "upload")
+            }
+        }
         worker.onStateChange = { [weak self] workerState in
             DispatchQueue.main.async {
                 guard let self else { return }

@@ -52,6 +52,11 @@ public final class UploadQueueWorker {
     public var onChunkUploaded: ((_ localId: String, _ seq: Int) -> Void)?
     public var onSessionFinalized: ((Outcome) -> Void)?
     public var onError: ((String) -> Void)?
+    /// Optional: persist a local copy of the assembled audio right before the
+    /// spool is deleted (transcript-only mode keeps audio only on this Mac).
+    /// Best-effort — runs on the worker task; a failure here must never block
+    /// filing or queue progress, so the caller swallows + logs its own errors.
+    public var archiveLocally: ((ChunkSpooler, CaptureAPIClient.FinalizeResult) -> Void)?
     /// Fired ONCE per stall episode (continuous failures past the threshold),
     /// so the app can post a single user notification rather than log spam.
     public var onStalled: ((String) -> Void)?
@@ -269,7 +274,11 @@ public final class UploadQueueWorker {
         log.info("finalized \(snap.sessionLocalId): \(finalize.title ?? "(untitled)") [\(finalize.recordingId ?? "?")]",
                  category: "upload")
 
-        // 4. Confirmed upload → local buffers deleted (NFR-CALL-SEC-1).
+        // 4a. Optional local archive BEFORE the spool is removed (the chunks are
+        // the only audio source once filing skipped CRM storage).
+        archiveLocally?(spooler, finalize)
+
+        // 4b. Confirmed upload → local buffers deleted (NFR-CALL-SEC-1).
         try store.deleteSession(spooler)
         onSessionFinalized?(outcome)
     }

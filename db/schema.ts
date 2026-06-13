@@ -476,6 +476,10 @@ export const workspaces = pgTable("workspaces", {
   // FR-CALL-RET-1: how long captured call audio is kept before the purge cron
   // deletes it (transcripts are permanent). Per-workspace, founder-configurable.
   callAudioRetentionDays: integer("call_audio_retention_days").notNull().default(30),
+  // FR-CALL-RET: when false, captured call audio is transcribed but never stored
+  // in the bucket (transcript-only) — eliminates recurring audio storage cost.
+  // Pair with the Helper's "keep audio locally" option to retain a usable copy.
+  storeCallAudio: boolean("store_call_audio").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

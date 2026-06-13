@@ -10,6 +10,9 @@ final class ConfigurePanel {
     private let urlField = NSTextField(string: "")
     private let tokenField = NSSecureTextField(string: "")
     private let neverPromptField = NSTextField(string: "")
+    private let keepAudioLocalCheck = NSButton(
+        checkboxWithTitle: "Keep call audio on this Mac (don’t store in CRM)",
+        target: nil, action: nil)
     private var saved = false
     private var original: HelperConfig
 
@@ -22,6 +25,7 @@ final class ConfigurePanel {
         tokenField.stringValue = config.token
         neverPromptField.placeholderString = "Dictation, SuperWhisper (comma-separated)"
         neverPromptField.stringValue = config.neverPromptApps.joined(separator: ", ")
+        keepAudioLocalCheck.state = config.keepAudioLocal ? .on : .off
 
         for field in [urlField, tokenField, neverPromptField] {
             field.translatesAutoresizingMaskIntoConstraints = false
@@ -54,10 +58,17 @@ final class ConfigurePanel {
         hint.font = .systemFont(ofSize: 11)
         hint.textColor = .secondaryLabelColor
 
+        let audioHint = NSTextField(wrappingLabelWithString:
+            "Saves a .wav per call to ~/Documents/AGB Call Recordings. Turn on the CRM’s transcript-only setting to stop storing audio in the cloud — calls are still transcribed.")
+        audioHint.font = .systemFont(ofSize: 11)
+        audioHint.textColor = .secondaryLabelColor
+
         let stack = NSStackView(views: [
             row("CRM base URL", urlField),
             row("Capture token", tokenField),
             row("Never-prompt apps", neverPromptField),
+            keepAudioLocalCheck,
+            audioHint,
             hint,
             buttons,
         ])
@@ -67,7 +78,7 @@ final class ConfigurePanel {
         stack.edgeInsets = NSEdgeInsets(top: 18, left: 20, bottom: 16, right: 20)
 
         panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 380, height: 260),
+            contentRect: NSRect(x: 0, y: 0, width: 380, height: 340),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -98,6 +109,7 @@ final class ConfigurePanel {
             .split(separator: ",")
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
+        updated.keepAudioLocal = keepAudioLocalCheck.state == .on
         updated.helperVersion = AudioConstants.helperVersion
         return updated
     }
