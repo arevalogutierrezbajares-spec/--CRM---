@@ -10,6 +10,7 @@ import { and, eq, ilike } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { claudeWithTools, claudeChat, type ClaudeToolDef } from "@/lib/anthropic";
 import { updateCallRecording } from "@/db/queries/call-recordings";
+import { createCallMeeting } from "@/db/queries/meetings";
 
 const { actionItems, touches, contacts } = schema;
 const PRIORITIES = ["now", "next", "later", "backlog"] as const;
@@ -77,6 +78,11 @@ export type FileCallResult = {
   actionItemCount: number;
   contact: { id: string; name: string } | null;
   contactAmbiguous: boolean;
+  /**
+   * Meeting created for this call (type='call'); the recording's back-link.
+   * Null only when filing threw before the meeting was created.
+   */
+  meetingId: string | null;
 };
 
 export async function fileCallTranscript(opts: {
@@ -192,7 +198,7 @@ export async function fileCallTranscript(opts: {
         ).map((r) => r.id)
       : [];
 
-  // Contact match: unique match → touch + attach; ambiguous → flag, never guess
+  // Contact match: unique match → attach; ambiguous → flag, never guess
   // (FR-CALL-DST-4). Matching never gates persistence — the row already exists.
   let attached: { id: string; name: string } | null = null;
   let ambiguous = false;
@@ -208,23 +214,38 @@ export async function fileCallTranscript(opts: {
         ),
       )
       .limit(2);
-    if (matches.length === 1) {
-      await db.insert(touches).values({
-        contactId: matches[0].id,
-        channel: "call",
-        body: note,
-        transcript,
-        workspaceId: opts.workspaceId,
-        createdBy: opts.userId,
-      });
-      await db
-        .update(contacts)
-        .set({ lastTouchAt: new Date() })
-        .where(eq(contacts.id, matches[0].id));
-      attached = matches[0];
-    } else if (matches.length > 1) {
-      ambiguous = true;
-    }
+    if (matches.length === 1) attached = matches[0];
+    else if (matches.length > 1) ambiguous = true;
+  }
+
+  // Every filed call becomes a Meeting (type='call', source='voice') so it lives
+  // in the meeting module and rolls up onto the contact's meeting history rather
+  // than hanging orphan. The matched contact (if any) is attached as attendee.
+  const meetingId = await createCallMeeting({
+    workspaceId: opts.workspaceId,
+    createdBy: opts.userId,
+    title,
+    minutes: brief || note || null,
+    durationSecs: opts.durationSecs ?? null,
+    contactId: attached?.id ?? null,
+  });
+
+  // Contact-timeline touch for the matched contact, linked to the new meeting so
+  // the call appears on their timeline and ties back to the meeting record.
+  if (attached) {
+    await db.insert(touches).values({
+      contactId: attached.id,
+      channel: "call",
+      body: note,
+      transcript,
+      meetingId,
+      workspaceId: opts.workspaceId,
+      createdBy: opts.userId,
+    });
+    await db
+      .update(contacts)
+      .set({ lastTouchAt: new Date() })
+      .where(eq(contacts.id, attached.id));
   }
 
   await updateCallRecording({
@@ -233,6 +254,7 @@ export async function fileCallTranscript(opts: {
     title,
     brief: brief || null,
     contactId: attached?.id ?? null,
+    meetingId,
     actionItemCount: createdItemIds.length,
     contactAmbiguous: ambiguous,
   });
@@ -244,5 +266,6 @@ export async function fileCallTranscript(opts: {
     actionItemCount: createdItemIds.length,
     contact: attached,
     contactAmbiguous: ambiguous,
+    meetingId,
   };
 }

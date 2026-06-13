@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
   Calendar,
+  CalendarClock,
   Check,
   Clock,
   Headphones,
@@ -39,6 +41,8 @@ type RecordingDetail = {
   contactId: string | null;
   contactName: string | null;
   contactAmbiguous: boolean;
+  meetingId: string | null;
+  meetingTitle: string | null;
   hasAudio: boolean;
   audioPurgeAt: string | null;
   audioPurgedAt: string | null;
@@ -193,6 +197,15 @@ export function RecordingDetail({ id }: { id: string }) {
               </span>
             ) : null}
             {rec.sourceApp && <span>via {rec.sourceApp}</span>}
+            {rec.meetingId && (
+              <Link
+                href={`/meetings/${rec.meetingId}`}
+                className="inline-flex items-center gap-1 text-[var(--primary)] hover:underline"
+              >
+                <CalendarClock className="h-3 w-3" />
+                {rec.meetingTitle ?? "View meeting"}
+              </Link>
+            )}
             {rec.partial && (
               <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-amber-600">
                 partial — recovered after an interruption

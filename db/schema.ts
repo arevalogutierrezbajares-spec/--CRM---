@@ -1796,6 +1796,7 @@ export const meetingsRelations = relations(meetings, ({ one, many }) => ({
   attendees: many(meetingAttendees),
   touches: many(touches),
   materials: many(meetingMaterials),
+  callRecordings: many(callRecordings),
 }));
 
 export const meetingMaterialsRelations = relations(
@@ -2520,6 +2521,12 @@ export const callRecordings = pgTable("call_recordings", {
   contactId: uuid("contact_id").references(() => contacts.id, {
     onDelete: "set null",
   }),
+  // Back-link to the meeting created for this call (type='call', source='voice').
+  // Set by the filing pipeline; null for legacy recordings filed before the link
+  // existed. ON DELETE SET NULL — the transcript outlives its meeting.
+  meetingId: uuid("meeting_id").references(() => meetings.id, {
+    onDelete: "set null",
+  }),
   actionItemCount: integer("action_item_count").notNull().default(0),
   // ── Call Capture module (CALL-CAPTURE-MODULE-V1) ──────────────────────────
   // Storage path of the assembled dual-channel WAV; null = no audio (legacy
@@ -2557,6 +2564,10 @@ export const callRecordingsRelations = relations(callRecordings, ({ one }) => ({
   contact: one(contacts, {
     fields: [callRecordings.contactId],
     references: [contacts.id],
+  }),
+  meeting: one(meetings, {
+    fields: [callRecordings.meetingId],
+    references: [meetings.id],
   }),
 }));
 

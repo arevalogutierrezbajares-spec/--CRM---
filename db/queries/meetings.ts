@@ -8,9 +8,98 @@ const {
   projects,
   touches,
   milestones,
+  callRecordings,
 } = schema;
 
 export type MeetingRow = typeof meetings.$inferSelect;
+
+/**
+ * Create the Meeting that represents a filed call. Every recording captured via
+ * /record becomes a meeting (type='call', source='voice') so it lives in the
+ * meeting module and rolls up onto the contact's history instead of hanging
+ * orphan. When a contact matched, they're added as the sole attendee. Returns
+ * the new meeting id so the caller can back-link the recording + touch.
+ */
+export async function createCallMeeting(opts: {
+  workspaceId: string;
+  createdBy: string;
+  title: string;
+  minutes: string | null;
+  occurredAt?: Date;
+  durationSecs?: number | null;
+  contactId?: string | null;
+}): Promise<string> {
+  const occurredAt = opts.occurredAt ?? new Date();
+  const endedAt =
+    opts.durationSecs && opts.durationSecs > 0
+      ? new Date(occurredAt.getTime() + opts.durationSecs * 1000)
+      : null;
+  const [m] = await db
+    .insert(meetings)
+    .values({
+      workspaceId: opts.workspaceId,
+      createdBy: opts.createdBy,
+      title: opts.title,
+      type: "call",
+      source: "voice",
+      scheduledAt: occurredAt,
+      startedAt: occurredAt,
+      endedAt,
+      minutes: opts.minutes,
+    })
+    .returning({ id: meetings.id });
+  if (opts.contactId) {
+    await db
+      .insert(meetingAttendees)
+      .values({ meetingId: m.id, contactId: opts.contactId })
+      .onConflictDoNothing();
+  }
+  return m.id;
+}
+
+/** Minimal meeting lookup (id + title), workspace-fenced — for cross-links. */
+export async function getMeetingSummary(opts: {
+  id: string;
+  workspaceId: string;
+}): Promise<{ id: string; title: string } | null> {
+  const [row] = await db
+    .select({ id: meetings.id, title: meetings.title })
+    .from(meetings)
+    .where(
+      and(eq(meetings.id, opts.id), eq(meetings.workspaceId, opts.workspaceId)),
+    )
+    .limit(1);
+  return row ?? null;
+}
+
+export type MeetingRecordingItem = {
+  id: string;
+  title: string;
+  durationSecs: number | null;
+  createdAt: Date;
+};
+
+/** Call recordings linked to a meeting, newest first (for the meeting detail). */
+export async function listRecordingsForMeeting(opts: {
+  meetingId: string;
+  workspaceId: string;
+}): Promise<MeetingRecordingItem[]> {
+  return db
+    .select({
+      id: callRecordings.id,
+      title: callRecordings.title,
+      durationSecs: callRecordings.durationSecs,
+      createdAt: callRecordings.createdAt,
+    })
+    .from(callRecordings)
+    .where(
+      and(
+        eq(callRecordings.meetingId, opts.meetingId),
+        eq(callRecordings.workspaceId, opts.workspaceId),
+      ),
+    )
+    .orderBy(desc(callRecordings.createdAt));
+}
 export type MeetingListItem = MeetingRow & {
   attendeeCount: number;
   attendeeNames: string[];

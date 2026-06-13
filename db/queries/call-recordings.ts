@@ -79,6 +79,7 @@ export async function updateCallRecording(input: {
   title?: string;
   brief?: string | null;
   contactId?: string | null;
+  meetingId?: string | null;
   actionItemCount?: number;
   consentNote?: string | null;
   contactAmbiguous?: boolean;
@@ -87,6 +88,7 @@ export async function updateCallRecording(input: {
   if (input.title !== undefined) patch.title = input.title;
   if (input.brief !== undefined) patch.brief = input.brief;
   if (input.contactId !== undefined) patch.contactId = input.contactId;
+  if (input.meetingId !== undefined) patch.meetingId = input.meetingId;
   if (input.actionItemCount !== undefined)
     patch.actionItemCount = input.actionItemCount;
   if (input.consentNote !== undefined) patch.consentNote = input.consentNote;

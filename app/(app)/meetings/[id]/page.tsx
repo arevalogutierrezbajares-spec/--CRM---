@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronLeft, ListChecks, Radio } from "lucide-react";
+import { ChevronLeft, Headphones, ListChecks, Radio } from "lucide-react";
 import { requireUser } from "@/lib/current-user";
 import { TopBar } from "@/components/layout/top-bar";
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,7 @@ import {
   getAttendeeContext,
   listRecentTouchesForContacts,
   listPriorMeetingsForContacts,
+  listRecordingsForMeeting,
 } from "@/db/queries/meetings";
 import { listPartnerAccessForContact } from "@/db/queries/partner-access";
 import { listPartnerNextSteps } from "@/db/queries/partner-next-steps";
@@ -92,6 +93,14 @@ export default async function MeetingDetailPage(props: {
         ).then((r) => r.data),
       ])
     : [[], []];
+
+  // Call recordings filed as this meeting (type='call' meetings created by /record).
+  const recordings = meeting
+    ? await safeRead(
+        () => listRecordingsForMeeting({ meetingId: id, workspaceId: user.workspaceId }),
+        [] as Awaited<ReturnType<typeof listRecordingsForMeeting>>,
+      ).then((r) => r.data)
+    : [];
 
   // Inline-edit + dynamic-attendee data: projects (linked-project select), all
   // contacts (attendee search), and each attendee's recent CRM activity (pulled
@@ -348,6 +357,33 @@ export default async function MeetingDetailPage(props: {
                         />
                       </CardContent>
                     </Card>
+
+                    {recordings.length > 0 && (
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="flex items-center gap-2">
+                            <Headphones className="h-4 w-4" /> Recordings
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-2 text-sm">
+                          {recordings.map((r) => (
+                            <Link
+                              key={r.id}
+                              href={`/record/${r.id}`}
+                              className="block rounded-md border border-[var(--border)] px-3 py-2 hover:border-[var(--primary)]"
+                            >
+                              <div className="truncate font-medium">{r.title}</div>
+                              <div className="text-xs text-[var(--muted-foreground)]">
+                                {formatMeetingDateTime(r.createdAt)}
+                                {r.durationSecs
+                                  ? ` · ${Math.round(r.durationSecs / 60)} min`
+                                  : ""}
+                              </div>
+                            </Link>
+                          ))}
+                        </CardContent>
+                      </Card>
+                    )}
 
                     <MeetingPartnerRooms rooms={partnerRoomSummaries} />
 

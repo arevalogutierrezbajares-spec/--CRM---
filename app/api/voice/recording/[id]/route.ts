@@ -6,6 +6,7 @@ import {
   updateCallRecording,
   deleteCallRecording,
 } from "@/db/queries/call-recordings";
+import { getMeetingSummary } from "@/db/queries/meetings";
 import { removeObjects } from "@/lib/capture/storage";
 import { isUuid } from "@/lib/capture/validate";
 
@@ -27,6 +28,11 @@ export async function GET(
     ? await getContactName({ id: rec.contactId, workspaceId: user.workspaceId })
     : null;
 
+  // The meeting this call was filed as (so the detail view can link to it).
+  const meeting = rec.meetingId
+    ? await getMeetingSummary({ id: rec.meetingId, workspaceId: user.workspaceId })
+    : null;
+
   return NextResponse.json({
     id: rec.id,
     title: rec.title,
@@ -44,6 +50,8 @@ export async function GET(
     contactId: rec.contactId,
     contactName: contact?.name ?? null,
     contactAmbiguous: rec.contactAmbiguous,
+    meetingId: meeting?.id ?? null,
+    meetingTitle: meeting?.title ?? null,
     hasAudio: Boolean(rec.audioPath) && !rec.audioPurgedAt,
     audioPurgeAt: rec.audioPurgeAt,
     audioPurgedAt: rec.audioPurgedAt,

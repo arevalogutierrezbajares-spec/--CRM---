@@ -318,6 +318,7 @@ export async function finalizeSession(opts: {
       actionItemCount: 0,
       contact: null,
       contactAmbiguous: false,
+      meetingId: null,
     };
     // Session still counts as filed (recording exists); error noted.
     await updateCaptureSession({
