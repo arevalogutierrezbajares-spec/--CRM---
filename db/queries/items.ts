@@ -414,6 +414,44 @@ export async function findActionItems(opts: {
     .limit(opts.limit ?? 15);
 }
 
+export type OpenActionItem = {
+  id: string;
+  title: string;
+  dueDate: string | null;
+  priority: WorkPriority | null;
+  projectId: string | null;
+  createdAt: Date;
+};
+
+/**
+ * Open action items for the workspace, newest first — the helper's checklist.
+ * Richer than findActionItems (which is a title-only fuzzy lookup): carries due
+ * date + priority + project so the macOS Town Hall can render the full row.
+ */
+export async function listOpenActionItems(opts: {
+  workspaceId: string;
+  limit?: number;
+}): Promise<OpenActionItem[]> {
+  return db
+    .select({
+      id: schema.actionItems.id,
+      title: schema.actionItems.title,
+      dueDate: schema.actionItems.dueDate,
+      priority: schema.actionItems.priority,
+      projectId: schema.actionItems.projectId,
+      createdAt: schema.actionItems.createdAt,
+    })
+    .from(schema.actionItems)
+    .where(
+      and(
+        eq(schema.actionItems.workspaceId, opts.workspaceId),
+        eq(schema.actionItems.status, "open"),
+      ),
+    )
+    .orderBy(desc(schema.actionItems.createdAt))
+    .limit(opts.limit ?? 100);
+}
+
 /** Fuzzy-match a project by title within the workspace → id (for #refs / capture). */
 export async function findProjectByName(
   workspaceId: string,

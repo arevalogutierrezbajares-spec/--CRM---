@@ -499,6 +499,64 @@ export async function createProjectLink(input: ProjectLinkInput): Promise<Projec
   });
 }
 
+export type ProjectNoteInput = {
+  workspaceId: string;
+  lobId: string;
+  actorId: string;
+  label: string;
+  body: string;
+  category?: ProjectLinkCategory;
+};
+
+/**
+ * Insert a kind='note' row (text-only, body in `description`) + a 'create'
+ * audit, mirroring createProjectLink. Used by the macOS helper to drop a quick
+ * note onto a project. sort_order lands at the bottom of its category.
+ */
+export async function createProjectNote(input: ProjectNoteInput): Promise<ProjectLinkRow> {
+  const category = input.category ?? "other";
+  return db.transaction(async (tx) => {
+    const [{ nextOrder }] = await tx
+      .select({
+        nextOrder: rawSql<number>`COALESCE(MAX(${schema.projectLinks.sortOrder}), -1) + 1`,
+      })
+      .from(schema.projectLinks)
+      .where(
+        and(
+          eq(schema.projectLinks.lobId, input.lobId),
+          eq(schema.projectLinks.category, category),
+        ),
+      );
+
+    const [row] = await tx
+      .insert(schema.projectLinks)
+      .values({
+        workspaceId: input.workspaceId,
+        lobId: input.lobId,
+        kind: "note",
+        category,
+        label: input.label,
+        url: null,
+        description: input.body,
+        sortOrder: Number(nextOrder),
+        createdBy: input.actorId,
+      })
+      .returning();
+
+    await tx.insert(schema.projectLinkAudits).values({
+      workspaceId: input.workspaceId,
+      lobId: input.lobId,
+      linkId: row.id,
+      actorId: input.actorId,
+      action: "create",
+      before: null,
+      after: row,
+    });
+
+    return row;
+  });
+}
+
 export type ProjectLinkUpdate = {
   workspaceId: string;
   lobId: string;

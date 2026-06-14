@@ -70,6 +70,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// menu-bar icon hiding behind the notch or a swallowed global hotkey.
     private let controlWindow = ControlWindow()
 
+    /// Town Hall lives INSIDE the control panel (controlWindow.pane). This is its
+    /// native-banner notifier + background poller.
+    private let townHallNotifier = TownHallNotifier()
+    private var townHallPoller: TownHallPoller?
+
     /// Wall-clock recording start, for the live menu timer + elapsed display.
     private var recordingStartedAt: Date?
     /// Ticks the live "Recording mm:ss — Stop" label once a second.
@@ -116,6 +121,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controlWindow.onToggle = { [weak self] in self?.hotKeyToggled() }
         controlWindow.onConfigure = { [weak self] in self?.configureTapped() }
         controlWindow.onToggleTranscript = { [weak self] in self?.liveWindow.toggle() }
+        controlWindow.onOpenTownHall = { [weak self] in self?.townHallOpened() }
+        configureTownHall()
         controlWindow.show()
 
         detector.arm()
@@ -137,6 +144,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             finishRecording(autoDetected: false)
         }
         worker?.stop()
+        townHallPoller?.stop()
+    }
+
+    // MARK: - Town Hall
+
+    /// Wire the embedded Town Hall pane to the API + poller. Called once at
+    /// launch. The poller starts the first time Town Hall is expanded (so the
+    /// helper never hits the API before it's configured) and then runs for the
+    /// app's lifetime, so native banners arrive even when the panel is collapsed.
+    private func configureTownHall() {
+        let pane = controlWindow.pane
+        pane.clientProvider = { CaptureAPIClient(config: HelperConfig.effective()) }
+        pane.onMutation = { [weak self] in self?.townHallPoller?.pokeNow() }
+        pane.onError = { [weak self] msg in self?.presentAlert(title: "Town Hall", text: msg) }
+
+        let poller = TownHallPoller(clientProvider: { CaptureAPIClient(config: HelperConfig.effective()) })
+        poller.onNewNotifications = { [weak self] new in self?.townHallNotifier.post(new) }
+        poller.onNotifications = { [weak self] unread, items in
+            self?.controlWindow.pane.applyNotifications(unread: unread, items: items)
+        }
+        poller.onPosts = { [weak self] posts in self?.controlWindow.pane.applyPosts(posts) }
+        townHallPoller = poller
+    }
+
+    /// Fired the first time the panel expands into Town Hall.
+    private func townHallOpened() {
+        townHallNotifier.requestAuthorizationOnce()
+        if HelperConfig.effective().isComplete { townHallPoller?.start() }
+    }
+
+    /// Menu item / hotkey: expand the control panel into Town Hall.
+    @objc private func openTownHall() {
+        controlWindow.setExpanded(true, animated: true)
     }
 
     // MARK: - Worker
@@ -852,6 +892,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(offRecord)
 
         menu.addItem(.separator())
+        let townHallItem = makeItem("Town Hall", #selector(openTownHall), "h")
+        townHallItem.keyEquivalentModifierMask = [.command, .shift]
+        menu.addItem(townHallItem)
         let liveItem = makeItem("Show live transcript", #selector(toggleLiveTranscriptTapped), "t")
         liveTranscriptMenuItem = liveItem
         menu.addItem(liveItem)
