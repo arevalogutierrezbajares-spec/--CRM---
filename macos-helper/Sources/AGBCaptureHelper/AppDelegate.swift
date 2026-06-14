@@ -205,7 +205,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     ? "\(shortTitle) · \(n) action item\(n == 1 ? "" : "s")"
                     : "\(shortTitle) · transcript + brief"
                 let warn = !(outcome.finalize.suspectFlags?.isEmpty ?? true)
-                self.controlWindow.flashFiled(title: filedTitle, detail: detail, warning: warn)
+                // Deep-link the confirmation to this call's transcript in the CRM.
+                let base = HelperConfig.effective().crmBaseUrl
+                var crmURL: URL? = nil
+                if let rid = outcome.finalize.recordingId, !rid.isEmpty,
+                   !base.isEmpty, let b = URL(string: base) {
+                    crmURL = b.appendingPathComponent("meetings/recordings/\(rid)")
+                }
+                self.controlWindow.flashFiled(title: filedTitle, detail: detail, warning: warn, url: crmURL)
             }
         }
         worker.onError = { [weak self] message in

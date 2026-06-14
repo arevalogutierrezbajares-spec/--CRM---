@@ -37,6 +37,10 @@ final class ControlWindow: NSObject {
     private var confirming = false
     private var pendingMode: Mode?
     private var confirmTimer: Timer?
+    // Transparent overlay over the logo/title/sub that, while a confirmation is
+    // showing, opens the filed call in the CRM. Hidden otherwise.
+    private var confirmOverlay: NSButton?
+    private var pendingOpenURL: URL?
 
     var onToggle: (() -> Void)?
     var onConfigure: (() -> Void)?
@@ -94,6 +98,17 @@ final class ControlWindow: NSObject {
         container.addSubview(btn)
         self.button = btn
 
+        // Transparent click target over the status area; only live (visible)
+        // while a "Saved to CRM" confirmation is up. Added before the gear so the
+        // gear stays clickable on top of it.
+        let overlay = NSButton(title: "", target: self, action: #selector(openFiledTapped))
+        overlay.isBordered = false
+        overlay.isTransparent = true // draws nothing, still receives clicks
+        overlay.isHidden = true
+        overlay.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(overlay)
+        self.confirmOverlay = overlay
+
         // Small gear in the top-right opens the config dialog directly from the
         // panel, so the helper is configurable without the menu-bar icon.
         let gear = NSButton(
@@ -129,6 +144,11 @@ final class ControlWindow: NSObject {
             btn.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -20),
             btn.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -16),
             btn.heightAnchor.constraint(equalToConstant: 42),
+
+            overlay.topAnchor.constraint(equalTo: container.topAnchor),
+            overlay.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            overlay.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            overlay.bottomAnchor.constraint(equalTo: btn.topAnchor, constant: -6),
         ])
 
         panel.contentView?.addSubview(container)
@@ -183,26 +203,36 @@ final class ControlWindow: NSObject {
     /// Show a "Saved to CRM" confirmation in the panel for a few seconds after a
     /// call files (transcript + brief + action items persisted). `warning` flags
     /// a suspect capture (e.g. a silent channel) so the founder double-checks it.
-    func flashFiled(title: String, detail: String, warning: Bool) {
+    func flashFiled(title: String, detail: String, warning: Bool, url: URL?) {
         guard button != nil else { return }
         confirming = true
         pendingMode = nil
+        pendingOpenURL = url
         confirmTimer?.invalidate()
 
-        titleLabel?.stringValue = warning ? "Saved — check it" : "Saved to CRM"
-        subLabel?.stringValue = detail
+        let base = warning ? "Saved — check it" : "Saved to CRM"
+        titleLabel?.stringValue = url != nil ? "\(base)  ↗" : base
+        subLabel?.stringValue = url != nil ? "\(detail) — tap to open" : detail
         logo?.set(color: warning ? .systemOrange : .systemGreen, motion: .calm)
         button?.configure(title: "Start Recording", fill: .systemRed, glyph: .record)
+        confirmOverlay?.isHidden = (url == nil)
 
         confirmTimer = Timer.scheduledTimer(withTimeInterval: 7, repeats: false) { [weak self] _ in
             self?.endConfirmation(apply: true)
         }
     }
 
+    @objc private func openFiledTapped() {
+        if let url = pendingOpenURL { NSWorkspace.shared.open(url) }
+        endConfirmation(apply: true)
+    }
+
     private func endConfirmation(apply: Bool) {
         confirming = false
         confirmTimer?.invalidate()
         confirmTimer = nil
+        confirmOverlay?.isHidden = true
+        pendingOpenURL = nil
         let next = pendingMode ?? .idle(label: "Idle — watching for calls")
         pendingMode = nil
         if apply { applyMode(next) }
