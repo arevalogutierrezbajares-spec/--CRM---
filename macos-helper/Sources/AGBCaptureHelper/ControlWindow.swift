@@ -32,6 +32,7 @@ final class ControlWindow: NSObject {
     private var button: PillButton?
 
     var onToggle: (() -> Void)?
+    var onConfigure: (() -> Void)?
 
     func show() {
         if let panel {
@@ -86,7 +87,26 @@ final class ControlWindow: NSObject {
         container.addSubview(btn)
         self.button = btn
 
+        // Small gear in the top-right opens the config dialog directly from the
+        // panel, so the helper is configurable without the menu-bar icon.
+        let gear = NSButton(
+            image: NSImage(systemSymbolName: "gearshape", accessibilityDescription: "Configure")
+                ?? NSImage(),
+            target: self,
+            action: #selector(configureTapped))
+        gear.isBordered = false
+        gear.bezelStyle = .regularSquare
+        gear.contentTintColor = .secondaryLabelColor
+        gear.toolTip = "Configure…"
+        gear.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(gear)
+
         NSLayoutConstraint.activate([
+            gear.topAnchor.constraint(equalTo: container.topAnchor, constant: 11),
+            gear.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -13),
+            gear.widthAnchor.constraint(equalToConstant: 20),
+            gear.heightAnchor.constraint(equalToConstant: 20),
+
             logo.topAnchor.constraint(equalTo: container.topAnchor, constant: 14),
             logo.centerXAnchor.constraint(equalTo: container.centerXAnchor),
             logo.widthAnchor.constraint(equalToConstant: 56),
@@ -114,6 +134,7 @@ final class ControlWindow: NSObject {
     }
 
     @objc private func toggleTapped() { onToggle?() }
+    @objc private func configureTapped() { onConfigure?() }
 
     /// Reflect the recorder state on the monogram, captions, and the big button.
     func update(_ mode: Mode) {

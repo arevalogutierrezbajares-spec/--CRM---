@@ -114,6 +114,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Always-on-screen Start/Stop control (notch-proof, hotkey-independent).
         controlWindow.onToggle = { [weak self] in self?.hotKeyToggled() }
+        controlWindow.onConfigure = { [weak self] in self?.configureTapped() }
         controlWindow.show()
 
         detector.arm()
