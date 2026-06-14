@@ -393,6 +393,7 @@ const initiativePatchSchema = z
     goal: z.string().nullable().optional(),
     successCriteria: z.string().nullable().optional(),
     ownerUserId: z.string().uuid().nullable().optional(),
+    lobId: z.string().uuid().nullable().optional(),
   })
   .strict();
 

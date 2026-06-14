@@ -19,8 +19,12 @@ import {
   type PlanDocData,
 } from "@/db/queries/roadmap";
 import { RoadmapToolbar } from "@/components/roadmap/roadmap-toolbar";
-import { PlanDoc } from "@/components/roadmap/plan-doc";
 import { UnassignedLane } from "@/components/roadmap/unassigned-lane";
+import { RoadmapBoard } from "@/components/roadmap/roadmap-board";
+import type {
+  TimelineGroup,
+  TimelineItem,
+} from "@/components/roadmap/roadmap-timeline";
 
 /* FR-RVW-3: exactly three zoom levels. */
 const WINDOWS = {
@@ -57,18 +61,6 @@ function leftPct(dateIso: string | null, start: Date, totalMs: number): number {
   return Math.max(0, Math.min(100, pos));
 }
 
-function widthPct(
-  startIso: string | null,
-  endIso: string | null,
-  windowStart: Date,
-  totalMs: number,
-): number {
-  if (!startIso || !endIso) return 0;
-  const a = leftPct(startIso, windowStart, totalMs);
-  const b = leftPct(endIso, windowStart, totalMs);
-  return Math.max(2, b - a);
-}
-
 export default async function RoadmapPage({
   searchParams,
 }: {
@@ -89,7 +81,7 @@ export default async function RoadmapPage({
       safeRead<SprintWithStats[]>(() => listSprints(user.workspaceId), []),
       safeRead<PlanDocData>(
         () => getPlanDocData(user.workspaceId),
-        { initiatives: [], members: [] },
+        { initiatives: [], members: [], lobs: [] },
       ),
       safeRead(
         () => listUnassignedTasks(user.workspaceId),
@@ -121,6 +113,33 @@ export default async function RoadmapPage({
     tl.totalMs,
   );
 
+  // Group on-timeline initiatives into Line-of-Business swimlanes.
+  const tlGroups: TimelineGroup[] = (() => {
+    const map = new Map<string, TimelineGroup>();
+    for (const i of onTimeline) {
+      const key = i.lobId ?? "none";
+      if (!map.has(key)) {
+        map.set(key, {
+          lobId: i.lobId ?? null,
+          lobTitle: i.projectTitle ?? "Cross-venture",
+          items: [],
+        });
+      }
+      const item: TimelineItem = {
+        id: i.id,
+        title: i.title,
+        subLabel: i.ownerName ?? null,
+        startDate: i.startDate,
+        targetEndDate: i.targetEndDate,
+        healthColor: i.healthColor,
+        taskCount: i.taskCount,
+        taskDoneCount: i.taskDoneCount,
+      };
+      map.get(key)!.items.push(item);
+    }
+    return Array.from(map.values());
+  })();
+
   return (
     <>
       <TopBar email={user.email} displayName={user.displayName} />
@@ -134,10 +153,11 @@ export default async function RoadmapPage({
           </div>
           <Link
             href="/roadmap/plan"
+            title="Snapshot the plan, review what changed since the last version, and commit a new baseline"
             className="rounded-md px-3 py-1.5 text-[13px] font-medium text-white"
             style={{ background: "var(--blue-mid)" }}
           >
-            Planning session
+            Review &amp; commit plan
           </Link>
         </header>
 
@@ -170,106 +190,22 @@ export default async function RoadmapPage({
           <DbBanner error={(initsRes as { error?: string }).error ?? ""} />
         )}
 
-        {/* Timeline grid */}
-        <div
-          className="rounded-lg border bg-card p-3 overflow-x-auto"
-          style={{ borderColor: "var(--border-default)" }}
-        >
-          <div className="min-w-[700px] relative">
-            {/* Month header */}
-            <div
-              className="grid border-b pb-1.5 mb-2"
-              style={{
-                gridTemplateColumns: `200px repeat(${monthCount}, 1fr)`,
-                borderColor: "var(--border-default)",
-              }}
-            >
-              <div className="text-tiny text-text-tertiary font-medium uppercase tracking-wider">
-                Initiative
-              </div>
-              {tl.months.map((m) => (
-                <div
-                  key={m.label}
-                  className="text-tiny text-text-secondary font-medium text-center"
-                >
-                  {m.label}
-                </div>
-              ))}
-            </div>
-
-            {/* Today marker on the data area */}
-            {todayPct > 0 && (
-              <div
-                className="absolute top-8 bottom-0 border-l-2 border-dashed pointer-events-none"
-                style={{
-                  left: `calc(200px + ${todayPct}% * (100% - 200px) / 100%)`,
-                  borderColor: "var(--blue-mid)",
-                }}
-              />
-            )}
-
-            {onTimeline.length === 0 ? (
-              <p className="text-[12px] text-text-secondary py-4 text-center">
-                No initiatives with start dates in this window. Set dates in the
-                plan below and they appear here.
-              </p>
-            ) : (
-              onTimeline.map((init) => {
-                const left = leftPct(init.startDate, tl.start, tl.totalMs);
-                const width = widthPct(
-                  init.startDate,
-                  init.targetEndDate ?? new Date(tl.end).toISOString().slice(0, 10),
-                  tl.start,
-                  tl.totalMs,
-                );
-                const fillColor =
-                  init.healthColor === "red"
-                    ? "var(--red-mid)"
-                    : init.healthColor === "amber"
-                      ? "var(--amber-mid)"
-                      : "var(--green-mid)";
-
-                return (
-                  <div
-                    key={init.id}
-                    className="grid items-center py-1.5"
-                    style={{ gridTemplateColumns: `200px 1fr` }}
-                  >
-                    <Link
-                      href={`/initiatives/${init.id}`}
-                      className="min-w-0 pr-2"
-                    >
-                      <div className="text-[12.5px] font-medium text-text-primary truncate hover:underline">
-                        {init.title}
-                      </div>
-                      <div className="text-tiny text-text-tertiary truncate">
-                        {init.projectTitle ?? "Cross-venture"}
-                      </div>
-                    </Link>
-                    <div className="relative h-7 bg-surface rounded">
-                      <div
-                        className="absolute top-1 bottom-1 rounded flex items-center px-2 text-tiny font-medium text-white"
-                        style={{
-                          left: `${left}%`,
-                          width: `${width}%`,
-                          background: `color-mix(in oklab, ${fillColor} 75%, transparent)`,
-                        }}
-                        title={`${init.startDate} → ${init.targetEndDate ?? "open"}`}
-                      >
-                        {/* FR-PRG-1: fractions, not percentages */}
-                        <span className="truncate" style={{ color: "white" }}>
-                          {init.taskCount > 0
-                            ? `${init.taskDoneCount}/${init.taskCount}`
-                            : "no tasks"}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
+        {/* Timeline + plan with shared milestone selection (click a bar →
+            deliverables expand inline + the plan filters to it). */}
+        <RoadmapBoard
+          timeline={{
+            monthCount,
+            months: tl.months.map((m) => ({ label: m.label })),
+            windowStartMs: tl.start.getTime(),
+            windowTotalMs: tl.totalMs,
+            todayPct,
+            groups: tlGroups,
+            detailsById: Object.fromEntries(
+              planDocRes.data.initiatives.map((i) => [i.id, i]),
+            ),
+          }}
+          planData={planDocRes.data}
+        />
 
         {/* Unassigned lane (FR-UNI-3/4) */}
         <UnassignedLane
@@ -279,12 +215,6 @@ export default async function RoadmapPage({
             title: i.title,
           }))}
         />
-
-        {/* The plan as a document (FR-RVW-1) */}
-        <section className="space-y-2">
-          <h2 className="text-label text-text-secondary">The plan</h2>
-          <PlanDoc data={planDocRes.data} />
-        </section>
 
         {/* Sprints list */}
         {sprintsRes.data.length > 0 && (
