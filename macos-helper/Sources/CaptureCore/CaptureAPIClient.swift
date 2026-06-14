@@ -330,7 +330,7 @@ public final class CaptureAPIClient {
 
     // MARK: - Plumbing
 
-    private func makeRequest(path: String, method: String) -> URLRequest {
+    func makeRequest(path: String, method: String) -> URLRequest {
         var url = baseURL
         // Avoid double slashes when baseURL has a trailing slash.
         let trimmed = path.hasPrefix("/") ? String(path.dropFirst()) : path
@@ -348,7 +348,7 @@ public final class CaptureAPIClient {
         return request
     }
 
-    private func send(_ request: URLRequest, body: Data? = nil) async throws -> (Data, Int) {
+    func send(_ request: URLRequest, body: Data? = nil) async throws -> (Data, Int) {
         do {
             let (data, response): (Data, URLResponse)
             if let body {
@@ -365,7 +365,7 @@ public final class CaptureAPIClient {
         }
     }
 
-    private func throwForCommonStatus(_ status: Int, data: Data) throws {
+    func throwForCommonStatus(_ status: Int, data: Data) throws {
         switch status {
         case 401: throw APIError.unauthorized
         case 404: throw APIError.sessionNotFound
@@ -374,7 +374,7 @@ public final class CaptureAPIClient {
         }
     }
 
-    private func decode<T: Decodable>(_ type: T.Type, from data: Data) throws -> T {
+    func decode<T: Decodable>(_ type: T.Type, from data: Data) throws -> T {
         do {
             return try JSONDecoder().decode(type, from: data)
         } catch {
@@ -382,7 +382,7 @@ public final class CaptureAPIClient {
         }
     }
 
-    private func bodyString(_ data: Data) -> String {
+    func bodyString(_ data: Data) -> String {
         String(data: data, encoding: .utf8) ?? "<\(data.count) bytes>"
     }
 }

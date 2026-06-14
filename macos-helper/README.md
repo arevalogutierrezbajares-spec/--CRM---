@@ -124,6 +124,7 @@ disabled by a footgun config):
 | Pause / Resume | paused intervals are absent from the recording, not silence (FR-CALL-CAP-7) |
 | Off the record: discard last 5 min | drops the un-uploaded tail from the local spool (FR-CALL-CAP-8 v1) |
 | Show / Hide live transcript | toggles the floating live-transcript window (⌘⇧T) |
+| Town Hall | expands the control panel into Town Hall (⌘⇧H) — feed, notifications, action items, files, notes, all in this one window |
 | Test Connection | `GET /api/capture/ping` |
 | Configure… | URL + token + never-prompt apps |
 | Diagnostics | writes `~/Desktop/agb-capture-diagnostics.txt`: state, permissions, config (token masked), spool, last uploads, log tail (FR-CALL-OPS-6) |
@@ -172,6 +173,43 @@ feature are configurable (`liveTranscript`, `liveTranscriptAutoShow`).
 
 Logs: `os.log` subsystem `com.agb.capture-helper` + rotating plain-text file at
 `~/Library/Application Support/AGBCaptureHelper/logs/helper.log`.
+
+## Town Hall (expands in the same panel)
+
+Beyond call capture, the AGB control panel **expands in place** into Town Hall —
+press the `bubble.left.and.bubble.right` button on the control (or ⌘⇧H). The panel
+animates from its top-right anchor into a workspace: a slim header (collapse,
+monogram, live recording state, a compact record button, gear/transcript) above a
+left **sidebar** of sections and a content area. There is no separate window — the
+record control and the whole chief-of-staff surface live in the one panel. Click
+the sidebar/collapse button to shrink back to the compact control.
+
+| Section | What it does |
+|---|---|
+| **Feed** | Newest-first Town Hall posts (author, body, #project refs, 👍). Compose a message with an optional `#project` reference. |
+| **Notifications** | Active inbox (unread + unsnoozed) with Open (deep-links into the CRM), Mark read, and Snooze (1h / tomorrow / next week). The toolbar item shows the unread count. |
+| **Action Items** | Open items with a done checkbox; create one with title + optional project + due date + priority. |
+| **Files** | Pick a project (line of business), browse its files (Open downloads via a signed URL), and upload by dropping files on the list **or** the Upload… picker. |
+| **Notes** | Save a quick note — either a Town Hall note-post (lands in the feed) or attached to a project. |
+
+A single background **poller** refreshes the feed + notifications every ~30 s and
+posts native macOS banners for newly-arrived notifications (it primes silently on
+the first poll so existing unread items don't all banner at launch, and uses each
+notification's id as the banner identifier so the OS de-dupes across relaunches).
+The poller starts on first open and runs for the app's lifetime, so banners arrive
+even when the window is closed. Banner authorization is requested once; if denied,
+the in-window Notifications list is the fallback.
+
+It talks to the same `agbcap_` capture token over these capture-authed routes:
+`GET /api/capture/{lobs,projects,members}`, `GET /api/capture/lobs/{id}/files`,
+`POST /api/capture/files/{sign,finalize}` (3-step sign → raw PUT to Supabase →
+finalize), `GET|POST /api/capture/posts`, `POST /api/capture/reactions`,
+`POST /api/capture/notes`, `GET /api/capture/notifications` +
+`PATCH /api/capture/notifications/{id}`, and `GET|POST /api/capture/action-items`
++ `PATCH /api/capture/action-items/{id}`.
+
+> Native banners need the signed `.app` bundle (a valid bundle id). Under a bare
+> `swift run` they no-op; the in-window list still works.
 
 ## Simulate mode (headless E2E)
 
