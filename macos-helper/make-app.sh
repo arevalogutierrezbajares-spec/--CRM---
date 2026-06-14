@@ -33,6 +33,14 @@ rm -rf "$APP_DIR"
 mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources"
 cp "$BIN" "$APP_DIR/Contents/MacOS/$APP_NAME"
 
+# Finder/Dock app icon (the AGB monogram). Regenerate with scripts/make-icon.sh
+# when the logo changes; committed AppIcon.icns is bundled on every build.
+if [[ -f "$PWD/AppIcon.icns" ]]; then
+    cp "$PWD/AppIcon.icns" "$APP_DIR/Contents/Resources/AppIcon.icns"
+else
+    echo "    (no AppIcon.icns — run scripts/make-icon.sh; bundling without an icon)"
+fi
+
 cat > "$APP_DIR/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -43,6 +51,8 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
     <key>CFBundleIdentifier</key>             <string>$BUNDLE_ID</string>
     <key>CFBundleInfoDictionaryVersion</key>  <string>6.0</string>
     <key>CFBundleName</key>                   <string>AGB Capture Helper</string>
+    <key>CFBundleIconFile</key>               <string>AppIcon</string>
+    <key>CFBundleIconName</key>               <string>AppIcon</string>
     <key>CFBundlePackageType</key>            <string>APPL</string>
     <key>CFBundleShortVersionString</key>     <string>$VERSION</string>
     <key>CFBundleVersion</key>                <string>$VERSION</string>

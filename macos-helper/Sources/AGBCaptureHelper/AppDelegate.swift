@@ -18,7 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         var glyph: (symbol: String, color: NSColor) {
             switch self {
-            case .idle: return ("○", .secondaryLabelColor)
+            case .idle: return ("○", .labelColor)
             case .detected: return ("?", .systemYellow)
             case .recording: return ("●", .systemRed)
             case .paused: return ("‖", .systemOrange)
@@ -743,9 +743,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Status item / menu
 
+    /// The AGB monogram (from public/logos/crm.svg, viewBox 200×200) drawn as a
+    /// template image: three angular strokes. Template = the menu bar tints it
+    /// for light/dark automatically, and we override the tint per state via the
+    /// button's contentTintColor. Filled (not stroked) so it stays legible at
+    /// menu-bar size where the brand's thin outline would disappear.
+    private static func agbLogoImage(size: CGFloat = 18) -> NSImage {
+        let image = NSImage(size: NSSize(width: size, height: size), flipped: false) { _ in
+            let scale = (size - 2) / 200.0
+            // SVG is y-down; AppKit is y-up — map each point and flip vertically.
+            func p(_ x: CGFloat, _ y: CGFloat) -> NSPoint {
+                NSPoint(x: 1 + x * scale, y: size - (1 + y * scale))
+            }
+            let path = NSBezierPath()
+            // Left wedge.
+            path.move(to: p(62, 44)); path.line(to: p(84, 44))
+            path.line(to: p(44, 166)); path.line(to: p(8, 166)); path.close()
+            // Center bar.
+            path.move(to: p(89, 44)); path.line(to: p(111, 44))
+            path.line(to: p(111, 166)); path.line(to: p(89, 166)); path.close()
+            // Right wedge.
+            path.move(to: p(116, 44)); path.line(to: p(138, 44))
+            path.line(to: p(192, 166)); path.line(to: p(156, 166)); path.close()
+            NSColor.black.setFill()
+            path.fill()
+            return true
+        }
+        image.isTemplate = true
+        return image
+    }
+
     private func buildStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem = item
+        item.button?.image = Self.agbLogoImage()
+        item.button?.imagePosition = .imageOnly
 
         stateMenuItem.isEnabled = false
         errorMenuItem.isEnabled = false
@@ -825,14 +857,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         if let button = statusItem?.button {
-            let glyph = display.glyph
-            button.attributedTitle = NSAttributedString(
-                string: glyph.symbol,
-                attributes: [
-                    .foregroundColor: glyph.color,
-                    .font: NSFont.systemFont(ofSize: 14, weight: .bold),
-                ]
-            )
+            // AGB monogram, tinted by state: adaptive (full-contrast) when idle,
+            // red while recording, etc. — so it's always visible in the menu bar.
+            button.contentTintColor = display.glyph.color
             button.toolTip = "AGB Capture Helper — \(display.label)"
         }
 
