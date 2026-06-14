@@ -157,7 +157,13 @@ export function RoadmapTimeline({
   }, []);
 
   // Measure bar edges after layout and build connector coordinates.
+  // While a milestone is focused (deliverables view) we hide all connectors
+  // so the expanded panel stays clean.
   useLayoutEffect(() => {
+    if (selectedId) {
+      setArrows([]);
+      return;
+    }
     const c = containerRef.current;
     if (!c) return;
     const cr = c.getBoundingClientRect();
@@ -536,8 +542,9 @@ export function RoadmapTimeline({
           })
         )}
 
-        {/* Dependency connectors + live drag-to-link rubber-band */}
-        {(arrows.length > 0 || linking) && (
+        {/* Dependency connectors + live drag-to-link rubber-band.
+            Hidden while a milestone is focused (deliverables view). */}
+        {!selectedId && (arrows.length > 0 || linking) && (
           <svg
             className="absolute inset-0 pointer-events-none"
             style={{ width: "100%", height: "100%", zIndex: 5 }}
