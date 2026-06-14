@@ -57,7 +57,6 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
     <key>CFBundleShortVersionString</key>     <string>$VERSION</string>
     <key>CFBundleVersion</key>                <string>$VERSION</string>
     <key>LSMinimumSystemVersion</key>         <string>14.0</string>
-    <key>LSUIElement</key>                    <true/>
     <key>NSMicrophoneUsageDescription</key>
     <string>AGB Capture Helper records your side of calls (with your explicit per-call consent) to file them into your CRM.</string>
     <key>NSAudioCaptureUsageDescription</key>

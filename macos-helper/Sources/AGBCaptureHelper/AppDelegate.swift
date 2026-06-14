@@ -120,6 +120,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         refreshUI()
     }
 
+    /// Now that the app shows in the Dock (not LSUIElement), clicking its Dock
+    /// icon — or reopening it from Finder while it's already running — surfaces
+    /// the floating control so there's always a visible response.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        controlWindow.show()
+        return true
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         // Best-effort: a quit mid-recording ends the session cleanly so the
         // worker (next launch) finalizes it rather than salvaging a "crash".
