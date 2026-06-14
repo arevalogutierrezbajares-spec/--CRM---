@@ -2,59 +2,78 @@ import AppKit
 import QuartzCore
 import CaptureCore
 
-/// A small, always-visible floating control: the animated AGB monogram, the
-/// current state, and one big button. Exists because a menu-bar app is hard to
-/// drive on a notched MacBook — the status item hides behind the notch and a
-/// global hotkey can be swallowed. This window is always on screen, one click
-/// from recording, and never depends on the menu bar.
+/// The single AGB panel. Two modes in ONE window (no separate Town Hall window):
 ///
-/// The monogram doubles as a live indicator: its three strokes breathe gently
-/// when idle and pulse in a staggered red "equalizer" wave while recording, so
-/// state is unmistakable. The button mirrors the state machine: Start Recording
-/// when idle, Record This Call while a detection prompt is up, and Stop with the
-/// elapsed time while capturing. All methods run on the main thread.
+///  • **Compact** — the always-visible floating control: the animated AGB
+///    monogram, the current state, and one big Start/Stop button. One click from
+///    recording, never dependent on the menu bar.
+///  • **Expanded** — the same panel grown into a workspace: a slim header strip
+///    (collapse, monogram, live state, a compact record button, gear/transcript)
+///    above an embedded `TownHallPane` (sidebar nav + content: feed,
+///    notifications, action items, files, notes). Everything lives here.
+///
+/// The monogram doubles as a live indicator (calm breathe idle / red equalizer
+/// wave recording). The panel grows from and collapses back to its top-right
+/// anchor with an animated frame change + content crossfade. All methods run on
+/// the main thread.
 final class ControlWindow: NSObject {
 
-    /// What the single big button currently means.
     enum Mode: Equatable {
         case idle(label: String)
         case detected
         case capturing(elapsed: String)
     }
 
-    /// Stable title used by PromptController to find this window's frame.
     static let windowTitle = "AGB Capture"
 
+    private static let compactSize = NSSize(width: 300, height: 168)
+    private static let expandedSize = NSSize(width: 880, height: 600)
+
     private var panel: NSPanel?
+
+    // Compact-mode views.
+    private var compactContainer: NSView?
     private var logo: LogoView?
     private var titleLabel: NSTextField?
     private var subLabel: NSTextField?
     private var button: PillButton?
+    private var confirmOverlay: NSButton?
 
-    // While a "Saved to CRM" confirmation is showing, normal state updates are
-    // buffered (so refreshUI doesn't instantly overwrite it) and applied when
-    // the confirmation ends. A new recording cancels it immediately.
+    // Expanded-mode views (built lazily on first expand).
+    private var expandedContainer: NSView?
+    private var headerLogo: LogoView?
+    private var headerStateLabel: NSTextField?
+    private var headerButton: PillButton?
+    let pane = TownHallPane()
+
+    private var expanded = false
+    /// Last applied recorder mode, re-applied to whichever mode is on screen.
+    private var lastMode: Mode = .idle(label: "Idle — watching for calls")
+
+    // Confirmation flash state (compact).
     private var confirming = false
     private var pendingMode: Mode?
     private var confirmTimer: Timer?
-    // Transparent overlay over the logo/title/sub that, while a confirmation is
-    // showing, opens the filed call in the CRM. Hidden otherwise.
-    private var confirmOverlay: NSButton?
     private var pendingOpenURL: URL?
 
     var onToggle: (() -> Void)?
     var onConfigure: (() -> Void)?
     var onToggleTranscript: (() -> Void)?
+    /// Fired the first time Town Hall is opened (so the app starts the poller +
+    /// requests notification authorization).
+    var onOpenTownHall: (() -> Void)?
+
+    // MARK: - Show
 
     func show() {
         if let panel {
             panel.orderFrontRegardless()
-            logo?.kick() // restart the animation if the layer was paused
+            (expanded ? headerLogo : logo)?.kick()
             return
         }
 
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 300, height: 168),
+            contentRect: NSRect(origin: .zero, size: Self.compactSize),
             styleMask: [.nonactivatingPanel, .titled, .closable, .utilityWindow, .hudWindow],
             backing: .buffered,
             defer: false
@@ -64,11 +83,28 @@ final class ControlWindow: NSObject {
         panel.level = .floating
         panel.hidesOnDeactivate = false
         panel.isMovableByWindowBackground = true
+        panel.becomesKeyOnlyIfNeeded = true
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.standardWindowButton(.miniaturizeButton)?.isHidden = true
         panel.standardWindowButton(.zoomButton)?.isHidden = true
+        self.panel = panel
 
-        let container = NSView(frame: panel.contentLayoutRect)
+        let compact = buildCompactContainer()
+        self.compactContainer = compact
+        panel.contentView = compact
+
+        if let screen = NSScreen.main {
+            let frame = PanelLayout.controlFrame(visible: screen.visibleFrame, size: panel.frame.size)
+            panel.setFrameOrigin(frame.origin)
+        }
+        panel.orderFrontRegardless()
+        applyMode(lastMode)
+    }
+
+    // MARK: - Compact container
+
+    private func buildCompactContainer() -> NSView {
+        let container = NSView(frame: NSRect(origin: .zero, size: Self.compactSize))
         container.autoresizingMask = [.width, .height]
 
         let logo = LogoView(frame: NSRect(x: 0, y: 0, width: 56, height: 36))
@@ -99,44 +135,20 @@ final class ControlWindow: NSObject {
         container.addSubview(btn)
         self.button = btn
 
-        // Transparent click target over the status area; only live (visible)
-        // while a "Saved to CRM" confirmation is up. Added before the gear so the
-        // gear stays clickable on top of it.
         let overlay = NSButton(title: "", target: self, action: #selector(openFiledTapped))
         overlay.isBordered = false
-        overlay.isTransparent = true // draws nothing, still receives clicks
+        overlay.isTransparent = true
         overlay.isHidden = true
         overlay.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(overlay)
         self.confirmOverlay = overlay
 
-        // Small gear in the top-right opens the config dialog directly from the
-        // panel, so the helper is configurable without the menu-bar icon.
-        let gear = NSButton(
-            image: NSImage(systemSymbolName: "gearshape", accessibilityDescription: "Configure")
-                ?? NSImage(),
-            target: self,
-            action: #selector(configureTapped))
-        gear.isBordered = false
-        gear.bezelStyle = .regularSquare
-        gear.contentTintColor = .secondaryLabelColor
-        gear.toolTip = "Configure…"
-        gear.translatesAutoresizingMaskIntoConstraints = false
+        let gear = iconButton("gearshape", tip: "Configure…", action: #selector(configureTapped))
         container.addSubview(gear)
-
-        // Top-left: show/hide the live transcript window, reachable without the
-        // menu. Added after the overlay so it stays clickable during a confirmation.
-        let transcriptBtn = NSButton(
-            image: NSImage(systemSymbolName: "captions.bubble", accessibilityDescription: "Live transcript")
-                ?? NSImage(),
-            target: self,
-            action: #selector(transcriptTapped))
-        transcriptBtn.isBordered = false
-        transcriptBtn.bezelStyle = .regularSquare
-        transcriptBtn.contentTintColor = .secondaryLabelColor
-        transcriptBtn.toolTip = "Show / hide live transcript"
-        transcriptBtn.translatesAutoresizingMaskIntoConstraints = false
+        let transcriptBtn = iconButton("captions.bubble", tip: "Show / hide live transcript", action: #selector(transcriptTapped))
         container.addSubview(transcriptBtn)
+        let townHallBtn = iconButton("bubble.left.and.bubble.right", tip: "Open Town Hall", action: #selector(townHallTapped))
+        container.addSubview(townHallBtn)
 
         NSLayoutConstraint.activate([
             gear.topAnchor.constraint(equalTo: container.topAnchor, constant: 11),
@@ -149,6 +161,11 @@ final class ControlWindow: NSObject {
             transcriptBtn.widthAnchor.constraint(equalToConstant: 20),
             transcriptBtn.heightAnchor.constraint(equalToConstant: 20),
 
+            townHallBtn.topAnchor.constraint(equalTo: container.topAnchor, constant: 11),
+            townHallBtn.leadingAnchor.constraint(equalTo: transcriptBtn.trailingAnchor, constant: 8),
+            townHallBtn.widthAnchor.constraint(equalToConstant: 20),
+            townHallBtn.heightAnchor.constraint(equalToConstant: 20),
+
             logo.topAnchor.constraint(equalTo: container.topAnchor, constant: 14),
             logo.centerXAnchor.constraint(equalTo: container.centerXAnchor),
             logo.widthAnchor.constraint(equalToConstant: 56),
@@ -156,7 +173,6 @@ final class ControlWindow: NSObject {
 
             title.topAnchor.constraint(equalTo: logo.bottomAnchor, constant: 9),
             title.centerXAnchor.constraint(equalTo: container.centerXAnchor),
-
             sub.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 2),
             sub.centerXAnchor.constraint(equalTo: container.centerXAnchor),
 
@@ -170,26 +186,159 @@ final class ControlWindow: NSObject {
             overlay.trailingAnchor.constraint(equalTo: container.trailingAnchor),
             overlay.bottomAnchor.constraint(equalTo: btn.topAnchor, constant: -6),
         ])
-
-        panel.contentView?.addSubview(container)
-        if let screen = NSScreen.main {
-            let frame = PanelLayout.controlFrame(visible: screen.visibleFrame, size: panel.frame.size)
-            panel.setFrameOrigin(frame.origin)
-        }
-        panel.orderFrontRegardless()
-        self.panel = panel
+        return container
     }
+
+    // MARK: - Expanded container
+
+    private func buildExpandedContainerIfNeeded() -> NSView {
+        if let expandedContainer { return expandedContainer }
+
+        let container = NSView(frame: NSRect(origin: .zero, size: Self.expandedSize))
+
+        // Header strip.
+        let header = NSView()
+        header.translatesAutoresizingMaskIntoConstraints = false
+
+        let collapse = iconButton("sidebar.left", tip: "Collapse", action: #selector(townHallTapped))
+        let hLogo = LogoView(frame: .zero)
+        hLogo.translatesAutoresizingMaskIntoConstraints = false
+        self.headerLogo = hLogo
+
+        let state = NSTextField(labelWithString: "Town Hall")
+        state.font = .systemFont(ofSize: 13, weight: .semibold)
+        state.textColor = .labelColor
+        state.translatesAutoresizingMaskIntoConstraints = false
+        self.headerStateLabel = state
+
+        let recordBtn = PillButton(title: "Start Recording")
+        recordBtn.target = self
+        recordBtn.action = #selector(toggleTapped)
+        recordBtn.translatesAutoresizingMaskIntoConstraints = false
+        self.headerButton = recordBtn
+
+        let gear = iconButton("gearshape", tip: "Configure…", action: #selector(configureTapped))
+        let transcriptBtn = iconButton("captions.bubble", tip: "Show / hide live transcript", action: #selector(transcriptTapped))
+
+        for v in [collapse, hLogo, state, recordBtn, transcriptBtn, gear] { header.addSubview(v) }
+
+        let divider = NSBox(); divider.boxType = .separator
+        divider.translatesAutoresizingMaskIntoConstraints = false
+
+        pane.translatesAutoresizingMaskIntoConstraints = false
+
+        container.addSubview(header)
+        container.addSubview(divider)
+        container.addSubview(pane)
+
+        NSLayoutConstraint.activate([
+            header.topAnchor.constraint(equalTo: container.topAnchor),
+            header.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            header.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            header.heightAnchor.constraint(equalToConstant: 52),
+
+            collapse.leadingAnchor.constraint(equalTo: header.leadingAnchor, constant: 14),
+            collapse.centerYAnchor.constraint(equalTo: header.centerYAnchor),
+            collapse.widthAnchor.constraint(equalToConstant: 20),
+            collapse.heightAnchor.constraint(equalToConstant: 20),
+
+            hLogo.leadingAnchor.constraint(equalTo: collapse.trailingAnchor, constant: 12),
+            hLogo.centerYAnchor.constraint(equalTo: header.centerYAnchor),
+            hLogo.widthAnchor.constraint(equalToConstant: 34),
+            hLogo.heightAnchor.constraint(equalToConstant: 24),
+
+            state.leadingAnchor.constraint(equalTo: hLogo.trailingAnchor, constant: 10),
+            state.centerYAnchor.constraint(equalTo: header.centerYAnchor),
+
+            gear.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -14),
+            gear.centerYAnchor.constraint(equalTo: header.centerYAnchor),
+            gear.widthAnchor.constraint(equalToConstant: 20),
+            gear.heightAnchor.constraint(equalToConstant: 20),
+
+            transcriptBtn.trailingAnchor.constraint(equalTo: gear.leadingAnchor, constant: -10),
+            transcriptBtn.centerYAnchor.constraint(equalTo: header.centerYAnchor),
+            transcriptBtn.widthAnchor.constraint(equalToConstant: 20),
+            transcriptBtn.heightAnchor.constraint(equalToConstant: 20),
+
+            recordBtn.trailingAnchor.constraint(equalTo: transcriptBtn.leadingAnchor, constant: -14),
+            recordBtn.centerYAnchor.constraint(equalTo: header.centerYAnchor),
+            recordBtn.widthAnchor.constraint(equalToConstant: 168),
+            recordBtn.heightAnchor.constraint(equalToConstant: 32),
+
+            divider.topAnchor.constraint(equalTo: header.bottomAnchor),
+            divider.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            divider.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            divider.heightAnchor.constraint(equalToConstant: 1),
+
+            pane.topAnchor.constraint(equalTo: divider.bottomAnchor),
+            pane.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            pane.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            pane.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+        ])
+
+        self.expandedContainer = container
+        return container
+    }
+
+    // MARK: - Expand / collapse
+
+    private var hasOpenedTownHall = false
+
+    @objc private func townHallTapped() { setExpanded(!expanded, animated: true) }
+
+    func setExpanded(_ value: Bool, animated: Bool) {
+        guard let panel, expanded != value else { return }
+        expanded = value
+
+        let targetSize = value ? Self.expandedSize : Self.compactSize
+        let newContent = value ? buildExpandedContainerIfNeeded() : (compactContainer ?? buildCompactContainer())
+
+        // Keep the panel's top-right corner fixed so it grows left + down.
+        let old = panel.frame
+        let topRight = NSPoint(x: old.maxX, y: old.maxY)
+        var newFrame = NSRect(x: topRight.x - targetSize.width,
+                              y: topRight.y - targetSize.height,
+                              width: targetSize.width, height: targetSize.height)
+        if let visible = panel.screen?.visibleFrame ?? NSScreen.main?.visibleFrame {
+            newFrame.origin.x = max(visible.minX + 8, min(newFrame.origin.x, visible.maxX - targetSize.width - 8))
+            newFrame.origin.y = max(visible.minY + 8, min(newFrame.origin.y, visible.maxY - targetSize.height - 8))
+        }
+
+        panel.contentView = newContent
+        applyMode(lastMode)
+
+        if value {
+            pane.activate()
+            if !hasOpenedTownHall { hasOpenedTownHall = true; onOpenTownHall?() }
+            NSApp.activate(ignoringOtherApps: true)
+        }
+
+        if animated {
+            newContent.alphaValue = 0
+            NSAnimationContext.runAnimationGroup { ctx in
+                ctx.duration = 0.22
+                ctx.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                panel.animator().setFrame(newFrame, display: true)
+                newContent.animator().alphaValue = 1
+            }
+        } else {
+            panel.setFrame(newFrame, display: true)
+            newContent.alphaValue = 1
+        }
+        if value { panel.makeKeyAndOrderFront(nil) } else { panel.orderFrontRegardless() }
+    }
+
+    // MARK: - Actions
 
     @objc private func toggleTapped() { onToggle?() }
     @objc private func configureTapped() { onConfigure?() }
     @objc private func transcriptTapped() { onToggleTranscript?() }
 
-    /// Reflect the recorder state on the monogram, captions, and the big button.
+    // MARK: - State
+
     func update(_ mode: Mode) {
-        guard button != nil else { return }
+        lastMode = mode
         if confirming {
-            // A new capture takes priority and clears the confirmation; any other
-            // state is buffered and applied once the confirmation finishes.
             if case .capturing = mode {
                 endConfirmation(apply: false)
             } else {
@@ -200,31 +349,44 @@ final class ControlWindow: NSObject {
         applyMode(mode)
     }
 
+    /// Apply a mode to whichever container is on screen (compact + expanded
+    /// header share the same recorder state).
     private func applyMode(_ mode: Mode) {
-        guard let button else { return }
         switch mode {
         case .idle(let label):
             titleLabel?.stringValue = "Ready"
             subLabel?.stringValue = label
             logo?.set(color: .labelColor, motion: .calm)
-            button.configure(title: "Start Recording", fill: .systemRed, glyph: .record)
+            button?.configure(title: "Start Recording", fill: .systemRed, glyph: .record)
+            headerLogo?.set(color: .labelColor, motion: .calm)
+            headerStateLabel?.stringValue = "Town Hall"
+            headerButton?.configure(title: "Start Recording", fill: .systemRed, glyph: .record)
         case .detected:
             titleLabel?.stringValue = "Call detected"
             subLabel?.stringValue = "Record this call?"
             logo?.set(color: .systemOrange, motion: .active)
-            button.configure(title: "Record This Call", fill: .systemRed, glyph: .record)
+            button?.configure(title: "Record This Call", fill: .systemRed, glyph: .record)
+            headerLogo?.set(color: .systemOrange, motion: .active)
+            headerStateLabel?.stringValue = "Call detected"
+            headerButton?.configure(title: "Record This Call", fill: .systemRed, glyph: .record)
         case .capturing(let elapsed):
             titleLabel?.stringValue = "Recording"
             subLabel?.stringValue = "Tap to stop · \(elapsed)"
             logo?.set(color: .systemRed, motion: .active)
-            button.configure(title: "Stop  ·  \(elapsed)", fill: .controlAccentColor, glyph: .stop)
+            button?.configure(title: "Stop  ·  \(elapsed)", fill: .controlAccentColor, glyph: .stop)
+            headerLogo?.set(color: .systemRed, motion: .active)
+            headerStateLabel?.stringValue = "Recording · \(elapsed)"
+            headerButton?.configure(title: "Stop · \(elapsed)", fill: .controlAccentColor, glyph: .stop)
         }
     }
 
-    /// Show a "Saved to CRM" confirmation in the panel for a few seconds after a
-    /// call files (transcript + brief + action items persisted). `warning` flags
-    /// a suspect capture (e.g. a silent channel) so the founder double-checks it.
+    /// "Saved to CRM" confirmation in the compact panel (and a brief header note
+    /// when expanded).
     func flashFiled(title: String, detail: String, warning: Bool, url: URL?) {
+        if expanded {
+            headerStateLabel?.stringValue = warning ? "Saved — check it" : "Saved to CRM"
+            return
+        }
         guard button != nil else { return }
         confirming = true
         pendingMode = nil
@@ -258,14 +420,26 @@ final class ControlWindow: NSObject {
         pendingMode = nil
         if apply { applyMode(next) }
     }
+
+    // MARK: - Helpers
+
+    private func iconButton(_ symbol: String, tip: String, action: Selector) -> NSButton {
+        let b = NSButton(image: NSImage(systemSymbolName: symbol, accessibilityDescription: tip) ?? NSImage(),
+                         target: self, action: action)
+        b.isBordered = false
+        b.bezelStyle = .regularSquare
+        b.contentTintColor = .secondaryLabelColor
+        b.toolTip = tip
+        b.translatesAutoresizingMaskIntoConstraints = false
+        return b
+    }
 }
 
 // MARK: - LogoView
 
 /// The AGB monogram (public/logos/crm.svg) as three filled CAShapeLayers that
-/// animate. Calm: a slow synchronized breathe (alive but quiet). Active: a
-/// staggered opacity wave across the three strokes — an equalizer-like pulse
-/// that reads as "listening / recording".
+/// animate. Calm: a slow synchronized breathe. Active: a staggered opacity wave
+/// across the three strokes — an equalizer-like pulse that reads as "listening".
 private final class LogoView: NSView {
     enum Motion { case calm, active }
 
@@ -285,8 +459,6 @@ private final class LogoView: NSView {
     override var isFlipped: Bool { false }
     override func layout() { super.layout(); rebuild() }
 
-    // The monogram's three shapes in the 200×200 viewBox (content bbox x8..192,
-    // y44..166), mapped into this view (y flipped for AppKit's bottom-left origin).
     private func rebuild() {
         let bx: CGFloat = 8, by: CGFloat = 44, bw: CGFloat = 184, bh: CGFloat = 122
         let pad: CGFloat = 1
@@ -321,7 +493,6 @@ private final class LogoView: NSView {
         }
     }
 
-    /// Restart the animation (e.g. after the window is re-shown and layers paused).
     func kick() { apply() }
 
     private func apply() {
@@ -351,22 +522,29 @@ private final class LogoView: NSView {
 // MARK: - PillButton
 
 /// A filled, rounded, full-width button with a hover state and a leading glyph
-/// (record dot / stop square) drawn in code — looks like a modern app's primary
-/// action rather than a stock AppKit push button.
+/// (record dot / stop square) drawn in code.
 private final class PillButton: NSButton {
     enum Glyph { case record, stop }
 
     private var fill: NSColor = .systemRed
     private var glyph: Glyph = .record
     private var hovering = false
+    private var pressed = false
+    private static let radius: CGFloat = 10
 
     init(title: String) {
         super.init(frame: .zero)
         self.title = title
         isBordered = false
         wantsLayer = true
-        layer?.cornerRadius = 11
-        layer?.masksToBounds = true
+        layer?.cornerRadius = Self.radius
+        layer?.masksToBounds = false
+        // A soft drop shadow gives the button real depth (Apple's primary buttons
+        // sit slightly above the surface). masksToBounds stays off so it shows.
+        layer?.shadowColor = NSColor.black.cgColor
+        layer?.shadowOpacity = 0.22
+        layer?.shadowRadius = 4
+        layer?.shadowOffset = CGSize(width: 0, height: -1)
         focusRingType = .none
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) unused") }
@@ -375,6 +553,7 @@ private final class PillButton: NSButton {
         self.title = title
         self.fill = fill
         self.glyph = glyph
+        layer?.shadowColor = fill.withAlphaComponent(0.5).cgColor
         needsDisplay = true
     }
 
@@ -388,32 +567,65 @@ private final class PillButton: NSButton {
     }
     override func mouseEntered(with event: NSEvent) { hovering = true; needsDisplay = true }
     override func mouseExited(with event: NSEvent) { hovering = false; needsDisplay = true }
+    override func mouseDown(with event: NSEvent) {
+        pressed = true; needsDisplay = true
+        super.mouseDown(with: event)   // tracks the press + fires the action on mouse-up
+        pressed = false; needsDisplay = true
+    }
 
     override func draw(_ dirtyRect: NSRect) {
-        let bg = hovering ? (fill.blended(withFraction: 0.14, of: .white) ?? fill) : fill
-        bg.setFill()
-        bounds.fill() // layer cornerRadius clips to the pill shape
+        let path = NSBezierPath(roundedRect: bounds, xRadius: Self.radius, yRadius: Self.radius)
 
-        let gSize: CGFloat = 11
-        let gx: CGFloat = 18
-        let gy = (bounds.height - gSize) / 2
-        NSColor.white.setFill()
-        switch glyph {
-        case .record:
-            NSBezierPath(ovalIn: NSRect(x: gx, y: gy, width: gSize, height: gSize)).fill()
-        case .stop:
-            NSBezierPath(roundedRect: NSRect(x: gx, y: gy, width: gSize, height: gSize),
-                         xRadius: 2, yRadius: 2).fill()
-        }
+        // Vertical gradient: a touch lighter at the top, slightly deeper at the
+        // bottom — the subtle dimensionality of a modern primary button.
+        let topLift: CGFloat = hovering ? 0.22 : 0.14
+        let top = fill.blended(withFraction: topLift, of: .white) ?? fill
+        let bottom = fill.blended(withFraction: 0.10, of: .black) ?? fill
+        (NSGradient(starting: top, ending: bottom))?.draw(in: path, angle: -90)
 
+        if pressed { NSColor.black.withAlphaComponent(0.16).setFill(); path.fill() }
+
+        // Crisp top highlight + hairline bottom edge for definition.
+        NSColor.white.withAlphaComponent(0.22).setStroke()
+        let hi = NSBezierPath()
+        hi.move(to: NSPoint(x: Self.radius, y: bounds.maxY - 0.5))
+        hi.line(to: NSPoint(x: bounds.maxX - Self.radius, y: bounds.maxY - 0.5))
+        hi.lineWidth = 1; hi.stroke()
+        NSColor.black.withAlphaComponent(0.18).setStroke()
+        let border = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5),
+                                  xRadius: Self.radius, yRadius: Self.radius)
+        border.lineWidth = 1; border.stroke()
+
+        let gSize: CGFloat = 10
+        let textColor = NSColor.white
         let p = NSMutableParagraphStyle(); p.alignment = .center
+        let textShadow = NSShadow()
+        textShadow.shadowColor = NSColor.black.withAlphaComponent(0.25)
+        textShadow.shadowOffset = NSSize(width: 0, height: -0.5)
+        textShadow.shadowBlurRadius = 1
         let attrs: [NSAttributedString.Key: Any] = [
-            .foregroundColor: NSColor.white,
-            .font: NSFont.systemFont(ofSize: 14, weight: .semibold),
+            .foregroundColor: textColor,
+            .font: NSFont.systemFont(ofSize: 13.5, weight: .semibold),
             .paragraphStyle: p,
+            .shadow: textShadow,
         ]
         let s = NSAttributedString(string: title, attributes: attrs)
-        let h = s.size().height
-        s.draw(in: NSRect(x: 0, y: (bounds.height - h) / 2, width: bounds.width, height: h))
+        let textSize = s.size()
+
+        // Center the glyph + label as a unit so it reads as one balanced control.
+        let gap: CGFloat = 8
+        let groupW = gSize + gap + textSize.width
+        let startX = (bounds.width - groupW) / 2
+        let gy = (bounds.height - gSize) / 2
+        textColor.setFill()
+        switch glyph {
+        case .record:
+            NSBezierPath(ovalIn: NSRect(x: startX, y: gy, width: gSize, height: gSize)).fill()
+        case .stop:
+            NSBezierPath(roundedRect: NSRect(x: startX, y: gy, width: gSize, height: gSize),
+                         xRadius: 2.5, yRadius: 2.5).fill()
+        }
+        s.draw(in: NSRect(x: startX + gSize + gap, y: (bounds.height - textSize.height) / 2,
+                          width: textSize.width, height: textSize.height))
     }
 }
