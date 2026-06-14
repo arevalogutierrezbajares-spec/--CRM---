@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Download, ExternalLink, Loader2, FileQuestion, Pencil } from "lucide-react";
+import { Download, ExternalLink, Loader2, FileQuestion, Pencil, SquarePen } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -43,6 +43,7 @@ export function FilePreviewModal({
   error,
   loading,
   onEditDetails,
+  onEditContent,
 }: {
   file: PreviewFile | null;
   open: boolean;
@@ -52,6 +53,8 @@ export function FilePreviewModal({
   loading: boolean;
   /** Provided when the current user may rename/recategorize this file. */
   onEditDetails?: () => void;
+  /** Provided when the file is editable text/markdown and the user may edit it. */
+  onEditContent?: () => void;
 }) {
   const kind = file ? previewKind(file.filename) : "none";
   const chip = file ? chipForFile(file.filename, file.mime) : "FILE";
@@ -107,6 +110,12 @@ export function FilePreviewModal({
         </div>
 
         <div className="flex items-center gap-2">
+          {onEditContent && (
+            <Button type="button" variant="outline" size="sm" onClick={onEditContent}>
+              <SquarePen size={14} />
+              Edit content
+            </Button>
+          )}
           {onEditDetails && (
             <Button type="button" variant="ghost" size="sm" onClick={onEditDetails}>
               <Pencil size={14} />

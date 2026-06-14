@@ -25,6 +25,7 @@ import { detectCategory } from "@/lib/project-links/detect-category";
 import { brandForUrl } from "@/lib/project-links/host-brands";
 import {
   isAllowedUpload,
+  isEditableTextFile,
   canonicalMime,
   REJECT_MESSAGE,
 } from "@/lib/project-files/allowed-types";
@@ -37,6 +38,7 @@ import {
   objectExists,
   sniffHeadBytes,
   removeObjects,
+  uploadBytes,
 } from "@/lib/project-files/storage";
 
 const { linesOfBusiness, projectContacts, pipelineStages } = schema;
@@ -573,4 +575,112 @@ export async function deleteFileAction(opts: {
   revalidatePath(`/lob/${opts.lobId}`);
   revalidatePath("/lob");
   return { ok: true, id: opts.linkId };
+}
+
+/* ─── Edit text/markdown file content in place (FR-DOC-COLLAB) ───────────── */
+
+export type FileTextResult =
+  | { ok: true; text: string; filename: string }
+  | { ok: false; error: string };
+
+/**
+ * Read an uploaded text/markdown file's content for in-place editing. Read
+ * access is workspace membership (same as preview) — mutation is gated on save.
+ */
+export async function getFileTextAction(opts: {
+  linkId: string;
+}): Promise<FileTextResult> {
+  const user = await requireUser();
+  const link = await getProjectLinkById({
+    linkId: opts.linkId,
+    workspaceId: user.workspaceId,
+  });
+  if (!link || link.kind !== "file" || !link.storagePath) {
+    return { ok: false, error: "Not a file" };
+  }
+  const filename = link.originalFilename ?? link.label ?? "";
+  if (!isEditableTextFile(filename)) {
+    return { ok: false, error: "This file type can't be edited as text" };
+  }
+  if (!(await objectExists(link.storagePath))) {
+    return { ok: false, error: "File missing — please re-upload" };
+  }
+  const signed = await createSignedDownloadUrl(link.storagePath);
+  if (!signed.ok) return { ok: false, error: "Could not read file" };
+  try {
+    const res = await fetch(signed.url);
+    if (!res.ok) return { ok: false, error: "Could not read file" };
+    const text = await res.text();
+    return { ok: true, text, filename };
+  } catch {
+    return { ok: false, error: "Could not read file" };
+  }
+}
+
+/**
+ * Overwrite a text/markdown file's content in storage, then stamp updatedAt/By
+ * + a size on the row and write an audit trail entry. Mutation follows the same
+ * member-owns-their-own / admin-owns-all rule as every other link mutation.
+ */
+export async function saveFileTextAction(opts: {
+  lobId: string;
+  linkId: string;
+  text: string;
+}): Promise<{ ok: true; sizeBytes: number } | { ok: false; error: string }> {
+  const user = await requireUser();
+
+  const perm = await canMutateLink(user, opts.linkId);
+  if (!perm.found) return { ok: false, error: "File not found" };
+  if (!perm.allowed) {
+    return { ok: false, error: "You can only edit files you uploaded" };
+  }
+
+  const link = await getProjectLinkById({
+    linkId: opts.linkId,
+    workspaceId: user.workspaceId,
+  });
+  if (!link || link.kind !== "file" || !link.storagePath) {
+    return { ok: false, error: "Not a file" };
+  }
+  const filename = link.originalFilename ?? link.label ?? "";
+  if (!isEditableTextFile(filename)) {
+    return { ok: false, error: "This file type can't be edited as text" };
+  }
+
+  const bytes = new TextEncoder().encode(opts.text);
+  if (bytes.byteLength > maxUploadBytes()) {
+    return { ok: false, error: tooLargeMessage() };
+  }
+
+  const contentType = canonicalMime(filename, link.mimeType ?? "");
+  const up = await uploadBytes(link.storagePath, bytes, contentType);
+  if (!up.ok) return { ok: false, error: up.error };
+
+  await db
+    .update(schema.projectLinks)
+    .set({
+      updatedAt: new Date(),
+      updatedBy: user.id,
+      sizeBytes: bytes.byteLength,
+    })
+    .where(
+      and(
+        eq(schema.projectLinks.id, opts.linkId),
+        eq(schema.projectLinks.workspaceId, user.workspaceId),
+      ),
+    );
+
+  await recordLinkAudit({
+    workspaceId: user.workspaceId,
+    lobId: opts.lobId,
+    linkId: opts.linkId,
+    actorId: user.id,
+    action: "update",
+    before: { sizeBytes: link.sizeBytes },
+    after: { sizeBytes: bytes.byteLength },
+  });
+
+  revalidatePath(`/lob/${opts.lobId}`);
+  revalidatePath("/lob");
+  return { ok: true, sizeBytes: bytes.byteLength };
 }

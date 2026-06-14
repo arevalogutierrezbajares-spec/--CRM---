@@ -134,7 +134,23 @@ export function viewerHref(
   linkId: string,
   signedUrl: string,
 ): string {
-  return kind === "html" ? `/api/materials/${linkId}/view` : signedUrl;
+  // HTML decks AND Markdown both need server-side rendering: Supabase serves
+  // stored HTML/MD objects as text/plain (+ nosniff), so a raw signed URL shows
+  // source. The /api/materials/[id]/view proxy re-serves HTML as text/html and
+  // renders Markdown to a styled HTML document.
+  return kind === "html" || kind === "markdown"
+    ? `/api/materials/${linkId}/view`
+    : signedUrl;
+}
+
+/**
+ * Files whose text content can be edited in place in the CRM (Markdown + plain
+ * text / CSV). Drives the "Edit content" affordance on the LoB board — binary
+ * formats (PDF, Office, images) are view/download only.
+ */
+export function isEditableTextFile(filename: string): boolean {
+  const kind = previewKind(filename);
+  return kind === "markdown" || kind === "text";
 }
 
 /** File-type chip label from a stored MIME / filename. */
