@@ -37,6 +37,11 @@ public struct HelperConfig: Codable, Equatable {
     /// Default true (only meaningful when `liveTranscript` is on).
     public var liveTranscriptAutoShow: Bool
 
+    /// Use Apple's on-device speech recognition for the live transcript (free,
+    /// private, offline, no Deepgram token) instead of the cloud stream.
+    /// Default true. Falls back to the cloud engine when false.
+    public var liveTranscriptOnDevice: Bool
+
     // MARK: - Local audio archive (transcript-only mode)
 
     /// Keep a playable copy of each call on this Mac (in ~/Documents/AGB Call
@@ -55,6 +60,7 @@ public struct HelperConfig: Codable, Equatable {
                 maxRecordingSeconds: Double = HelperConfig.defaultMaxRecordingSeconds,
                 liveTranscript: Bool = true,
                 liveTranscriptAutoShow: Bool = true,
+                liveTranscriptOnDevice: Bool = true,
                 keepAudioLocal: Bool = false) {
         self.crmBaseUrl = crmBaseUrl
         self.token = token
@@ -65,6 +71,7 @@ public struct HelperConfig: Codable, Equatable {
         self.maxRecordingSeconds = maxRecordingSeconds
         self.liveTranscript = liveTranscript
         self.liveTranscriptAutoShow = liveTranscriptAutoShow
+        self.liveTranscriptOnDevice = liveTranscriptOnDevice
         self.keepAudioLocal = keepAudioLocal
     }
 
@@ -88,6 +95,7 @@ public struct HelperConfig: Codable, Equatable {
         maxRecordingSeconds = maxDur > 0 ? maxDur : HelperConfig.defaultMaxRecordingSeconds
         liveTranscript = (try? c.decodeIfPresent(Bool.self, forKey: .liveTranscript)) ?? true
         liveTranscriptAutoShow = (try? c.decodeIfPresent(Bool.self, forKey: .liveTranscriptAutoShow)) ?? true
+        liveTranscriptOnDevice = (try? c.decodeIfPresent(Bool.self, forKey: .liveTranscriptOnDevice)) ?? true
         keepAudioLocal = (try? c.decodeIfPresent(Bool.self, forKey: .keepAudioLocal)) ?? false
     }
 

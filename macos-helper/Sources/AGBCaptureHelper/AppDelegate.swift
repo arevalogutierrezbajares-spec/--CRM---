@@ -64,7 +64,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// FEATURE 2: live-transcript floating window + Deepgram stream.
     private let liveWindow = LiveTranscriptWindow()
-    private var liveStreamer: LiveTranscriptStreamer?
+    private var liveStreamer: LiveTranscribing?
 
     /// Always-visible floating Start/Stop control — works regardless of the
     /// menu-bar icon hiding behind the notch or a swallowed global hotkey.
@@ -417,11 +417,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if cfg.liveTranscript {
             liveWindow.reset()
             if cfg.liveTranscriptAutoShow { liveWindow.show() }
-            let streamer = LiveTranscriptStreamer(config: cfg, participantName: participant)
-            streamer.onStatus = { [weak self] status in self?.handleLiveStatus(status) }
-            streamer.onLine = { [weak self] line in self?.liveWindow.append(line: line) }
-            liveStreamer = streamer
-            streamer.start()
+            // On-device (Apple) by default — private, free, no token; cloud as a
+            // fallback. Both emit the same Line type, so the window is agnostic.
+            let engine: LiveTranscribing = cfg.liveTranscriptOnDevice
+                ? OnDeviceTranscriber(participantName: participant)
+                : LiveTranscriptStreamer(config: cfg, participantName: participant)
+            engine.onStatus = { [weak self] status in self?.handleLiveStatus(status) }
+            engine.onLine = { [weak self] line in self?.liveWindow.append(line: line) }
+            liveStreamer = engine
+            engine.start()
         }
 
         startLiveTimer()

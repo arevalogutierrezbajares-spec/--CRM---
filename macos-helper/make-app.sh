@@ -61,6 +61,8 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
     <string>AGB Capture Helper records your side of calls (with your explicit per-call consent) to file them into your CRM.</string>
     <key>NSAudioCaptureUsageDescription</key>
     <string>AGB Capture Helper records the other participants' audio — including FaceTime and other call apps — via a Core Audio process tap, so it can file the full conversation into your CRM (with your explicit per-call consent).</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>AGB Capture Helper transcribes your calls on-device with Apple Speech so the live transcript stays private to your Mac.</string>
     <key>NSHumanReadableCopyright</key>       <string>AGB CRM internal tool</string>
 </dict>
 </plist>

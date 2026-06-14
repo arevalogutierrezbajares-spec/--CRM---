@@ -13,6 +13,9 @@ final class ConfigurePanel {
     private let keepAudioLocalCheck = NSButton(
         checkboxWithTitle: "Keep call audio on this Mac (don’t store in CRM)",
         target: nil, action: nil)
+    private let onDeviceLiveCheck = NSButton(
+        checkboxWithTitle: "On-device live transcript (Apple, private — no cloud)",
+        target: nil, action: nil)
     private var saved = false
     private var original: HelperConfig
 
@@ -26,6 +29,7 @@ final class ConfigurePanel {
         neverPromptField.placeholderString = "Dictation, SuperWhisper (comma-separated)"
         neverPromptField.stringValue = config.neverPromptApps.joined(separator: ", ")
         keepAudioLocalCheck.state = config.keepAudioLocal ? .on : .off
+        onDeviceLiveCheck.state = config.liveTranscriptOnDevice ? .on : .off
 
         for field in [urlField, tokenField, neverPromptField] {
             field.translatesAutoresizingMaskIntoConstraints = false
@@ -67,6 +71,7 @@ final class ConfigurePanel {
             row("CRM base URL", urlField),
             row("Capture token", tokenField),
             row("Never-prompt apps", neverPromptField),
+            onDeviceLiveCheck,
             keepAudioLocalCheck,
             audioHint,
             hint,
@@ -78,7 +83,7 @@ final class ConfigurePanel {
         stack.edgeInsets = NSEdgeInsets(top: 18, left: 20, bottom: 16, right: 20)
 
         panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 380, height: 340),
+            contentRect: NSRect(x: 0, y: 0, width: 380, height: 372),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -110,6 +115,7 @@ final class ConfigurePanel {
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
         updated.keepAudioLocal = keepAudioLocalCheck.state == .on
+        updated.liveTranscriptOnDevice = onDeviceLiveCheck.state == .on
         updated.helperVersion = AudioConstants.helperVersion
         return updated
     }
