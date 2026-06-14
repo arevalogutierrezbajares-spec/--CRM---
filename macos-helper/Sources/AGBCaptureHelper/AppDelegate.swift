@@ -193,6 +193,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     self.lastResult = (self.lastResult ?? "") + " ⚠ \(flags.joined(separator: ", "))"
                 }
                 self.refreshUI()
+
+                // Visible confirmation in the floating panel that the call's
+                // transcript + brief landed in the CRM (not just the menu).
+                let filedTitle = outcome.finalize.title ?? "Call"
+                let shortTitle = filedTitle.count > 26
+                    ? String(filedTitle.prefix(25)) + "…"
+                    : filedTitle
+                let n = outcome.finalize.actionItemCount ?? 0
+                let detail = n > 0
+                    ? "\(shortTitle) · \(n) action item\(n == 1 ? "" : "s")"
+                    : "\(shortTitle) · transcript + brief"
+                let warn = !(outcome.finalize.suspectFlags?.isEmpty ?? true)
+                self.controlWindow.flashFiled(title: filedTitle, detail: detail, warning: warn)
             }
         }
         worker.onError = { [weak self] message in

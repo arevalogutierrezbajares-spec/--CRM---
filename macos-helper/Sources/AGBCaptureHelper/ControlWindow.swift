@@ -31,6 +31,13 @@ final class ControlWindow: NSObject {
     private var subLabel: NSTextField?
     private var button: PillButton?
 
+    // While a "Saved to CRM" confirmation is showing, normal state updates are
+    // buffered (so refreshUI doesn't instantly overwrite it) and applied when
+    // the confirmation ends. A new recording cancels it immediately.
+    private var confirming = false
+    private var pendingMode: Mode?
+    private var confirmTimer: Timer?
+
     var onToggle: (() -> Void)?
     var onConfigure: (() -> Void)?
 
@@ -138,6 +145,21 @@ final class ControlWindow: NSObject {
 
     /// Reflect the recorder state on the monogram, captions, and the big button.
     func update(_ mode: Mode) {
+        guard button != nil else { return }
+        if confirming {
+            // A new capture takes priority and clears the confirmation; any other
+            // state is buffered and applied once the confirmation finishes.
+            if case .capturing = mode {
+                endConfirmation(apply: false)
+            } else {
+                pendingMode = mode
+                return
+            }
+        }
+        applyMode(mode)
+    }
+
+    private func applyMode(_ mode: Mode) {
         guard let button else { return }
         switch mode {
         case .idle(let label):
@@ -156,6 +178,34 @@ final class ControlWindow: NSObject {
             logo?.set(color: .systemRed, motion: .active)
             button.configure(title: "Stop  ·  \(elapsed)", fill: .controlAccentColor, glyph: .stop)
         }
+    }
+
+    /// Show a "Saved to CRM" confirmation in the panel for a few seconds after a
+    /// call files (transcript + brief + action items persisted). `warning` flags
+    /// a suspect capture (e.g. a silent channel) so the founder double-checks it.
+    func flashFiled(title: String, detail: String, warning: Bool) {
+        guard button != nil else { return }
+        confirming = true
+        pendingMode = nil
+        confirmTimer?.invalidate()
+
+        titleLabel?.stringValue = warning ? "Saved — check it" : "Saved to CRM"
+        subLabel?.stringValue = detail
+        logo?.set(color: warning ? .systemOrange : .systemGreen, motion: .calm)
+        button?.configure(title: "Start Recording", fill: .systemRed, glyph: .record)
+
+        confirmTimer = Timer.scheduledTimer(withTimeInterval: 7, repeats: false) { [weak self] _ in
+            self?.endConfirmation(apply: true)
+        }
+    }
+
+    private func endConfirmation(apply: Bool) {
+        confirming = false
+        confirmTimer?.invalidate()
+        confirmTimer = nil
+        let next = pendingMode ?? .idle(label: "Idle — watching for calls")
+        pendingMode = nil
+        if apply { applyMode(next) }
     }
 }
 
