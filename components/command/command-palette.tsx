@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Command } from "cmdk";
 import { toast } from "sonner";
@@ -21,7 +21,7 @@ import { openGlobalUpload } from "@/components/upload/global-upload-modal";
 import { GOTO_CHIP } from "@/lib/shortcuts";
 import { quickCaptureAction } from "@/app/(app)/dashboard/item-actions";
 import { createPostAction } from "@/app/(app)/town-hall/actions";
-import { paletteDataAction, type PaletteData, type PaletteEntity } from "@/app/(app)/dashboard/palette-actions";
+import { paletteDataAction, type PaletteData } from "@/app/(app)/dashboard/palette-actions";
 
 const OPEN_EVENT = "open-command-palette";
 
@@ -31,6 +31,66 @@ export function openCommandPalette() {
 }
 
 const EMPTY: PaletteData = { recent: [], projects: [], docs: [], people: [], objectives: [] };
+
+const WORD_BOUNDARY = /[\s\-_/.]/;
+
+/**
+ * Fuzzy subsequence score — higher is better, null if the query isn't a
+ * subsequence of the text. Rewards substring hits, prefix/word-boundary starts,
+ * contiguous runs, and earliness; lightly favours shorter labels.
+ */
+function fuzzyScore(query: string, text: string): number | null {
+  const q = query.toLowerCase();
+  const t = text.toLowerCase();
+  if (!q) return 0;
+  const idx = t.indexOf(q);
+  if (idx >= 0) {
+    let score = 120 - idx;
+    if (idx === 0) score += 60;
+    else if (WORD_BOUNDARY.test(t[idx - 1])) score += 30;
+    score += Math.max(0, 20 - (t.length - q.length) / 4);
+    return score;
+  }
+  let ti = 0;
+  let qi = 0;
+  let score = 0;
+  let streak = 0;
+  let first = -1;
+  while (ti < t.length && qi < q.length) {
+    if (t[ti] === q[qi]) {
+      if (first < 0) first = ti;
+      streak += 1;
+      score += 1 + streak;
+      if (ti === 0 || WORD_BOUNDARY.test(t[ti - 1])) score += 5;
+      qi += 1;
+    } else {
+      streak = 0;
+    }
+    ti += 1;
+  }
+  if (qi < q.length) return null;
+  return score + Math.max(0, 15 - first);
+}
+
+/** Fuzzy-rank labelled items by score, boosting recently-touched ones. */
+function rank<T extends { label: string; id?: string }>(
+  items: T[],
+  query: string,
+  limit: number,
+  recentIds?: Set<string>,
+): T[] {
+  if (!query) return [];
+  return items
+    .map((e) => {
+      const base = fuzzyScore(query, e.label);
+      const s = base === null ? null : base + (e.id && recentIds?.has(e.id) ? 40 : 0);
+      return { e, s };
+    })
+    .filter((x): x is { e: T; s: number } => x.s !== null)
+    .sort((a, b) => b.s - a.s)
+    .slice(0, limit)
+    .map((x) => x.e);
+}
 
 export function CommandPalette() {
   const router = useRouter();
@@ -110,14 +170,17 @@ export function CommandPalette() {
     }
   }
 
-  const q = query.trim().toLowerCase();
-  const match = (e: PaletteEntity) => !q || e.label.toLowerCase().includes(q);
-  const navMatches = NAV_ITEMS.filter((n) => n.label.toLowerCase().includes(q)).slice(0, 8);
+  const q = query.trim();
+  const recentIds = useMemo(
+    () => new Set(data.recent.map((r) => r.id)),
+    [data.recent],
+  );
+  const navMatches = q ? rank(NAV_ITEMS, q, 8) : NAV_ITEMS.slice(0, 8);
 
-  const projects = q ? data.projects.filter(match).slice(0, 6) : [];
-  const docs = q ? data.docs.filter(match).slice(0, 6) : [];
-  const people = q ? data.people.filter(match).slice(0, 5) : [];
-  const objectives = q ? data.objectives.filter(match).slice(0, 5) : [];
+  const projects = rank(data.projects, q, 6, recentIds);
+  const docs = rank(data.docs, q, 6, recentIds);
+  const people = rank(data.people, q, 5, recentIds);
+  const objectives = rank(data.objectives, q, 5, recentIds);
 
   return (
     <Command.Dialog
@@ -156,7 +219,7 @@ export function CommandPalette() {
         )}
 
         {/* Quick actions — global affordances, available with or without a query. */}
-        {(!q || "upload a file document".includes(q)) && (
+        {(!q || fuzzyScore(q, "upload a file") !== null) && (
           <Group heading="Quick actions">
             <Row
               icon={Upload}
