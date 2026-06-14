@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, inArray, sql as rawSql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { db, schema } from "@/db";
 import { computeHealth, type HealthColor } from "@/lib/health";
 
@@ -364,9 +365,19 @@ export async function listStagesForTemplate(templateId: string) {
 /* ─── LoB links (Business / Marketing / Tech / etc.) ───────────────────── */
 
 export type ProjectLinkRow = typeof schema.projectLinks.$inferSelect;
-/** Row enriched with the uploader's display name (FR-DOC-17 attribution). */
+/**
+ * Row enriched with attribution (FR-DOC-17):
+ *  - createdByName / updatedByName — uploader + last editor display names.
+ *  - editedAt / editedByName — the best "last edited" signal across kinds. For
+ *    docs this is the collaborative content's last save (project_doc_contents),
+ *    not the row's updatedAt (which only moves on rename/reorder); for files and
+ *    links it's the row's updatedAt, falling back to createdAt.
+ */
 export type ProjectLinkWithAuthor = ProjectLinkRow & {
   createdByName: string | null;
+  updatedByName: string | null;
+  editedAt: Date | null;
+  editedByName: string | null;
 };
 
 /**
@@ -382,13 +393,25 @@ export async function listProjectLinks(opts: {
   lobId: string;
   workspaceId: string;
 }): Promise<ProjectLinkWithAuthor[]> {
+  const creator = alias(schema.users, "link_creator");
+  const updater = alias(schema.users, "link_updater");
+  const docUpdater = alias(schema.users, "doc_updater");
   const rows = await db
     .select({
       link: schema.projectLinks,
-      createdByName: schema.users.displayName,
+      createdByName: creator.displayName,
+      updatedByName: updater.displayName,
+      docUpdatedAt: schema.projectDocContents.updatedAt,
+      docUpdatedByName: docUpdater.displayName,
     })
     .from(schema.projectLinks)
-    .leftJoin(schema.users, eq(schema.users.id, schema.projectLinks.createdBy))
+    .leftJoin(creator, eq(creator.id, schema.projectLinks.createdBy))
+    .leftJoin(updater, eq(updater.id, schema.projectLinks.updatedBy))
+    .leftJoin(
+      schema.projectDocContents,
+      eq(schema.projectDocContents.linkId, schema.projectLinks.id),
+    )
+    .leftJoin(docUpdater, eq(docUpdater.id, schema.projectDocContents.updatedBy))
     .where(
       and(
         eq(schema.projectLinks.lobId, opts.lobId),
@@ -396,7 +419,22 @@ export async function listProjectLinks(opts: {
       ),
     )
     .orderBy(asc(schema.projectLinks.category), asc(schema.projectLinks.sortOrder));
-  return rows.map((r) => ({ ...r.link, createdByName: r.createdByName }));
+  return rows.map((r) => {
+    const isDoc = r.link.kind === "doc";
+    const editedAt = isDoc
+      ? r.docUpdatedAt ?? r.link.updatedAt ?? r.link.createdAt
+      : r.link.updatedAt ?? r.link.createdAt;
+    const editedByName = isDoc
+      ? r.docUpdatedByName ?? r.updatedByName ?? r.createdByName
+      : r.updatedByName ?? r.createdByName;
+    return {
+      ...r.link,
+      createdByName: r.createdByName,
+      updatedByName: r.updatedByName,
+      editedAt,
+      editedByName,
+    };
+  });
 }
 
 /* ─── LoB link mutations (FR-DOC-1/4/5/6/11) ────────────────────────────── */

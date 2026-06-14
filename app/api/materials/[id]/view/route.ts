@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/current-user";
 import { getProjectLinkById } from "@/db/queries/lines-of-business";
 import { createSignedDownloadUrl } from "@/lib/project-files/storage";
-import { canonicalMime } from "@/lib/project-files/allowed-types";
+import { canonicalMime, previewKind } from "@/lib/project-files/allowed-types";
+import { renderMarkdownDocument } from "@/lib/project-files/render-markdown";
 
 /**
  * Serve a stored project file (esp. HTML decks) with the CORRECT Content-Type.
@@ -37,7 +38,25 @@ export async function GET(_req: Request, props: { params: Params }) {
     return NextResponse.json({ error: "Object fetch failed" }, { status: 502 });
   }
 
-  const contentType = canonicalMime(link.originalFilename ?? link.label ?? "", "");
+  const filename = link.originalFilename ?? link.label ?? "";
+
+  // Markdown: render to a styled HTML document so a new tab shows formatted
+  // prose, not raw source. Opaque-origin sandbox; no scripts needed.
+  if (previewKind(filename) === "markdown") {
+    const text = await upstream.text();
+    const html = renderMarkdownDocument(text, link.label ?? filename);
+    return new NextResponse(html, {
+      status: 200,
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "private, max-age=300",
+        "X-Content-Type-Options": "nosniff",
+        "Content-Security-Policy": "sandbox",
+      },
+    });
+  }
+
+  const contentType = canonicalMime(filename, "");
 
   return new NextResponse(upstream.body, {
     status: 200,

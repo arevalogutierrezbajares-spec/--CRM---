@@ -22,6 +22,11 @@ import {
   ChevronDown,
   FileText,
   FilePlus,
+  LayoutGrid,
+  List as ListIcon,
+  Search,
+  ArrowUpDown,
+  SquarePen,
   type LucideIcon,
 } from "lucide-react";
 import { DashCard } from "@/components/dashboard/shared/dash-card";
@@ -34,7 +39,7 @@ import type {
 import type { LinkCategory } from "@/lib/project-links/detect-category";
 import { brandForUrl } from "@/lib/project-links/host-brands";
 import { formatBytes } from "@/lib/project-files/limits";
-import { chipForFile } from "@/lib/project-files/allowed-types";
+import { chipForFile, isEditableTextFile } from "@/lib/project-files/allowed-types";
 import {
   deleteLinkAction,
   deleteFileAction,
@@ -46,6 +51,10 @@ import { createDocAction } from "@/app/(app)/lob/docs-actions";
 import { AddLinkModal, type LinkModalInitial } from "./add-link-modal";
 import { EditFileModal, type FileEditInitial } from "./edit-file-modal";
 import { FilePreviewModal, type PreviewFile } from "./file-preview-modal";
+import {
+  EditFileContentModal,
+  type EditFileTarget,
+} from "./edit-file-content-modal";
 import { UploadTray } from "./upload-tray";
 import {
   ShareLinkModal,
@@ -111,6 +120,20 @@ const META: Record<
   },
 };
 
+type SortKey = "name" | "type" | "edited";
+
+/** Short type label for the List view's Type column. */
+function typeLabel(l: ProjectLinkView): string {
+  if (l.kind === "file") return chipForFile(l.originalFilename ?? "", l.mimeType ?? "");
+  if (l.kind === "doc") return "DOC";
+  if (l.kind === "link") return "LINK";
+  return "NOTE";
+}
+
+function editedTime(l: ProjectLinkView): number {
+  return l.editedAt ? new Date(l.editedAt).getTime() : 0;
+}
+
 export function LinksBoard({
   lobId,
   links,
@@ -140,6 +163,14 @@ export function LinksBoard({
   const [previewLoading, setPreviewLoading] = useState(false);
   const [sharingLink, setSharingLink] = useState<ShareableProjectLink | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
+  const [editContentFile, setEditContentFile] = useState<EditFileTarget | null>(null);
+  const [editContentOpen, setEditContentOpen] = useState(false);
+  const [view, setView] = useState<"grid" | "list">("grid");
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({
+    key: "edited",
+    dir: "desc",
+  });
 
   const isPrivileged = currentUserRole === "owner" || currentUserRole === "admin";
   const canEditRow = (l: ProjectLinkWithAuthor) =>
@@ -256,6 +287,53 @@ export function LinksBoard({
     });
   }
 
+  function openEditContent(l: ProjectLinkView) {
+    setEditContentFile({
+      linkId: l.id,
+      label: l.label,
+      filename: l.originalFilename ?? l.label,
+    });
+    setEditContentOpen(true);
+  }
+
+  // Clicking an item's name opens the right surface for its kind.
+  function openItem(l: ProjectLinkView) {
+    if (l.kind === "doc") openDoc(l);
+    else if (l.kind === "file") preview(l);
+    else if (l.url) window.open(l.url, "_blank", "noopener,noreferrer");
+  }
+
+  function isFileEditable(l: ProjectLinkView) {
+    return l.kind === "file" && isEditableTextFile(l.originalFilename ?? l.label);
+  }
+
+  function toggleSort(key: SortKey) {
+    setSort((s) =>
+      s.key === key
+        ? { key, dir: s.dir === "asc" ? "desc" : "asc" }
+        : { key, dir: key === "name" ? "asc" : "desc" },
+    );
+  }
+
+  // Flat, searchable, sortable rows for the List view (all categories merged).
+  const listRows = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const filtered = q
+      ? links.filter(
+          (l) =>
+            l.label.toLowerCase().includes(q) ||
+            (l.originalFilename ?? "").toLowerCase().includes(q),
+        )
+      : links;
+    return [...filtered].sort((a, b) => {
+      let cmp = 0;
+      if (sort.key === "name") cmp = a.label.localeCompare(b.label);
+      else if (sort.key === "type") cmp = typeLabel(a).localeCompare(typeLabel(b));
+      else cmp = editedTime(a) - editedTime(b);
+      return sort.dir === "asc" ? cmp : -cmp;
+    });
+  }, [links, query, sort]);
+
   function move(category: LinkCategory, index: number, dir: -1 | 1) {
     const list = byCategory.get(category)!;
     const target = index + dir;
@@ -341,6 +419,171 @@ export function LinksBoard({
     );
   }
 
+  const sortHeader = (label: string, k: SortKey) => (
+    <th className="px-3 py-2 text-left">
+      <button
+        type="button"
+        onClick={() => toggleSort(k)}
+        className={`inline-flex items-center gap-1 font-medium ${
+          sort.key === k
+            ? "text-text-secondary"
+            : "text-text-tertiary hover:text-text-secondary"
+        }`}
+      >
+        {label}
+        {sort.key === k ? (
+          sort.dir === "asc" ? (
+            <ChevronUp size={12} />
+          ) : (
+            <ChevronDown size={12} />
+          )
+        ) : (
+          <ArrowUpDown size={11} className="opacity-40" />
+        )}
+      </button>
+    </th>
+  );
+
+  function renderList() {
+    return (
+      <div className="overflow-x-auto rounded-lg border border-[var(--border)]">
+        <table className="w-full text-[13px]">
+          <thead>
+            <tr className="border-b border-[var(--border)] text-label">
+              {sortHeader("Name", "name")}
+              {sortHeader("Type", "type")}
+              {sortHeader("Edited", "edited")}
+              <th className="px-3 py-2 text-left font-medium text-text-tertiary">
+                By
+              </th>
+              <th className="w-px px-3 py-2" />
+            </tr>
+          </thead>
+          <tbody>
+            {listRows.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={5}
+                  className="px-3 py-8 text-center text-tiny text-text-tertiary"
+                >
+                  {query
+                    ? "No files or links match your search."
+                    : "Nothing here yet — add a link, upload a file, or start a doc."}
+                </td>
+              </tr>
+            ) : (
+              listRows.map((l) => {
+                const chip = typeLabel(l);
+                return (
+                  <tr
+                    key={l.id}
+                    className="group border-b border-[var(--border)] last:border-0 hover:bg-surface"
+                  >
+                    <td className="px-3 py-2">
+                      <button
+                        type="button"
+                        onClick={() => openItem(l)}
+                        disabled={pending}
+                        className="flex min-w-0 max-w-full items-center gap-1.5 text-left"
+                      >
+                        <span
+                          className={`shrink-0 rounded px-1 text-[9px] font-medium tabular-nums ${
+                            l.attached
+                              ? "bg-surface text-text-secondary"
+                              : "bg-surface text-text-tertiary line-through"
+                          }`}
+                        >
+                          {chip}
+                        </span>
+                        <span
+                          className={`truncate ${
+                            l.attached ? "text-text-primary" : "text-text-tertiary"
+                          }`}
+                        >
+                          {l.label}
+                        </span>
+                        {!l.attached && (
+                          <span className="inline-flex shrink-0 items-center gap-1 rounded bg-[var(--amber-bg,rgba(180,120,20,0.12))] px-1 text-[9px] font-medium text-[var(--amber-text)]">
+                            <AlertTriangle size={9} />
+                            {l.kind === "file" ? "Missing" : "No file"}
+                          </span>
+                        )}
+                      </button>
+                    </td>
+                    <td className="px-3 py-2 text-tiny text-text-tertiary tabular-nums">
+                      {chip}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2 text-tiny text-text-tertiary">
+                      {l.editedAt ? formatRelative(new Date(l.editedAt)) : "—"}
+                    </td>
+                    <td className="max-w-[140px] truncate px-3 py-2 text-tiny text-text-tertiary">
+                      {l.editedByName ?? "—"}
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="flex items-center justify-end gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                        {isFileEditable(l) && canEditRow(l) && (
+                          <button
+                            type="button"
+                            onClick={() => openEditContent(l)}
+                            disabled={pending}
+                            aria-label={`Edit ${l.label} content`}
+                            className="rounded p-0.5 text-text-tertiary hover:text-text-primary"
+                          >
+                            <SquarePen size={13} />
+                          </button>
+                        )}
+                        {canEditRow(l) && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => openShare(l)}
+                              disabled={pending}
+                              aria-label={`Share ${l.label}`}
+                              className="rounded p-0.5 text-text-tertiary hover:text-text-primary"
+                            >
+                              <Share2 size={13} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => openEdit(l)}
+                              disabled={pending}
+                              aria-label={`Edit ${l.label} details`}
+                              className="rounded p-0.5 text-text-tertiary hover:text-text-primary"
+                            >
+                              <Pencil size={13} />
+                            </button>
+                            <ConfirmDialog
+                              title={l.kind === "file" ? "Remove this file?" : "Remove this link?"}
+                              description={`"${l.label}" will be removed from this project${l.kind === "file" ? " and deleted from storage" : ""}.`}
+                              confirmLabel="Remove"
+                              destructive
+                              onConfirm={() => remove(l)}
+                              trigger={(open) => (
+                                <button
+                                  type="button"
+                                  onClick={open}
+                                  disabled={pending}
+                                  aria-label={`Delete ${l.label}`}
+                                  className="rounded p-0.5 text-text-tertiary hover:text-[var(--destructive)]"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              )}
+                            />
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
   const hasSecondary = secondary.some((c) => byCategory.get(c)!.length > 0);
 
   return (
@@ -349,9 +592,52 @@ export function LinksBoard({
       onUploaded={() => router.refresh()}
     >
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-label text-text-secondary">Links & Documents</h2>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {view === "list" && (
+              <div className="relative">
+                <Search
+                  size={13}
+                  className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-text-tertiary"
+                />
+                <input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search…"
+                  aria-label="Search files and links"
+                  className="h-8 w-40 rounded-md border border-[var(--border)] bg-transparent pl-7 pr-2 text-[13px] outline-none focus:border-text-tertiary"
+                />
+              </div>
+            )}
+            <div className="flex items-center rounded-md border border-[var(--border)] p-0.5">
+              <button
+                type="button"
+                onClick={() => setView("grid")}
+                aria-label="Grid view"
+                aria-pressed={view === "grid"}
+                className={`rounded p-1 transition-colors ${
+                  view === "grid"
+                    ? "bg-surface text-text-primary"
+                    : "text-text-tertiary hover:text-text-secondary"
+                }`}
+              >
+                <LayoutGrid size={14} />
+              </button>
+              <button
+                type="button"
+                onClick={() => setView("list")}
+                aria-label="List view"
+                aria-pressed={view === "list"}
+                className={`rounded p-1 transition-colors ${
+                  view === "list"
+                    ? "bg-surface text-text-primary"
+                    : "text-text-tertiary hover:text-text-secondary"
+                }`}
+              >
+                <ListIcon size={14} />
+              </button>
+            </div>
             <Button
               type="button"
               size="sm"
@@ -375,16 +661,22 @@ export function LinksBoard({
           </div>
         </div>
 
-        <div className="grid gap-3 lg:grid-cols-3">
-          {primary.map(renderCard)}
-        </div>
+        {view === "list" ? (
+          renderList()
+        ) : (
+          <>
+            <div className="grid gap-3 lg:grid-cols-3">
+              {primary.map(renderCard)}
+            </div>
 
-        {hasSecondary && (
-          <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
-            {secondary
-              .filter((c) => byCategory.get(c)!.length > 0)
-              .map(renderCard)}
-          </div>
+            {hasSecondary && (
+              <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
+                {secondary
+                  .filter((c) => byCategory.get(c)!.length > 0)
+                  .map(renderCard)}
+              </div>
+            )}
+          </>
         )}
 
         <AddLinkModal
@@ -418,6 +710,24 @@ export function LinksBoard({
               openEdit(l);
             };
           })()}
+          onEditContent={(() => {
+            if (!previewFile) return undefined;
+            const l = links.find((x) => x.id === previewFile.linkId);
+            if (!l || !canEditRow(l) || !isFileEditable(l)) return undefined;
+            return () => {
+              setPreviewOpen(false);
+              openEditContent(l);
+            };
+          })()}
+        />
+
+        <EditFileContentModal
+          key={editContentFile?.linkId ?? "none"}
+          lobId={lobId}
+          file={editContentFile}
+          open={editContentOpen}
+          onOpenChange={setEditContentOpen}
+          onSaved={() => router.refresh()}
         />
 
         <ShareLinkModal
