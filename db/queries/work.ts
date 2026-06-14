@@ -114,7 +114,13 @@ export async function listInitiatives(opts: {
         done: sql<number>`SUM(CASE WHEN ${milestones.status} = 'done' THEN 1 ELSE 0 END)::int`,
       })
       .from(milestones)
-      .where(inArray(milestones.initiativeId, ids))
+      // Exclude soft-deleted (cancelled) tasks so deletes reflect in the count.
+      .where(
+        and(
+          inArray(milestones.initiativeId, ids),
+          sql`${milestones.status} <> 'cancelled'`,
+        ),
+      )
       .groupBy(milestones.initiativeId),
   ]);
 

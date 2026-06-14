@@ -21,6 +21,7 @@ import {
   type PlanDocData,
 } from "@/db/queries/roadmap";
 import { RoadmapToolbar } from "@/components/roadmap/roadmap-toolbar";
+import { RoadmapSelectionProvider } from "@/components/roadmap/roadmap-selection";
 import { UnassignedLane } from "@/components/roadmap/unassigned-lane";
 import { RoadmapBoard } from "@/components/roadmap/roadmap-board";
 import type {
@@ -154,65 +155,59 @@ export default async function RoadmapPage({
           <div>
             <h1 className="text-[22px] font-medium tracking-tight">Roadmap</h1>
             <p className="text-[13px] text-text-secondary">
-              The plan, end to end — edit anything in place.
+              The plan, end to end — edit anything in place. Changes save automatically.
             </p>
           </div>
-          <Link
-            href="/roadmap/plan"
-            title="Snapshot the plan, review what changed since the last version, and commit a new baseline"
-            className="rounded-md px-3 py-1.5 text-[13px] font-medium text-white"
-            style={{ background: "var(--blue-mid)" }}
-          >
-            Review &amp; commit plan
-          </Link>
         </header>
 
         <WorkNav />
 
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <RoadmapToolbar currentVersion={currentVersion} />
-          {/* FR-RVW-3: three zoom levels only */}
-          <div
-            className="flex items-center rounded-md border overflow-hidden"
-            style={{ borderColor: "var(--border-default)" }}
-          >
-            {(Object.keys(WINDOWS) as WindowKey[]).map((k) => (
-              <Link
-                key={k}
-                href={`/roadmap?window=${k}`}
-                className={`px-2.5 py-1 text-[12px] ${
-                  k === windowKey
-                    ? "font-medium text-text-primary bg-surface"
-                    : "text-text-secondary hover:text-text-primary"
-                }`}
-              >
-                {WINDOWS[k].label}
-              </Link>
-            ))}
+        <RoadmapSelectionProvider>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <RoadmapToolbar currentVersion={currentVersion} />
+            {/* FR-RVW-3: three zoom levels only */}
+            <div
+              className="flex items-center rounded-md border overflow-hidden"
+              style={{ borderColor: "var(--border-default)" }}
+            >
+              {(Object.keys(WINDOWS) as WindowKey[]).map((k) => (
+                <Link
+                  key={k}
+                  href={`/roadmap?window=${k}`}
+                  className={`px-2.5 py-1 text-[12px] ${
+                    k === windowKey
+                      ? "font-medium text-text-primary bg-surface"
+                      : "text-text-secondary hover:text-text-primary"
+                  }`}
+                >
+                  {WINDOWS[k].label}
+                </Link>
+              ))}
+            </div>
           </div>
-        </div>
 
-        {!initsRes.ok && (
-          <DbBanner error={(initsRes as { error?: string }).error ?? ""} />
-        )}
+          {!initsRes.ok && (
+            <DbBanner error={(initsRes as { error?: string }).error ?? ""} />
+          )}
 
-        {/* Timeline + plan with shared milestone selection (click a bar →
-            deliverables expand inline + the plan filters to it). */}
-        <RoadmapBoard
-          timeline={{
-            monthCount,
-            months: tl.months.map((m) => ({ label: m.label })),
-            windowStartMs: tl.start.getTime(),
-            windowTotalMs: tl.totalMs,
-            todayPct,
-            groups: tlGroups,
-            detailsById: Object.fromEntries(
-              planDocRes.data.initiatives.map((i) => [i.id, i]),
-            ),
-          }}
-          planData={planDocRes.data}
-          deps={depsRes.data}
-        />
+          {/* Timeline + plan with shared milestone selection (click a bar →
+              deliverables expand inline + the plan filters to it). */}
+          <RoadmapBoard
+            timeline={{
+              monthCount,
+              months: tl.months.map((m) => ({ label: m.label })),
+              windowStartMs: tl.start.getTime(),
+              windowTotalMs: tl.totalMs,
+              todayPct,
+              groups: tlGroups,
+              detailsById: Object.fromEntries(
+                planDocRes.data.initiatives.map((i) => [i.id, i]),
+              ),
+            }}
+            planData={planDocRes.data}
+            deps={depsRes.data}
+          />
+        </RoadmapSelectionProvider>
 
         {/* Unassigned lane (FR-UNI-3/4) */}
         <UnassignedLane
