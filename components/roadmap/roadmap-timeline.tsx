@@ -14,6 +14,7 @@ import {
   useEffect,
   useLayoutEffect,
   useMemo,
+  useOptimistic,
   useRef,
   useState,
   useTransition,
@@ -21,6 +22,7 @@ import {
 import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner";
 import { CornerDownRight, Plus, Star, X, Zap } from "lucide-react";
+import { useRoadmapSelection } from "./roadmap-selection";
 import type {
   InitiativeDependency,
   PlanDocInitiative,
@@ -155,6 +157,7 @@ export function RoadmapTimeline({
   const [optimistic, setOptimistic] = useState<Record<string, { s: number; e: number }>>({});
   const dragRef = useRef<DragRef | null>(null);
   const [, startTransition] = useTransition();
+  const sel = useRoadmapSelection();
 
   // ── Dependency arrows + drag-to-link ──
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -444,10 +447,20 @@ export function RoadmapTimeline({
                             transition: "opacity .15s",
                           }}
                         >
+                          <div className="flex items-center min-w-0">
+                          {sel.selectMode && (
+                            <input
+                              type="checkbox"
+                              checked={sel.isSelected(item.id)}
+                              onChange={() => sel.toggle(item.id, "init")}
+                              className="ml-3 mr-1 shrink-0"
+                              title="Select milestone for delete"
+                            />
+                          )}
                           <button
                             type="button"
                             onClick={() => onSelect(isSel ? null : item.id)}
-                            className="min-w-0 pr-2 pl-3 text-left flex items-center gap-2"
+                            className={`min-w-0 pr-2 text-left flex items-center gap-2 ${sel.selectMode ? "pl-1" : "pl-3"}`}
                           >
                             {code && (
                               <span
@@ -481,6 +494,7 @@ export function RoadmapTimeline({
                               </span>
                             )}
                           </button>
+                          </div>
 
                           <div data-track className="relative h-7 bg-surface rounded">
                             <div
@@ -848,6 +862,52 @@ function flattenTasks(
   return out;
 }
 
+type AddOpts = {
+  afterId: string | null;
+  level: number;
+  parentTaskId: string | null;
+  title?: string;
+  dueDate?: string | null;
+  focusNew?: boolean;
+};
+type OptAction =
+  | ({ type: "add"; tempId: string } & AddOpts)
+  | { type: "delete"; id: string };
+
+function optimisticReducer(state: DelivRow[], action: OptAction): DelivRow[] {
+  if (action.type === "delete") {
+    const remove = new Set<string>([action.id]);
+    let grew = true;
+    while (grew) {
+      grew = false;
+      for (const r of state) {
+        if (r.parentTaskId && remove.has(r.parentTaskId) && !remove.has(r.id)) {
+          remove.add(r.id);
+          grew = true;
+        }
+      }
+    }
+    return state.filter((r) => !remove.has(r.id));
+  }
+  // add
+  const tmp: DelivRow = {
+    id: action.tempId,
+    title: action.title ?? "",
+    done: false,
+    dueDate: action.dueDate ?? null,
+    level: action.level,
+    parentTaskId: action.parentTaskId,
+  };
+  if (action.afterId === null) return [...state, tmp];
+  const i = state.findIndex((r) => r.id === action.afterId);
+  if (i < 0) return [...state, tmp];
+  const copy = [...state];
+  copy.splice(i + 1, 0, tmp);
+  return copy;
+}
+
+let tmpSeq = 0;
+
 function DeliverablesEditor({
   initiativeId,
   tasks,
@@ -858,7 +918,10 @@ function DeliverablesEditor({
   const [, startTransition] = useTransition();
   const [focusId, setFocusId] = useState<string | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
-  const rows = useMemo(() => flattenTasks(tasks), [tasks]);
+  const serverRows = useMemo(() => flattenTasks(tasks), [tasks]);
+  // Optimistic overlay → add/remove reflect instantly; server truth replaces
+  // it when the revalidated props arrive (no 1s round-trip stall).
+  const [rows, applyOptimistic] = useOptimistic(serverRows, optimisticReducer);
   const parentOf = useMemo(() => new Map(rows.map((r) => [r.id, r.parentTaskId])), [rows]);
 
   // After a structural change re-renders with fresh data, focus the new row.
@@ -885,6 +948,27 @@ function DeliverablesEditor({
     }
   };
 
+  const addRow = (opts: AddOpts) => {
+    const tempId = `__tmp_${tmpSeq++}`;
+    startTransition(async () => {
+      applyOptimistic({ type: "add", tempId, ...opts });
+      const r = await createRoadmapTask({
+        initiativeId,
+        title: opts.title ?? "",
+        parentTaskId: opts.parentTaskId,
+        dueDate: opts.dueDate ?? null,
+      });
+      if (r.id && opts.focusNew !== false) setFocusId(r.id);
+    });
+  };
+
+  const removeRow = (id: string) => {
+    startTransition(async () => {
+      applyOptimistic({ type: "delete", id });
+      await deleteRoadmapTask(id);
+    });
+  };
+
   return (
     <div ref={boxRef}>
       <p className="text-tiny text-text-tertiary mb-1.5">
@@ -901,10 +985,12 @@ function DeliverablesEditor({
             moveFocus={moveFocus}
             setFocusId={setFocusId}
             startTransition={startTransition}
+            addRow={addRow}
+            removeRow={removeRow}
           />
         ))}
       </div>
-      <InlineAddTask initiativeId={initiativeId} moveFocus={moveFocus} />
+      <InlineAddTask initiativeId={initiativeId} moveFocus={moveFocus} addRow={addRow} />
     </div>
   );
 }
@@ -912,11 +998,12 @@ function DeliverablesEditor({
 function DelivRow({
   row,
   prev,
-  initiativeId,
   parentOf,
   moveFocus,
   setFocusId,
   startTransition,
+  addRow,
+  removeRow,
 }: {
   row: DelivRow;
   prev: DelivRow | undefined;
@@ -925,13 +1012,18 @@ function DelivRow({
   moveFocus: (fromId: string, dir: 1 | -1) => void;
   setFocusId: (id: string | null) => void;
   startTransition: (cb: () => void) => void;
+  addRow: (opts: AddOpts) => void;
+  removeRow: (id: string) => void;
 }) {
   const [checked, setChecked] = useState(row.done);
   const [title, setTitle] = useState(row.title);
   useEffect(() => setChecked(row.done), [row.done]);
   useEffect(() => setTitle(row.title), [row.title]);
+  const sel = useRoadmapSelection();
+  const isTemp = row.id.startsWith("__tmp_");
 
   const commit = () => {
+    if (isTemp) return;
     const { title: parsed, end } = parseDateTokens(title);
     const newTitle = parsed || row.title;
     const patch: Parameters<typeof updateRoadmapTask>[1] = {};
@@ -942,33 +1034,11 @@ function DelivRow({
     startTransition(() => updateRoadmapTask(row.id, patch));
   };
 
-  const addSibling = () => {
-    commit();
-    startTransition(async () => {
-      const r = await createRoadmapTask({
-        initiativeId,
-        title: "",
-        parentTaskId: row.parentTaskId ?? null,
-      });
-      if (r.id) setFocusId(r.id);
-    });
-  };
-
-  const addChild = () => {
-    if (row.level >= MAX_DELIV_DEPTH) return;
-    commit();
-    startTransition(async () => {
-      const r = await createRoadmapTask({ initiativeId, title: "", parentTaskId: row.id });
-      if (r.id) setFocusId(r.id);
-    });
-  };
-
-  const remove = () => startTransition(() => deleteRoadmapTask(row.id));
-
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      addSibling();
+      commit();
+      addRow({ afterId: row.id, level: row.level, parentTaskId: row.parentTaskId ?? null, focusNew: true });
     } else if (e.key === "ArrowDown") {
       e.preventDefault();
       moveFocus(row.id, 1);
@@ -977,6 +1047,7 @@ function DelivRow({
       moveFocus(row.id, -1);
     } else if (e.key === "Tab") {
       e.preventDefault();
+      if (isTemp) return;
       if (e.shiftKey) {
         // outdent → become a sibling of the current parent
         if (row.parentTaskId) {
@@ -1001,28 +1072,43 @@ function DelivRow({
           });
         }
       }
-    } else if (e.key === "Backspace" && title === "") {
+    } else if (e.key === "Backspace" && title === "" && !isTemp) {
       e.preventDefault();
-      remove();
+      removeRow(row.id);
     }
   };
 
   return (
     <div
       className="group flex items-center gap-2 rounded px-1 py-0.5 hover:bg-surface"
-      style={{ paddingLeft: `${row.level * 22 + 4}px` }}
+      style={{
+        paddingLeft: `${row.level * 22 + 4}px`,
+        background: sel.isSelected(row.id) ? "color-mix(in oklab, var(--red-mid) 12%, transparent)" : undefined,
+        opacity: isTemp ? 0.6 : 1,
+      }}
     >
+      {sel.selectMode && !isTemp && (
+        <input
+          type="checkbox"
+          checked={sel.isSelected(row.id)}
+          onChange={() => sel.toggle(row.id, "task")}
+          className="shrink-0"
+          title="Select for delete"
+        />
+      )}
       {row.level > 0 && (
         <CornerDownRight size={12} className="shrink-0 text-text-tertiary opacity-40" />
       )}
       <input
         type="checkbox"
         checked={checked}
+        disabled={isTemp}
         onChange={(e) => {
           setChecked(e.target.checked);
           startTransition(() => toggleRoadmapTask(row.id, e.target.checked));
         }}
         className="shrink-0"
+        title="Mark done"
       />
       <input
         data-deliv={row.id}
@@ -1033,24 +1119,29 @@ function DelivRow({
         placeholder={row.level === 0 ? "Deliverable…" : "Sub-deliverable…"}
         className={`flex-1 min-w-0 bg-transparent text-[13px] outline-none placeholder:text-text-tertiary ${checked ? "line-through text-text-tertiary" : ""}`}
       />
-      {row.level < MAX_DELIV_DEPTH && (
+      {!isTemp && row.level < MAX_DELIV_DEPTH && (
         <button
           type="button"
-          onClick={addChild}
+          onClick={() => {
+            commit();
+            addRow({ afterId: row.id, level: row.level + 1, parentTaskId: row.id, focusNew: true });
+          }}
           title="Add sub-deliverable (or press Tab)"
           className="shrink-0 text-text-tertiary hover:text-text-primary opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
         >
           <Plus size={13} />
         </button>
       )}
-      <button
-        type="button"
-        onClick={remove}
-        title="Delete"
-        className="shrink-0 text-text-tertiary hover:text-[var(--red-mid)] opacity-0 group-hover:opacity-100 transition-opacity"
-      >
-        <X size={13} />
-      </button>
+      {!isTemp && (
+        <button
+          type="button"
+          onClick={() => removeRow(row.id)}
+          title="Delete"
+          className="shrink-0 text-text-tertiary hover:text-[var(--red-mid)] opacity-0 group-hover:opacity-100 transition-opacity"
+        >
+          <X size={13} />
+        </button>
+      )}
       <DateField
         value={row.dueDate}
         onChange={(v) => startTransition(() => updateRoadmapTask(row.id, { dueDate: v }))}
@@ -1061,25 +1152,29 @@ function DelivRow({
 }
 
 function InlineAddTask({
-  initiativeId,
   moveFocus,
+  addRow,
 }: {
   initiativeId: string;
   moveFocus: (fromId: string, dir: 1 | -1) => void;
+  addRow: (opts: AddOpts) => void;
 }) {
   const [value, setValue] = useState("");
-  const [pending, startTransition] = useTransition();
   const submit = () => {
     const raw = value.trim();
     if (!raw) return;
     setValue(""); // clear + keep focus → type the next one straight away
     // Support the inline date shortcut: "QA pass /END 5/20" or "ETA:5/20".
     const { title, end } = parseDateTokens(raw);
-    startTransition(() =>
-      createRoadmapTask({ initiativeId, title: title || raw, dueDate: end ?? null }).then(
-        () => undefined,
-      ),
-    );
+    // Keep focus in the add box (focusNew:false) for rapid sequential entry.
+    addRow({
+      afterId: null,
+      level: 0,
+      parentTaskId: null,
+      title: title || raw,
+      dueDate: end ?? null,
+      focusNew: false,
+    });
   };
   return (
     <div className="flex items-center gap-2 px-1 py-0.5 mt-0.5">
@@ -1098,7 +1193,6 @@ function InlineAddTask({
           }
         }}
         onBlur={submit}
-        disabled={pending}
         placeholder="Add deliverable…  (try: QA pass /END 5/20)"
         className="flex-1 bg-transparent text-[13px] outline-none placeholder:text-text-tertiary"
       />

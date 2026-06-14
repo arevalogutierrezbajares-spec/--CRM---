@@ -836,6 +836,75 @@ export async function deleteRoadmapTask(id: string): Promise<void> {
   revalidatePath("/work");
 }
 
+/** Multi-select delete from the toolbar: initiatives are removed (with their
+ *  milestones); tasks are soft-cancelled (with descendants). One round trip. */
+export async function bulkDeleteRoadmap(input: {
+  initiativeIds?: string[];
+  taskIds?: string[];
+}): Promise<{ ok: boolean; deleted: number }> {
+  const user = await requireUser();
+  const initIds = (input.initiativeIds ?? []).filter(Boolean);
+  const taskIds = (input.taskIds ?? []).filter(Boolean);
+  if (initIds.length === 0 && taskIds.length === 0) return { ok: true, deleted: 0 };
+
+  await db.transaction(async (tx) => {
+    const t = tx as unknown as typeof db;
+
+    if (taskIds.length > 0) {
+      // Expand each selected task to include its descendants, then soft-cancel.
+      const all = await t
+        .select({ id: milestones.id, parent: milestones.parentMilestoneId })
+        .from(milestones)
+        .where(eq(milestones.workspaceId, user.workspaceId));
+      const childrenOf = new Map<string, string[]>();
+      for (const m of all) {
+        if (m.parent) {
+          const a = childrenOf.get(m.parent) ?? [];
+          a.push(m.id);
+          childrenOf.set(m.parent, a);
+        }
+      }
+      const toCancel = new Set<string>();
+      const stack = [...taskIds];
+      while (stack.length) {
+        const n = stack.pop()!;
+        if (toCancel.has(n)) continue;
+        toCancel.add(n);
+        for (const c of childrenOf.get(n) ?? []) stack.push(c);
+      }
+      await t
+        .update(milestones)
+        .set({ status: "cancelled" })
+        .where(
+          and(
+            inArray(milestones.id, [...toCancel]),
+            eq(milestones.workspaceId, user.workspaceId),
+          ),
+        );
+    }
+
+    if (initIds.length > 0) {
+      await t
+        .delete(milestones)
+        .where(
+          and(
+            inArray(milestones.initiativeId, initIds),
+            eq(milestones.workspaceId, user.workspaceId),
+          ),
+        );
+      await t
+        .delete(initiatives)
+        .where(
+          and(inArray(initiatives.id, initIds), eq(initiatives.workspaceId, user.workspaceId)),
+        );
+    }
+  });
+
+  revalidatePath("/roadmap");
+  revalidatePath("/work");
+  return { ok: true, deleted: initIds.length + taskIds.length };
+}
+
 /** Re-parent a task (Tab/Shift+Tab indent/outdent within a milestone's tree). */
 export async function reparentRoadmapTask(
   id: string,
