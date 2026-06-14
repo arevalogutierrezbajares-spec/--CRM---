@@ -6,9 +6,13 @@
 
 ---
 
+## This is the CRM's one existing MCP server — not a new one
+
+There is a single MCP server in this repo: `app/api/mcp/` (internals in `lib/mcp/*`, tokens in the `mcp_access_tokens` table). The **Profile page already exposes it** for Claude Code via the command `claude mcp add --transport http agb-crm-mcp <origin>/api/mcp` (`app/(app)/profile/mcp-connect-snippet.tsx`) and lists/revokes active connections. This runbook connects the **same server, same `/api/mcp` endpoint, same OAuth flow** — just from the Claude **Desktop** app (a custom connector) instead of the Claude **Code** CLI, plus a scheduled Routine. Nothing here builds or duplicates a second MCP.
+
 ## What's already in place
 
-- **MCP server:** `app/api/mcp/route.ts`, live at **`https://<your-crm-domain>/api/mcp`** (your Vercel domain). Public HTTPS — the one hard prerequisite for a Claude Desktop connector — is already satisfied.
+- **MCP server:** `app/api/mcp/route.ts`, live at **`https://<your-crm-domain>/api/mcp`** (your Vercel domain — the exact URL the Profile page's `claude mcp add` command points at). Public HTTPS — the one hard prerequisite for a Claude Desktop connector — is already satisfied.
 - **OAuth 2.1:** full flow implemented (`/api/mcp/oauth/{register,authorize,token}` + `/api/mcp/well-known/*`), tokens are hashed, scoped to your workspace+user, and expire. Scope: `crm.read crm.write`.
 - **19 tools exposed** (a curated subset of the agent registry — `lib/mcp/tools.ts`):
   - **Read (10):** `find_contact`, `contact_summary`, `find_project`, `find_member`, `status_report`, `daily_recap`, `read_todo_board`, `meeting_brief`, `list_reminders`
