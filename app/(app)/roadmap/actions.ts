@@ -9,6 +9,7 @@ import {
   actionItems,
   initiativeDependencies,
   initiatives,
+  linesOfBusiness,
   milestones,
 } from "@/db/schema";
 import { requireUser } from "@/lib/current-user";
@@ -465,10 +466,9 @@ export async function createRoadmapTask(opts: {
   title: string;
   parentTaskId?: string | null;
   dueDate?: string | null;
-}): Promise<{ ok: boolean; error?: string }> {
+}): Promise<{ ok: boolean; id?: string; error?: string }> {
   const user = await requireUser();
-  const title = (opts.title ?? "").trim();
-  if (!title) return { ok: false, error: "Title required" };
+  const title = (opts.title ?? "").trim() || "New deliverable";
   const [owned] = await db
     .select({ id: initiatives.id })
     .from(initiatives)
@@ -485,18 +485,21 @@ export async function createRoadmapTask(opts: {
     initiativeId: opts.initiativeId,
     createdBy: user.id,
   });
-  await db.insert(milestones).values({
-    workspaceId: user.workspaceId,
-    projectId,
-    initiativeId: opts.initiativeId,
-    parentMilestoneId: opts.parentTaskId ?? null,
-    title,
-    dueDate: opts.dueDate ?? null,
-    createdBy: user.id,
-  });
+  const [row] = await db
+    .insert(milestones)
+    .values({
+      workspaceId: user.workspaceId,
+      projectId,
+      initiativeId: opts.initiativeId,
+      parentMilestoneId: opts.parentTaskId ?? null,
+      title,
+      dueDate: opts.dueDate ?? null,
+      createdBy: user.id,
+    })
+    .returning({ id: milestones.id });
   revalidatePath("/roadmap");
   revalidatePath("/work");
-  return { ok: true };
+  return { ok: true, id: row.id };
 }
 
 /* ─── Planning session (FR-PLN-1/2/3/4) ───────────────────────────────── */
@@ -720,4 +723,131 @@ export async function removeInitiativeDependency(id: string): Promise<void> {
       ),
     );
   revalidatePath("/roadmap");
+}
+
+/* ─── Bulk-edit structural ops (LoBs · initiatives · tasks) ───────────── */
+
+export async function createLob(
+  title?: string,
+): Promise<{ ok: boolean; id?: string }> {
+  const user = await requireUser();
+  const [row] = await db
+    .insert(linesOfBusiness)
+    .values({
+      workspaceId: user.workspaceId,
+      title: (title ?? "").trim() || "New line of business",
+      kind: "business",
+      createdBy: user.id,
+    })
+    .returning({ id: linesOfBusiness.id });
+  revalidatePath("/roadmap");
+  return { ok: true, id: row.id };
+}
+
+export async function renameLob(id: string, title: string): Promise<void> {
+  const user = await requireUser();
+  const t = (title ?? "").trim();
+  if (!t) return;
+  await db
+    .update(linesOfBusiness)
+    .set({ title: t, updatedAt: new Date() })
+    .where(and(eq(linesOfBusiness.id, id), eq(linesOfBusiness.workspaceId, user.workspaceId)));
+  revalidatePath("/roadmap");
+}
+
+/** Delete a LoB; its initiatives are detached (become Cross-venture), not deleted. */
+export async function deleteLob(id: string): Promise<void> {
+  const user = await requireUser();
+  await db.transaction(async (tx) => {
+    const t = tx as unknown as typeof db;
+    await t
+      .update(initiatives)
+      .set({ lobId: null })
+      .where(and(eq(initiatives.lobId, id), eq(initiatives.workspaceId, user.workspaceId)));
+    await t
+      .delete(linesOfBusiness)
+      .where(and(eq(linesOfBusiness.id, id), eq(linesOfBusiness.workspaceId, user.workspaceId)));
+  });
+  revalidatePath("/roadmap");
+}
+
+export async function createInitiative(opts: {
+  lobId?: string | null;
+  title?: string;
+}): Promise<{ ok: boolean; id?: string }> {
+  const user = await requireUser();
+  const [row] = await db
+    .insert(initiatives)
+    .values({
+      workspaceId: user.workspaceId,
+      lobId: opts.lobId ?? null,
+      title: (opts.title ?? "").trim() || "New milestone",
+      createdBy: user.id,
+    })
+    .returning({ id: initiatives.id });
+  revalidatePath("/roadmap");
+  return { ok: true, id: row.id };
+}
+
+export async function deleteInitiative(id: string): Promise<void> {
+  const user = await requireUser();
+  await db.transaction(async (tx) => {
+    const t = tx as unknown as typeof db;
+    await t
+      .delete(milestones)
+      .where(and(eq(milestones.initiativeId, id), eq(milestones.workspaceId, user.workspaceId)));
+    await t
+      .delete(initiatives)
+      .where(and(eq(initiatives.id, id), eq(initiatives.workspaceId, user.workspaceId)));
+  });
+  revalidatePath("/roadmap");
+}
+
+/** Soft-delete a task + its descendants (the roadmap queries exclude cancelled). */
+export async function deleteRoadmapTask(id: string): Promise<void> {
+  const user = await requireUser();
+  await db.transaction(async (tx) => {
+    const t = tx as unknown as typeof db;
+    const all = await t
+      .select({ id: milestones.id, parent: milestones.parentMilestoneId })
+      .from(milestones)
+      .where(eq(milestones.workspaceId, user.workspaceId));
+    const childrenOf = new Map<string, string[]>();
+    for (const m of all) {
+      if (m.parent) {
+        const a = childrenOf.get(m.parent) ?? [];
+        a.push(m.id);
+        childrenOf.set(m.parent, a);
+      }
+    }
+    const toCancel: string[] = [];
+    const stack = [id];
+    while (stack.length) {
+      const n = stack.pop()!;
+      toCancel.push(n);
+      for (const c of childrenOf.get(n) ?? []) stack.push(c);
+    }
+    await t
+      .update(milestones)
+      .set({ status: "cancelled" })
+      .where(and(inArray(milestones.id, toCancel), eq(milestones.workspaceId, user.workspaceId)));
+  });
+  revalidatePath("/roadmap");
+  revalidatePath("/work");
+}
+
+/** Re-parent a task (Tab/Shift+Tab indent/outdent within a milestone's tree). */
+export async function reparentRoadmapTask(
+  id: string,
+  parentMilestoneId: string | null,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireUser();
+  if (id === parentMilestoneId) return { ok: false, error: "Invalid parent" };
+  await db
+    .update(milestones)
+    .set({ parentMilestoneId })
+    .where(and(eq(milestones.id, id), eq(milestones.workspaceId, user.workspaceId)));
+  revalidatePath("/roadmap");
+  revalidatePath("/work");
+  return { ok: true };
 }

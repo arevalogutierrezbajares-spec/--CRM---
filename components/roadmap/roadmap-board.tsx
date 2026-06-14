@@ -9,6 +9,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { RoadmapTimeline, type TimelineGroup } from "./roadmap-timeline";
 import { PlanDoc } from "./plan-doc";
+import { BulkEditOutline } from "./bulk-edit-outline";
 import type {
   InitiativeDependency,
   PlanDocData,
@@ -92,6 +93,7 @@ export function RoadmapBoard({
   deps: InitiativeDependency[];
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [bulkEdit, setBulkEdit] = useState(false);
   const criticalIds = useMemo(
     () => computeCriticalIds(planData.initiatives, deps),
     [planData.initiatives, deps],
@@ -143,40 +145,60 @@ export function RoadmapBoard({
 
   return (
     <div className="space-y-4">
-      <RoadmapTimeline
-        {...timeline}
-        members={planData.members}
-        lobs={planData.lobs}
-        deps={deps}
-        criticalIds={criticalIds}
-        initiativeList={initiativeList}
-        selectedId={selectedId}
-        onSelect={setSelectedId}
-      />
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={() => setBulkEdit((b) => !b)}
+          className={`rounded-md border px-2.5 py-1 text-[12px] font-medium ${bulkEdit ? "text-white" : "text-text-secondary hover:text-text-primary"}`}
+          style={{
+            borderColor: bulkEdit ? "var(--blue-mid)" : "var(--border-default)",
+            background: bulkEdit ? "var(--blue-mid)" : "transparent",
+          }}
+        >
+          {bulkEdit ? "✓ Done" : "⊞ Bulk edit"}
+        </button>
+      </div>
 
-      <section className="space-y-2">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-label text-text-secondary truncate">
-            {focused ? `Focused: ${focused.title}` : "The plan"}
-          </h2>
-          <div className="flex items-center gap-2.5 shrink-0">
-            <span className="hidden sm:inline text-tiny text-text-tertiary">
-              ↑↓ navigate · Esc to clear
-            </span>
-            {selectedId && (
-              <button
-                type="button"
-                onClick={() => setSelectedId(null)}
-                className="rounded-md border px-2 py-1 text-[12px] text-text-secondary hover:text-text-primary"
-                style={{ borderColor: "var(--border-default)" }}
-              >
-                ✕ Show all
-              </button>
-            )}
-          </div>
-        </div>
-        <PlanDoc data={planData} focusId={selectedId} />
-      </section>
+      {bulkEdit ? (
+        <BulkEditOutline data={planData} />
+      ) : (
+        <>
+          <RoadmapTimeline
+            {...timeline}
+            members={planData.members}
+            lobs={planData.lobs}
+            deps={deps}
+            criticalIds={criticalIds}
+            initiativeList={initiativeList}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+          />
+
+          <section className="space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-label text-text-secondary truncate">
+                {focused ? `Focused: ${focused.title}` : "The plan"}
+              </h2>
+              <div className="flex items-center gap-2.5 shrink-0">
+                <span className="hidden sm:inline text-tiny text-text-tertiary">
+                  ↑↓ navigate · Esc to clear
+                </span>
+                {selectedId && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedId(null)}
+                    className="rounded-md border px-2 py-1 text-[12px] text-text-secondary hover:text-text-primary"
+                    style={{ borderColor: "var(--border-default)" }}
+                  >
+                    ✕ Show all
+                  </button>
+                )}
+              </div>
+            </div>
+            <PlanDoc data={planData} focusId={selectedId} />
+          </section>
+        </>
+      )}
     </div>
   );
 }
