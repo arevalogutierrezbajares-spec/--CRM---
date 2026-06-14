@@ -64,7 +64,7 @@ export async function getRoomItem(input: {
 export async function createRoomItem(input: {
   workspaceId: string;
   roomId: string;
-  kind: "link" | "file";
+  kind: "link" | "file" | "note";
   title: string;
   description?: string | null;
   category?: string | null;

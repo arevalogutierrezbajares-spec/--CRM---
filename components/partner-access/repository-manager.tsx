@@ -10,6 +10,7 @@ import {
   LinkIcon,
   Pencil,
   Plus,
+  StickyNote,
   Trash2,
   Upload,
   X,
@@ -96,6 +97,7 @@ function SectionSelect({
 }
 
 function itemIcon(item: OwnerRepoItem) {
+  if (item.kind === "note") return <StickyNote className="h-4 w-4 text-[var(--muted-foreground)]" />;
   if (item.kind === "link") return <LinkIcon className="h-4 w-4 text-[var(--muted-foreground)]" />;
   if (item.mimeType?.startsWith("image/")) return <ImageIcon className="h-4 w-4 text-[var(--muted-foreground)]" />;
   if (item.mimeType?.startsWith("video/")) return <Film className="h-4 w-4 text-[var(--muted-foreground)]" />;
@@ -444,7 +446,7 @@ function OwnerItemRow({
                 <div className="min-w-0">
                   <div className="truncate text-sm font-medium">{item.title}</div>
                   <div className="text-xs text-[var(--muted-foreground)]">
-                    {item.kind === "link" ? item.url : item.mimeType}
+                    {item.kind === "note" ? "Note" : item.kind === "link" ? item.url : item.mimeType}
                     {item.sizeBytes ? ` · ${formatBytes(item.sizeBytes)}` : ""}
                   </div>
                 </div>

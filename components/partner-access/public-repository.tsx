@@ -15,6 +15,7 @@ import {
   LinkIcon,
   Palette,
   PenLine,
+  StickyNote,
   Upload,
   type LucideIcon,
 } from "lucide-react";
@@ -387,7 +388,9 @@ function ItemRow({
     <li className="p-4 transition-colors hover:bg-[var(--secondary)]/25">
       <div className="flex items-start gap-3">
         <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-[var(--secondary)]">
-          {item.kind === "link" ? (
+          {item.kind === "note" ? (
+            <StickyNote className="h-4 w-4 text-[var(--muted-foreground)]" />
+          ) : item.kind === "link" ? (
             <LinkIcon className="h-4 w-4 text-[var(--muted-foreground)]" />
           ) : mk === "image" ? (
             <ImageIcon className="h-4 w-4 text-[var(--muted-foreground)]" />
@@ -428,7 +431,11 @@ function ItemRow({
             </p>
           ) : null}
           {item.description && (
-            <p className="mt-1.5 text-sm leading-6 text-[var(--muted-foreground)]">
+            <p
+              className={`mt-1.5 text-sm leading-6 text-[var(--muted-foreground)]${
+                item.kind === "note" ? " whitespace-pre-wrap" : ""
+              }`}
+            >
               {item.description}
             </p>
           )}

@@ -1,7 +1,21 @@
+"use client";
+
+import { useState, useTransition } from "react";
 import Link from "next/link";
-import { CheckSquare, ChevronRight, DoorOpen, Eye, FileUp } from "lucide-react";
+import {
+  CheckSquare,
+  ChevronRight,
+  DoorOpen,
+  Eye,
+  FileUp,
+  Send,
+  Sparkles,
+  FileText,
+} from "lucide-react";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { shareMeetingMinutesToRoom } from "@/app/(app)/meetings/actions";
 
 type RoomSummary = {
   id: string;
@@ -20,8 +34,39 @@ function statusVariant(status: string) {
   return "outline" as const;
 }
 
-export function MeetingPartnerRooms({ rooms }: { rooms: RoomSummary[] }) {
+export function MeetingPartnerRooms({
+  rooms,
+  meetingId,
+  hasMinutes,
+}: {
+  rooms: RoomSummary[];
+  meetingId?: string;
+  hasMinutes?: boolean;
+}) {
+  const [openFor, setOpenFor] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [, startTransition] = useTransition();
+
   if (rooms.length === 0) return null;
+
+  function share(roomId: string, mode: "raw" | "brief") {
+    if (!meetingId) return;
+    setBusy(roomId);
+    startTransition(async () => {
+      const res = await shareMeetingMinutesToRoom(meetingId, roomId, mode);
+      setBusy(null);
+      setOpenFor(null);
+      if (res.ok) {
+        toast.success(
+          mode === "brief" && res.usedAi
+            ? "Shared a client-brief of the minutes to the room"
+            : "Shared the minutes to the room",
+        );
+      } else {
+        toast.error(res.error);
+      }
+    });
+  }
 
   return (
     <Card>
@@ -67,6 +112,47 @@ export function MeetingPartnerRooms({ rooms }: { rooms: RoomSummary[] }) {
                 <Eye className="h-2.5 w-2.5" /> Preview
               </Link>
             </div>
+
+            {/* Share minutes — one click, with raw vs AI client-brief. */}
+            {meetingId && hasMinutes && room.status !== "revoked" && (
+              <div className="mt-2 border-t border-[var(--border)] pt-2">
+                {openFor === room.id ? (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <button
+                      type="button"
+                      disabled={busy === room.id}
+                      onClick={() => share(room.id, "raw")}
+                      className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-2 py-1 text-[11px] hover:bg-[var(--secondary)] disabled:opacity-50"
+                    >
+                      <FileText className="h-3 w-3" /> As-is
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy === room.id}
+                      onClick={() => share(room.id, "brief")}
+                      className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-2 py-1 text-[11px] hover:bg-[var(--secondary)] disabled:opacity-50"
+                    >
+                      <Sparkles className="h-3 w-3" /> AI client-brief
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setOpenFor(null)}
+                      className="text-[11px] text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setOpenFor(room.id)}
+                    className="inline-flex items-center gap-1 text-[11px] text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+                  >
+                    <Send className="h-3 w-3" /> Share minutes
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         ))}
       </CardContent>

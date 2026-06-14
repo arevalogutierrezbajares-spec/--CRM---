@@ -385,7 +385,11 @@ export default async function MeetingDetailPage(props: {
                       </Card>
                     )}
 
-                    <MeetingPartnerRooms rooms={partnerRoomSummaries} />
+                    <MeetingPartnerRooms
+                      rooms={partnerRoomSummaries}
+                      meetingId={meeting.id}
+                      hasMinutes={Boolean(meeting.minutes?.trim())}
+                    />
 
                     <Card>
                       <CardHeader>

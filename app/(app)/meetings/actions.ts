@@ -23,11 +23,81 @@ import {
   createPartnerShare,
   regeneratePartnerRoomAccessToken,
 } from "@/db/queries/partner-access";
+import { createRoomItem } from "@/db/queries/partner-repository";
+import { claudeChat, isAnthropicConfigured } from "@/lib/anthropic";
+import { modelForWorkload } from "@/lib/anthropic-budget";
 
 type RelationshipType = "friend" | "lead" | "partner" | "prospect";
 type MeetingTypeValue = "one_on_one" | "group" | "event" | "call";
 
-const { meetings, meetingAttendees, touches, milestones, contacts } = schema;
+const { meetings, meetingAttendees, touches, milestones, contacts, partnerRooms } = schema;
+
+/**
+ * Share a meeting's minutes into a partner room as a note item. mode "raw"
+ * posts the minutes verbatim; "brief" first asks Claude to turn the internal
+ * notes into a clean client-facing recap (falls back to raw if Claude is off
+ * or errors). The matched room is surfaced on the meeting's Partner Rooms panel.
+ */
+export async function shareMeetingMinutesToRoom(
+  meetingId: string,
+  roomId: string,
+  mode: "raw" | "brief",
+): Promise<{ ok: true; usedAi: boolean } | { ok: false; error: string }> {
+  const user = await requireUser();
+
+  const [meeting] = await db
+    .select({ id: meetings.id, title: meetings.title, minutes: meetings.minutes })
+    .from(meetings)
+    .where(and(eq(meetings.id, meetingId), eq(meetings.workspaceId, user.workspaceId)))
+    .limit(1);
+  if (!meeting) return { ok: false, error: "Meeting not found" };
+
+  const raw = meeting.minutes?.trim();
+  if (!raw) return { ok: false, error: "This meeting has no minutes yet" };
+
+  const [room] = await db
+    .select({ id: partnerRooms.id })
+    .from(partnerRooms)
+    .where(and(eq(partnerRooms.id, roomId), eq(partnerRooms.workspaceId, user.workspaceId)))
+    .limit(1);
+  if (!room) return { ok: false, error: "Partner room not found" };
+
+  let body = raw;
+  let usedAi = false;
+  if (mode === "brief" && isAnthropicConfigured()) {
+    const res = await claudeChat({
+      model: modelForWorkload("briefing"),
+      system:
+        "You turn a founder's raw internal meeting notes into a concise, client-facing recap to post in a shared partner room. Keep what's useful to the client: decisions, agreed next steps, and dates. Drop internal-only asides, candid commentary, pricing strategy, and anything not meant for the client's eyes. Warm, professional, first person plural ('we'). Output the recap body only — no preamble, no sign-off.",
+      prompt: `Meeting: ${meeting.title}\n\nRaw notes:\n${raw}`,
+      maxTokens: 700,
+      spend: {
+        workspaceId: user.workspaceId,
+        userId: user.id,
+        direction: "out",
+        trackUsage: true,
+        payload: { route: "meeting:share-minutes-brief", meetingId, roomId },
+      },
+    });
+    if (res.ok && res.text.trim()) {
+      body = res.text.trim();
+      usedAi = true;
+    }
+  }
+
+  await createRoomItem({
+    workspaceId: user.workspaceId,
+    roomId,
+    kind: "note",
+    title: `Minutes — ${meeting.title}`,
+    description: body,
+    category: "Notes",
+    addedBy: user.id,
+  });
+
+  revalidatePath(`/partner-access/rooms/${roomId}`);
+  return { ok: true, usedAi };
+}
 
 export type ActionResult =
   | { ok: true; id: string }
