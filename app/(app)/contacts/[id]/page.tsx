@@ -10,6 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { DbBanner } from "@/components/db-banner";
 import { ContactAvatar } from "@/components/contacts/avatar";
 import { ContactLogoUploader } from "@/components/contacts/contact-logo-uploader";
+import { LinkOrgAssist } from "@/components/contacts/link-org-assist";
 import { TouchForm } from "@/components/touches/touch-form";
 import { TouchList } from "@/components/touches/touch-list";
 import { VoiceRecorder } from "@/components/touches/voice-recorder";
@@ -179,10 +180,14 @@ export default async function ContactDetailPage(props: { params: Params }) {
                     </Link>
                   </p>
                 ) : (
-                  contact.organization && (
-                    <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-                      {contact.organization}
-                    </p>
+                  contact.organization &&
+                  contact.type === "person" && (
+                    <div className="mt-1">
+                      <LinkOrgAssist
+                        contactId={contact.id}
+                        organization={contact.organization}
+                      />
+                    </div>
                   )
                 )}
               </div>

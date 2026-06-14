@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/db";
@@ -13,6 +13,69 @@ import {
 } from "@/lib/validation/contact";
 
 const { contacts, contactChannels, contactTags } = schema;
+
+/**
+ * Link-assist: resolve a person's free-text `organization` into a structured
+ * org-type contact and set primaryOrgId — matching an existing org by name
+ * (case-insensitive) or creating one. Backs the "Link as org" button shown on a
+ * contact whose organization is still free text. The bulk equivalent runs as
+ * the 20260613160000_backfill_contacts_org_links migration.
+ */
+export async function resolveContactOrg(
+  contactId: string,
+): Promise<{ ok: true; orgId: string } | { ok: false; error: string }> {
+  const user = await requireUser();
+
+  const [person] = await db
+    .select({
+      id: contacts.id,
+      organization: contacts.organization,
+      primaryOrgId: contacts.primaryOrgId,
+    })
+    .from(contacts)
+    .where(and(eq(contacts.id, contactId), eq(contacts.workspaceId, user.workspaceId)))
+    .limit(1);
+  if (!person) return { ok: false, error: "Contact not found" };
+  if (person.primaryOrgId) return { ok: true, orgId: person.primaryOrgId };
+
+  const orgName = person.organization?.trim();
+  if (!orgName) return { ok: false, error: "No organization to link" };
+
+  const [existing] = await db
+    .select({ id: contacts.id })
+    .from(contacts)
+    .where(
+      and(
+        eq(contacts.workspaceId, user.workspaceId),
+        eq(contacts.type, "org"),
+        sql`lower(${contacts.name}) = lower(${orgName})`,
+      ),
+    )
+    .limit(1);
+
+  let orgId = existing?.id;
+  if (!orgId) {
+    const [created] = await db
+      .insert(contacts)
+      .values({
+        workspaceId: user.workspaceId,
+        name: orgName,
+        type: "org",
+        relationshipType: "partner",
+        createdBy: user.id,
+      })
+      .returning({ id: contacts.id });
+    orgId = created.id;
+  }
+
+  await db
+    .update(contacts)
+    .set({ primaryOrgId: orgId, updatedAt: new Date() })
+    .where(eq(contacts.id, contactId));
+
+  revalidatePath(`/contacts/${contactId}`);
+  return { ok: true, orgId };
+}
 
 export type ActionResult =
   | { ok: true; id: string }
