@@ -44,6 +44,7 @@ final class ControlWindow: NSObject {
 
     var onToggle: (() -> Void)?
     var onConfigure: (() -> Void)?
+    var onToggleTranscript: (() -> Void)?
 
     func show() {
         if let panel {
@@ -123,11 +124,30 @@ final class ControlWindow: NSObject {
         gear.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(gear)
 
+        // Top-left: show/hide the live transcript window, reachable without the
+        // menu. Added after the overlay so it stays clickable during a confirmation.
+        let transcriptBtn = NSButton(
+            image: NSImage(systemSymbolName: "captions.bubble", accessibilityDescription: "Live transcript")
+                ?? NSImage(),
+            target: self,
+            action: #selector(transcriptTapped))
+        transcriptBtn.isBordered = false
+        transcriptBtn.bezelStyle = .regularSquare
+        transcriptBtn.contentTintColor = .secondaryLabelColor
+        transcriptBtn.toolTip = "Show / hide live transcript"
+        transcriptBtn.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(transcriptBtn)
+
         NSLayoutConstraint.activate([
             gear.topAnchor.constraint(equalTo: container.topAnchor, constant: 11),
             gear.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -13),
             gear.widthAnchor.constraint(equalToConstant: 20),
             gear.heightAnchor.constraint(equalToConstant: 20),
+
+            transcriptBtn.topAnchor.constraint(equalTo: container.topAnchor, constant: 11),
+            transcriptBtn.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 13),
+            transcriptBtn.widthAnchor.constraint(equalToConstant: 20),
+            transcriptBtn.heightAnchor.constraint(equalToConstant: 20),
 
             logo.topAnchor.constraint(equalTo: container.topAnchor, constant: 14),
             logo.centerXAnchor.constraint(equalTo: container.centerXAnchor),
@@ -162,6 +182,7 @@ final class ControlWindow: NSObject {
 
     @objc private func toggleTapped() { onToggle?() }
     @objc private func configureTapped() { onConfigure?() }
+    @objc private func transcriptTapped() { onToggleTranscript?() }
 
     /// Reflect the recorder state on the monogram, captions, and the big button.
     func update(_ mode: Mode) {
