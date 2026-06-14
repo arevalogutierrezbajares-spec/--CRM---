@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireUser } from "@/lib/current-user";
 import { claudeChat, isAnthropicConfigured } from "@/lib/anthropic";
+import { modelForWorkload } from "@/lib/anthropic-budget";
 
 const { meetings } = schema;
 
@@ -37,7 +38,7 @@ export async function postMeetingDraft(meetingId: string): Promise<PostMeetingRe
   }
 
   const claude = await claudeChat({
-    model: "claude-haiku-4-5",
+    model: modelForWorkload("briefing"),
     system:
       "You are a chief-of-staff cleaning up post-meeting notes. Output structured minutes followed by a list of action items in the form '[ ] thing to do'. Be concise.",
     prompt: [

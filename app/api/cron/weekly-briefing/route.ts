@@ -7,6 +7,7 @@ import {
   listStaleFriends,
 } from "@/db/queries/this-week";
 import { claudeChat, isAnthropicConfigured } from "@/lib/anthropic";
+import { modelForWorkload } from "@/lib/anthropic-budget";
 import { sendEmail, isResendConfigured } from "@/lib/resend";
 import { withErrorCapture } from "@/lib/instrument";
 
@@ -77,7 +78,7 @@ export const GET = withErrorCapture("/api/cron/weekly-briefing", async (req: Nex
   let briefingText: string;
   if (isAnthropicConfigured()) {
     const claude = await claudeChat({
-      model: "claude-haiku-4-5",
+      model: modelForWorkload("briefing"),
       system:
         "You are a chief-of-staff writing a weekly briefing email for a busy founder. Output exactly 5 markdown bullets, each starting with **One word**. Be direct, no fluff, no preamble.",
       prompt: `Write the Monday briefing. Here are the facts in JSON:\n\n${facts}\n\nIf a list is empty, fold it into another bullet rather than saying "none." End with the single most important next step.`,

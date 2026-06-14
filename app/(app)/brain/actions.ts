@@ -4,6 +4,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { requireUser } from "@/lib/current-user";
 import { claudeChat, isAnthropicConfigured } from "@/lib/anthropic";
+import { modelForWorkload } from "@/lib/anthropic-budget";
 
 const { contacts, touches } = schema;
 
@@ -55,7 +56,7 @@ export async function generateReintro(contactId: string): Promise<ReintroResult>
     .join("\n");
 
   const claude = await claudeChat({
-    model: "claude-haiku-4-5",
+    model: modelForWorkload("chat"),
     system:
       "You are drafting a warm, short, low-pressure re-intro message from the user to a contact they haven't touched recently. Output the message body only — no salutation explainer, no preamble. 2-4 sentences. Reference one specific thing from the recent touches if possible.",
     prompt: [

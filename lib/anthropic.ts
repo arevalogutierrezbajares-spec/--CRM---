@@ -92,7 +92,8 @@ function coerceModel(value?: string): AnthropicModel {
   if (
     value === "claude-haiku-4-5" ||
     value === "claude-sonnet-4-6" ||
-    value === "claude-opus-4-7"
+    value === "claude-opus-4-7" ||
+    value === "claude-opus-4-8"
   ) {
     return value;
   }

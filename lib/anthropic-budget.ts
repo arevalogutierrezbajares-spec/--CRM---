@@ -1,7 +1,11 @@
 import { and, eq, gte, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 
-export type AnthropicModel = "claude-haiku-4-5" | "claude-sonnet-4-6" | "claude-opus-4-7";
+export type AnthropicModel =
+  | "claude-haiku-4-5"
+  | "claude-sonnet-4-6"
+  | "claude-opus-4-7"
+  | "claude-opus-4-8";
 
 export type AnthropicUsage = {
   input_tokens: number;
@@ -32,18 +36,23 @@ export type AnthropicBudgetResult = AnthropicBudgetCheck | AnthropicBudgetBlock;
 
 type AnthropicPriceTable = Record<AnthropicModel, { input: number; output: number }>;
 
+// USD per 1M tokens (input / output). Source: Anthropic model catalog 2026-06-04.
 const DEFAULT_PRICING: AnthropicPriceTable = {
   "claude-haiku-4-5": {
-    input: 0.8,
-    output: 4,
+    input: 1,
+    output: 5,
   },
   "claude-sonnet-4-6": {
     input: 3,
     output: 15,
   },
   "claude-opus-4-7": {
-    input: 15,
-    output: 75,
+    input: 5,
+    output: 25,
+  },
+  "claude-opus-4-8": {
+    input: 5,
+    output: 25,
   },
 };
 
@@ -63,15 +72,17 @@ function envFloat(name: string, fallback: number): number {
   return Number.isFinite(n) && n >= 0 ? n : fallback;
 }
 
-function parseAnthropicModel(value: string | undefined | null): AnthropicModel {
-  if (
+function isAnthropicModel(value: string | undefined | null): value is AnthropicModel {
+  return (
     value === "claude-haiku-4-5" ||
     value === "claude-sonnet-4-6" ||
-    value === "claude-opus-4-7"
-  ) {
-    return value;
-  }
-  return DEFAULT_ANTHROPIC_MODEL;
+    value === "claude-opus-4-7" ||
+    value === "claude-opus-4-8"
+  );
+}
+
+function parseAnthropicModel(value: string | undefined | null): AnthropicModel {
+  return isAnthropicModel(value) ? value : DEFAULT_ANTHROPIC_MODEL;
 }
 
 function pricingTable(): AnthropicPriceTable {
@@ -79,37 +90,16 @@ function pricingTable(): AnthropicPriceTable {
   if (!raw) return DEFAULT_PRICING;
   try {
     const parsed = JSON.parse(raw) as Partial<AnthropicPriceTable>;
-    const haiku = parsed["claude-haiku-4-5"];
-    const sonnet = parsed["claude-sonnet-4-6"];
-    const opus = parsed["claude-opus-4-7"];
-    return {
-      "claude-haiku-4-5": {
-        input:
-          typeof haiku?.input === "number" && haiku.input > 0 ? haiku.input : DEFAULT_PRICING["claude-haiku-4-5"].input,
-        output:
-          typeof haiku?.output === "number" && haiku.output > 0
-            ? haiku.output
-            : DEFAULT_PRICING["claude-haiku-4-5"].output,
-      },
-      "claude-sonnet-4-6": {
-        input:
-          typeof sonnet?.input === "number" && sonnet.input > 0
-            ? sonnet.input
-            : DEFAULT_PRICING["claude-sonnet-4-6"].input,
-        output:
-          typeof sonnet?.output === "number" && sonnet.output > 0
-            ? sonnet.output
-            : DEFAULT_PRICING["claude-sonnet-4-6"].output,
-      },
-      "claude-opus-4-7": {
-        input:
-          typeof opus?.input === "number" && opus.input > 0 ? opus.input : DEFAULT_PRICING["claude-opus-4-7"].input,
-        output:
-          typeof opus?.output === "number" && opus.output > 0
-            ? opus.output
-            : DEFAULT_PRICING["claude-opus-4-7"].output,
-      },
-    };
+    const table = {} as AnthropicPriceTable;
+    for (const model of Object.keys(DEFAULT_PRICING) as AnthropicModel[]) {
+      const override = parsed[model];
+      const fallback = DEFAULT_PRICING[model];
+      table[model] = {
+        input: typeof override?.input === "number" && override.input > 0 ? override.input : fallback.input,
+        output: typeof override?.output === "number" && override.output > 0 ? override.output : fallback.output,
+      };
+    }
+    return table;
   } catch {
     return DEFAULT_PRICING;
   }
@@ -121,6 +111,31 @@ function estimateTokensFromText(text: string): number {
 
 export function defaultAnthropicModel(): AnthropicModel {
   return parseAnthropicModel(process.env.ANTHROPIC_DEFAULT_MODEL);
+}
+
+/**
+ * Workload tiers — route each kind of task to a fitting model instead of
+ * defaulting everything to the cheapest one. Haiku stays the workhorse for
+ * cheap high-volume work; reasoning-heavy and user-facing work gets Sonnet;
+ * deep synthesis can opt into Opus. Override any tier per-deploy with
+ * ANTHROPIC_MODEL_<WORKLOAD> (e.g. ANTHROPIC_MODEL_STRATEGY=claude-opus-4-8).
+ *   intake    — classification / extraction / routing (cheap, high-volume)
+ *   chat      — the conversational chief-of-staff brain (user-facing)
+ *   briefing  — weekly briefing, nudges, meeting → action synthesis, drafts
+ *   strategy  — deep multi-step reasoning / roadmap synthesis
+ */
+export type AnthropicWorkload = "intake" | "chat" | "briefing" | "strategy";
+
+const WORKLOAD_DEFAULTS: Record<AnthropicWorkload, AnthropicModel> = {
+  intake: "claude-haiku-4-5",
+  chat: "claude-sonnet-4-6",
+  briefing: "claude-sonnet-4-6",
+  strategy: "claude-opus-4-8",
+};
+
+export function modelForWorkload(workload: AnthropicWorkload): AnthropicModel {
+  const override = process.env[`ANTHROPIC_MODEL_${workload.toUpperCase()}`];
+  return isAnthropicModel(override) ? override : WORKLOAD_DEFAULTS[workload];
 }
 
 export function estimateAnthropicMillicents(

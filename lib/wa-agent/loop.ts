@@ -18,6 +18,7 @@ import {
   type ClaudeMessage,
   type ClaudeMessageContent,
 } from "@/lib/anthropic";
+import { modelForWorkload } from "@/lib/anthropic-budget";
 import {
   TOOL_DEFINITIONS,
   executeTool,
@@ -517,7 +518,12 @@ async function handleResolvedMessage(opts: {
   const tools = allowedNames
     ? TOOL_DEFINITIONS.filter((t) => allowedNames.includes(t.name))
     : TOOL_DEFINITIONS;
-  const model = workflow.model ?? "claude-haiku-4-5";
+  // The conversational chief-of-staff brain (full tool registry) runs on the
+  // chat tier (Sonnet by default); narrow intent workflows keep their declared
+  // cheap model. Override per-deploy via ANTHROPIC_MODEL_CHAT.
+  const model = opts.fullTools
+    ? modelForWorkload("chat")
+    : (workflow.model ?? modelForWorkload("intake"));
 
   for (let turn = 0; turn < MAX_TURNS; turn++) {
     // On turn 0 we send the full supplement (workflow nudge + confirmation

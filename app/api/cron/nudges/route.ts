@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { sendWhatsAppText, isWhatsAppConfigured } from "@/lib/whatsapp";
 import { claudeChat, isAnthropicConfigured } from "@/lib/anthropic";
+import { modelForWorkload } from "@/lib/anthropic-budget";
 import { withErrorCapture } from "@/lib/instrument";
 import { brainKillSwitch, inQuietHours } from "@/lib/silence-rules";
 import {
@@ -80,7 +81,7 @@ export const GET = withErrorCapture(
     if (isAnthropicConfigured()) {
       const claude = await claudeChat({
         // Templated nudge copy → Haiku (cheap + fast).
-        model: "claude-haiku-4-5",
+        model: modelForWorkload("briefing"),
         system:
           "Write a friendly 2-3 sentence morning nudge from a CRM assistant. " +
           "Mention each item by name. End with: 'Reply done/snooze, or just text me.' " +
