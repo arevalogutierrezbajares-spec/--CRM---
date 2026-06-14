@@ -12,6 +12,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { ChevronRight, Plus, X } from "lucide-react";
 import type { PlanDocData, PlanDocInitiative, PlanDocTask } from "@/db/queries/roadmap";
+import { fmtChip, parseDateTokens } from "@/lib/roadmap-dates";
 import {
   createInitiative,
   createLob,
@@ -39,54 +40,6 @@ type Row = {
 };
 
 const MAX_TASK_LEVEL = 3; // deliverable = 2, sub-deliverable = 3
-
-/** Parse a loose date: M/D, M/D/YY, M/D/YYYY with / - or . separators.
- *  No year → this year, or next year if the date already passed. */
-function parseFlexDate(s: string): string | null {
-  const m = s.trim().match(/^(\d{1,2})[\/\-.](\d{1,2})(?:[\/\-.](\d{2}|\d{4}))?$/);
-  if (!m) return null;
-  const mo = parseInt(m[1], 10);
-  const da = parseInt(m[2], 10);
-  if (mo < 1 || mo > 12 || da < 1 || da > 31) return null;
-  let yr: number;
-  if (m[3]) {
-    yr = m[3].length === 2 ? 2000 + parseInt(m[3], 10) : parseInt(m[3], 10);
-  } else {
-    const now = new Date();
-    yr = now.getFullYear();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    if (new Date(yr, mo - 1, da) < today) yr += 1;
-  }
-  const d = new Date(yr, mo - 1, da);
-  if (d.getFullYear() !== yr || d.getMonth() !== mo - 1 || d.getDate() !== da) return null;
-  return `${yr}-${String(mo).padStart(2, "0")}-${String(da).padStart(2, "0")}`;
-}
-
-/** Pull /start, /end, /eta, /due date tokens out of a title and parse them. */
-function parseDateTokens(raw: string): { title: string; start?: string; end?: string } {
-  let start: string | undefined;
-  let end: string | undefined;
-  const title = raw
-    .replace(
-      /\/(start|end|eta|due)\s+(\d{1,2}[\/\-.]\d{1,2}(?:[\/\-.]\d{2,4})?)/gi,
-      (_full, kw: string, dateStr: string) => {
-        const iso = parseFlexDate(dateStr);
-        if (iso) {
-          if (/start/i.test(kw)) start = iso;
-          else end = iso;
-        }
-        return "";
-      },
-    )
-    .replace(/\s{2,}/g, " ")
-    .trim();
-  return { title, start, end };
-}
-
-const fmtChip = (iso: string | null | undefined) =>
-  iso
-    ? new Date(iso + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" })
-    : null;
 
 function flatten(data: PlanDocData): Row[] {
   const rows: Row[] = [];

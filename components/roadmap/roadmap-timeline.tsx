@@ -26,6 +26,8 @@ import {
   updateInitiativeFields,
   updateRoadmapTask,
 } from "@/app/(app)/roadmap/actions";
+import { DateField } from "./date-field";
+import { parseDateTokens } from "@/lib/roadmap-dates";
 
 export type TimelineItem = {
   id: string;
@@ -808,57 +810,6 @@ function DependsOn({
   );
 }
 
-/* ─── Nicer date entry: formatted pill that opens the native calendar ─── */
-
-function DateField({
-  value,
-  onChange,
-  placeholder = "set date",
-}: {
-  value: string | null;
-  onChange: (v: string | null) => void;
-  placeholder?: string;
-}) {
-  const [editing, setEditing] = useState(false);
-  const ref = useRef<HTMLInputElement>(null);
-  if (editing) {
-    return (
-      <input
-        ref={ref}
-        type="date"
-        defaultValue={value ?? ""}
-        autoFocus
-        onBlur={() => setEditing(false)}
-        onChange={(e) => {
-          onChange(e.target.value || null);
-          setEditing(false);
-        }}
-        className="rounded border bg-card px-1.5 py-1 text-[12px]"
-        style={{ borderColor: "var(--border-default)" }}
-      />
-    );
-  }
-  return (
-    <button
-      type="button"
-      onClick={() => {
-        setEditing(true);
-        requestAnimationFrame(() => {
-          const el = ref.current;
-          if (!el) return;
-          // showPicker() pops the native calendar immediately where supported.
-          (el as HTMLInputElement & { showPicker?: () => void }).showPicker?.();
-          el.focus();
-        });
-      }}
-      className={`rounded-full border px-2 py-0.5 text-[12px] tabular-nums transition-colors ${value ? "text-text-primary" : "text-text-tertiary"} hover:border-text-tertiary`}
-      style={{ borderColor: "var(--border-default)" }}
-    >
-      {fmtDate(value) ?? placeholder}
-    </button>
-  );
-}
-
 /* ─── Inline deliverables editor ──────────────────────────────────────── */
 
 function InlineDeliverables({
@@ -974,10 +925,16 @@ function InlineAddTask({ initiativeId }: { initiativeId: string }) {
   const [value, setValue] = useState("");
   const [pending, startTransition] = useTransition();
   const submit = () => {
-    const t = value.trim();
-    if (!t) return;
+    const raw = value.trim();
+    if (!raw) return;
     setValue("");
-    startTransition(() => createRoadmapTask({ initiativeId, title: t }).then(() => undefined));
+    // Support the inline date shortcut: "QA pass /END 5/20" or "ETA:5/20".
+    const { title, end } = parseDateTokens(raw);
+    startTransition(() =>
+      createRoadmapTask({ initiativeId, title: title || raw, dueDate: end ?? null }).then(
+        () => undefined,
+      ),
+    );
   };
   return (
     <div className="flex items-center gap-2 px-1 py-0.5">
@@ -988,7 +945,7 @@ function InlineAddTask({ initiativeId }: { initiativeId: string }) {
         onKeyDown={(e) => e.key === "Enter" && submit()}
         onBlur={submit}
         disabled={pending}
-        placeholder="Add deliverable…"
+        placeholder="Add deliverable…  (try: QA pass /END 5/20)"
         className="flex-1 bg-transparent text-[13px] outline-none placeholder:text-text-tertiary"
       />
     </div>
