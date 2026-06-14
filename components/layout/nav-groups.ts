@@ -18,6 +18,7 @@ import {
   Contact2,
   MessageSquareText,
   Network,
+  HeartHandshake,
   UsersRound,
   Wallet,
   Scale,
@@ -83,6 +84,7 @@ export const NAV_GROUPS: NavGroup[] = [
     tree: true,
     items: [
       { href: "/contacts", label: "Contacts", icon: Contact2 },
+      { href: "/reconnect", label: "Reconnect", icon: HeartHandshake },
       { href: "/pitch-feedback", label: "Pitch Feedback", icon: MessageSquareText },
       { href: "/network", label: "Network", icon: Network },
       { href: "/team", label: "Team", icon: UsersRound },
