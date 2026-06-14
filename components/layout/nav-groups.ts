@@ -8,7 +8,6 @@ import {
   Megaphone,
   Bot,
   Mic,
-  Headphones,
   Presentation,
   Map,
   Flag,
@@ -62,7 +61,8 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/town-hall", label: "Town Hall", icon: Megaphone },
       { href: "/agent", label: "Agent", icon: Bot },
       { href: "/meetings/record", label: "Record Call", icon: Mic },
-      { href: "/capture", label: "Call Capture", icon: Headphones },
+      // Call Capture moved to Settings → Configurations (it's setup, not a
+      // daily destination). Reach it at /settings.
     ],
   },
   {
