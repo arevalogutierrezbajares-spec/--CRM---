@@ -14,8 +14,10 @@ import {
 } from "@/db/queries/work";
 import {
   getPlanDocData,
+  listInitiativeDependencies,
   listUnassignedTasks,
   nextPlanVersionNumber,
+  type InitiativeDependency,
   type PlanDocData,
 } from "@/db/queries/roadmap";
 import { RoadmapToolbar } from "@/components/roadmap/roadmap-toolbar";
@@ -72,7 +74,7 @@ export default async function RoadmapPage({
     sp.window === "quarter" || sp.window === "year" ? sp.window : "6mo";
   const monthCount = WINDOWS[windowKey].months;
 
-  const [initsRes, sprintsRes, planDocRes, unassignedRes, versionRes] =
+  const [initsRes, sprintsRes, planDocRes, unassignedRes, versionRes, depsRes] =
     await Promise.all([
       safeRead<InitiativeListItem[]>(
         () => listInitiatives({ workspaceId: user.workspaceId }),
@@ -88,6 +90,10 @@ export default async function RoadmapPage({
         [] as Awaited<ReturnType<typeof listUnassignedTasks>>,
       ),
       safeRead<number>(() => nextPlanVersionNumber(user.workspaceId), 1),
+      safeRead<InitiativeDependency[]>(
+        () => listInitiativeDependencies(user.workspaceId),
+        [],
+      ),
     ]);
   const currentVersion = versionRes.data - 1;
 
@@ -205,6 +211,7 @@ export default async function RoadmapPage({
             ),
           }}
           planData={planDocRes.data}
+          deps={depsRes.data}
         />
 
         {/* Unassigned lane (FR-UNI-3/4) */}

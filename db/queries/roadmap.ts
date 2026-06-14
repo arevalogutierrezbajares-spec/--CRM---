@@ -3,6 +3,7 @@ import { db } from "@/db";
 import {
   actionItemInitiatives,
   actionItems,
+  initiativeDependencies,
   initiatives,
   linesOfBusiness,
   milestones,
@@ -448,6 +449,29 @@ export async function getPlanDocData(workspaceId: string): Promise<PlanDocData> 
       };
     }),
   };
+}
+
+/* ─── Initiative dependencies (roadmap) ───────────────────────────────── */
+
+export type InitiativeDependency = {
+  id: string;
+  fromInitiativeId: string;
+  toInitiativeId: string;
+  type: string;
+};
+
+export async function listInitiativeDependencies(
+  workspaceId: string,
+): Promise<InitiativeDependency[]> {
+  return db
+    .select({
+      id: initiativeDependencies.id,
+      fromInitiativeId: initiativeDependencies.fromInitiativeId,
+      toInitiativeId: initiativeDependencies.toInitiativeId,
+      type: initiativeDependencies.type,
+    })
+    .from(initiativeDependencies)
+    .where(eq(initiativeDependencies.workspaceId, workspaceId));
 }
 
 /* ─── Holding project for roadmap-born tasks (OD-4) ───────────────────── */

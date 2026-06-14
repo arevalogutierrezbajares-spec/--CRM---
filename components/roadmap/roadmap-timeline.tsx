@@ -11,10 +11,17 @@
 
 import { useCallback, useRef, useState, useTransition } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Plus, Star } from "lucide-react";
-import type { PlanDocInitiative, PlanDocTask } from "@/db/queries/roadmap";
+import { toast } from "sonner";
+import { Plus, Star, X, Zap } from "lucide-react";
+import type {
+  InitiativeDependency,
+  PlanDocInitiative,
+  PlanDocTask,
+} from "@/db/queries/roadmap";
 import {
+  addInitiativeDependency,
   createRoadmapTask,
+  removeInitiativeDependency,
   toggleRoadmapTask,
   updateInitiativeFields,
   updateRoadmapTask,
@@ -104,6 +111,9 @@ export function RoadmapTimeline({
   detailsById,
   members,
   lobs,
+  deps,
+  criticalIds,
+  initiativeList,
   selectedId,
   onSelect,
 }: {
@@ -116,6 +126,9 @@ export function RoadmapTimeline({
   detailsById: Record<string, PlanDocInitiative>;
   members: Member[];
   lobs: Lob[];
+  deps: InitiativeDependency[];
+  criticalIds: Set<string>;
+  initiativeList: Array<{ id: string; title: string }>;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
 }) {
@@ -316,6 +329,11 @@ export function RoadmapTimeline({
                                 </span>
                               )}
                             </span>
+                            {criticalIds.has(item.id) && (
+                              <span className="shrink-0" title="On the critical path">
+                                <Zap size={13} fill="var(--amber-mid)" style={{ color: "var(--amber-mid)" }} />
+                              </span>
+                            )}
                             {owner && (
                               <span
                                 className="shrink-0 grid place-items-center rounded-full text-[9px] font-bold text-white"
@@ -393,6 +411,11 @@ export function RoadmapTimeline({
                                   }}
                                 >
                                   <FocusMeta init={detail} members={members} lobs={lobs} />
+                                  <DependsOn
+                                    initId={item.id}
+                                    deps={deps}
+                                    initiativeList={initiativeList}
+                                  />
                                   <div>
                                     <div className="text-tiny font-semibold uppercase tracking-wider text-text-tertiary mb-1.5">
                                       Deliverables
@@ -514,6 +537,71 @@ function FocusMeta({
           ))}
         </select>
       </label>
+    </div>
+  );
+}
+
+/* ─── Dependency linker (focus panel) ────────────────────────────────── */
+
+function DependsOn({
+  initId,
+  deps,
+  initiativeList,
+}: {
+  initId: string;
+  deps: InitiativeDependency[];
+  initiativeList: Array<{ id: string; title: string }>;
+}) {
+  const [, startTransition] = useTransition();
+  const titleOf = (id: string) => initiativeList.find((i) => i.id === id)?.title ?? "—";
+  const preds = deps.filter((d) => d.toInitiativeId === initId);
+  const predIds = new Set(preds.map((p) => p.fromInitiativeId));
+  const options = initiativeList.filter((i) => i.id !== initId && !predIds.has(i.id));
+  return (
+    <div>
+      <div className="text-tiny font-semibold uppercase tracking-wider text-text-tertiary mb-1.5">
+        Depends on
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {preds.map((p) => (
+          <span
+            key={p.id}
+            className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[12px] text-text-primary"
+            style={{ borderColor: "var(--border-default)" }}
+          >
+            {titleOf(p.fromInitiativeId)}
+            <button
+              type="button"
+              onClick={() => startTransition(() => removeInitiativeDependency(p.id))}
+              className="text-text-tertiary hover:text-text-primary"
+              aria-label="Remove dependency"
+            >
+              <X size={12} />
+            </button>
+          </span>
+        ))}
+        {preds.length === 0 && <span className="text-[12px] text-text-tertiary">none yet</span>}
+        <select
+          value=""
+          onChange={(e) => {
+            const from = e.target.value;
+            if (!from) return;
+            startTransition(async () => {
+              const r = await addInitiativeDependency(from, initId);
+              if (!r.ok && r.error) toast.error(r.error);
+            });
+          }}
+          className="rounded border bg-card px-1.5 py-1 text-[12px]"
+          style={{ borderColor: "var(--border-default)" }}
+        >
+          <option value="">+ add predecessor…</option>
+          {options.map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.title}
+            </option>
+          ))}
+        </select>
+      </div>
     </div>
   );
 }

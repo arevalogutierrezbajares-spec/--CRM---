@@ -6,14 +6,78 @@
  * the plan below filters to that milestone. Click again / "show all" → reset.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { RoadmapTimeline, type TimelineGroup } from "./roadmap-timeline";
 import { PlanDoc } from "./plan-doc";
-import type { PlanDocData, PlanDocInitiative } from "@/db/queries/roadmap";
+import type {
+  InitiativeDependency,
+  PlanDocData,
+  PlanDocInitiative,
+} from "@/db/queries/roadmap";
+
+const DAY = 86_400_000;
+
+/** Critical path = the longest chain by summed duration over the dependency
+ *  DAG. Returns the set of initiative ids on that chain. */
+function computeCriticalIds(
+  inits: PlanDocInitiative[],
+  deps: InitiativeDependency[],
+): Set<string> {
+  if (deps.length === 0) return new Set();
+  const dur = new Map<string, number>();
+  for (const i of inits) {
+    const s = i.startDate ? Date.parse(i.startDate) : null;
+    const e = i.targetEndDate ? Date.parse(i.targetEndDate) : null;
+    dur.set(i.id, s != null && e != null ? Math.max(1, (e - s) / DAY) : 1);
+  }
+  const preds = new Map<string, string[]>();
+  for (const d of deps) {
+    const a = preds.get(d.toInitiativeId) ?? [];
+    a.push(d.fromInitiativeId);
+    preds.set(d.toInitiativeId, a);
+  }
+  const memo = new Map<string, number>();
+  const parent = new Map<string, string | null>();
+  const longest = (n: string): number => {
+    const cached = memo.get(n);
+    if (cached != null) return cached;
+    memo.set(n, dur.get(n) ?? 1); // re-entry guard (DAG, so safe)
+    let best = 0;
+    let bp: string | null = null;
+    for (const p of preds.get(n) ?? []) {
+      const v = longest(p);
+      if (v > best) {
+        best = v;
+        bp = p;
+      }
+    }
+    const total = best + (dur.get(n) ?? 1);
+    memo.set(n, total);
+    parent.set(n, bp);
+    return total;
+  };
+  let maxNode: string | null = null;
+  let maxVal = -1;
+  for (const i of inits) {
+    const v = longest(i.id);
+    if (v > maxVal) {
+      maxVal = v;
+      maxNode = i.id;
+    }
+  }
+  const crit = new Set<string>();
+  let cur: string | null = maxNode;
+  while (cur) {
+    crit.add(cur);
+    cur = parent.get(cur) ?? null;
+  }
+  return crit;
+}
 
 export function RoadmapBoard({
   timeline,
   planData,
+  deps,
 }: {
   timeline: {
     monthCount: number;
@@ -25,8 +89,17 @@ export function RoadmapBoard({
     detailsById: Record<string, PlanDocInitiative>;
   };
   planData: PlanDocData;
+  deps: InitiativeDependency[];
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const criticalIds = useMemo(
+    () => computeCriticalIds(planData.initiatives, deps),
+    [planData.initiatives, deps],
+  );
+  const initiativeList = useMemo(
+    () => planData.initiatives.map((i) => ({ id: i.id, title: i.title })),
+    [planData.initiatives],
+  );
   const focused = selectedId
     ? planData.initiatives.find((i) => i.id === selectedId)
     : null;
@@ -74,6 +147,9 @@ export function RoadmapBoard({
         {...timeline}
         members={planData.members}
         lobs={planData.lobs}
+        deps={deps}
+        criticalIds={criticalIds}
+        initiativeList={initiativeList}
         selectedId={selectedId}
         onSelect={setSelectedId}
       />

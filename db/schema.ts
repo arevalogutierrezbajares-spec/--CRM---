@@ -2289,6 +2289,38 @@ export const initiativeThemes = pgTable(
   }),
 );
 
+// Dependencies between initiatives (roadmap). A row means `to` depends on
+// `from` (predecessor → successor); default finish-to-start. Cycles are
+// prevented in the action layer.
+export const initiativeDependencies = pgTable(
+  "initiative_dependencies",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    fromInitiativeId: uuid("from_initiative_id")
+      .notNull()
+      .references(() => initiatives.id, { onDelete: "cascade" }),
+    toInitiativeId: uuid("to_initiative_id")
+      .notNull()
+      .references(() => initiatives.id, { onDelete: "cascade" }),
+    type: text("type").notNull().default("finish_to_start"),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    uniqEdge: uniqueIndex("initiative_dependencies_edge_uniq").on(
+      t.fromInitiativeId,
+      t.toInitiativeId,
+    ),
+  }),
+);
+
 // many-to-many themes on milestones (existing table)
 export const milestoneThemes = pgTable(
   "milestone_themes",
