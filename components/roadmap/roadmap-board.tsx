@@ -72,6 +72,8 @@ export function RoadmapBoard({
     <div className="space-y-4">
       <RoadmapTimeline
         {...timeline}
+        members={planData.members}
+        lobs={planData.lobs}
         selectedId={selectedId}
         onSelect={setSelectedId}
       />
