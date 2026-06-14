@@ -9,10 +9,18 @@
  * deliverables show animated star markers on the timeline at their deadline.
  */
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, useTransition } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner";
-import { Plus, Star, X, Zap } from "lucide-react";
+import { CornerDownRight, Plus, Star, X, Zap } from "lucide-react";
 import type {
   InitiativeDependency,
   PlanDocInitiative,
@@ -21,7 +29,9 @@ import type {
 import {
   addInitiativeDependency,
   createRoadmapTask,
+  deleteRoadmapTask,
   removeInitiativeDependency,
+  reparentRoadmapTask,
   toggleRoadmapTask,
   updateInitiativeFields,
   updateRoadmapTask,
@@ -557,7 +567,7 @@ export function RoadmapTimeline({
                                   <div className="text-tiny font-semibold uppercase tracking-wider text-text-tertiary mb-1.5">
                                     Deliverables
                                   </div>
-                                  <InlineDeliverables initiativeId={item.id} tasks={detail.tasks} />
+                                  <DeliverablesEditor initiativeId={item.id} tasks={detail.tasks} />
                                 </div>
                               </div>
                             </motion.div>
@@ -810,124 +820,259 @@ function DependsOn({
   );
 }
 
-/* ─── Inline deliverables editor ──────────────────────────────────────── */
+/* ─── Inline deliverables editor (keyboard-driven, with sub-deliverables) ──
+ *  Enter = new deliverable below (focused) · ↑/↓ = move between rows ·
+ *  Tab = make sub-deliverable · ⇧Tab = outdent · ⌫ on empty = delete.        */
 
-function InlineDeliverables({
+const MAX_DELIV_DEPTH = 2; // deliverable (0) → sub (1) → sub-sub (2)
+
+type DelivRow = {
+  id: string;
+  title: string;
+  done: boolean;
+  dueDate: string | null;
+  level: number;
+  parentTaskId: string | null;
+};
+
+function flattenTasks(
+  tasks: PlanDocTask[],
+  level = 0,
+  parent: string | null = null,
+  out: DelivRow[] = [],
+): DelivRow[] {
+  for (const t of tasks) {
+    out.push({ id: t.id, title: t.title, done: t.done, dueDate: t.dueDate, level, parentTaskId: parent });
+    if (t.children.length) flattenTasks(t.children, level + 1, t.id, out);
+  }
+  return out;
+}
+
+function DeliverablesEditor({
   initiativeId,
   tasks,
-  depth = 0,
 }: {
   initiativeId: string;
   tasks: PlanDocTask[];
-  depth?: number;
-}) {
-  return (
-    <ul className={depth === 0 ? "space-y-0.5" : "space-y-0.5 ml-5"}>
-      {tasks.map((t) => (
-        <InlineTaskRow key={t.id} task={t} initiativeId={initiativeId} depth={depth} />
-      ))}
-      {depth === 0 && (
-        <li>
-          <InlineAddTask initiativeId={initiativeId} />
-        </li>
-      )}
-    </ul>
-  );
-}
-
-function InlineTaskRow({
-  task,
-  initiativeId,
-  depth,
-}: {
-  task: PlanDocTask;
-  initiativeId: string;
-  depth: number;
 }) {
   const [, startTransition] = useTransition();
-  const [checked, setChecked] = useState(task.done);
-  const [title, setTitle] = useState(task.title);
-  const [adding, setAdding] = useState(false);
-  const [childVal, setChildVal] = useState("");
-  const submitChild = () => {
-    const t = childVal.trim();
-    if (!t) {
-      setAdding(false);
-      return;
+  const [focusId, setFocusId] = useState<string | null>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
+  const rows = useMemo(() => flattenTasks(tasks), [tasks]);
+  const parentOf = useMemo(() => new Map(rows.map((r) => [r.id, r.parentTaskId])), [rows]);
+
+  // After a structural change re-renders with fresh data, focus the new row.
+  useEffect(() => {
+    if (!focusId) return;
+    const el = boxRef.current?.querySelector<HTMLInputElement>(`input[data-deliv="${focusId}"]`);
+    if (el) {
+      el.focus();
+      el.select();
+      setFocusId(null);
     }
-    setChildVal("");
-    startTransition(() =>
-      createRoadmapTask({ initiativeId, title: t, parentTaskId: task.id }).then(() => undefined),
-    );
+  }, [focusId, rows]);
+
+  // ↑/↓ move focus across every editable row (deliverables + the add box).
+  const moveFocus = (fromId: string, dir: 1 | -1) => {
+    const c = boxRef.current;
+    if (!c) return;
+    const inputs = Array.from(c.querySelectorAll<HTMLInputElement>("input[data-deliv]"));
+    const i = inputs.findIndex((el) => el.dataset.deliv === fromId);
+    const next = inputs[i + dir];
+    if (next) {
+      next.focus();
+      next.select();
+    }
   };
+
   return (
-    <li>
-      <div className="group flex items-center gap-2 rounded px-1 py-0.5 hover:bg-surface">
-        <input
-          type="checkbox"
-          checked={checked}
-          onChange={(e) => {
-            setChecked(e.target.checked);
-            startTransition(() => toggleRoadmapTask(task.id, e.target.checked));
-          }}
-          className="shrink-0"
-        />
-        <input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          onBlur={() => {
-            const v = title.trim();
-            if (v && v !== task.title) startTransition(() => updateRoadmapTask(task.id, { title: v }));
-          }}
-          className={`flex-1 min-w-0 bg-transparent text-[13px] outline-none ${checked ? "line-through text-text-tertiary" : ""}`}
-        />
-        {task.dueDate && (
-          <Star size={11} className="shrink-0" style={{ color: "var(--amber-mid)" }} aria-label="has deadline" />
-        )}
-        {depth < 2 && (
-          <button
-            type="button"
-            onClick={() => setAdding((a) => !a)}
-            title="Add sub-deliverable"
-            className="shrink-0 text-text-tertiary hover:text-text-primary opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
-          >
-            <Plus size={13} />
-          </button>
-        )}
-        <DateField
-          value={task.dueDate}
-          onChange={(v) => startTransition(() => updateRoadmapTask(task.id, { dueDate: v }))}
-          placeholder="due"
-        />
-      </div>
-      {task.children.length > 0 && (
-        <InlineDeliverables initiativeId={initiativeId} tasks={task.children} depth={depth + 1} />
-      )}
-      {adding && (
-        <div className="flex items-center gap-2 px-1 py-0.5 ml-6">
-          <span className="text-text-tertiary text-[13px] shrink-0">↳</span>
-          <input
-            autoFocus
-            value={childVal}
-            onChange={(e) => setChildVal(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && submitChild()}
-            onBlur={submitChild}
-            placeholder="Add sub-deliverable…"
-            className="flex-1 bg-transparent text-[13px] outline-none placeholder:text-text-tertiary"
+    <div ref={boxRef}>
+      <p className="text-tiny text-text-tertiary mb-1.5">
+        Enter = new row · Tab = sub-deliverable · ↑↓ = move · /END 5/20 sets a date
+      </p>
+      <div className="space-y-0.5">
+        {rows.map((row, idx) => (
+          <DelivRow
+            key={row.id}
+            row={row}
+            prev={rows[idx - 1]}
+            initiativeId={initiativeId}
+            parentOf={parentOf}
+            moveFocus={moveFocus}
+            setFocusId={setFocusId}
+            startTransition={startTransition}
           />
-        </div>
-      )}
-    </li>
+        ))}
+      </div>
+      <InlineAddTask initiativeId={initiativeId} moveFocus={moveFocus} />
+    </div>
   );
 }
 
-function InlineAddTask({ initiativeId }: { initiativeId: string }) {
+function DelivRow({
+  row,
+  prev,
+  initiativeId,
+  parentOf,
+  moveFocus,
+  setFocusId,
+  startTransition,
+}: {
+  row: DelivRow;
+  prev: DelivRow | undefined;
+  initiativeId: string;
+  parentOf: Map<string, string | null>;
+  moveFocus: (fromId: string, dir: 1 | -1) => void;
+  setFocusId: (id: string | null) => void;
+  startTransition: (cb: () => void) => void;
+}) {
+  const [checked, setChecked] = useState(row.done);
+  const [title, setTitle] = useState(row.title);
+  useEffect(() => setChecked(row.done), [row.done]);
+  useEffect(() => setTitle(row.title), [row.title]);
+
+  const commit = () => {
+    const { title: parsed, end } = parseDateTokens(title);
+    const newTitle = parsed || row.title;
+    const patch: Parameters<typeof updateRoadmapTask>[1] = {};
+    if (newTitle !== row.title) patch.title = newTitle;
+    if (end !== undefined) patch.dueDate = end;
+    if (Object.keys(patch).length === 0) return;
+    if (parsed && parsed !== title) setTitle(newTitle);
+    startTransition(() => updateRoadmapTask(row.id, patch));
+  };
+
+  const addSibling = () => {
+    commit();
+    startTransition(async () => {
+      const r = await createRoadmapTask({
+        initiativeId,
+        title: "",
+        parentTaskId: row.parentTaskId ?? null,
+      });
+      if (r.id) setFocusId(r.id);
+    });
+  };
+
+  const addChild = () => {
+    if (row.level >= MAX_DELIV_DEPTH) return;
+    commit();
+    startTransition(async () => {
+      const r = await createRoadmapTask({ initiativeId, title: "", parentTaskId: row.id });
+      if (r.id) setFocusId(r.id);
+    });
+  };
+
+  const remove = () => startTransition(() => deleteRoadmapTask(row.id));
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      addSibling();
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      moveFocus(row.id, 1);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      moveFocus(row.id, -1);
+    } else if (e.key === "Tab") {
+      e.preventDefault();
+      if (e.shiftKey) {
+        // outdent → become a sibling of the current parent
+        if (row.parentTaskId) {
+          commit();
+          const grandparent = parentOf.get(row.parentTaskId) ?? null;
+          startTransition(async () => {
+            await reparentRoadmapTask(row.id, grandparent);
+            setFocusId(row.id);
+          });
+        }
+      } else {
+        // indent → become a child of the previous sibling
+        if (
+          prev &&
+          (prev.parentTaskId ?? null) === (row.parentTaskId ?? null) &&
+          row.level < MAX_DELIV_DEPTH
+        ) {
+          commit();
+          startTransition(async () => {
+            await reparentRoadmapTask(row.id, prev.id);
+            setFocusId(row.id);
+          });
+        }
+      }
+    } else if (e.key === "Backspace" && title === "") {
+      e.preventDefault();
+      remove();
+    }
+  };
+
+  return (
+    <div
+      className="group flex items-center gap-2 rounded px-1 py-0.5 hover:bg-surface"
+      style={{ paddingLeft: `${row.level * 22 + 4}px` }}
+    >
+      {row.level > 0 && (
+        <CornerDownRight size={12} className="shrink-0 text-text-tertiary opacity-40" />
+      )}
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => {
+          setChecked(e.target.checked);
+          startTransition(() => toggleRoadmapTask(row.id, e.target.checked));
+        }}
+        className="shrink-0"
+      />
+      <input
+        data-deliv={row.id}
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        onBlur={commit}
+        onKeyDown={onKeyDown}
+        placeholder={row.level === 0 ? "Deliverable…" : "Sub-deliverable…"}
+        className={`flex-1 min-w-0 bg-transparent text-[13px] outline-none placeholder:text-text-tertiary ${checked ? "line-through text-text-tertiary" : ""}`}
+      />
+      {row.level < MAX_DELIV_DEPTH && (
+        <button
+          type="button"
+          onClick={addChild}
+          title="Add sub-deliverable (or press Tab)"
+          className="shrink-0 text-text-tertiary hover:text-text-primary opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+        >
+          <Plus size={13} />
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={remove}
+        title="Delete"
+        className="shrink-0 text-text-tertiary hover:text-[var(--red-mid)] opacity-0 group-hover:opacity-100 transition-opacity"
+      >
+        <X size={13} />
+      </button>
+      <DateField
+        value={row.dueDate}
+        onChange={(v) => startTransition(() => updateRoadmapTask(row.id, { dueDate: v }))}
+        placeholder="due"
+      />
+    </div>
+  );
+}
+
+function InlineAddTask({
+  initiativeId,
+  moveFocus,
+}: {
+  initiativeId: string;
+  moveFocus: (fromId: string, dir: 1 | -1) => void;
+}) {
   const [value, setValue] = useState("");
   const [pending, startTransition] = useTransition();
   const submit = () => {
     const raw = value.trim();
     if (!raw) return;
-    setValue("");
+    setValue(""); // clear + keep focus → type the next one straight away
     // Support the inline date shortcut: "QA pass /END 5/20" or "ETA:5/20".
     const { title, end } = parseDateTokens(raw);
     startTransition(() =>
@@ -937,12 +1082,21 @@ function InlineAddTask({ initiativeId }: { initiativeId: string }) {
     );
   };
   return (
-    <div className="flex items-center gap-2 px-1 py-0.5">
+    <div className="flex items-center gap-2 px-1 py-0.5 mt-0.5">
       <Plus size={13} className="text-text-tertiary shrink-0" />
       <input
+        data-deliv="__add__"
         value={value}
         onChange={(e) => setValue(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && submit()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            submit();
+          } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            moveFocus("__add__", -1);
+          }
+        }}
         onBlur={submit}
         disabled={pending}
         placeholder="Add deliverable…  (try: QA pass /END 5/20)"
