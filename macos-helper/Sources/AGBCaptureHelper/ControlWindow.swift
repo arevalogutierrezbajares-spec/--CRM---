@@ -2,17 +2,17 @@ import AppKit
 import QuartzCore
 import CaptureCore
 
-/// A small, always-visible floating control with one big button and the current
-/// state. Exists because a menu-bar app is hard to drive on a notched MacBook —
-/// the status item hides behind the notch and a global hotkey can be swallowed.
-/// This window is always on screen, one click from recording, and never depends
-/// on the menu bar.
+/// A small, always-visible floating control: the animated AGB monogram, the
+/// current state, and one big button. Exists because a menu-bar app is hard to
+/// drive on a notched MacBook — the status item hides behind the notch and a
+/// global hotkey can be swallowed. This window is always on screen, one click
+/// from recording, and never depends on the menu bar.
 ///
-/// The button mirrors the helper's state machine: Start Recording when idle,
-/// **Record This Call** while a detection prompt is up, and Stop with the
-/// elapsed time while capturing. A status dot pulses red while recording so
-/// state is unmistakable at a glance. Positioned by PanelLayout so it can never
-/// overlap the prompt. All methods run on the main thread (from AppDelegate).
+/// The monogram doubles as a live indicator: its three strokes breathe gently
+/// when idle and pulse in a staggered red "equalizer" wave while recording, so
+/// state is unmistakable. The button mirrors the state machine: Start Recording
+/// when idle, Record This Call while a detection prompt is up, and Stop with the
+/// elapsed time while capturing. All methods run on the main thread.
 final class ControlWindow: NSObject {
 
     /// What the single big button currently means.
@@ -26,7 +26,7 @@ final class ControlWindow: NSObject {
     static let windowTitle = "AGB Capture"
 
     private var panel: NSPanel?
-    private var dot: StatusDot?
+    private var logo: LogoView?
     private var titleLabel: NSTextField?
     private var subLabel: NSTextField?
     private var button: PillButton?
@@ -36,11 +36,12 @@ final class ControlWindow: NSObject {
     func show() {
         if let panel {
             panel.orderFrontRegardless()
+            logo?.kick() // restart the animation if the layer was paused
             return
         }
 
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 288, height: 132),
+            contentRect: NSRect(x: 0, y: 0, width: 300, height: 168),
             styleMask: [.nonactivatingPanel, .titled, .closable, .utilityWindow, .hudWindow],
             backing: .buffered,
             defer: false
@@ -57,15 +58,15 @@ final class ControlWindow: NSObject {
         let container = NSView(frame: panel.contentLayoutRect)
         container.autoresizingMask = [.width, .height]
 
-        // Status row: pulsing dot + bold state title + secondary caption.
-        let dot = StatusDot(frame: NSRect(x: 0, y: 0, width: 12, height: 12))
-        dot.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(dot)
-        self.dot = dot
+        let logo = LogoView(frame: NSRect(x: 0, y: 0, width: 56, height: 36))
+        logo.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(logo)
+        self.logo = logo
 
         let title = NSTextField(labelWithString: "Ready")
         title.font = .systemFont(ofSize: 14, weight: .semibold)
         title.textColor = .labelColor
+        title.alignment = .center
         title.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(title)
         self.titleLabel = title
@@ -73,6 +74,7 @@ final class ControlWindow: NSObject {
         let sub = NSTextField(labelWithString: "Watching for calls")
         sub.font = .systemFont(ofSize: 11, weight: .regular)
         sub.textColor = .secondaryLabelColor
+        sub.alignment = .center
         sub.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(sub)
         self.subLabel = sub
@@ -85,22 +87,20 @@ final class ControlWindow: NSObject {
         self.button = btn
 
         NSLayoutConstraint.activate([
-            dot.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 20),
-            dot.centerYAnchor.constraint(equalTo: title.centerYAnchor),
-            dot.widthAnchor.constraint(equalToConstant: 12),
-            dot.heightAnchor.constraint(equalToConstant: 12),
+            logo.topAnchor.constraint(equalTo: container.topAnchor, constant: 14),
+            logo.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+            logo.widthAnchor.constraint(equalToConstant: 56),
+            logo.heightAnchor.constraint(equalToConstant: 36),
 
-            title.topAnchor.constraint(equalTo: container.topAnchor, constant: 18),
-            title.leadingAnchor.constraint(equalTo: dot.trailingAnchor, constant: 9),
-            title.trailingAnchor.constraint(lessThanOrEqualTo: container.trailingAnchor, constant: -20),
+            title.topAnchor.constraint(equalTo: logo.bottomAnchor, constant: 9),
+            title.centerXAnchor.constraint(equalTo: container.centerXAnchor),
 
             sub.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 2),
-            sub.leadingAnchor.constraint(equalTo: title.leadingAnchor),
-            sub.trailingAnchor.constraint(lessThanOrEqualTo: container.trailingAnchor, constant: -20),
+            sub.centerXAnchor.constraint(equalTo: container.centerXAnchor),
 
             btn.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 20),
             btn.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -20),
-            btn.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -18),
+            btn.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -16),
             btn.heightAnchor.constraint(equalToConstant: 42),
         ])
 
@@ -115,64 +115,114 @@ final class ControlWindow: NSObject {
 
     @objc private func toggleTapped() { onToggle?() }
 
-    /// Reflect the recorder state on the dot, captions, and the big button.
+    /// Reflect the recorder state on the monogram, captions, and the big button.
     func update(_ mode: Mode) {
         guard let button else { return }
         switch mode {
         case .idle(let label):
             titleLabel?.stringValue = "Ready"
             subLabel?.stringValue = label
-            dot?.set(color: .tertiaryLabelColor, pulsing: false)
+            logo?.set(color: .labelColor, motion: .calm)
             button.configure(title: "Start Recording", fill: .systemRed, glyph: .record)
         case .detected:
             titleLabel?.stringValue = "Call detected"
             subLabel?.stringValue = "Record this call?"
-            dot?.set(color: .systemOrange, pulsing: true)
+            logo?.set(color: .systemOrange, motion: .active)
             button.configure(title: "Record This Call", fill: .systemRed, glyph: .record)
         case .capturing(let elapsed):
             titleLabel?.stringValue = "Recording"
             subLabel?.stringValue = "Tap to stop · \(elapsed)"
-            dot?.set(color: .systemRed, pulsing: true)
+            logo?.set(color: .systemRed, motion: .active)
             button.configure(title: "Stop  ·  \(elapsed)", fill: .controlAccentColor, glyph: .stop)
         }
     }
 }
 
-// MARK: - StatusDot
+// MARK: - LogoView
 
-/// A small filled circle that can pulse (opacity breathe) to signal live state.
-private final class StatusDot: NSView {
-    private let dotLayer = CALayer()
+/// The AGB monogram (public/logos/crm.svg) as three filled CAShapeLayers that
+/// animate. Calm: a slow synchronized breathe (alive but quiet). Active: a
+/// staggered opacity wave across the three strokes — an equalizer-like pulse
+/// that reads as "listening / recording".
+private final class LogoView: NSView {
+    enum Motion { case calm, active }
+
+    private let strokes = [CAShapeLayer(), CAShapeLayer(), CAShapeLayer()]
+    private var color: NSColor = .labelColor
+    private var motion: Motion = .calm
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
-        dotLayer.backgroundColor = NSColor.tertiaryLabelColor.cgColor
-        layer?.addSublayer(dotLayer)
-        layoutDot()
+        strokes.forEach { layer?.addSublayer($0) }
+        rebuild()
+        apply()
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) unused") }
 
-    override func layout() { super.layout(); layoutDot() }
+    override var isFlipped: Bool { false }
+    override func layout() { super.layout(); rebuild() }
 
-    private func layoutDot() {
-        let d: CGFloat = 11
-        dotLayer.frame = CGRect(x: (bounds.width - d) / 2, y: (bounds.height - d) / 2, width: d, height: d)
-        dotLayer.cornerRadius = d / 2
+    // The monogram's three shapes in the 200×200 viewBox (content bbox x8..192,
+    // y44..166), mapped into this view (y flipped for AppKit's bottom-left origin).
+    private func rebuild() {
+        let bx: CGFloat = 8, by: CGFloat = 44, bw: CGFloat = 184, bh: CGFloat = 122
+        let pad: CGFloat = 1
+        let scale = min((bounds.width - pad * 2) / bw, (bounds.height - pad * 2) / bh)
+        let drawW = bw * scale, drawH = bh * scale
+        let ox = (bounds.width - drawW) / 2, oy = (bounds.height - drawH) / 2
+        func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+            CGPoint(x: ox + (x - bx) * scale, y: bounds.height - (oy + (y - by) * scale))
+        }
+        let shapes: [[(CGFloat, CGFloat)]] = [
+            [(62, 44), (84, 44), (44, 166), (8, 166)],
+            [(89, 44), (111, 44), (111, 166), (89, 166)],
+            [(116, 44), (138, 44), (192, 166), (156, 166)],
+        ]
+        for (i, pts) in shapes.enumerated() {
+            let path = CGMutablePath()
+            path.move(to: p(pts[0].0, pts[0].1))
+            for q in pts.dropFirst() { path.addLine(to: p(q.0, q.1)) }
+            path.closeSubpath()
+            strokes[i].frame = bounds
+            strokes[i].path = path
+            strokes[i].fillColor = color.cgColor
+        }
     }
 
-    func set(color: NSColor, pulsing: Bool) {
-        dotLayer.backgroundColor = color.cgColor
-        dotLayer.removeAnimation(forKey: "pulse")
-        guard pulsing else { dotLayer.opacity = 1; return }
-        let a = CABasicAnimation(keyPath: "opacity")
-        a.fromValue = 1.0
-        a.toValue = 0.2
-        a.duration = 0.85
-        a.autoreverses = true
-        a.repeatCount = .infinity
-        a.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-        dotLayer.add(a, forKey: "pulse")
+    func set(color: NSColor, motion: Motion) {
+        self.color = color
+        strokes.forEach { $0.fillColor = color.cgColor }
+        if self.motion != motion || strokes[0].animation(forKey: "wave") == nil {
+            self.motion = motion
+            apply()
+        }
+    }
+
+    /// Restart the animation (e.g. after the window is re-shown and layers paused).
+    func kick() { apply() }
+
+    private func apply() {
+        for (i, l) in strokes.enumerated() {
+            l.removeAnimation(forKey: "wave")
+            let a = CABasicAnimation(keyPath: "opacity")
+            switch motion {
+            case .calm:
+                a.fromValue = 0.55
+                a.toValue = 1.0
+                a.duration = 1.6
+                a.beginTime = CACurrentMediaTime() + Double(i) * 0.12
+            case .active:
+                a.fromValue = 0.2
+                a.toValue = 1.0
+                a.duration = 0.5
+                a.beginTime = CACurrentMediaTime() + Double(i) * 0.16
+            }
+            a.autoreverses = true
+            a.repeatCount = .infinity
+            a.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            l.add(a, forKey: "wave")
+        }
     }
 }
 
@@ -222,7 +272,6 @@ private final class PillButton: NSButton {
         bg.setFill()
         bounds.fill() // layer cornerRadius clips to the pill shape
 
-        // Leading glyph.
         let gSize: CGFloat = 11
         let gx: CGFloat = 18
         let gy = (bounds.height - gSize) / 2
@@ -235,7 +284,6 @@ private final class PillButton: NSButton {
                          xRadius: 2, yRadius: 2).fill()
         }
 
-        // Centered title.
         let p = NSMutableParagraphStyle(); p.alignment = .center
         let attrs: [NSAttributedString.Key: Any] = [
             .foregroundColor: NSColor.white,
