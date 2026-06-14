@@ -3,6 +3,7 @@ import { db } from "@/db";
 import {
   actionItemInitiatives,
   actionItems,
+  initiativeDependencies,
   initiatives,
   linesOfBusiness,
   milestones,
@@ -360,16 +361,19 @@ export type PlanDocInitiative = {
   successCriteria: string | null;
   successOutcome: string | null;
   ownerUserId: string | null;
+  lobId: string | null;
+  lobTitle: string | null;
   tasks: PlanDocTask[];
 };
 
 export type PlanDocData = {
   initiatives: PlanDocInitiative[];
   members: Array<{ id: string; displayName: string }>;
+  lobs: Array<{ id: string; title: string }>;
 };
 
 export async function getPlanDocData(workspaceId: string): Promise<PlanDocData> {
-  const [inits, members] = await Promise.all([
+  const [inits, members, lobRows] = await Promise.all([
     db
       .select()
       .from(initiatives)
@@ -382,7 +386,13 @@ export async function getPlanDocData(workspaceId: string): Promise<PlanDocData> 
       .from(workspaceMembers)
       .innerJoin(users, eq(users.id, workspaceMembers.userId))
       .where(eq(workspaceMembers.workspaceId, workspaceId)),
+    db
+      .select({ id: linesOfBusiness.id, title: linesOfBusiness.title })
+      .from(linesOfBusiness)
+      .where(eq(linesOfBusiness.workspaceId, workspaceId))
+      .orderBy(asc(linesOfBusiness.createdAt)),
   ]);
+  const lobTitleById = new Map(lobRows.map((l) => [l.id, l.title]));
 
   const initIds = inits.map((i) => i.id);
   const taskRows = initIds.length
@@ -400,6 +410,7 @@ export async function getPlanDocData(workspaceId: string): Promise<PlanDocData> 
 
   return {
     members,
+    lobs: lobRows,
     initiatives: inits.map((init) => {
       const mine = taskRows.filter((t) => t.initiativeId === init.id);
       const byId = new Map<string, PlanDocTask>();
@@ -432,10 +443,35 @@ export async function getPlanDocData(workspaceId: string): Promise<PlanDocData> 
         successCriteria: init.successCriteria,
         successOutcome: init.successOutcome,
         ownerUserId: init.ownerUserId,
+        lobId: init.lobId,
+        lobTitle: init.lobId ? (lobTitleById.get(init.lobId) ?? null) : null,
         tasks: roots,
       };
     }),
   };
+}
+
+/* ─── Initiative dependencies (roadmap) ───────────────────────────────── */
+
+export type InitiativeDependency = {
+  id: string;
+  fromInitiativeId: string;
+  toInitiativeId: string;
+  type: string;
+};
+
+export async function listInitiativeDependencies(
+  workspaceId: string,
+): Promise<InitiativeDependency[]> {
+  return db
+    .select({
+      id: initiativeDependencies.id,
+      fromInitiativeId: initiativeDependencies.fromInitiativeId,
+      toInitiativeId: initiativeDependencies.toInitiativeId,
+      type: initiativeDependencies.type,
+    })
+    .from(initiativeDependencies)
+    .where(eq(initiativeDependencies.workspaceId, workspaceId));
 }
 
 /* ─── Holding project for roadmap-born tasks (OD-4) ───────────────────── */

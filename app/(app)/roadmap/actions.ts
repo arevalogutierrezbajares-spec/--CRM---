@@ -1,10 +1,16 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
-import { actionItemInitiatives, actionItems, initiatives, milestones } from "@/db/schema";
+import {
+  actionItemInitiatives,
+  actionItems,
+  initiativeDependencies,
+  initiatives,
+  milestones,
+} from "@/db/schema";
 import { requireUser } from "@/lib/current-user";
 import {
   buildCopyForAiPayload,
@@ -393,6 +399,7 @@ const initiativePatchSchema = z
     goal: z.string().nullable().optional(),
     successCriteria: z.string().nullable().optional(),
     ownerUserId: z.string().uuid().nullable().optional(),
+    lobId: z.string().uuid().nullable().optional(),
   })
   .strict();
 
@@ -639,5 +646,78 @@ export async function updateInitiativeSuccessCriteria(
     .set({ successCriteria: successCriteria.trim() || null, updatedAt: new Date() })
     .where(and(eq(initiatives.id, id), eq(initiatives.workspaceId, user.workspaceId)));
   revalidatePath(`/initiatives/${id}`);
+  revalidatePath("/roadmap");
+}
+
+/* ─── Initiative dependencies (roadmap) ───────────────────────────────── */
+
+/** Link a dependency: `to` depends on `from` (from is the predecessor).
+ *  Rejects self-links and anything that would create a cycle. */
+export async function addInitiativeDependency(
+  fromId: string,
+  toId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireUser();
+  if (fromId === toId) return { ok: false, error: "An initiative can't depend on itself" };
+
+  const owned = await db
+    .select({ id: initiatives.id })
+    .from(initiatives)
+    .where(
+      and(
+        inArray(initiatives.id, [fromId, toId]),
+        eq(initiatives.workspaceId, user.workspaceId),
+      ),
+    );
+  if (owned.length !== 2) return { ok: false, error: "Initiative not found" };
+
+  // Cycle guard: a new edge from→to closes a cycle iff `from` is already
+  // reachable from `to` along existing from→to edges.
+  const deps = await db
+    .select({
+      f: initiativeDependencies.fromInitiativeId,
+      t: initiativeDependencies.toInitiativeId,
+    })
+    .from(initiativeDependencies)
+    .where(eq(initiativeDependencies.workspaceId, user.workspaceId));
+  const adj = new Map<string, string[]>();
+  for (const d of deps) {
+    const arr = adj.get(d.f) ?? [];
+    arr.push(d.t);
+    adj.set(d.f, arr);
+  }
+  const seen = new Set<string>();
+  const queue = [toId];
+  while (queue.length) {
+    const n = queue.shift()!;
+    if (n === fromId) return { ok: false, error: "That would create a circular dependency" };
+    if (seen.has(n)) continue;
+    seen.add(n);
+    for (const m of adj.get(n) ?? []) queue.push(m);
+  }
+
+  await db
+    .insert(initiativeDependencies)
+    .values({
+      workspaceId: user.workspaceId,
+      fromInitiativeId: fromId,
+      toInitiativeId: toId,
+      createdBy: user.id,
+    })
+    .onConflictDoNothing();
+  revalidatePath("/roadmap");
+  return { ok: true };
+}
+
+export async function removeInitiativeDependency(id: string): Promise<void> {
+  const user = await requireUser();
+  await db
+    .delete(initiativeDependencies)
+    .where(
+      and(
+        eq(initiativeDependencies.id, id),
+        eq(initiativeDependencies.workspaceId, user.workspaceId),
+      ),
+    );
   revalidatePath("/roadmap");
 }

@@ -16,7 +16,16 @@ import {
  *  (D5 — the md file is regenerated on export, never maintained). This is the
  *  ONLY surface where initiatives are edited (INV-7). No raw markdown editor
  *  exists (INV-3). */
-export function PlanDoc({ data }: { data: PlanDocData }) {
+export function PlanDoc({
+  data,
+  focusId,
+}: {
+  data: PlanDocData;
+  focusId?: string | null;
+}) {
+  const initiatives = focusId
+    ? data.initiatives.filter((i) => i.id === focusId)
+    : data.initiatives;
   if (data.initiatives.length === 0) {
     return (
       <div
@@ -38,10 +47,40 @@ export function PlanDoc({ data }: { data: PlanDocData }) {
       </div>
     );
   }
+  // Group initiatives into Line-of-Business sections (LoB order first, then
+  // any unassigned as "Cross-venture").
+  const order = new Map(data.lobs.map((l, i) => [l.id, i]));
+  const groups = new Map<
+    string,
+    { lobId: string | null; lobTitle: string; inits: PlanDocInitiative[] }
+  >();
+  for (const init of initiatives) {
+    const key = init.lobId ?? "none";
+    if (!groups.has(key)) {
+      groups.set(key, {
+        lobId: init.lobId ?? null,
+        lobTitle: init.lobTitle ?? "Cross-venture",
+        inits: [],
+      });
+    }
+    groups.get(key)!.inits.push(init);
+  }
+  const groupList = Array.from(groups.values()).sort((a, b) => {
+    const ai = a.lobId ? (order.get(a.lobId) ?? 999) : 1000;
+    const bi = b.lobId ? (order.get(b.lobId) ?? 999) : 1000;
+    return ai - bi;
+  });
+
   return (
-    <div className="space-y-3">
-      {data.initiatives.map((init) => (
-        <InitiativeSection key={init.id} init={init} members={data.members} />
+    <div className="space-y-5">
+      {groupList.map((g) => (
+        <LobGroup
+          key={g.lobId ?? "none"}
+          lobTitle={g.lobTitle}
+          inits={g.inits}
+          members={data.members}
+          lobs={data.lobs}
+        />
       ))}
       <Link
         href="/initiatives/new"
@@ -49,6 +88,58 @@ export function PlanDoc({ data }: { data: PlanDocData }) {
       >
         <Plus size={14} /> New initiative
       </Link>
+    </div>
+  );
+}
+
+/* ─── Line-of-Business group (swimlane) ───────────────────────────────── */
+
+function LobGroup({
+  lobTitle,
+  inits,
+  members,
+  lobs,
+}: {
+  lobTitle: string;
+  inits: PlanDocInitiative[];
+  members: PlanDocData["members"];
+  lobs: PlanDocData["lobs"];
+}) {
+  const [open, setOpen] = useState(true);
+  const done = inits.reduce((n, i) => n + countDone(i.tasks).done, 0);
+  const total = inits.reduce((n, i) => n + countDone(i.tasks).total, 0);
+  return (
+    <div className="space-y-2">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center gap-2 text-left"
+      >
+        {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+        <span className="text-[13px] font-semibold uppercase tracking-wider text-text-secondary">
+          {lobTitle}
+        </span>
+        <span className="text-tiny text-text-tertiary">
+          · {inits.length} {inits.length === 1 ? "initiative" : "initiatives"}
+          {total > 0 ? ` · ${done}/${total}` : ""}
+        </span>
+        <span
+          className="flex-1 ml-2 border-t"
+          style={{ borderColor: "var(--border-default)" }}
+        />
+      </button>
+      {open && (
+        <div className="space-y-3 pl-1">
+          {inits.map((init) => (
+            <InitiativeSection
+              key={init.id}
+              init={init}
+              members={members}
+              lobs={lobs}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -78,9 +169,11 @@ function countDone(tasks: PlanDocTask[]): { done: number; total: number } {
 function InitiativeSection({
   init,
   members,
+  lobs,
 }: {
   init: PlanDocInitiative;
   members: PlanDocData["members"];
+  lobs: PlanDocData["lobs"];
 }) {
   const [open, setOpen] = useState(true);
   const [, startTransition] = useTransition();
@@ -185,6 +278,22 @@ function InitiativeSection({
                 {members.map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.displayName}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex items-center gap-1.5 text-text-secondary">
+              LoB
+              <select
+                defaultValue={init.lobId ?? ""}
+                onChange={(e) => save({ lobId: e.target.value || null })}
+                className="rounded border bg-card px-1 py-0.5"
+                style={{ borderColor: "var(--border-default)" }}
+              >
+                <option value="">Cross-venture</option>
+                {lobs.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.title}
                   </option>
                 ))}
               </select>
