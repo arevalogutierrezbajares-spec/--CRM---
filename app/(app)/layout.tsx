@@ -4,6 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { PresenceProvider } from "@/lib/presence/presence-context";
 import { CommandPalette } from "@/components/command/command-palette";
 import { GlobalShortcuts } from "@/components/command/global-shortcuts";
+import { GlobalUploadModal } from "@/components/upload/global-upload-modal";
 import { MotionProvider } from "@/components/motion-provider";
 import { AmbientPlayer } from "@/components/ambient/ambient-player";
 import { safeRead } from "@/lib/db-status";
@@ -51,6 +52,7 @@ export default async function AppLayout({
         </div>
         <Toaster />
         <CommandPalette />
+        <GlobalUploadModal projects={projectsRes.data} />
         <GlobalShortcuts />
         <AmbientPlayer />
       </div>

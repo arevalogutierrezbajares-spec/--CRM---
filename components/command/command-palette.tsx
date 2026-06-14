@@ -14,8 +14,10 @@ import {
   Clock,
   CornerDownLeft,
   Search,
+  Upload,
 } from "lucide-react";
 import { NAV_ITEMS } from "@/components/layout/nav-items";
+import { openGlobalUpload } from "@/components/upload/global-upload-modal";
 import { GOTO_CHIP } from "@/lib/shortcuts";
 import { quickCaptureAction } from "@/app/(app)/dashboard/item-actions";
 import { createPostAction } from "@/app/(app)/town-hall/actions";
@@ -149,6 +151,21 @@ export function CommandPalette() {
             </Row>
             <Row icon={Megaphone} onSelect={post} disabled={busy}>
               Post to Town Hall: <span className="text-text-primary">“{query.trim()}”</span>
+            </Row>
+          </Group>
+        )}
+
+        {/* Quick actions — global affordances, available with or without a query. */}
+        {(!q || "upload a file document".includes(q)) && (
+          <Group heading="Quick actions">
+            <Row
+              icon={Upload}
+              onSelect={() => {
+                close();
+                openGlobalUpload();
+              }}
+            >
+              Upload a file…
             </Row>
           </Group>
         )}

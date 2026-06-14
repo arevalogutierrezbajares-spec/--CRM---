@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronRight, ChevronsLeft, ChevronsRight, Star } from "lucide-react";
+import { ChevronRight, ChevronsLeft, ChevronsRight, Star, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { openGlobalUpload } from "@/components/upload/global-upload-modal";
 import { NAV_GROUPS, NAV_FOOTER, type NavLeaf } from "./nav-groups";
 import { BrandWidget } from "@/components/brand/brand-widget";
 import { ExplorerTree } from "./explorer-tree";
@@ -154,12 +155,30 @@ export function Sidebar({
 
       {rail ? (
         <nav aria-label="Primary" className="flex flex-1 flex-col gap-0.5 overflow-y-auto p-2">
+          <button
+            type="button"
+            onClick={() => openGlobalUpload()}
+            title="Upload a file"
+            aria-label="Upload a file"
+            className="mb-0.5 flex h-10 items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-surface hover:text-text-primary active:scale-[0.96]"
+          >
+            <Upload size={18} className="shrink-0" />
+          </button>
           {NAV_GROUPS.flatMap((g) => g.items).map((item) => (
             <NavRow key={item.href} item={item} pathname={pathname} rail />
           ))}
         </nav>
       ) : (
         <nav aria-label="Primary" className="flex flex-1 flex-col gap-1 overflow-y-auto p-2">
+          <button
+            type="button"
+            onClick={() => openGlobalUpload()}
+            className="mb-1 flex items-center gap-2 rounded-md border border-[var(--border)] px-2.5 py-1.5 text-[13px] font-medium text-text-secondary transition-colors hover:bg-surface hover:text-text-primary active:scale-[0.99]"
+          >
+            <Upload size={15} className="shrink-0" />
+            <span className="truncate">Upload a file</span>
+          </button>
+
           {/* Favorites (pinned projects) */}
           {favorites.length > 0 && (
             <Section
