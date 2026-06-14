@@ -67,6 +67,12 @@ const fmtDate = (iso: string | null) =>
 const fillFor = (h: string) =>
   h === "red" ? "var(--red-mid)" : h === "amber" ? "var(--amber-mid)" : "var(--green-mid)";
 
+/** Smooth S-curve between two points (pronounced horizontal control handles). */
+function arcPath(x1: number, y1: number, x2: number, y2: number): string {
+  const dx = Math.max(22, Math.min(80, Math.abs(x2 - x1) * 0.5));
+  return `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
+}
+
 const initials = (name: string) =>
   name
     .split(/\s+/)
@@ -141,6 +147,7 @@ export function RoadmapTimeline({
   // ── Dependency arrows + drag-to-link ──
   const containerRef = useRef<HTMLDivElement | null>(null);
   const barEls = useRef(new Map<string, HTMLElement>());
+  const pathEls = useRef(new Map<string, SVGPathElement>());
   const [arrows, setArrows] = useState<
     Array<{ key: string; x1: number; y1: number; x2: number; y2: number; violated: boolean }>
   >([]);
@@ -256,7 +263,27 @@ export function RoadmapTimeline({
     const right = clampPct(((en - windowStartMs) / windowTotalMs) * 100);
     d.el.style.left = `${left}%`;
     d.el.style.width = `${Math.max(1.5, right - left)}%`;
-  }, [windowStartMs, windowTotalMs]);
+
+    // Live-follow: redraw any dependency arrows touching the dragged bar by
+    // mutating their path 'd' directly (no React render → stays smooth).
+    const c = containerRef.current;
+    if (c && pathEls.current.size) {
+      const cr = c.getBoundingClientRect();
+      for (const dep of deps) {
+        if (dep.fromInitiativeId !== d.id && dep.toInitiativeId !== d.id) continue;
+        const pe = pathEls.current.get(dep.id);
+        const fe = barEls.current.get(dep.fromInitiativeId);
+        const te = barEls.current.get(dep.toInitiativeId);
+        if (!pe || !fe || !te) continue;
+        const fr = fe.getBoundingClientRect();
+        const tr = te.getBoundingClientRect();
+        pe.setAttribute(
+          "d",
+          arcPath(fr.right - cr.left, fr.top - cr.top + fr.height / 2, tr.left - cr.left, tr.top - cr.top + tr.height / 2),
+        );
+      }
+    }
+  }, [windowStartMs, windowTotalMs, deps]);
 
   const onPointerUp = useCallback(() => {
     const d = dragRef.current;
@@ -542,59 +569,71 @@ export function RoadmapTimeline({
           })
         )}
 
-        {/* Dependency connectors + live drag-to-link rubber-band.
-            Hidden while a milestone is focused (deliverables view). */}
-        {!selectedId && (arrows.length > 0 || linking) && (
+        {/* Dependency connectors — routed BEHIND the bars (zIndex 0) so they
+            tuck out of the way; curved. Hidden while a milestone is focused. */}
+        {!selectedId && arrows.length > 0 && (
           <svg
             className="absolute inset-0 pointer-events-none"
-            style={{ width: "100%", height: "100%", zIndex: 5 }}
+            style={{ width: "100%", height: "100%", zIndex: 0 }}
           >
             <defs>
-              <marker id="rm-arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
-                <path d="M0,0 L7,3.5 L0,7 Z" fill="rgba(120,120,120,.75)" />
+              <marker id="rm-arrow" markerWidth="7" markerHeight="7" refX="5.5" refY="3.5" orient="auto">
+                <path d="M0,0 L7,3.5 L0,7 Z" fill="rgba(120,120,120,.8)" />
               </marker>
-              <marker id="rm-arrow-red" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+              <marker id="rm-arrow-red" markerWidth="7" markerHeight="7" refX="5.5" refY="3.5" orient="auto">
                 <path d="M0,0 L7,3.5 L0,7 Z" fill="var(--red-mid)" />
               </marker>
-              <marker id="rm-arrow-blue" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+            </defs>
+            {arrows.map((a) => (
+              <path
+                key={a.key}
+                ref={(el) => {
+                  if (el) pathEls.current.set(a.key, el);
+                  else pathEls.current.delete(a.key);
+                }}
+                d={arcPath(a.x1, a.y1, a.x2, a.y2)}
+                fill="none"
+                stroke={a.violated ? "var(--red-mid)" : "rgba(120,120,120,.5)"}
+                strokeWidth={a.violated ? 2 : 1.6}
+                strokeLinecap="round"
+                strokeDasharray={a.violated ? "5 3" : undefined}
+                markerEnd={`url(#${a.violated ? "rm-arrow-red" : "rm-arrow"})`}
+              />
+            ))}
+          </svg>
+        )}
+
+        {/* Live drag-to-link rubber-band — on top of everything. */}
+        {!selectedId && linking && linkCursor && (
+          <svg
+            className="absolute inset-0 pointer-events-none"
+            style={{ width: "100%", height: "100%", zIndex: 6 }}
+          >
+            <defs>
+              <marker id="rm-arrow-blue" markerWidth="7" markerHeight="7" refX="5.5" refY="3.5" orient="auto">
                 <path d="M0,0 L7,3.5 L0,7 Z" fill="var(--blue-mid)" />
               </marker>
             </defs>
-            {arrows.map((a) => {
-              const dx = Math.max(16, Math.min(60, Math.abs(a.x2 - a.x1) * 0.4));
+            {(() => {
+              const fe = barEls.current.get(linking.fromId);
+              const c = containerRef.current;
+              if (!fe || !c) return null;
+              const cr = c.getBoundingClientRect();
+              const fr = fe.getBoundingClientRect();
+              const x1 = fr.right - cr.left;
+              const y1 = fr.top - cr.top + fr.height / 2;
               return (
                 <path
-                  key={a.key}
-                  d={`M ${a.x1} ${a.y1} C ${a.x1 + dx} ${a.y1}, ${a.x2 - dx} ${a.y2}, ${a.x2} ${a.y2}`}
+                  d={arcPath(x1, y1, linkCursor.x, linkCursor.y)}
                   fill="none"
-                  stroke={a.violated ? "var(--red-mid)" : "rgba(120,120,120,.55)"}
-                  strokeWidth={1.6}
-                  strokeDasharray={a.violated ? "5 3" : undefined}
-                  markerEnd={`url(#${a.violated ? "rm-arrow-red" : "rm-arrow"})`}
+                  stroke="var(--blue-mid)"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeDasharray="5 4"
+                  markerEnd="url(#rm-arrow-blue)"
                 />
               );
-            })}
-            {linking &&
-              linkCursor &&
-              (() => {
-                const fe = barEls.current.get(linking.fromId);
-                const c = containerRef.current;
-                if (!fe || !c) return null;
-                const cr = c.getBoundingClientRect();
-                const fr = fe.getBoundingClientRect();
-                const x1 = fr.right - cr.left;
-                const y1 = fr.top - cr.top + fr.height / 2;
-                return (
-                  <path
-                    d={`M ${x1} ${y1} L ${linkCursor.x} ${linkCursor.y}`}
-                    fill="none"
-                    stroke="var(--blue-mid)"
-                    strokeWidth={2}
-                    strokeDasharray="5 4"
-                    markerEnd="url(#rm-arrow-blue)"
-                  />
-                );
-              })()}
+            })()}
           </svg>
         )}
       </div>
