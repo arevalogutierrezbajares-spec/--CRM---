@@ -1,7 +1,7 @@
 /**
  * Publish a built+zipped macOS Capture Helper to the CRM downloads bucket so
- * workspace members can download it from /capture. Called by
- * macos-helper/scripts/release.sh.
+ * workspace members can download it from Settings → Configurations → Call
+ * Capture. Called by macos-helper/scripts/release.sh.
  *
  *   npx tsx scripts/publish-helper.ts <zipPath> <version> [notes]
  */
@@ -64,7 +64,7 @@ async function main() {
   console.log(`✓ published Helper ${version} (${(bytes.length / 1024 / 1024).toFixed(1)} MB)`);
   console.log(`  object: ${DOWNLOADS_BUCKET}/${objectPath}`);
   console.log(`  sha256: ${sha256}`);
-  console.log("  cofounders can now download it from /capture in the CRM.");
+  console.log("  cofounders can now download it from Settings → Configurations → Call Capture.");
   process.exit(0);
 }
 
