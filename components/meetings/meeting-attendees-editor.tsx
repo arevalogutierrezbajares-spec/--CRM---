@@ -146,34 +146,56 @@ export function MeetingAttendeesEditor({
           No attendees yet. Search to add people from your CRM.
         </p>
       ) : (
-        <ul className="space-y-2.5">
-          {display.map((c) => {
-            const recent = recentByContact[c.id] ?? [];
-            return (
-              <li key={c.id} className="group">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <Link
-                      href={`/contacts/${c.id}`}
-                      className="text-sm font-medium hover:underline"
-                    >
-                      {c.name}
-                    </Link>
-                    <div className="text-xs text-[var(--muted-foreground)]">
-                      {c.relationshipType}
-                      {c.organization ? ` · ${c.organization}` : ""}
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => remove(c.id)}
-                    aria-label={`Remove ${c.name}`}
-                    className="flex h-6 w-6 flex-none items-center justify-center rounded text-[var(--muted-foreground)] opacity-0 transition hover:bg-[var(--muted)] hover:text-[var(--foreground)] group-hover:opacity-100"
+        <div className="flex flex-wrap gap-2">
+          {display.map((c) => (
+            <span
+              key={c.id}
+              className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--muted)]/40 py-1 pl-1 pr-1 text-sm"
+            >
+              <Link
+                href={`/contacts/${c.id}`}
+                title={`${c.name}${c.organization ? ` · ${c.organization}` : ""} — open profile`}
+                className="flex items-center gap-1.5 rounded-full"
+              >
+                <span className="grid h-6 w-6 flex-none place-items-center rounded-full bg-[var(--primary)]/15 text-xs font-semibold text-[var(--primary)]">
+                  {initial(c.name)}
+                </span>
+                <span className="max-w-[160px] truncate font-medium hover:underline">
+                  {c.name}
+                </span>
+              </Link>
+              <button
+                type="button"
+                onClick={() => remove(c.id)}
+                aria-label={`Remove ${c.name}`}
+                className="grid h-5 w-5 flex-none place-items-center rounded-full text-[var(--muted-foreground)] transition hover:bg-[var(--muted)] hover:text-[var(--foreground)]"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Recent CRM activity for these attendees — two-way context, tucked away. */}
+      {display.some((c) => (recentByContact[c.id] ?? []).length > 0) && (
+        <details className="group rounded-md border border-[var(--border)] bg-[var(--muted)]/10">
+          <summary className="flex min-h-9 cursor-pointer list-none items-center justify-between px-3 py-2 text-xs font-medium text-[var(--muted-foreground)] [&::-webkit-details-marker]:hidden">
+            Recent activity
+            <span className="transition-transform group-open:rotate-180">v</span>
+          </summary>
+          <div className="space-y-3 border-t border-[var(--border)] p-3">
+            {display.map((c) => {
+              const recent = recentByContact[c.id] ?? [];
+              if (recent.length === 0) return null;
+              return (
+                <div key={c.id}>
+                  <Link
+                    href={`/contacts/${c.id}`}
+                    className="text-xs font-medium hover:underline"
                   >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-                {recent.length > 0 && (
+                    {c.name}
+                  </Link>
                   <ul className="mt-1 space-y-0.5 border-l border-[var(--border)] pl-2.5">
                     {recent.map((t) => (
                       <li
@@ -188,11 +210,11 @@ export function MeetingAttendeesEditor({
                       </li>
                     ))}
                   </ul>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+                </div>
+              );
+            })}
+          </div>
+        </details>
       )}
 
       {/* Search / add */}
@@ -265,6 +287,10 @@ export function MeetingAttendeesEditor({
 function firstLine(body: string): string {
   const line = body.split("\n").find((l) => l.trim()) ?? body;
   return line.length > 60 ? `${line.slice(0, 60)}…` : line;
+}
+
+function initial(name: string): string {
+  return name.trim().charAt(0).toUpperCase() || "?";
 }
 
 function AddContactDialog({

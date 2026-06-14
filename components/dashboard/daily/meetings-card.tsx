@@ -1,13 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { CalendarClock, Radio } from "lucide-react";
+import { CalendarClock } from "lucide-react";
 import { DashCard } from "../shared/dash-card";
 import { SectionLabel } from "../shared/section-label";
 import { DashBadge } from "../shared/badge";
 import { useItemDrawer } from "../item-drawer";
 import type { DashMeeting } from "@/db/queries/dashboard";
-import { formatMeetingTimeOnly, toEtWallMs } from "@/lib/date/meeting-time";
+import { formatMeetingTimeOnly } from "@/lib/date/meeting-time";
 
 interface MeetingsCardProps {
   meetings: DashMeeting[];
@@ -35,12 +35,6 @@ function dayShort(d: Date): string {
   });
 }
 
-function isLive(m: DashMeeting): boolean {
-  // From 5 min before start through ~60 min after — compare in ET wall-clock.
-  const delta = toEtWallMs(Date.now()) - m.scheduledAt.getTime();
-  return delta >= -5 * 60_000 && delta <= 60 * 60_000;
-}
-
 export function MeetingsCard({ meetings, scope }: MeetingsCardProps) {
   const drawer = useItemDrawer();
 
@@ -57,7 +51,6 @@ export function MeetingsCard({ meetings, scope }: MeetingsCardProps) {
       ) : (
         <ul className="space-y-1.5">
           {meetings.slice(0, 8).map((m) => {
-            const live = isLive(m) && scope === "today";
             return (
               <li key={m.id} className="flex items-center gap-2 rounded px-1 py-1 hover:bg-surface transition-colors">
                 <div className="w-12 shrink-0 text-tiny font-medium text-text-secondary tabular-nums">
@@ -86,15 +79,6 @@ export function MeetingsCard({ meetings, scope }: MeetingsCardProps) {
                 )}
                 <div className="flex items-center gap-1.5 shrink-0">
                   <DashBadge variant="neutral">{TYPE_LABEL[m.type]}</DashBadge>
-                  {live && (
-                    <Link
-                      href={`/meetings/${m.id}?live=1`}
-                      className="inline-flex items-center gap-1 rounded-full bg-red-bg px-1.5 py-0.5 text-tiny font-medium text-red-text hover:opacity-80"
-                    >
-                      <Radio size={10} />
-                      Live
-                    </Link>
-                  )}
                 </div>
               </li>
             );

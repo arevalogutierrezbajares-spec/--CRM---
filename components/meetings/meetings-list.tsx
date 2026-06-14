@@ -2,17 +2,21 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import {
   Briefcase,
   ChevronDown,
-  Radio,
   Search,
+  Trash2,
   Users,
   X,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { deleteMeetingAction } from "@/app/(app)/meetings/actions";
 import type { MeetingListItem } from "@/db/queries/meetings";
 import {
   formatMeetingTime,
@@ -247,13 +251,8 @@ export function MeetingsList({
                 </div>
                 <Card className="overflow-hidden">
                   <ul className="divide-y divide-[var(--border)]">
-                    {items.map(({ m, kind, group }) => (
-                      <MeetingRow
-                        key={m.id}
-                        meeting={m}
-                        kind={kind}
-                        isToday={group === "today"}
-                      />
+                    {items.map(({ m, kind }) => (
+                      <MeetingRow key={m.id} meeting={m} kind={kind} />
                     ))}
                   </ul>
                 </Card>
@@ -307,12 +306,11 @@ function Count({ n, active }: { n: number; active: boolean }) {
 function MeetingRow({
   meeting: m,
   kind,
-  isToday,
 }: {
   meeting: MeetingListItem;
   kind: Kind;
-  isToday: boolean;
 }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const { date, time } = formatMeetingTime(m.scheduledAt);
   const summary = summaryOf(m);
@@ -388,22 +386,40 @@ function MeetingRow({
         </div>
 
         {/* Actions */}
-        <div className="flex flex-none items-center gap-2">
-          {isToday && (
-            <Button
-              asChild
-              size="sm"
-              variant="outline"
-              className="gap-1 border-red-300 px-2 text-xs text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
-            >
-              <Link href={`/meetings/${m.id}?live=1`}>
-                <Radio className="h-3 w-3" /> Live
-              </Link>
-            </Button>
-          )}
+        <div className="flex flex-none items-center gap-1">
           <Button asChild size="sm" variant="ghost" className="text-xs">
             <Link href={`/meetings/${m.id}`}>Open</Link>
           </Button>
+          <ConfirmDialog
+            title="Delete this meeting?"
+            description={
+              <>
+                <span className="font-medium text-[var(--foreground)]">{m.title}</span>{" "}
+                and its attendee touches will be removed. This can&apos;t be undone.
+              </>
+            }
+            confirmLabel="Delete"
+            destructive
+            onConfirm={async () => {
+              const res = await deleteMeetingAction(m.id);
+              if (res.ok) {
+                toast.success("Meeting deleted");
+                router.refresh();
+              } else {
+                toast.error(res.error);
+              }
+            }}
+            trigger={(openConfirm) => (
+              <button
+                type="button"
+                onClick={openConfirm}
+                aria-label={`Delete ${m.title}`}
+                className="grid h-9 w-9 flex-none place-items-center rounded-md text-[var(--muted-foreground)] transition hover:bg-[var(--destructive)]/10 hover:text-[var(--destructive)]"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            )}
+          />
         </div>
       </div>
     </li>

@@ -70,6 +70,7 @@ export default async function NewMeetingPage(props: { searchParams: SearchParams
               contacts={contactsRes.data.map((c) => ({
                 id: c.id,
                 name: c.name,
+                organization: c.organization,
               }))}
               projects={projectsRes.data.map((p) => ({
                 id: p.id,

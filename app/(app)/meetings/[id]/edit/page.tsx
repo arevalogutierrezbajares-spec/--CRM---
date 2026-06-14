@@ -68,6 +68,7 @@ export default async function EditMeetingPage(props: { params: Params }) {
               contacts={contactsRes.data.map((c) => ({
                 id: c.id,
                 name: c.name,
+                organization: c.organization,
               }))}
               projects={projectsRes.data.map((p) => ({
                 id: p.id,

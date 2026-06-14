@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -14,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { AttendeePicker, type PickerContact } from "@/components/meetings/attendee-picker";
 
 type MeetingType = "one_on_one" | "group" | "event" | "call";
 
@@ -42,7 +42,7 @@ export function MeetingForm({
 }: {
   initial?: MeetingFormInitial;
   action: Action;
-  contacts: { id: string; name: string }[];
+  contacts: PickerContact[];
   projects: { id: string; title: string }[];
   submitLabel?: string;
 }) {
@@ -53,18 +53,7 @@ export function MeetingForm({
   const [linkedProjectId, setLinkedProjectId] = useState<string>(
     initial?.linkedProjectId ?? "",
   );
-  const [attendees, setAttendees] = useState<Set<string>>(
-    new Set(initial?.attendeeIds ?? []),
-  );
-
-  function toggleAttendee(id: string) {
-    setAttendees((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
+  const [attendees, setAttendees] = useState<string[]>(initial?.attendeeIds ?? []);
 
   return (
     <form
@@ -115,34 +104,14 @@ Use [ ] action items to spawn milestones:
         </div>
       </div>
 
-      {contacts.length > 0 && (
-        <section className="space-y-3">
-          <Label>Attendees</Label>
-          <div className="flex flex-wrap gap-2">
-            {contacts.map((c) => {
-              const active = attendees.has(c.id);
-              return (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => toggleAttendee(c.id)}
-                  className="min-h-[44px] rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
-                >
-                  <Badge
-                    variant={active ? "default" : "outline"}
-                    className="min-h-[36px] cursor-pointer px-3 transition-opacity hover:opacity-80"
-                  >
-                    {c.name}
-                  </Badge>
-                </button>
-              );
-            })}
-          </div>
-          <p className="text-xs text-[var(--muted-foreground)]">
-            Each selected attendee gets a meeting Touch on save.
-          </p>
-        </section>
-      )}
+      <section className="space-y-2">
+        <Label>Attendees</Label>
+        <AttendeePicker
+          contacts={contacts}
+          value={attendees}
+          onChange={setAttendees}
+        />
+      </section>
 
       <details
         className="group rounded-lg border border-[var(--border)] bg-[var(--muted)]/10"

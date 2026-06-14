@@ -506,6 +506,77 @@ export async function createContactForMeetingAction(
   return { ok: true, contact: inserted };
 }
 
+/** Quick-create a CRM contact (no meeting attachment) and return it. Powers the
+ *  "Add '<name>' to your CRM" path inside the New-meeting attendee picker, where
+ *  no meeting exists yet. Unlike `createContact`, this returns the row instead of
+ *  redirecting, so the picker can drop the new person straight into the form. */
+export async function createContactQuickAction(input: {
+  name: string;
+  organization?: string;
+  relationshipType?: RelationshipType;
+}): Promise<AttendeeContactResult> {
+  const user = await requireUser();
+  const name = input.name.trim();
+  if (!name) return { ok: false, error: "Name required" };
+
+  const [inserted] = await db
+    .insert(contacts)
+    .values({
+      name,
+      type: "person",
+      organization: input.organization?.trim() || null,
+      relationshipType: input.relationshipType ?? "prospect",
+      workspaceId: user.workspaceId,
+      createdBy: user.id,
+    })
+    .returning({
+      id: contacts.id,
+      name: contacts.name,
+      organization: contacts.organization,
+      relationshipType: contacts.relationshipType,
+    });
+
+  revalidatePath("/contacts");
+  return { ok: true, contact: inserted };
+}
+
+/**
+ * Delete a meeting and everything that should die with it. `meeting_attendees`
+ * and `meeting_materials` cascade on the FK; call recordings + partner-repo
+ * items are ON DELETE SET NULL (the transcript/material outlives the meeting).
+ * `touches.meeting_id` has no FK, so we clean those per-meeting touches by hand
+ * to keep contact timelines tidy. Milestones spawned from action items are real
+ * project work — they're intentionally left in place.
+ */
+export async function deleteMeetingAction(
+  meetingId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const user = await requireUser();
+
+  const [m] = await db
+    .select({ id: meetings.id, linkedProjectId: meetings.linkedProjectId })
+    .from(meetings)
+    .where(and(eq(meetings.id, meetingId), eq(meetings.workspaceId, user.workspaceId)))
+    .limit(1);
+  if (!m) return { ok: false, error: "Meeting not found" };
+
+  await db
+    .delete(touches)
+    .where(
+      and(eq(touches.meetingId, meetingId), eq(touches.workspaceId, user.workspaceId)),
+    );
+
+  await db
+    .delete(meetings)
+    .where(and(eq(meetings.id, meetingId), eq(meetings.workspaceId, user.workspaceId)));
+
+  revalidatePath("/meetings");
+  revalidatePath("/contacts");
+  revalidatePath("/");
+  if (m.linkedProjectId) revalidatePath(`/projects/${m.linkedProjectId}`);
+  return { ok: true };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // MEETING MATERIALS — curate the decks/docs shown in a meeting + present mode
 // ─────────────────────────────────────────────────────────────────────────────
