@@ -651,6 +651,8 @@ export const linesOfBusiness = pgTable("lines_of_business", {
     .references(() => workspaces.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
   kind: lobKind("kind").notNull().default("project"),
+  // Manual ordering in the roadmap bulk-edit (drag to reorder LoBs).
+  sortOrder: integer("sort_order").notNull().default(0),
   status: projectStatus("status").notNull().default("active"),
   templateId: text("template_id").references(() => pipelineTemplates.id),
   currentStageId: uuid("current_stage_id").references(() => pipelineStages.id),
@@ -2205,6 +2207,8 @@ export const initiatives = pgTable("initiatives", {
   goal: text("goal"), // the why
   status: initiativeStatus("status").notNull().default("planning"),
   priority: workPriority("priority").notNull().default("next"),
+  // Manual ordering within a LoB in the roadmap bulk-edit (drag to reorder).
+  sortOrder: integer("sort_order").notNull().default(0),
   healthColor: healthColor("health_color").notNull().default("green"),
   ownerUserId: uuid("owner_user_id").references(() => users.id, {
     onDelete: "set null",

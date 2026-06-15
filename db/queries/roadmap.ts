@@ -380,7 +380,7 @@ export async function getPlanDocData(workspaceId: string): Promise<PlanDocData> 
       .where(
         and(eq(initiatives.workspaceId, workspaceId), ne(initiatives.status, "cancelled")),
       )
-      .orderBy(asc(initiatives.createdAt)),
+      .orderBy(asc(initiatives.sortOrder), asc(initiatives.createdAt)),
     db
       .select({ id: users.id, displayName: users.displayName })
       .from(workspaceMembers)
@@ -390,7 +390,7 @@ export async function getPlanDocData(workspaceId: string): Promise<PlanDocData> 
       .select({ id: linesOfBusiness.id, title: linesOfBusiness.title })
       .from(linesOfBusiness)
       .where(eq(linesOfBusiness.workspaceId, workspaceId))
-      .orderBy(asc(linesOfBusiness.createdAt)),
+      .orderBy(asc(linesOfBusiness.sortOrder), asc(linesOfBusiness.createdAt)),
   ]);
   const lobTitleById = new Map(lobRows.map((l) => [l.id, l.title]));
 

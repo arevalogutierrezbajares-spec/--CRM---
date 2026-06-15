@@ -50,8 +50,10 @@ import {
   deleteInitiative,
   deleteLob,
   deleteRoadmapTask,
+  moveInitiative,
   moveRoadmapTask,
   renameLob,
+  reorderLobs,
   reparentRoadmapTask,
   updateInitiativeFields,
   updateRoadmapTask,
@@ -141,6 +143,7 @@ function subtreeKeySet(rows: ERow[], key: string): Set<string> {
 type Projection =
   | { kind: "task"; depth: number; initKey: string; parentTaskKey: string | null; afterKey: string | null }
   | { kind: "init"; depth: 1; lobKey: string | null; afterKey: string | null }
+  | { kind: "lob"; depth: 0; afterKey: string | null }
   | null;
 
 /** Where the dragged row would land, given the over row + horizontal offset. */
@@ -160,7 +163,13 @@ function getProjection(
   const next = reordered[pos + 1];
   const afterKey = prev?.key ?? null;
 
-  if (active.kind === "lob") return null; // LoBs aren't reorderable (no order column)
+  if (active.kind === "lob") {
+    // Reorder among LoBs; afterKey must be another LoB (or top). The synthetic
+    // Cross-venture header (isLobNone) can't be reordered past.
+    if (prev && prev.kind !== "lob") return null;
+    if (prev?.isLobNone) return null;
+    return { kind: "lob", depth: 0, afterKey };
+  }
 
   if (active.kind === "init") {
     let lobKey: string | null = null;
@@ -217,9 +226,9 @@ function moveBlock(rows: ERow[], activeKey: string, proj: NonNullable<Projection
   if (proj.kind === "task") {
     active.initKey = proj.initKey;
     active.parentTaskKey = proj.parentTaskKey;
-  } else {
+  } else if (proj.kind === "init") {
     active.lobKey = proj.lobKey;
-  }
+  } // proj.kind === "lob": position only, no field change
   for (let k = 1; k < block.length; k++) {
     block[k].level += delta;
     if (proj.kind === "task") block[k].initKey = proj.initKey;
@@ -229,7 +238,10 @@ function moveBlock(rows: ERow[], activeKey: string, proj: NonNullable<Projection
   if (proj.afterKey == null) insertAt = 0;
   else {
     const ai = rest.findIndex((r) => r.key === proj.afterKey);
-    insertAt = ai < 0 ? rest.length : endOfSubtree(rest, proj.afterKey);
+    if (ai < 0) insertAt = rest.length;
+    else if (rest[ai].level < proj.depth)
+      insertAt = ai + 1; // dropping as the first child — right after the container header
+    else insertAt = endOfSubtree(rest, proj.afterKey); // after a sibling's whole subtree
   }
   return [...rest.slice(0, insertAt), ...block, ...rest.slice(insertAt)];
 }
@@ -552,10 +564,21 @@ export function BulkEditOutline({ data }: { data: PlanDocData }) {
       if (moved.serverId) doMove();
       else withServerId(aKey, () => doMove());
     } else if (moved.kind === "init") {
+      // milestones sharing the moved one's LoB, in final order → renumber
+      const sibs = next.filter((r) => r.kind === "init" && (r.lobKey ?? null) === (moved.lobKey ?? null));
       const persist = (sid: string) =>
-        withServerId(moved.lobKey, (lobSid) => void updateInitiativeFields(sid, { lobId: lobSid }, true).then(scheduleRefresh));
+        withServerId(moved.lobKey, (lobSid) => {
+          const orderedSiblingIds = sibs.map((r) => r.serverId).filter((x): x is string => !!x);
+          void moveInitiative(sid, { lobId: lobSid, orderedSiblingIds }, true).then(scheduleRefresh);
+        });
       if (moved.serverId) persist(moved.serverId);
       else withServerId(aKey, (sid) => sid && persist(sid));
+    } else if (moved.kind === "lob") {
+      const orderedIds = next
+        .filter((r) => r.kind === "lob" && !r.isLobNone)
+        .map((r) => r.serverId)
+        .filter((x): x is string => !!x);
+      void reorderLobs(orderedIds, true).then(scheduleRefresh);
     }
   };
 
