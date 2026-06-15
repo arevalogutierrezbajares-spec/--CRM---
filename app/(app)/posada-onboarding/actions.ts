@@ -15,11 +15,10 @@ import {
   buildIntakeFields,
   computeIntakeRevision,
   intakeDraftSchema,
+  SESSION_ID_RE,
   type IntakeDraft,
 } from "@/lib/onboarding/intake-contract";
 
-const SESSION_ID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PMS_TIMEOUT_MS = 12000;
 
 export type SubmitErrorCode =

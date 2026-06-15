@@ -1,13 +1,19 @@
 import { describe, expect, it } from "vitest";
 import {
+  AMENITY_GROUPS,
+  CANONICAL_AMENITIES,
   buildIntakeFields,
   buildRecords,
   cancellationRuleSchema,
   computeIntakeRevision,
   computeReadiness,
   emptyDraft,
+  expandRoomNumbers,
   intakeDraftSchema,
   ratePlanSchema,
+  removeRoomTypeCascade,
+  replaceRoomType,
+  roomTypeDependents,
   roomTypeSchema,
   type IntakeDraft,
 } from "@/lib/onboarding/intake-contract";
@@ -168,5 +174,69 @@ describe("computeIntakeRevision — idempotency key", () => {
     const changed = fullDraft();
     changed.ratePlans[0].baseRate = 999;
     expect(computeIntakeRevision(base)).not.toBe(computeIntakeRevision(buildIntakeFields(changed)));
+  });
+});
+
+describe("expandRoomNumbers — bulk entry", () => {
+  it("expands an inclusive numeric range", () => {
+    expect(expandRoomNumbers("101-105").numbers).toEqual(["101", "102", "103", "104", "105"]);
+  });
+
+  it("preserves zero-padding from the start of the range", () => {
+    expect(expandRoomNumbers("001-003").numbers).toEqual(["001", "002", "003"]);
+    expect(expandRoomNumbers("8-11").numbers).toEqual(["8", "9", "10", "11"]);
+  });
+
+  it("mixes ranges, singles, and non-numeric tokens; de-dupes", () => {
+    const { numbers } = expandRoomNumbers("101-103, 101, 201, PH1");
+    expect(numbers).toEqual(["101", "102", "103", "201", "PH1"]);
+  });
+
+  it("reports bad ranges and over-cap ranges without throwing", () => {
+    expect(expandRoomNumbers("105-100").errors[0]).toMatch(/inicio mayor/i);
+    expect(expandRoomNumbers("1-9999", { cap: 50 }).errors[0]).toMatch(/demasiado grande/i);
+  });
+});
+
+describe("cascade edit / remove helpers", () => {
+  function draftWithType(): IntakeDraft {
+    return intakeDraftSchema.parse({
+      property: { name: "P" },
+      roomTypes: [{ name: "Doble", maxOccupancy: 2, amenities: [] }],
+      rooms: [
+        { roomNumber: "101", roomTypeName: "Doble" },
+        { roomNumber: "102", roomTypeName: "Doble" },
+      ],
+      ratePlans: [{ roomTypeName: "Doble", name: "standard", baseRate: 40, currency: "USD" }],
+    });
+  }
+
+  it("counts dependents of a room type", () => {
+    expect(roomTypeDependents(draftWithType(), "Doble")).toEqual({ rooms: 2, ratePlans: 1 });
+  });
+
+  it("replaceRoomType cascades a rename into rooms + rate plans", () => {
+    const renamed = { name: "Matrimonial", maxOccupancy: 2, bedType: null, amenities: [] };
+    const next = replaceRoomType(draftWithType(), 0, renamed);
+    expect(next.roomTypes[0].name).toBe("Matrimonial");
+    expect(next.rooms.every((r) => r.roomTypeName === "Matrimonial")).toBe(true);
+    expect(next.ratePlans[0].roomTypeName).toBe("Matrimonial");
+    // and the result still validates (no orphans)
+    expect(intakeDraftSchema.safeParse(next).success).toBe(true);
+  });
+
+  it("removeRoomTypeCascade drops the type and all its dependents", () => {
+    const next = removeRoomTypeCascade(draftWithType(), 0);
+    expect(next.roomTypes).toHaveLength(0);
+    expect(next.rooms).toHaveLength(0);
+    expect(next.ratePlans).toHaveLength(0);
+  });
+});
+
+describe("amenity grouping", () => {
+  it("covers every canonical amenity exactly once across groups", () => {
+    const grouped = AMENITY_GROUPS.flatMap((g) => g.amenities);
+    expect([...grouped].sort()).toEqual([...CANONICAL_AMENITIES].sort());
+    expect(new Set(grouped).size).toBe(CANONICAL_AMENITIES.length);
   });
 });

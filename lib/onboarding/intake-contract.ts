@@ -23,6 +23,11 @@
 
 import { z } from "zod";
 
+/** PMS onboarding session id shape (UUID). Single source of truth for the
+ *  wizard + the server action so the check can't drift between them. */
+export const SESSION_ID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 // --------------------------------------------------------------------------- //
 // Canonical taxonomy (mirror of PMS onboarding/taxonomy.py)                     //
 // Submitting these exact tokens guarantees the PMS normalizer keeps them;       //
@@ -96,6 +101,33 @@ export const CURRENCY_LABELS: Record<CanonicalCurrency, string> = {
   VES: "VES — Bolívares",
   EUR: "EUR — Euros",
 };
+
+/**
+ * Amenities clustered into labelled groups so the wizard shows digestible
+ * chunks instead of a 16-checkbox wall (keeps each decision point ≤ working
+ * memory). Every canonical amenity appears in exactly one group.
+ */
+export const AMENITY_GROUPS: ReadonlyArray<{
+  key: string;
+  label: string;
+  amenities: readonly CanonicalAmenity[];
+}> = [
+  {
+    key: "essentials",
+    label: "Esenciales",
+    amenities: ["wifi", "air_conditioning", "fan", "hot_water", "private_bathroom", "tv"],
+  },
+  {
+    key: "comfort",
+    label: "Comodidades",
+    amenities: ["minibar", "breakfast_included", "kitchen", "safe", "balcony", "pets_allowed"],
+  },
+  {
+    key: "location",
+    label: "Ubicación y propiedad",
+    amenities: ["pool", "parking", "ocean_view", "beach_access"],
+  },
+];
 
 /** Common Venezuelan posada payment methods (free tokens; PMS stores verbatim). */
 export const PAYMENT_METHODS = [
@@ -234,6 +266,104 @@ export function emptyDraft(): IntakeDraft {
     ratePlans: [],
     cancellationRules: [],
     payment: { methods: [] },
+  };
+}
+
+// --------------------------------------------------------------------------- //
+// Pure list helpers (bulk entry + cascade edit/remove) — unit-testable         //
+// --------------------------------------------------------------------------- //
+/**
+ * Expand an operator-typed room list into individual numbers. Accepts mixed
+ * tokens separated by comma / newline / semicolon: plain values ("PH1"),
+ * single numbers ("101"), and inclusive numeric ranges ("101-110"). A range
+ * keeps the start's zero-padding ("001-003" → 001,002,003; "1-10" → 1..10).
+ * De-dupes, caps each range, and reports human-readable errors per bad token.
+ */
+export function expandRoomNumbers(
+  input: string,
+  opts?: { cap?: number },
+): { numbers: string[]; errors: string[] } {
+  const cap = opts?.cap ?? 300;
+  const numbers: string[] = [];
+  const errors: string[] = [];
+  const seen = new Set<string>();
+  const push = (v: string) => {
+    const t = v.trim();
+    if (t && !seen.has(t)) {
+      seen.add(t);
+      numbers.push(t);
+    }
+  };
+  for (const tok of input.split(/[,\n;]+/).map((t) => t.trim()).filter(Boolean)) {
+    const m = tok.match(/^(\d+)\s*-\s*(\d+)$/);
+    if (!m) {
+      push(tok);
+      continue;
+    }
+    const a = Number(m[1]);
+    const b = Number(m[2]);
+    if (a > b) {
+      errors.push(`Rango inválido (inicio mayor que fin): ${tok}`);
+      continue;
+    }
+    if (b - a + 1 > cap) {
+      errors.push(`Rango demasiado grande (máx ${cap}): ${tok}`);
+      continue;
+    }
+    const pad = m[1].startsWith("0") ? m[1].length : 0;
+    for (let n = a; n <= b; n++) push(String(n).padStart(pad, "0"));
+  }
+  return { numbers, errors };
+}
+
+/** How many rooms / rate plans reference a given room-type name. */
+export function roomTypeDependents(
+  draft: IntakeDraft,
+  name: string,
+): { rooms: number; ratePlans: number } {
+  const n = name.trim();
+  return {
+    rooms: draft.rooms.filter((r) => r.roomTypeName.trim() === n).length,
+    ratePlans: draft.ratePlans.filter((rp) => rp.roomTypeName.trim() === n).length,
+  };
+}
+
+/**
+ * Replace the room type at `index`. If its name changed, cascade the rename
+ * into every referencing room + rate plan so the FK pre-wiring stays intact
+ * (no orphans, no submit-time gap).
+ */
+export function replaceRoomType(
+  draft: IntakeDraft,
+  index: number,
+  updated: RoomTypeDraft,
+): IntakeDraft {
+  const oldName = draft.roomTypes[index]?.name.trim();
+  const newName = updated.name.trim();
+  const roomTypes = draft.roomTypes.map((rt, i) => (i === index ? updated : rt));
+  if (!oldName || oldName === newName) return { ...draft, roomTypes };
+  return {
+    ...draft,
+    roomTypes,
+    rooms: draft.rooms.map((r) =>
+      r.roomTypeName.trim() === oldName ? { ...r, roomTypeName: newName } : r,
+    ),
+    ratePlans: draft.ratePlans.map((rp) =>
+      rp.roomTypeName.trim() === oldName ? { ...rp, roomTypeName: newName } : rp,
+    ),
+  };
+}
+
+/** Remove the room type at `index` and every room + rate plan that referenced
+ *  it (cascade), so removal can't silently leave orphans that fail at submit. */
+export function removeRoomTypeCascade(draft: IntakeDraft, index: number): IntakeDraft {
+  const name = draft.roomTypes[index]?.name.trim();
+  if (!name) return draft;
+  return {
+    ...draft,
+    roomTypes: draft.roomTypes.filter((_, i) => i !== index),
+    rooms: draft.rooms.filter((r) => r.roomTypeName.trim() !== name),
+    ratePlans: draft.ratePlans.filter((rp) => rp.roomTypeName.trim() !== name),
   };
 }
 
