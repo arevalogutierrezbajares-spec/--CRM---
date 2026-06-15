@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * Bulk-edit outline — a fast, keyboard-driven indented editor over the whole
- * roadmap hierarchy (LoB → milestone → deliverable → sub-deliverable).
+ * Bulk-edit outline — a fast, keyboard-driven AND drag-and-drop indented editor
+ * over the whole roadmap hierarchy (LoB → milestone → deliverable → sub-deliverable).
  *
  * Client-authoritative: local state owns the list so edits are instant and rows
  * never reorder/remount mid-write. Writes run "quiet" (no full /roadmap
@@ -12,13 +12,35 @@
  *   • Enter      → new sibling below (auto-focused)
  *   • ↑ / ↓      → move between rows
  *   • Tab / ⇧Tab → indent / outdent (within a milestone's task tree)
+ *   • drag the ⋮⋮ handle → move a deliverable to any milestone/LoB (drag right
+ *     to nest), or move a milestone to a different LoB
  *   • the + buttons add a child; × (or ⌫ on an empty row) deletes
  *   • /END 5/4, /START, ETA:5/4 in the title set dates
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronRight, Plus, X } from "lucide-react";
+import {
+  DndContext,
+  DragOverlay,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragMoveEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { ChevronRight, GripVertical, Plus, X } from "lucide-react";
 import type { PlanDocData, PlanDocInitiative, PlanDocTask } from "@/db/queries/roadmap";
 import { fmtChip, parseDateTokens } from "@/lib/roadmap-dates";
 import {
@@ -28,6 +50,7 @@ import {
   deleteInitiative,
   deleteLob,
   deleteRoadmapTask,
+  moveRoadmapTask,
   renameLob,
   reparentRoadmapTask,
   updateInitiativeFields,
@@ -36,21 +59,22 @@ import {
 
 type RowKind = "lob" | "init" | "task";
 type ERow = {
-  key: string; // stable client id — never changes, so no remount on save
-  serverId: string | null; // real db id (null until a create resolves)
+  key: string;
+  serverId: string | null;
   kind: RowKind;
   title: string;
   level: number; // 0 lob · 1 init · 2 deliverable · 3 sub
-  lobKey: string | null; // containing LoB row key (null = cross-venture)
-  initKey: string | null; // containing init row key (tasks only)
-  parentTaskKey: string | null; // parent task row key (nested tasks)
+  lobKey: string | null;
+  initKey: string | null;
+  parentTaskKey: string | null;
   startDate: string | null;
-  endDate: string | null; // targetEndDate (init) / dueDate (task)
-  isLobNone: boolean; // the synthetic "Cross-venture" header
+  endDate: string | null;
+  isLobNone: boolean;
 };
 
-const MAX_TASK_LEVEL = 3; // deliverable = 2, sub-deliverable = 3
+const MAX_TASK_LEVEL = 3;
 const NONE_KEY = "__none__";
+const INDENT = 22;
 let kseq = 0;
 const nk = () => `b${kseq++}`;
 
@@ -63,25 +87,11 @@ function seed(data: PlanDocData): ERow[] {
     arr.push(i);
     byLob.set(k, arr);
   }
-  const walkTasks = (
-    tasks: PlanDocTask[],
-    initKey: string,
-    parentTaskKey: string | null,
-    level: number,
-  ) => {
+  const walkTasks = (tasks: PlanDocTask[], initKey: string, parentTaskKey: string | null, level: number) => {
     for (const t of tasks) {
       rows.push({
-        key: t.id,
-        serverId: t.id,
-        kind: "task",
-        title: t.title,
-        level,
-        lobKey: null,
-        initKey,
-        parentTaskKey,
-        startDate: null,
-        endDate: t.dueDate,
-        isLobNone: false,
+        key: t.id, serverId: t.id, kind: "task", title: t.title, level,
+        lobKey: null, initKey, parentTaskKey, startDate: null, endDate: t.dueDate, isLobNone: false,
       });
       if (t.children.length) walkTasks(t.children, initKey, t.id, level + 1);
     }
@@ -89,50 +99,23 @@ function seed(data: PlanDocData): ERow[] {
   const emitInits = (lobServerId: string | null, lobKey: string | null) => {
     for (const init of byLob.get(lobServerId) ?? []) {
       rows.push({
-        key: init.id,
-        serverId: init.id,
-        kind: "init",
-        title: init.title,
-        level: 1,
-        lobKey,
-        initKey: null,
-        parentTaskKey: null,
-        startDate: init.startDate,
-        endDate: init.targetEndDate,
-        isLobNone: false,
+        key: init.id, serverId: init.id, kind: "init", title: init.title, level: 1,
+        lobKey, initKey: null, parentTaskKey: null, startDate: init.startDate, endDate: init.targetEndDate, isLobNone: false,
       });
       walkTasks(init.tasks, init.id, null, 2);
     }
   };
   for (const lob of data.lobs) {
     rows.push({
-      key: lob.id,
-      serverId: lob.id,
-      kind: "lob",
-      title: lob.title,
-      level: 0,
-      lobKey: lob.id,
-      initKey: null,
-      parentTaskKey: null,
-      startDate: null,
-      endDate: null,
-      isLobNone: false,
+      key: lob.id, serverId: lob.id, kind: "lob", title: lob.title, level: 0,
+      lobKey: lob.id, initKey: null, parentTaskKey: null, startDate: null, endDate: null, isLobNone: false,
     });
     emitInits(lob.id, lob.id);
   }
   if ((byLob.get(null) ?? []).length) {
     rows.push({
-      key: NONE_KEY,
-      serverId: null,
-      kind: "lob",
-      title: "Cross-venture (no line of business)",
-      level: 0,
-      lobKey: null,
-      initKey: null,
-      parentTaskKey: null,
-      startDate: null,
-      endDate: null,
-      isLobNone: true,
+      key: NONE_KEY, serverId: null, kind: "lob", title: "Cross-venture (no line of business)", level: 0,
+      lobKey: null, initKey: null, parentTaskKey: null, startDate: null, endDate: null, isLobNone: true,
     });
     emitInits(null, null);
   }
@@ -149,9 +132,114 @@ function endOfSubtree(rows: ERow[], key: string): number {
   return j;
 }
 
+function subtreeKeySet(rows: ERow[], key: string): Set<string> {
+  const i = rows.findIndex((r) => r.key === key);
+  if (i < 0) return new Set();
+  return new Set(rows.slice(i, endOfSubtree(rows, key)).map((r) => r.key));
+}
+
+type Projection =
+  | { kind: "task"; depth: number; initKey: string; parentTaskKey: string | null; afterKey: string | null }
+  | { kind: "init"; depth: 1; lobKey: string | null; afterKey: string | null }
+  | null;
+
+/** Where the dragged row would land, given the over row + horizontal offset. */
+function getProjection(
+  visible: ERow[],
+  activeKey: string,
+  overKey: string,
+  offsetX: number,
+): Projection {
+  const aIdx = visible.findIndex((r) => r.key === activeKey);
+  const oIdx = visible.findIndex((r) => r.key === overKey);
+  if (aIdx < 0 || oIdx < 0) return null;
+  const reordered = arrayMove(visible, aIdx, oIdx);
+  const pos = oIdx;
+  const active = visible[aIdx];
+  const prev = reordered[pos - 1];
+  const next = reordered[pos + 1];
+  const afterKey = prev?.key ?? null;
+
+  if (active.kind === "lob") return null; // LoBs aren't reorderable (no order column)
+
+  if (active.kind === "init") {
+    let lobKey: string | null = null;
+    for (let k = pos - 1; k >= 0; k--) {
+      if (reordered[k].kind === "lob") {
+        lobKey = reordered[k].isLobNone ? null : reordered[k].key;
+        break;
+      }
+    }
+    return { kind: "init", depth: 1, lobKey, afterKey };
+  }
+
+  // task
+  if (!prev || prev.kind === "lob") return null; // a task needs a milestone above it
+  const dragDepth = Math.round(offsetX / INDENT);
+  const maxDepth = prev.kind === "init" ? 2 : Math.min(MAX_TASK_LEVEL, prev.level + 1);
+  const minDepth = next && next.kind === "task" ? Math.max(2, next.level) : 2;
+  const depth = Math.max(minDepth, Math.min(maxDepth, active.level + dragDepth));
+
+  let initKey: string | null = null;
+  for (let k = pos - 1; k >= 0; k--) {
+    if (reordered[k].kind === "init") {
+      initKey = reordered[k].key;
+      break;
+    }
+    if (reordered[k].kind === "lob") break;
+  }
+  if (!initKey) return null;
+
+  let parentTaskKey: string | null = null;
+  if (depth === 3) {
+    for (let k = pos - 1; k >= 0; k--) {
+      const it = reordered[k];
+      if (it.kind === "init") break;
+      if (it.kind === "task" && it.level === 2) {
+        parentTaskKey = it.key;
+        break;
+      }
+    }
+    if (!parentTaskKey) return null;
+  }
+  return { kind: "task", depth, initKey, parentTaskKey, afterKey };
+}
+
+/** Apply a drop: relocate the active subtree block + re-home/relevel it. */
+function moveBlock(rows: ERow[], activeKey: string, proj: NonNullable<Projection>): ERow[] {
+  const i = rows.findIndex((r) => r.key === activeKey);
+  if (i < 0) return rows;
+  const end = endOfSubtree(rows, activeKey);
+  const block = rows.slice(i, end).map((r) => ({ ...r }));
+  const active = block[0];
+  const delta = proj.depth - active.level;
+  active.level = proj.depth;
+  if (proj.kind === "task") {
+    active.initKey = proj.initKey;
+    active.parentTaskKey = proj.parentTaskKey;
+  } else {
+    active.lobKey = proj.lobKey;
+  }
+  for (let k = 1; k < block.length; k++) {
+    block[k].level += delta;
+    if (proj.kind === "task") block[k].initKey = proj.initKey;
+  }
+  const rest = [...rows.slice(0, i), ...rows.slice(end)];
+  let insertAt: number;
+  if (proj.afterKey == null) insertAt = 0;
+  else {
+    const ai = rest.findIndex((r) => r.key === proj.afterKey);
+    insertAt = ai < 0 ? rest.length : endOfSubtree(rest, proj.afterKey);
+  }
+  return [...rest.slice(0, insertAt), ...block, ...rest.slice(insertAt)];
+}
+
 export function BulkEditOutline({ data }: { data: PlanDocData }) {
   const [rows, setRows] = useState<ERow[]>(() => seed(data));
   const [focusKey, setFocusKey] = useState<string | null>(null);
+  const [activeKey, setActiveKey] = useState<string | null>(null);
+  const [overKey, setOverKey] = useState<string | null>(null);
+  const [offsetX, setOffsetX] = useState(0);
   const boxRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
@@ -160,9 +248,6 @@ export function BulkEditOutline({ data }: { data: PlanDocData }) {
     rowsRef.current = rows;
   });
 
-  // We do NOT re-seed from props on every change (that caused the reorder/churn).
-  // For rare structural ops that the server reshapes differently than us (LoB
-  // delete detaches its initiatives), we opt in to a one-shot re-seed.
   const wantReseed = useRef(false);
   useEffect(() => {
     if (wantReseed.current) {
@@ -171,8 +256,6 @@ export function BulkEditOutline({ data }: { data: PlanDocData }) {
     }
   }, [data]);
 
-  // Subscribers waiting on a row's server id (to create a child of a row whose
-  // own create hasn't resolved yet).
   const waiters = useRef<Map<string, Array<(sid: string) => void>>>(new Map());
   const setServerId = (key: string, sid: string) => {
     setRows((prev) => prev.map((r) => (r.key === key ? { ...r, serverId: sid } : r)));
@@ -202,15 +285,10 @@ export function BulkEditOutline({ data }: { data: PlanDocData }) {
     if (refreshTimer.current) clearTimeout(refreshTimer.current);
     refreshTimer.current = setTimeout(() => router.refresh(), 1200);
   }, [router]);
-  useEffect(
-    () => () => {
-      if (refreshTimer.current) clearTimeout(refreshTimer.current);
-    },
-    [],
-  );
+  useEffect(() => () => {
+    if (refreshTimer.current) clearTimeout(refreshTimer.current);
+  }, []);
 
-  // Focus a freshly inserted row once it renders (stable key → fires on the
-  // optimistic insert, no wait for the server).
   useEffect(() => {
     if (!focusKey) return;
     const el = boxRef.current?.querySelector<HTMLInputElement>(`input[data-key="${focusKey}"]`);
@@ -225,8 +303,8 @@ export function BulkEditOutline({ data }: { data: PlanDocData }) {
     const c = boxRef.current;
     if (!c) return;
     const inputs = Array.from(c.querySelectorAll<HTMLInputElement>("input[data-key]:not([disabled])"));
-    const i = inputs.findIndex((el) => el.dataset.key === fromKey);
-    const next = inputs[i + dir];
+    const idx = inputs.findIndex((el) => el.dataset.key === fromKey);
+    const next = inputs[idx + dir];
     if (next) {
       next.focus();
       next.select();
@@ -243,18 +321,8 @@ export function BulkEditOutline({ data }: { data: PlanDocData }) {
     });
 
   const mkRow = (over: Partial<ERow>): ERow => ({
-    key: nk(),
-    serverId: null,
-    kind: "task",
-    title: "",
-    level: 0,
-    lobKey: null,
-    initKey: null,
-    parentTaskKey: null,
-    startDate: null,
-    endDate: null,
-    isLobNone: false,
-    ...over,
+    key: nk(), serverId: null, kind: "task", title: "", level: 0,
+    lobKey: null, initKey: null, parentTaskKey: null, startDate: null, endDate: null, isLobNone: false, ...over,
   });
 
   const addLob = (afterKey: string | null) => {
@@ -280,24 +348,14 @@ export function BulkEditOutline({ data }: { data: PlanDocData }) {
     });
   };
 
-  const addTask = (
-    initKey: string,
-    parentTaskKey: string | null,
-    level: number,
-    afterKey: string | null,
-  ) => {
+  const addTask = (initKey: string, parentTaskKey: string | null, level: number, afterKey: string | null) => {
     const row = mkRow({ kind: "task", level, initKey, parentTaskKey });
     insertAfter(afterKey, row);
     setFocusKey(row.key);
     withServerId(initKey, (initSid) => {
       if (!initSid) return;
       withServerId(parentTaskKey, (parentSid) => {
-        void createRoadmapTask({
-          initiativeId: initSid,
-          title: "",
-          parentTaskId: parentSid,
-          quiet: true,
-        }).then((r) => {
+        void createRoadmapTask({ initiativeId: initSid, title: "", parentTaskId: parentSid, quiet: true }).then((r) => {
           if (r.id) setServerId(row.key, r.id);
           scheduleRefresh();
         });
@@ -317,8 +375,7 @@ export function BulkEditOutline({ data }: { data: PlanDocData }) {
       prev.map((r) =>
         r.key === key
           ? {
-              ...r,
-              title: newTitle,
+              ...r, title: newTitle,
               startDate: row.kind === "init" && start !== undefined ? start : r.startDate,
               endDate: end !== undefined ? end : r.endDate,
             }
@@ -348,12 +405,10 @@ export function BulkEditOutline({ data }: { data: PlanDocData }) {
   const remove = (key: string) => {
     const row = rowsRef.current.find((r) => r.key === key);
     if (!row || row.isLobNone) return;
-    if (row.kind === "lob" && !confirm("Delete this line of business? Its milestones move to Cross-venture."))
-      return;
+    if (row.kind === "lob" && !confirm("Delete this line of business? Its milestones move to Cross-venture.")) return;
     if (row.kind === "init" && !confirm("Delete this milestone and all its deliverables?")) return;
 
     if (row.kind === "lob") {
-      // Server keeps the initiatives (detaches them) → re-seed for correct shape.
       setRows((prev) => prev.filter((r) => r.key !== key));
       if (row.serverId) {
         wantReseed.current = true;
@@ -364,8 +419,7 @@ export function BulkEditOutline({ data }: { data: PlanDocData }) {
     setRows((prev) => {
       const i = prev.findIndex((r) => r.key === key);
       if (i < 0) return prev;
-      const end = endOfSubtree(prev, key);
-      return [...prev.slice(0, i), ...prev.slice(end)];
+      return [...prev.slice(0, i), ...prev.slice(endOfSubtree(prev, key))];
     });
     if (row.serverId) {
       if (row.kind === "init") void deleteInitiative(row.serverId, true).then(scheduleRefresh);
@@ -373,34 +427,22 @@ export function BulkEditOutline({ data }: { data: PlanDocData }) {
     }
   };
 
-  const subtreeKeys = (src: ERow[], key: string): Set<string> => {
-    const i = src.findIndex((r) => r.key === key);
-    if (i < 0) return new Set();
-    return new Set(src.slice(i, endOfSubtree(src, key)).map((r) => r.key));
-  };
-
   const indent = (key: string) => {
     const cur = rowsRef.current;
     const i = cur.findIndex((r) => r.key === key);
     const row = cur[i];
     if (!row || row.kind !== "task" || row.level >= MAX_TASK_LEVEL) return;
-    // previous sibling = nearest earlier task with same init + parent + level
     let p = i - 1;
     while (
       p >= 0 &&
-      !(
-        cur[p].kind === "task" &&
-        cur[p].initKey === row.initKey &&
-        (cur[p].parentTaskKey ?? null) === (row.parentTaskKey ?? null) &&
-        cur[p].level === row.level
-      )
+      !(cur[p].kind === "task" && cur[p].initKey === row.initKey && (cur[p].parentTaskKey ?? null) === (row.parentTaskKey ?? null) && cur[p].level === row.level)
     ) {
-      if (cur[p].level < row.level) return; // first child — nothing to indent under
+      if (cur[p].level < row.level) return;
       p--;
     }
     if (p < 0) return;
     const prevSib = cur[p];
-    const sub = subtreeKeys(cur, key);
+    const sub = subtreeKeySet(cur, key);
     commit(key);
     setRows((prev) =>
       prev.map((r) => {
@@ -424,12 +466,11 @@ export function BulkEditOutline({ data }: { data: PlanDocData }) {
     if (!row || row.kind !== "task" || row.parentTaskKey === null) return;
     const parent = cur.find((r) => r.key === row.parentTaskKey);
     const grandparentKey = parent?.parentTaskKey ?? null;
-    const sub = subtreeKeys(cur, key);
+    const sub = subtreeKeySet(cur, key);
     commit(key);
     setRows((prev) =>
       prev.map((r) => {
-        if (r.key === key)
-          return { ...r, level: Math.max(2, r.level - 1), parentTaskKey: grandparentKey };
+        if (r.key === key) return { ...r, level: Math.max(2, r.level - 1), parentTaskKey: grandparentKey };
         if (sub.has(r.key)) return { ...r, level: Math.max(2, r.level - 1) };
         return r;
       }),
@@ -437,50 +478,139 @@ export function BulkEditOutline({ data }: { data: PlanDocData }) {
     setFocusKey(key);
     withServerId(key, (sid) => {
       if (!sid) return;
-      withServerId(grandparentKey, (gsid) =>
-        void reparentRoadmapTask(sid, gsid, true).then(scheduleRefresh),
-      );
+      withServerId(grandparentKey, (gsid) => void reparentRoadmapTask(sid, gsid, true).then(scheduleRefresh));
     });
   };
 
-  // Enter → sibling of the same kind.
   const addSibling = (row: ERow) => {
     if (row.kind === "lob") addLob(row.isLobNone ? null : row.key);
     else if (row.kind === "init") addInit(row.lobKey, row.key);
     else addTask(row.initKey!, row.parentTaskKey ?? null, row.level, row.key);
   };
-
-  // + button → child one level down.
   const addChild = (row: ERow) => {
     if (row.kind === "lob") addInit(row.isLobNone ? null : row.key, row.key);
     else if (row.kind === "init") addTask(row.key, null, 2, row.key);
     else if (row.level < MAX_TASK_LEVEL) addTask(row.initKey!, row.key, row.level + 1, row.key);
   };
 
+  // ── Drag and drop ──
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  // While dragging, hide the active node's descendants (they travel with it).
+  const displayRows = useMemo(() => {
+    if (!activeKey) return rows;
+    const sub = subtreeKeySet(rows, activeKey);
+    sub.delete(activeKey);
+    return rows.filter((r) => !sub.has(r.key));
+  }, [rows, activeKey]);
+
+  const projection = useMemo(() => {
+    if (!activeKey || !overKey) return null;
+    return getProjection(displayRows, activeKey, overKey, offsetX);
+  }, [activeKey, overKey, offsetX, displayRows]);
+
+  const onDragStart = (e: DragStartEvent) => {
+    setActiveKey(String(e.active.id));
+    setOverKey(String(e.active.id));
+    setOffsetX(0);
+  };
+  const onDragMove = (e: DragMoveEvent) => {
+    setOffsetX(e.delta.x);
+    if (e.over) setOverKey(String(e.over.id));
+  };
+  const onDragEnd = (e: DragEndEvent) => {
+    const aKey = activeKey;
+    const proj = projection;
+    setActiveKey(null);
+    setOverKey(null);
+    setOffsetX(0);
+    if (!aKey || !proj || !e.over) return;
+
+    const next = moveBlock(rowsRef.current, aKey, proj);
+    setRows(next);
+    const moved = next.find((r) => r.key === aKey);
+    if (!moved) return;
+
+    if (moved.kind === "task") {
+      const sibs = next.filter(
+        (r) => r.kind === "task" && r.initKey === moved.initKey && (r.parentTaskKey ?? null) === (moved.parentTaskKey ?? null),
+      );
+      const doMove = () =>
+        withServerId(moved.initKey, (initSid) => {
+          if (!initSid) return;
+          withServerId(moved.parentTaskKey, (pSid) => {
+            const orderedSiblingIds = sibs.map((r) => r.serverId).filter((x): x is string => !!x);
+            if (moved.serverId)
+              void moveRoadmapTask(moved.serverId, { initiativeId: initSid, parentMilestoneId: pSid, orderedSiblingIds }, true).then(scheduleRefresh);
+          });
+        });
+      if (moved.serverId) doMove();
+      else withServerId(aKey, () => doMove());
+    } else if (moved.kind === "init") {
+      const persist = (sid: string) =>
+        withServerId(moved.lobKey, (lobSid) => void updateInitiativeFields(sid, { lobId: lobSid }, true).then(scheduleRefresh));
+      if (moved.serverId) persist(moved.serverId);
+      else withServerId(aKey, (sid) => sid && persist(sid));
+    }
+  };
+
+  const activeRow = activeKey ? rows.find((r) => r.key === activeKey) : null;
+
   return (
     <div className="rounded-lg border bg-card p-3" style={{ borderColor: "var(--border-default)" }}>
       <div className="flex items-center justify-between mb-2">
         <p className="text-tiny text-text-tertiary">
-          Enter = new row · ↑↓ = move · Tab / ⇧Tab = indent/outdent · type to rename · /END 5/4 sets dates
+          Enter = new row · ↑↓ = move · Tab / ⇧Tab = indent/outdent · drag ⋮⋮ to move across milestones/LoBs · /END 5/4 sets dates
         </p>
       </div>
 
-      <div className="space-y-0.5" ref={boxRef}>
-        {rows.map((row) => (
-          <OutlineRow
-            key={row.key}
-            row={row}
-            setTitle={setTitle}
-            commit={commit}
-            remove={remove}
-            addSibling={addSibling}
-            addChild={addChild}
-            indent={indent}
-            outdent={outdent}
-            moveFocus={moveFocus}
-          />
-        ))}
-      </div>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragStart={onDragStart}
+        onDragMove={onDragMove}
+        onDragEnd={onDragEnd}
+        onDragCancel={() => {
+          setActiveKey(null);
+          setOverKey(null);
+          setOffsetX(0);
+        }}
+      >
+        <SortableContext items={displayRows.map((r) => r.key)} strategy={verticalListSortingStrategy}>
+          <div className="space-y-0.5" ref={boxRef}>
+            {displayRows.map((row) => (
+              <OutlineRow
+                key={row.key}
+                row={row}
+                projectedDepth={activeKey === row.key && projection ? projection.depth : null}
+                dragValid={activeKey === row.key ? projection != null : null}
+                setTitle={setTitle}
+                commit={commit}
+                remove={remove}
+                addSibling={addSibling}
+                addChild={addChild}
+                indent={indent}
+                outdent={outdent}
+                moveFocus={moveFocus}
+              />
+            ))}
+          </div>
+        </SortableContext>
+        <DragOverlay>
+          {activeRow ? (
+            <div
+              className="flex items-center gap-1.5 rounded bg-card px-2 py-0.5 shadow-lg border text-[13px] text-text-primary"
+              style={{ borderColor: "var(--border-default)" }}
+            >
+              <GripVertical size={13} className="text-text-tertiary" />
+              {activeRow.title || (activeRow.kind === "init" ? "Milestone" : "Deliverable")}
+            </div>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
 
       <button
         type="button"
@@ -495,6 +625,8 @@ export function BulkEditOutline({ data }: { data: PlanDocData }) {
 
 function OutlineRow({
   row,
+  projectedDepth,
+  dragValid,
   setTitle,
   commit,
   remove,
@@ -505,6 +637,8 @@ function OutlineRow({
   moveFocus,
 }: {
   row: ERow;
+  projectedDepth: number | null;
+  dragValid: boolean | null;
   setTitle: (key: string, title: string) => void;
   commit: (key: string) => void;
   remove: (key: string) => void;
@@ -515,6 +649,10 @@ function OutlineRow({
   moveFocus: (fromKey: string, dir: 1 | -1) => void;
 }) {
   const isLobNone = row.isLobNone;
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: row.key,
+    disabled: isLobNone,
+  });
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
@@ -544,14 +682,34 @@ function OutlineRow({
         ? "text-[13.5px] font-medium text-text-primary"
         : "text-[13px] text-text-primary";
 
+  // While this row is the one being dragged, preview its projected indent.
+  const level = projectedDepth ?? row.level;
+  const invalid = dragValid === false;
+
   return (
     <div
-      className="group flex items-center gap-1.5 rounded px-1 py-0.5 hover:bg-surface"
-      style={{ paddingLeft: `${row.level * 22 + 4}px` }}
+      ref={setNodeRef}
+      className="group flex items-center gap-1 rounded px-1 py-0.5 hover:bg-surface"
+      style={{
+        paddingLeft: `${level * INDENT + 4}px`,
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.4 : 1,
+        outline: invalid ? "1px dashed var(--red-mid)" : undefined,
+      }}
     >
-      {row.kind !== "lob" && (
-        <ChevronRight size={12} className="text-text-tertiary shrink-0 opacity-40" />
+      {!isLobNone && (
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          title="Drag to move"
+          className="shrink-0 cursor-grab active:cursor-grabbing text-text-tertiary hover:text-text-primary opacity-0 group-hover:opacity-100 transition-opacity touch-none"
+        >
+          <GripVertical size={13} />
+        </button>
       )}
+      {row.kind !== "lob" && <ChevronRight size={12} className="text-text-tertiary shrink-0 opacity-40" />}
       <input
         data-key={row.key}
         value={row.title}
@@ -568,20 +726,13 @@ function OutlineRow({
           {fmtChip(row.endDate) ?? ""}
         </span>
       )}
-      {/* add-child + delete on hover */}
       {!isLobNone && (
         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
           {(row.kind !== "task" || row.level < MAX_TASK_LEVEL) && (
             <button
               type="button"
               onClick={() => addChild(row)}
-              title={
-                row.kind === "lob"
-                  ? "Add milestone"
-                  : row.kind === "init"
-                    ? "Add deliverable"
-                    : "Add sub-deliverable"
-              }
+              title={row.kind === "lob" ? "Add milestone" : row.kind === "init" ? "Add deliverable" : "Add sub-deliverable"}
               className="text-text-tertiary hover:text-text-primary p-0.5"
             >
               <Plus size={13} />

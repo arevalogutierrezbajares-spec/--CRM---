@@ -920,6 +920,94 @@ export async function bulkDeleteRoadmap(input: {
   return { ok: true, deleted: initIds.length + taskIds.length };
 }
 
+/** Drag-and-drop move of a task (deliverable/sub-deliverable) to a new home:
+ *  possibly a different milestone (initiativeId), a new parent task, and a new
+ *  order among its destination siblings. Cascades initiativeId/projectId to the
+ *  moved subtree. `orderedSiblingIds` are the destination siblings in final
+ *  order (the moved task included). */
+export async function moveRoadmapTask(
+  id: string,
+  opts: {
+    initiativeId: string;
+    parentMilestoneId: string | null;
+    orderedSiblingIds: string[];
+  },
+  quiet = false,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireUser();
+  if (opts.parentMilestoneId === id) return { ok: false, error: "Invalid parent" };
+
+  const [destInit] = await db
+    .select({ id: initiatives.id })
+    .from(initiatives)
+    .where(and(eq(initiatives.id, opts.initiativeId), eq(initiatives.workspaceId, user.workspaceId)))
+    .limit(1);
+  if (!destInit) return { ok: false, error: "Milestone not found" };
+
+  try {
+    await db.transaction(async (tx) => {
+      const t = tx as unknown as typeof db;
+      const all = await t
+        .select({ id: milestones.id, parent: milestones.parentMilestoneId })
+        .from(milestones)
+        .where(eq(milestones.workspaceId, user.workspaceId));
+      const childrenOf = new Map<string, string[]>();
+      for (const m of all) {
+        if (m.parent) {
+          const a = childrenOf.get(m.parent) ?? [];
+          a.push(m.id);
+          childrenOf.set(m.parent, a);
+        }
+      }
+      const subtree = new Set<string>();
+      const stack = [id];
+      while (stack.length) {
+        const n = stack.pop()!;
+        subtree.add(n);
+        for (const c of childrenOf.get(n) ?? []) stack.push(c);
+      }
+      // Can't drop a node inside its own subtree.
+      if (opts.parentMilestoneId && subtree.has(opts.parentMilestoneId)) {
+        throw new Error("Can't move a task into its own descendant");
+      }
+      const projectId = await resolveProjectForInitiative(
+        { workspaceId: user.workspaceId, initiativeId: opts.initiativeId, createdBy: user.id },
+        t,
+      );
+      // Re-home the whole moved subtree onto the destination milestone/project.
+      await t
+        .update(milestones)
+        .set({ initiativeId: opts.initiativeId, projectId })
+        .where(and(inArray(milestones.id, [...subtree]), eq(milestones.workspaceId, user.workspaceId)));
+      // Set the moved node's parent.
+      await t
+        .update(milestones)
+        .set({ parentMilestoneId: opts.parentMilestoneId })
+        .where(and(eq(milestones.id, id), eq(milestones.workspaceId, user.workspaceId)));
+      // Renumber the destination sibling group.
+      for (let i = 0; i < opts.orderedSiblingIds.length; i++) {
+        await t
+          .update(milestones)
+          .set({ order: i })
+          .where(
+            and(
+              eq(milestones.id, opts.orderedSiblingIds[i]),
+              eq(milestones.workspaceId, user.workspaceId),
+            ),
+          );
+      }
+    });
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Move failed" };
+  }
+
+  if (!quiet) {
+    revalidatePath("/roadmap");
+    revalidatePath("/work");
+  }
+  return { ok: true };
+}
+
 /** Re-parent a task (Tab/Shift+Tab indent/outdent within a milestone's tree). */
 export async function reparentRoadmapTask(
   id: string,
