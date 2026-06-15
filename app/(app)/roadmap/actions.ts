@@ -434,6 +434,7 @@ const taskPatchSchema = z
 export async function updateRoadmapTask(
   id: string,
   patch: z.infer<typeof taskPatchSchema>,
+  quiet = false,
 ): Promise<void> {
   const user = await requireUser();
   const parsed = taskPatchSchema.safeParse(patch);
@@ -442,12 +443,17 @@ export async function updateRoadmapTask(
     .update(milestones)
     .set(parsed.data)
     .where(and(eq(milestones.id, id), eq(milestones.workspaceId, user.workspaceId)));
+  if (quiet) return; // editor refreshes coarsely on its own (router.refresh)
   revalidatePath("/roadmap");
   revalidatePath("/work");
 }
 
 /** FR-UNI-1 made tangible: the same row the home box checks off. */
-export async function toggleRoadmapTask(id: string, done: boolean): Promise<void> {
+export async function toggleRoadmapTask(
+  id: string,
+  done: boolean,
+  quiet = false,
+): Promise<void> {
   const user = await requireUser();
   await db
     .update(milestones)
@@ -456,6 +462,7 @@ export async function toggleRoadmapTask(id: string, done: boolean): Promise<void
       completedAt: done ? new Date() : null,
     })
     .where(and(eq(milestones.id, id), eq(milestones.workspaceId, user.workspaceId)));
+  if (quiet) return;
   revalidatePath("/roadmap");
   revalidatePath("/work");
   revalidatePath("/");
@@ -466,6 +473,7 @@ export async function createRoadmapTask(opts: {
   title: string;
   parentTaskId?: string | null;
   dueDate?: string | null;
+  quiet?: boolean;
 }): Promise<{ ok: boolean; id?: string; error?: string }> {
   const user = await requireUser();
   const title = (opts.title ?? "").trim() || "New deliverable";
@@ -497,8 +505,10 @@ export async function createRoadmapTask(opts: {
       createdBy: user.id,
     })
     .returning({ id: milestones.id });
-  revalidatePath("/roadmap");
-  revalidatePath("/work");
+  if (!opts.quiet) {
+    revalidatePath("/roadmap");
+    revalidatePath("/work");
+  }
   return { ok: true, id: row.id };
 }
 
@@ -804,7 +814,7 @@ export async function deleteInitiative(id: string): Promise<void> {
 }
 
 /** Soft-delete a task + its descendants (the roadmap queries exclude cancelled). */
-export async function deleteRoadmapTask(id: string): Promise<void> {
+export async function deleteRoadmapTask(id: string, quiet = false): Promise<void> {
   const user = await requireUser();
   await db.transaction(async (tx) => {
     const t = tx as unknown as typeof db;
@@ -832,6 +842,7 @@ export async function deleteRoadmapTask(id: string): Promise<void> {
       .set({ status: "cancelled" })
       .where(and(inArray(milestones.id, toCancel), eq(milestones.workspaceId, user.workspaceId)));
   });
+  if (quiet) return;
   revalidatePath("/roadmap");
   revalidatePath("/work");
 }
@@ -909,6 +920,7 @@ export async function bulkDeleteRoadmap(input: {
 export async function reparentRoadmapTask(
   id: string,
   parentMilestoneId: string | null,
+  quiet = false,
 ): Promise<{ ok: boolean; error?: string }> {
   const user = await requireUser();
   if (id === parentMilestoneId) return { ok: false, error: "Invalid parent" };
@@ -916,6 +928,7 @@ export async function reparentRoadmapTask(
     .update(milestones)
     .set({ parentMilestoneId })
     .where(and(eq(milestones.id, id), eq(milestones.workspaceId, user.workspaceId)));
+  if (quiet) return { ok: true };
   revalidatePath("/roadmap");
   revalidatePath("/work");
   return { ok: true };
