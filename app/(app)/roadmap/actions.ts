@@ -803,6 +803,61 @@ export async function createInitiative(opts: {
   return { ok: true, id: row.id };
 }
 
+/** Drag-move a milestone (initiative) to a LoB and/or reorder it among the
+ *  destination LoB's milestones. `orderedSiblingIds` = that LoB's milestones in
+ *  final order (the moved one included). */
+export async function moveInitiative(
+  id: string,
+  opts: { lobId: string | null; orderedSiblingIds: string[] },
+  quiet = false,
+): Promise<{ ok: boolean }> {
+  const user = await requireUser();
+  await db.transaction(async (tx) => {
+    const t = tx as unknown as typeof db;
+    await t
+      .update(initiatives)
+      .set({ lobId: opts.lobId, updatedAt: new Date() })
+      .where(and(eq(initiatives.id, id), eq(initiatives.workspaceId, user.workspaceId)));
+    for (let i = 0; i < opts.orderedSiblingIds.length; i++) {
+      await t
+        .update(initiatives)
+        .set({ sortOrder: i })
+        .where(
+          and(
+            eq(initiatives.id, opts.orderedSiblingIds[i]),
+            eq(initiatives.workspaceId, user.workspaceId),
+          ),
+        );
+    }
+  });
+  if (!quiet) revalidatePath("/roadmap");
+  return { ok: true };
+}
+
+/** Drag-reorder lines of business. `orderedIds` = all LoBs in final order. */
+export async function reorderLobs(
+  orderedIds: string[],
+  quiet = false,
+): Promise<{ ok: boolean }> {
+  const user = await requireUser();
+  await db.transaction(async (tx) => {
+    const t = tx as unknown as typeof db;
+    for (let i = 0; i < orderedIds.length; i++) {
+      await t
+        .update(linesOfBusiness)
+        .set({ sortOrder: i })
+        .where(
+          and(
+            eq(linesOfBusiness.id, orderedIds[i]),
+            eq(linesOfBusiness.workspaceId, user.workspaceId),
+          ),
+        );
+    }
+  });
+  if (!quiet) revalidatePath("/roadmap");
+  return { ok: true };
+}
+
 export async function deleteInitiative(id: string, quiet = false): Promise<void> {
   const user = await requireUser();
   await db.transaction(async (tx) => {

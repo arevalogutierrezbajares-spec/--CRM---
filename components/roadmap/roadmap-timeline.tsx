@@ -908,6 +908,9 @@ function DeliverablesEditor({
     rowsRef.current = rows;
   });
 
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleRefreshRef = useRef<() => void>(() => {});
+
   // Server-id backfill plumbing: lets ops on a still-pending row (delete,
   // indent, rename) run as soon as the create resolves — no orphans, no lost edits.
   const waiters = useRef<Map<string, Array<(sid: string) => void>>>(new Map());
@@ -941,8 +944,6 @@ function DeliverablesEditor({
     waiters.current.set(key, arr);
   };
 
-  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const scheduleRefreshRef = useRef<() => void>(() => {});
   const scheduleRefresh = useCallback(() => {
     if (refreshTimer.current) clearTimeout(refreshTimer.current);
     refreshTimer.current = setTimeout(() => router.refresh(), 1200);
