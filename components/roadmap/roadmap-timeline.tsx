@@ -13,12 +13,11 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
-  useMemo,
-  useOptimistic,
   useRef,
   useState,
   useTransition,
 } from "react";
+import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner";
 import { CornerDownRight, Plus, Star, X, Zap } from "lucide-react";
@@ -834,79 +833,60 @@ function DependsOn({
   );
 }
 
-/* ─── Inline deliverables editor (keyboard-driven, with sub-deliverables) ──
- *  Enter = new deliverable below (focused) · ↑/↓ = move between rows ·
- *  Tab = make sub-deliverable · ⇧Tab = outdent · ⌫ on empty = delete.        */
+/* ─── Inline deliverables editor (client-authoritative) ───────────────────
+ *  The editor owns its list in local state and persists in the background, so
+ *  edits are instant and rows never reorder/remount mid-write. Server writes
+ *  run "quiet" (no full /roadmap revalidation); a single debounced
+ *  router.refresh() syncs the timeline bar count + plan doc afterward.
+ *
+ *  Enter = new row below (focused) · ↑/↓ = move · Tab = sub-deliverable ·
+ *  ⇧Tab = outdent · ⌫ on empty = delete.                                     */
 
 const MAX_DELIV_DEPTH = 2; // deliverable (0) → sub (1) → sub-sub (2)
 
-type DelivRow = {
-  id: string;
+type ERow = {
+  key: string; // stable client id — never changes, so no remount on save
+  serverId: string | null; // real db id once the create resolves
   title: string;
   done: boolean;
   dueDate: string | null;
   level: number;
-  parentTaskId: string | null;
+  parentKey: string | null;
 };
 
-function flattenTasks(
-  tasks: PlanDocTask[],
-  level = 0,
-  parent: string | null = null,
-  out: DelivRow[] = [],
-): DelivRow[] {
-  for (const t of tasks) {
-    out.push({ id: t.id, title: t.title, done: t.done, dueDate: t.dueDate, level, parentTaskId: parent });
-    if (t.children.length) flattenTasks(t.children, level + 1, t.id, out);
-  }
+let keySeq = 0;
+const newKey = () => `k${keySeq++}`;
+
+function seedRows(tasks: PlanDocTask[]): ERow[] {
+  const out: ERow[] = [];
+  const walk = (ts: PlanDocTask[], level: number, parentKey: string | null) => {
+    for (const t of ts) {
+      const key = t.id; // existing rows key by their server id (stable)
+      out.push({
+        key,
+        serverId: t.id,
+        title: t.title,
+        done: t.done,
+        dueDate: t.dueDate,
+        level,
+        parentKey,
+      });
+      if (t.children.length) walk(t.children, level + 1, key);
+    }
+  };
+  walk(tasks, 0, null);
   return out;
 }
 
-type AddOpts = {
-  afterId: string | null;
-  level: number;
-  parentTaskId: string | null;
-  title?: string;
-  dueDate?: string | null;
-  focusNew?: boolean;
-};
-type OptAction =
-  | ({ type: "add"; tempId: string } & AddOpts)
-  | { type: "delete"; id: string };
-
-function optimisticReducer(state: DelivRow[], action: OptAction): DelivRow[] {
-  if (action.type === "delete") {
-    const remove = new Set<string>([action.id]);
-    let grew = true;
-    while (grew) {
-      grew = false;
-      for (const r of state) {
-        if (r.parentTaskId && remove.has(r.parentTaskId) && !remove.has(r.id)) {
-          remove.add(r.id);
-          grew = true;
-        }
-      }
-    }
-    return state.filter((r) => !remove.has(r.id));
-  }
-  // add
-  const tmp: DelivRow = {
-    id: action.tempId,
-    title: action.title ?? "",
-    done: false,
-    dueDate: action.dueDate ?? null,
-    level: action.level,
-    parentTaskId: action.parentTaskId,
-  };
-  if (action.afterId === null) return [...state, tmp];
-  const i = state.findIndex((r) => r.id === action.afterId);
-  if (i < 0) return [...state, tmp];
-  const copy = [...state];
-  copy.splice(i + 1, 0, tmp);
-  return copy;
+/** Index just past `key` and all of its descendants. */
+function endOfSubtree(rows: ERow[], key: string): number {
+  const i = rows.findIndex((r) => r.key === key);
+  if (i < 0) return rows.length;
+  const base = rows[i].level;
+  let j = i + 1;
+  while (j < rows.length && rows[j].level > base) j++;
+  return j;
 }
-
-let tmpSeq = 0;
 
 function DeliverablesEditor({
   initiativeId,
@@ -915,32 +895,83 @@ function DeliverablesEditor({
   initiativeId: string;
   tasks: PlanDocTask[];
 }) {
-  const [, startTransition] = useTransition();
-  const [focusId, setFocusId] = useState<string | null>(null);
+  // Seed once per mount (reopening a milestone remounts → fresh seed). We do
+  // NOT re-seed from props, so background revalidations never disturb edits.
+  const [rows, setRows] = useState<ERow[]>(() => seedRows(tasks));
+  const [focusKey, setFocusKey] = useState<string | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
-  const serverRows = useMemo(() => flattenTasks(tasks), [tasks]);
-  // Optimistic overlay → add/remove reflect instantly; server truth replaces
-  // it when the revalidated props arrive (no 1s round-trip stall).
-  const [rows, applyOptimistic] = useOptimistic(serverRows, optimisticReducer);
-  const parentOf = useMemo(() => new Map(rows.map((r) => [r.id, r.parentTaskId])), [rows]);
+  const router = useRouter();
+  const sel = useRoadmapSelection();
 
-  // After a structural change re-renders with fresh data, focus the new row.
+  const rowsRef = useRef(rows);
   useEffect(() => {
-    if (!focusId) return;
-    const el = boxRef.current?.querySelector<HTMLInputElement>(`input[data-deliv="${focusId}"]`);
+    rowsRef.current = rows;
+  });
+
+  // Server-id backfill plumbing: lets ops on a still-pending row (delete,
+  // indent, rename) run as soon as the create resolves — no orphans, no lost edits.
+  const waiters = useRef<Map<string, Array<(sid: string) => void>>>(new Map());
+  const removedPending = useRef<Set<string>>(new Set());
+  const settleServerId = (key: string, sid: string) => {
+    if (removedPending.current.has(key)) {
+      // Row was deleted before its create resolved → delete the server row now.
+      removedPending.current.delete(key);
+      void deleteRoadmapTask(sid, true).then(scheduleRefreshRef.current);
+      return;
+    }
+    setRows((prev) => prev.map((x) => (x.key === key ? { ...x, serverId: sid } : x)));
+    const ws = waiters.current.get(key);
+    if (ws) {
+      waiters.current.delete(key);
+      ws.forEach((f) => f(sid));
+    }
+  };
+  const withServerId = (key: string | null, cb: (sid: string | null) => void) => {
+    if (key === null) {
+      cb(null);
+      return;
+    }
+    const row = rowsRef.current.find((r) => r.key === key);
+    if (row?.serverId) {
+      cb(row.serverId);
+      return;
+    }
+    const arr = waiters.current.get(key) ?? [];
+    arr.push((sid) => cb(sid));
+    waiters.current.set(key, arr);
+  };
+
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleRefreshRef = useRef<() => void>(() => {});
+  const scheduleRefresh = useCallback(() => {
+    if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    refreshTimer.current = setTimeout(() => router.refresh(), 1200);
+  }, [router]);
+  scheduleRefreshRef.current = scheduleRefresh;
+  useEffect(() => () => {
+    if (refreshTimer.current) clearTimeout(refreshTimer.current);
+  }, []);
+
+  // Focus a freshly-created row once it renders (key is stable, so this fires
+  // on the optimistic insert — no wait for the server).
+  useEffect(() => {
+    if (!focusKey) return;
+    const el = boxRef.current?.querySelector<HTMLInputElement>(`input[data-key="${focusKey}"]`);
     if (el) {
       el.focus();
       el.select();
-      setFocusId(null);
+      setFocusKey(null);
     }
-  }, [focusId, rows]);
+  }, [focusKey, rows]);
 
-  // ↑/↓ move focus across every editable row (deliverables + the add box).
-  const moveFocus = (fromId: string, dir: 1 | -1) => {
+  const serverIdOf = (key: string | null) =>
+    key ? (rowsRef.current.find((r) => r.key === key)?.serverId ?? null) : null;
+
+  const moveFocus = (fromKey: string, dir: 1 | -1) => {
     const c = boxRef.current;
     if (!c) return;
-    const inputs = Array.from(c.querySelectorAll<HTMLInputElement>("input[data-deliv]"));
-    const i = inputs.findIndex((el) => el.dataset.deliv === fromId);
+    const inputs = Array.from(c.querySelectorAll<HTMLInputElement>("input[data-key]"));
+    const i = inputs.findIndex((el) => el.dataset.key === fromKey);
     const next = inputs[i + dir];
     if (next) {
       next.focus();
@@ -948,25 +979,160 @@ function DeliverablesEditor({
     }
   };
 
-  const addRow = (opts: AddOpts) => {
-    const tempId = `__tmp_${tmpSeq++}`;
-    startTransition(async () => {
-      applyOptimistic({ type: "add", tempId, ...opts });
-      const r = await createRoadmapTask({
-        initiativeId,
-        title: opts.title ?? "",
-        parentTaskId: opts.parentTaskId,
-        dueDate: opts.dueDate ?? null,
-      });
-      if (r.id && opts.focusNew !== false) setFocusId(r.id);
+  const addRow = (opts: {
+    afterKey: string | null;
+    level: number;
+    parentKey: string | null;
+    title?: string;
+    dueDate?: string | null;
+    focus?: boolean;
+  }) => {
+    const key = newKey();
+    const row: ERow = {
+      key,
+      serverId: null,
+      title: opts.title ?? "",
+      done: false,
+      dueDate: opts.dueDate ?? null,
+      level: opts.level,
+      parentKey: opts.parentKey,
+    };
+    setRows((prev) => {
+      if (opts.afterKey === null) return [...prev, row];
+      const idx = endOfSubtree(prev, opts.afterKey);
+      const copy = [...prev];
+      copy.splice(idx, 0, row);
+      return copy;
+    });
+    if (opts.focus !== false) setFocusKey(key);
+
+    // Resolve the parent's server id first (it may itself still be creating),
+    // then create — so a sub-deliverable under a brand-new deliverable works.
+    withServerId(opts.parentKey, (parentServerId) => {
+      void (async () => {
+        const r = await createRoadmapTask({
+          initiativeId,
+          title: opts.title ?? "",
+          parentTaskId: parentServerId,
+          dueDate: opts.dueDate ?? null,
+          quiet: true,
+        });
+        if (r.id) settleServerId(key, r.id);
+        scheduleRefresh();
+      })();
     });
   };
 
-  const removeRow = (id: string) => {
-    startTransition(async () => {
-      applyOptimistic({ type: "delete", id });
-      await deleteRoadmapTask(id);
+  const saveRow = (key: string) => {
+    const row = rows.find((r) => r.key === key);
+    if (!row) return;
+    const { title: parsed, end } = parseDateTokens(row.title);
+    const newTitle = parsed || row.title;
+    const changedTitle = newTitle !== row.title;
+    const changedDate = end !== undefined;
+    if (changedTitle || changedDate) {
+      setRows((prev) =>
+        prev.map((r) =>
+          r.key === key
+            ? { ...r, title: newTitle, dueDate: changedDate ? (end as string) : r.dueDate }
+            : r,
+        ),
+      );
+    }
+    const patch: { title?: string; dueDate?: string | null } = {};
+    if (newTitle) patch.title = newTitle;
+    if (changedDate) patch.dueDate = end as string;
+    if (Object.keys(patch).length === 0) return;
+    withServerId(key, (sid) => sid && void updateRoadmapTask(sid, patch, true).then(scheduleRefresh));
+  };
+
+  const setTitle = (key: string, title: string) =>
+    setRows((prev) => prev.map((r) => (r.key === key ? { ...r, title } : r)));
+
+  const setDue = (key: string, due: string | null) => {
+    setRows((prev) => prev.map((r) => (r.key === key ? { ...r, dueDate: due } : r)));
+    withServerId(key, (sid) => sid && void updateRoadmapTask(sid, { dueDate: due }, true).then(scheduleRefresh));
+  };
+
+  const toggleDone = (key: string, done: boolean) => {
+    setRows((prev) => prev.map((r) => (r.key === key ? { ...r, done } : r)));
+    const sid = serverIdOf(key);
+    if (sid) void toggleRoadmapTask(sid, done, true).then(scheduleRefresh);
+  };
+
+  const removeRow = (key: string) => {
+    const sid = serverIdOf(key);
+    setRows((prev) => {
+      const i = prev.findIndex((r) => r.key === key);
+      if (i < 0) return prev;
+      const end = endOfSubtree(prev, key);
+      return [...prev.slice(0, i), ...prev.slice(end)];
     });
+    if (sid) void deleteRoadmapTask(sid, true).then(scheduleRefresh);
+    else removedPending.current.add(key); // create still in flight → delete on backfill
+  };
+
+  // Keys of `key` plus all its descendants (a contiguous block in `rows`).
+  const subtreeKeys = (src: ERow[], key: string): Set<string> => {
+    const i = src.findIndex((r) => r.key === key);
+    if (i < 0) return new Set();
+    const end = endOfSubtree(src, key);
+    return new Set(src.slice(i, end).map((r) => r.key));
+  };
+
+  const indentRow = (key: string) => {
+    const i = rows.findIndex((r) => r.key === key);
+    if (i <= 0) return;
+    const row = rows[i];
+    if (row.level >= MAX_DELIV_DEPTH) return;
+    // previous sibling = nearest earlier row at the same level + parent
+    let p = i - 1;
+    while (p >= 0 && !(rows[p].level === row.level && rows[p].parentKey === row.parentKey)) {
+      if (rows[p].level < row.level) return; // first child — can't indent
+      p--;
+    }
+    if (p < 0) return;
+    const prevSib = rows[p];
+    const sub = subtreeKeys(rows, key);
+    setRows((prev) =>
+      prev.map((r) => {
+        if (r.key === key) return { ...r, level: r.level + 1, parentKey: prevSib.key };
+        if (sub.has(r.key)) return { ...r, level: r.level + 1 }; // descendants shift too
+        return r;
+      }),
+    );
+    saveRow(key);
+    withServerId(key, (sid) => {
+      if (!sid) return;
+      withServerId(prevSib.key, (psid) => {
+        if (psid) void reparentRoadmapTask(sid, psid, true).then(scheduleRefresh);
+      });
+    });
+    setFocusKey(key);
+  };
+
+  const outdentRow = (key: string) => {
+    const row = rows.find((r) => r.key === key);
+    if (!row || row.parentKey === null) return;
+    const parent = rows.find((r) => r.key === row.parentKey);
+    const grandparentKey = parent?.parentKey ?? null;
+    const sub = subtreeKeys(rows, key);
+    setRows((prev) =>
+      prev.map((r) => {
+        if (r.key === key)
+          return { ...r, level: Math.max(0, r.level - 1), parentKey: grandparentKey };
+        if (sub.has(r.key)) return { ...r, level: Math.max(0, r.level - 1) };
+        return r;
+      }),
+    );
+    saveRow(key);
+    withServerId(key, (sid) => {
+      if (!sid) return;
+      withServerId(grandparentKey, (gsid) =>
+        void reparentRoadmapTask(sid, gsid, true).then(scheduleRefresh),
+      );
+    });
+    setFocusKey(key);
   };
 
   return (
@@ -975,106 +1141,90 @@ function DeliverablesEditor({
         Enter = new row · Tab = sub-deliverable · ↑↓ = move · /END 5/20 sets a date
       </p>
       <div className="space-y-0.5">
-        {rows.map((row, idx) => (
+        {rows.map((row) => (
           <DelivRow
-            key={row.id}
+            key={row.key}
             row={row}
-            prev={rows[idx - 1]}
-            initiativeId={initiativeId}
-            parentOf={parentOf}
-            moveFocus={moveFocus}
-            setFocusId={setFocusId}
-            startTransition={startTransition}
-            addRow={addRow}
+            selectMode={sel.selectMode}
+            isSelected={row.serverId ? sel.isSelected(row.serverId) : false}
+            onToggleSelect={() => row.serverId && sel.toggle(row.serverId, "task")}
+            setTitle={setTitle}
+            saveRow={saveRow}
+            setDue={setDue}
+            toggleDone={toggleDone}
             removeRow={removeRow}
+            moveFocus={moveFocus}
+            onEnter={() =>
+              addRow({ afterKey: row.key, level: row.level, parentKey: row.parentKey, focus: true })
+            }
+            onAddChild={() =>
+              addRow({ afterKey: row.key, level: row.level + 1, parentKey: row.key, focus: true })
+            }
+            onIndent={() => indentRow(row.key)}
+            onOutdent={() => outdentRow(row.key)}
           />
         ))}
       </div>
-      <InlineAddTask initiativeId={initiativeId} moveFocus={moveFocus} addRow={addRow} />
+      <InlineAddTask
+        moveFocus={moveFocus}
+        onAdd={(title, dueDate) =>
+          addRow({ afterKey: null, level: 0, parentKey: null, title, dueDate, focus: false })
+        }
+      />
     </div>
   );
 }
 
 function DelivRow({
   row,
-  prev,
-  parentOf,
-  moveFocus,
-  setFocusId,
-  startTransition,
-  addRow,
+  selectMode,
+  isSelected,
+  onToggleSelect,
+  setTitle,
+  saveRow,
+  setDue,
+  toggleDone,
   removeRow,
+  moveFocus,
+  onEnter,
+  onAddChild,
+  onIndent,
+  onOutdent,
 }: {
-  row: DelivRow;
-  prev: DelivRow | undefined;
-  initiativeId: string;
-  parentOf: Map<string, string | null>;
-  moveFocus: (fromId: string, dir: 1 | -1) => void;
-  setFocusId: (id: string | null) => void;
-  startTransition: (cb: () => void) => void;
-  addRow: (opts: AddOpts) => void;
-  removeRow: (id: string) => void;
+  row: ERow;
+  selectMode: boolean;
+  isSelected: boolean;
+  onToggleSelect: () => void;
+  setTitle: (key: string, title: string) => void;
+  saveRow: (key: string) => void;
+  setDue: (key: string, due: string | null) => void;
+  toggleDone: (key: string, done: boolean) => void;
+  removeRow: (key: string) => void;
+  moveFocus: (fromKey: string, dir: 1 | -1) => void;
+  onEnter: () => void;
+  onAddChild: () => void;
+  onIndent: () => void;
+  onOutdent: () => void;
 }) {
-  const [checked, setChecked] = useState(row.done);
-  const [title, setTitle] = useState(row.title);
-  useEffect(() => setChecked(row.done), [row.done]);
-  useEffect(() => setTitle(row.title), [row.title]);
-  const sel = useRoadmapSelection();
-  const isTemp = row.id.startsWith("__tmp_");
-
-  const commit = () => {
-    if (isTemp) return;
-    const { title: parsed, end } = parseDateTokens(title);
-    const newTitle = parsed || row.title;
-    const patch: Parameters<typeof updateRoadmapTask>[1] = {};
-    if (newTitle !== row.title) patch.title = newTitle;
-    if (end !== undefined) patch.dueDate = end;
-    if (Object.keys(patch).length === 0) return;
-    if (parsed && parsed !== title) setTitle(newTitle);
-    startTransition(() => updateRoadmapTask(row.id, patch));
-  };
-
+  const pending = row.serverId === null;
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      commit();
-      addRow({ afterId: row.id, level: row.level, parentTaskId: row.parentTaskId ?? null, focusNew: true });
+      saveRow(row.key);
+      onEnter();
     } else if (e.key === "ArrowDown") {
       e.preventDefault();
-      moveFocus(row.id, 1);
+      moveFocus(row.key, 1);
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      moveFocus(row.id, -1);
+      moveFocus(row.key, -1);
     } else if (e.key === "Tab") {
       e.preventDefault();
-      if (isTemp) return;
-      if (e.shiftKey) {
-        // outdent → become a sibling of the current parent
-        if (row.parentTaskId) {
-          commit();
-          const grandparent = parentOf.get(row.parentTaskId) ?? null;
-          startTransition(async () => {
-            await reparentRoadmapTask(row.id, grandparent);
-            setFocusId(row.id);
-          });
-        }
-      } else {
-        // indent → become a child of the previous sibling
-        if (
-          prev &&
-          (prev.parentTaskId ?? null) === (row.parentTaskId ?? null) &&
-          row.level < MAX_DELIV_DEPTH
-        ) {
-          commit();
-          startTransition(async () => {
-            await reparentRoadmapTask(row.id, prev.id);
-            setFocusId(row.id);
-          });
-        }
-      }
-    } else if (e.key === "Backspace" && title === "" && !isTemp) {
+      if (e.shiftKey) onOutdent();
+      else onIndent(); // indentRow validates there's a previous sibling
+    } else if (e.key === "Backspace" && row.title === "") {
       e.preventDefault();
-      removeRow(row.id);
+      removeRow(row.key);
     }
   };
 
@@ -1083,15 +1233,14 @@ function DelivRow({
       className="group flex items-center gap-2 rounded px-1 py-0.5 hover:bg-surface"
       style={{
         paddingLeft: `${row.level * 22 + 4}px`,
-        background: sel.isSelected(row.id) ? "color-mix(in oklab, var(--red-mid) 12%, transparent)" : undefined,
-        opacity: isTemp ? 0.6 : 1,
+        background: isSelected ? "color-mix(in oklab, var(--red-mid) 12%, transparent)" : undefined,
       }}
     >
-      {sel.selectMode && !isTemp && (
+      {selectMode && !pending && (
         <input
           type="checkbox"
-          checked={sel.isSelected(row.id)}
-          onChange={() => sel.toggle(row.id, "task")}
+          checked={isSelected}
+          onChange={onToggleSelect}
           className="shrink-0"
           title="Select for delete"
         />
@@ -1101,86 +1250,63 @@ function DelivRow({
       )}
       <input
         type="checkbox"
-        checked={checked}
-        disabled={isTemp}
-        onChange={(e) => {
-          setChecked(e.target.checked);
-          startTransition(() => toggleRoadmapTask(row.id, e.target.checked));
-        }}
+        checked={row.done}
+        onChange={(e) => toggleDone(row.key, e.target.checked)}
         className="shrink-0"
         title="Mark done"
       />
       <input
-        data-deliv={row.id}
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        onBlur={commit}
+        data-key={row.key}
+        value={row.title}
+        onChange={(e) => setTitle(row.key, e.target.value)}
+        onBlur={() => saveRow(row.key)}
         onKeyDown={onKeyDown}
         placeholder={row.level === 0 ? "Deliverable…" : "Sub-deliverable…"}
-        className={`flex-1 min-w-0 bg-transparent text-[13px] outline-none placeholder:text-text-tertiary ${checked ? "line-through text-text-tertiary" : ""}`}
+        className={`flex-1 min-w-0 bg-transparent text-[13px] outline-none placeholder:text-text-tertiary ${row.done ? "line-through text-text-tertiary" : ""}`}
       />
-      {!isTemp && row.level < MAX_DELIV_DEPTH && (
+      {row.level < MAX_DELIV_DEPTH && (
         <button
           type="button"
-          onClick={() => {
-            commit();
-            addRow({ afterId: row.id, level: row.level + 1, parentTaskId: row.id, focusNew: true });
-          }}
+          onClick={onAddChild}
           title="Add sub-deliverable (or press Tab)"
           className="shrink-0 text-text-tertiary hover:text-text-primary opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
         >
           <Plus size={13} />
         </button>
       )}
-      {!isTemp && (
-        <button
-          type="button"
-          onClick={() => removeRow(row.id)}
-          title="Delete"
-          className="shrink-0 text-text-tertiary hover:text-[var(--red-mid)] opacity-0 group-hover:opacity-100 transition-opacity"
-        >
-          <X size={13} />
-        </button>
-      )}
-      <DateField
-        value={row.dueDate}
-        onChange={(v) => startTransition(() => updateRoadmapTask(row.id, { dueDate: v }))}
-        placeholder="due"
-      />
+      <button
+        type="button"
+        onClick={() => removeRow(row.key)}
+        title="Delete"
+        className="shrink-0 text-text-tertiary hover:text-[var(--red-mid)] opacity-0 group-hover:opacity-100 transition-opacity"
+      >
+        <X size={13} />
+      </button>
+      <DateField value={row.dueDate} onChange={(v) => setDue(row.key, v)} placeholder="due" />
     </div>
   );
 }
 
 function InlineAddTask({
   moveFocus,
-  addRow,
+  onAdd,
 }: {
-  initiativeId: string;
-  moveFocus: (fromId: string, dir: 1 | -1) => void;
-  addRow: (opts: AddOpts) => void;
+  moveFocus: (fromKey: string, dir: 1 | -1) => void;
+  onAdd: (title: string, dueDate: string | null) => void;
 }) {
   const [value, setValue] = useState("");
   const submit = () => {
     const raw = value.trim();
     if (!raw) return;
     setValue(""); // clear + keep focus → type the next one straight away
-    // Support the inline date shortcut: "QA pass /END 5/20" or "ETA:5/20".
     const { title, end } = parseDateTokens(raw);
-    // Keep focus in the add box (focusNew:false) for rapid sequential entry.
-    addRow({
-      afterId: null,
-      level: 0,
-      parentTaskId: null,
-      title: title || raw,
-      dueDate: end ?? null,
-      focusNew: false,
-    });
+    onAdd(title || raw, end ?? null);
   };
   return (
     <div className="flex items-center gap-2 px-1 py-0.5 mt-0.5">
       <Plus size={13} className="text-text-tertiary shrink-0" />
       <input
-        data-deliv="__add__"
+        data-key="__add__"
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => {

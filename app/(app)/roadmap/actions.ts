@@ -407,6 +407,7 @@ const initiativePatchSchema = z
 export async function updateInitiativeFields(
   id: string,
   patch: z.infer<typeof initiativePatchSchema>,
+  quiet = false,
 ): Promise<void> {
   const user = await requireUser();
   const parsed = initiativePatchSchema.safeParse(patch);
@@ -418,6 +419,7 @@ export async function updateInitiativeFields(
     .update(initiatives)
     .set(set)
     .where(and(eq(initiatives.id, id), eq(initiatives.workspaceId, user.workspaceId)));
+  if (quiet) return; // editor refreshes coarsely on its own (router.refresh)
   revalidatePath("/roadmap");
   revalidatePath("/initiatives");
   revalidatePath(`/initiatives/${id}`);
@@ -434,6 +436,7 @@ const taskPatchSchema = z
 export async function updateRoadmapTask(
   id: string,
   patch: z.infer<typeof taskPatchSchema>,
+  quiet = false,
 ): Promise<void> {
   const user = await requireUser();
   const parsed = taskPatchSchema.safeParse(patch);
@@ -442,12 +445,17 @@ export async function updateRoadmapTask(
     .update(milestones)
     .set(parsed.data)
     .where(and(eq(milestones.id, id), eq(milestones.workspaceId, user.workspaceId)));
+  if (quiet) return; // editor refreshes coarsely on its own (router.refresh)
   revalidatePath("/roadmap");
   revalidatePath("/work");
 }
 
 /** FR-UNI-1 made tangible: the same row the home box checks off. */
-export async function toggleRoadmapTask(id: string, done: boolean): Promise<void> {
+export async function toggleRoadmapTask(
+  id: string,
+  done: boolean,
+  quiet = false,
+): Promise<void> {
   const user = await requireUser();
   await db
     .update(milestones)
@@ -456,6 +464,7 @@ export async function toggleRoadmapTask(id: string, done: boolean): Promise<void
       completedAt: done ? new Date() : null,
     })
     .where(and(eq(milestones.id, id), eq(milestones.workspaceId, user.workspaceId)));
+  if (quiet) return;
   revalidatePath("/roadmap");
   revalidatePath("/work");
   revalidatePath("/");
@@ -466,6 +475,7 @@ export async function createRoadmapTask(opts: {
   title: string;
   parentTaskId?: string | null;
   dueDate?: string | null;
+  quiet?: boolean;
 }): Promise<{ ok: boolean; id?: string; error?: string }> {
   const user = await requireUser();
   const title = (opts.title ?? "").trim() || "New deliverable";
@@ -497,8 +507,10 @@ export async function createRoadmapTask(opts: {
       createdBy: user.id,
     })
     .returning({ id: milestones.id });
-  revalidatePath("/roadmap");
-  revalidatePath("/work");
+  if (!opts.quiet) {
+    revalidatePath("/roadmap");
+    revalidatePath("/work");
+  }
   return { ok: true, id: row.id };
 }
 
@@ -729,6 +741,7 @@ export async function removeInitiativeDependency(id: string): Promise<void> {
 
 export async function createLob(
   title?: string,
+  quiet = false,
 ): Promise<{ ok: boolean; id?: string }> {
   const user = await requireUser();
   const [row] = await db
@@ -740,11 +753,11 @@ export async function createLob(
       createdBy: user.id,
     })
     .returning({ id: linesOfBusiness.id });
-  revalidatePath("/roadmap");
+  if (!quiet) revalidatePath("/roadmap");
   return { ok: true, id: row.id };
 }
 
-export async function renameLob(id: string, title: string): Promise<void> {
+export async function renameLob(id: string, title: string, quiet = false): Promise<void> {
   const user = await requireUser();
   const t = (title ?? "").trim();
   if (!t) return;
@@ -752,11 +765,11 @@ export async function renameLob(id: string, title: string): Promise<void> {
     .update(linesOfBusiness)
     .set({ title: t, updatedAt: new Date() })
     .where(and(eq(linesOfBusiness.id, id), eq(linesOfBusiness.workspaceId, user.workspaceId)));
-  revalidatePath("/roadmap");
+  if (!quiet) revalidatePath("/roadmap");
 }
 
 /** Delete a LoB; its initiatives are detached (become Cross-venture), not deleted. */
-export async function deleteLob(id: string): Promise<void> {
+export async function deleteLob(id: string, quiet = false): Promise<void> {
   const user = await requireUser();
   await db.transaction(async (tx) => {
     const t = tx as unknown as typeof db;
@@ -768,12 +781,13 @@ export async function deleteLob(id: string): Promise<void> {
       .delete(linesOfBusiness)
       .where(and(eq(linesOfBusiness.id, id), eq(linesOfBusiness.workspaceId, user.workspaceId)));
   });
-  revalidatePath("/roadmap");
+  if (!quiet) revalidatePath("/roadmap");
 }
 
 export async function createInitiative(opts: {
   lobId?: string | null;
   title?: string;
+  quiet?: boolean;
 }): Promise<{ ok: boolean; id?: string }> {
   const user = await requireUser();
   const [row] = await db
@@ -785,11 +799,11 @@ export async function createInitiative(opts: {
       createdBy: user.id,
     })
     .returning({ id: initiatives.id });
-  revalidatePath("/roadmap");
+  if (!opts.quiet) revalidatePath("/roadmap");
   return { ok: true, id: row.id };
 }
 
-export async function deleteInitiative(id: string): Promise<void> {
+export async function deleteInitiative(id: string, quiet = false): Promise<void> {
   const user = await requireUser();
   await db.transaction(async (tx) => {
     const t = tx as unknown as typeof db;
@@ -800,11 +814,11 @@ export async function deleteInitiative(id: string): Promise<void> {
       .delete(initiatives)
       .where(and(eq(initiatives.id, id), eq(initiatives.workspaceId, user.workspaceId)));
   });
-  revalidatePath("/roadmap");
+  if (!quiet) revalidatePath("/roadmap");
 }
 
 /** Soft-delete a task + its descendants (the roadmap queries exclude cancelled). */
-export async function deleteRoadmapTask(id: string): Promise<void> {
+export async function deleteRoadmapTask(id: string, quiet = false): Promise<void> {
   const user = await requireUser();
   await db.transaction(async (tx) => {
     const t = tx as unknown as typeof db;
@@ -832,6 +846,7 @@ export async function deleteRoadmapTask(id: string): Promise<void> {
       .set({ status: "cancelled" })
       .where(and(inArray(milestones.id, toCancel), eq(milestones.workspaceId, user.workspaceId)));
   });
+  if (quiet) return;
   revalidatePath("/roadmap");
   revalidatePath("/work");
 }
@@ -905,10 +920,99 @@ export async function bulkDeleteRoadmap(input: {
   return { ok: true, deleted: initIds.length + taskIds.length };
 }
 
+/** Drag-and-drop move of a task (deliverable/sub-deliverable) to a new home:
+ *  possibly a different milestone (initiativeId), a new parent task, and a new
+ *  order among its destination siblings. Cascades initiativeId/projectId to the
+ *  moved subtree. `orderedSiblingIds` are the destination siblings in final
+ *  order (the moved task included). */
+export async function moveRoadmapTask(
+  id: string,
+  opts: {
+    initiativeId: string;
+    parentMilestoneId: string | null;
+    orderedSiblingIds: string[];
+  },
+  quiet = false,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireUser();
+  if (opts.parentMilestoneId === id) return { ok: false, error: "Invalid parent" };
+
+  const [destInit] = await db
+    .select({ id: initiatives.id })
+    .from(initiatives)
+    .where(and(eq(initiatives.id, opts.initiativeId), eq(initiatives.workspaceId, user.workspaceId)))
+    .limit(1);
+  if (!destInit) return { ok: false, error: "Milestone not found" };
+
+  try {
+    await db.transaction(async (tx) => {
+      const t = tx as unknown as typeof db;
+      const all = await t
+        .select({ id: milestones.id, parent: milestones.parentMilestoneId })
+        .from(milestones)
+        .where(eq(milestones.workspaceId, user.workspaceId));
+      const childrenOf = new Map<string, string[]>();
+      for (const m of all) {
+        if (m.parent) {
+          const a = childrenOf.get(m.parent) ?? [];
+          a.push(m.id);
+          childrenOf.set(m.parent, a);
+        }
+      }
+      const subtree = new Set<string>();
+      const stack = [id];
+      while (stack.length) {
+        const n = stack.pop()!;
+        subtree.add(n);
+        for (const c of childrenOf.get(n) ?? []) stack.push(c);
+      }
+      // Can't drop a node inside its own subtree.
+      if (opts.parentMilestoneId && subtree.has(opts.parentMilestoneId)) {
+        throw new Error("Can't move a task into its own descendant");
+      }
+      const projectId = await resolveProjectForInitiative(
+        { workspaceId: user.workspaceId, initiativeId: opts.initiativeId, createdBy: user.id },
+        t,
+      );
+      // Re-home the whole moved subtree onto the destination milestone/project.
+      await t
+        .update(milestones)
+        .set({ initiativeId: opts.initiativeId, projectId })
+        .where(and(inArray(milestones.id, [...subtree]), eq(milestones.workspaceId, user.workspaceId)));
+      // Set the moved node's parent.
+      await t
+        .update(milestones)
+        .set({ parentMilestoneId: opts.parentMilestoneId })
+        .where(and(eq(milestones.id, id), eq(milestones.workspaceId, user.workspaceId)));
+      // Renumber the destination sibling group.
+      for (let i = 0; i < opts.orderedSiblingIds.length; i++) {
+        await t
+          .update(milestones)
+          .set({ order: i })
+          .where(
+            and(
+              eq(milestones.id, opts.orderedSiblingIds[i]),
+              eq(milestones.workspaceId, user.workspaceId),
+            ),
+          );
+      }
+    });
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Move failed" };
+  }
+
+  if (!quiet) {
+    revalidatePath("/roadmap");
+    revalidatePath("/work");
+  }
+  return { ok: true };
+}
+
 /** Re-parent a task (Tab/Shift+Tab indent/outdent within a milestone's tree). */
 export async function reparentRoadmapTask(
   id: string,
   parentMilestoneId: string | null,
+  quiet = false,
 ): Promise<{ ok: boolean; error?: string }> {
   const user = await requireUser();
   if (id === parentMilestoneId) return { ok: false, error: "Invalid parent" };
@@ -916,6 +1020,7 @@ export async function reparentRoadmapTask(
     .update(milestones)
     .set({ parentMilestoneId })
     .where(and(eq(milestones.id, id), eq(milestones.workspaceId, user.workspaceId)));
+  if (quiet) return { ok: true };
   revalidatePath("/roadmap");
   revalidatePath("/work");
   return { ok: true };
