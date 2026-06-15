@@ -407,6 +407,7 @@ const initiativePatchSchema = z
 export async function updateInitiativeFields(
   id: string,
   patch: z.infer<typeof initiativePatchSchema>,
+  quiet = false,
 ): Promise<void> {
   const user = await requireUser();
   const parsed = initiativePatchSchema.safeParse(patch);
@@ -418,6 +419,7 @@ export async function updateInitiativeFields(
     .update(initiatives)
     .set(set)
     .where(and(eq(initiatives.id, id), eq(initiatives.workspaceId, user.workspaceId)));
+  if (quiet) return; // editor refreshes coarsely on its own (router.refresh)
   revalidatePath("/roadmap");
   revalidatePath("/initiatives");
   revalidatePath(`/initiatives/${id}`);
@@ -739,6 +741,7 @@ export async function removeInitiativeDependency(id: string): Promise<void> {
 
 export async function createLob(
   title?: string,
+  quiet = false,
 ): Promise<{ ok: boolean; id?: string }> {
   const user = await requireUser();
   const [row] = await db
@@ -750,11 +753,11 @@ export async function createLob(
       createdBy: user.id,
     })
     .returning({ id: linesOfBusiness.id });
-  revalidatePath("/roadmap");
+  if (!quiet) revalidatePath("/roadmap");
   return { ok: true, id: row.id };
 }
 
-export async function renameLob(id: string, title: string): Promise<void> {
+export async function renameLob(id: string, title: string, quiet = false): Promise<void> {
   const user = await requireUser();
   const t = (title ?? "").trim();
   if (!t) return;
@@ -762,11 +765,11 @@ export async function renameLob(id: string, title: string): Promise<void> {
     .update(linesOfBusiness)
     .set({ title: t, updatedAt: new Date() })
     .where(and(eq(linesOfBusiness.id, id), eq(linesOfBusiness.workspaceId, user.workspaceId)));
-  revalidatePath("/roadmap");
+  if (!quiet) revalidatePath("/roadmap");
 }
 
 /** Delete a LoB; its initiatives are detached (become Cross-venture), not deleted. */
-export async function deleteLob(id: string): Promise<void> {
+export async function deleteLob(id: string, quiet = false): Promise<void> {
   const user = await requireUser();
   await db.transaction(async (tx) => {
     const t = tx as unknown as typeof db;
@@ -778,12 +781,13 @@ export async function deleteLob(id: string): Promise<void> {
       .delete(linesOfBusiness)
       .where(and(eq(linesOfBusiness.id, id), eq(linesOfBusiness.workspaceId, user.workspaceId)));
   });
-  revalidatePath("/roadmap");
+  if (!quiet) revalidatePath("/roadmap");
 }
 
 export async function createInitiative(opts: {
   lobId?: string | null;
   title?: string;
+  quiet?: boolean;
 }): Promise<{ ok: boolean; id?: string }> {
   const user = await requireUser();
   const [row] = await db
@@ -795,11 +799,11 @@ export async function createInitiative(opts: {
       createdBy: user.id,
     })
     .returning({ id: initiatives.id });
-  revalidatePath("/roadmap");
+  if (!opts.quiet) revalidatePath("/roadmap");
   return { ok: true, id: row.id };
 }
 
-export async function deleteInitiative(id: string): Promise<void> {
+export async function deleteInitiative(id: string, quiet = false): Promise<void> {
   const user = await requireUser();
   await db.transaction(async (tx) => {
     const t = tx as unknown as typeof db;
@@ -810,7 +814,7 @@ export async function deleteInitiative(id: string): Promise<void> {
       .delete(initiatives)
       .where(and(eq(initiatives.id, id), eq(initiatives.workspaceId, user.workspaceId)));
   });
-  revalidatePath("/roadmap");
+  if (!quiet) revalidatePath("/roadmap");
 }
 
 /** Soft-delete a task + its descendants (the roadmap queries exclude cancelled). */
