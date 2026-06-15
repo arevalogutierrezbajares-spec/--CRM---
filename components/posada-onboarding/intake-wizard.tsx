@@ -994,7 +994,15 @@ function ReviewStep({
       </ReviewGroup>
 
       <ReviewGroup label={`Tipos de habitación (${draft.roomTypes.length})`} onEdit={() => onJump(2)}>
-        <ReviewLines lines={draft.roomTypes.map((rt) => `${rt.name} — ${rt.maxOccupancy} pax${rt.bedType ? `, ${BED_TYPE_LABELS[rt.bedType]}` : ""}`)} empty="Ninguno" />
+        <ReviewLines
+          lines={draft.roomTypes.map(
+            (rt) =>
+              `${rt.name} — ${rt.maxOccupancy} pax${rt.bedType ? `, ${BED_TYPE_LABELS[rt.bedType]}` : ""}${
+                rt.amenities.length ? `, ${rt.amenities.map((a) => AMENITY_LABELS[a]).join(", ")}` : ""
+              }`,
+          )}
+          empty="Ninguno"
+        />
       </ReviewGroup>
 
       <ReviewGroup label={`Habitaciones (${draft.rooms.length})`} onEdit={() => onJump(3)}>
@@ -1254,17 +1262,13 @@ function ItemList({
               </span>
             </div>
             {warn && (
-              <div role="alert" className="mt-2 flex flex-wrap items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-700 dark:text-amber-400">
-                <TriangleAlert className="h-3.5 w-3.5 shrink-0" />
-                <span>{warn}</span>
-                <span className="ml-auto flex gap-2">
-                  <button type="button" className="font-medium underline" onClick={() => { onConfirmRemove?.(i); setConfirming(null); }}>
-                    Quitar de todos modos
-                  </button>
-                  <button type="button" className="underline" onClick={() => setConfirming(null)}>
-                    Cancelar
-                  </button>
-                </span>
+              <div className="mt-2">
+                <InlineConfirm
+                  message={warn}
+                  confirmLabel="Quitar de todos modos"
+                  onConfirm={() => { onConfirmRemove?.(i); setConfirming(null); }}
+                  onCancel={() => setConfirming(null)}
+                />
               </div>
             )}
           </li>
@@ -1282,6 +1286,38 @@ function Banner({ tone, children }: { tone: "ok" | "warn" | "error"; children: R
         ? "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400"
         : "border-[var(--destructive)]/30 bg-[var(--destructive)]/10 text-[var(--destructive)]";
   return <div className={cn("rounded-md border px-3 py-2 text-sm", cls)}>{children}</div>;
+}
+
+/** One destructive-confirm idiom for the whole wizard: amber alert + a real
+ *  destructive Button + a ghost Cancel (proper focus ring + hit area). */
+function InlineConfirm({
+  message,
+  confirmLabel,
+  onConfirm,
+  onCancel,
+}: {
+  message: string;
+  confirmLabel: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div
+      role="alert"
+      className="flex flex-wrap items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400"
+    >
+      <TriangleAlert className="h-3.5 w-3.5 shrink-0" />
+      <span>{message}</span>
+      <span className="ml-auto flex items-center gap-1.5">
+        <Button type="button" variant="destructive" size="sm" onClick={onConfirm}>
+          {confirmLabel}
+        </Button>
+        <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
+          Cancelar
+        </Button>
+      </span>
+    </div>
+  );
 }
 
 function StepFooter({
@@ -1302,6 +1338,18 @@ function StepFooter({
   onClear: () => void;
 }) {
   const [confirmClear, setConfirmClear] = useState(false);
+  if (confirmClear) {
+    return (
+      <div className="border-t border-[var(--border)] pt-4">
+        <InlineConfirm
+          message="Esto borrará todo el borrador capturado."
+          confirmLabel="Borrar todo"
+          onConfirm={() => { onClear(); setConfirmClear(false); }}
+          onCancel={() => setConfirmClear(false)}
+        />
+      </div>
+    );
+  }
   return (
     <div className="flex items-center justify-between gap-2 border-t border-[var(--border)] pt-4">
       <Button type="button" variant="ghost" onClick={onBack} disabled={step === 0}>
@@ -1309,22 +1357,11 @@ function StepFooter({
       </Button>
 
       <div className="flex items-center gap-2">
-        {hasContent &&
-          (confirmClear ? (
-            <span className="flex items-center gap-1 text-xs text-[var(--muted-foreground)]">
-              ¿Borrar todo?
-              <button type="button" className="font-medium text-[var(--destructive)] underline" onClick={() => { onClear(); setConfirmClear(false); }}>
-                Sí
-              </button>
-              <button type="button" className="underline" onClick={() => setConfirmClear(false)}>
-                No
-              </button>
-            </span>
-          ) : (
-            <button type="button" onClick={() => setConfirmClear(true)} className="inline-flex items-center gap-1 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]" title="Borrador guardado automáticamente">
-              <RotateCcw className="h-3.5 w-3.5" /> Limpiar
-            </button>
-          ))}
+        {hasContent && (
+          <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmClear(true)} title="Borrador guardado automáticamente">
+            <RotateCcw className="h-3.5 w-3.5" /> Limpiar
+          </Button>
+        )}
         {step < lastStep ? (
           <Button type="button" variant="outline" onClick={onNext} disabled={nextDisabled}>
             Siguiente <ChevronRight className="h-4 w-4" />
