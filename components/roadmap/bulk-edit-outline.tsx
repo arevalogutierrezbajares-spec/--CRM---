@@ -421,10 +421,12 @@ export function BulkEditOutline({ data }: { data: PlanDocData }) {
       if (i < 0) return prev;
       return [...prev.slice(0, i), ...prev.slice(endOfSubtree(prev, key))];
     });
-    if (row.serverId) {
-      if (row.kind === "init") void deleteInitiative(row.serverId, true).then(scheduleRefresh);
-      else void deleteRoadmapTask(row.serverId, true).then(scheduleRefresh);
-    }
+    const del = (sid: string) => {
+      if (row.kind === "init") void deleteInitiative(sid, true).then(scheduleRefresh);
+      else void deleteRoadmapTask(sid, true).then(scheduleRefresh);
+    };
+    if (row.serverId) del(row.serverId);
+    else withServerId(key, (sid) => sid && del(sid)); // create in flight → delete on backfill
   };
 
   const indent = (key: string) => {

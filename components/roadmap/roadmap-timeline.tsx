@@ -903,13 +903,51 @@ function DeliverablesEditor({
   const router = useRouter();
   const sel = useRoadmapSelection();
 
-  // Patches that arrived before a row had its server id; flushed on backfill.
-  const pending = useRef<Map<string, { title?: string; dueDate?: string | null }>>(new Map());
+  const rowsRef = useRef(rows);
+  useEffect(() => {
+    rowsRef.current = rows;
+  });
+
+  // Server-id backfill plumbing: lets ops on a still-pending row (delete,
+  // indent, rename) run as soon as the create resolves — no orphans, no lost edits.
+  const waiters = useRef<Map<string, Array<(sid: string) => void>>>(new Map());
+  const removedPending = useRef<Set<string>>(new Set());
+  const settleServerId = (key: string, sid: string) => {
+    if (removedPending.current.has(key)) {
+      // Row was deleted before its create resolved → delete the server row now.
+      removedPending.current.delete(key);
+      void deleteRoadmapTask(sid, true).then(scheduleRefreshRef.current);
+      return;
+    }
+    setRows((prev) => prev.map((x) => (x.key === key ? { ...x, serverId: sid } : x)));
+    const ws = waiters.current.get(key);
+    if (ws) {
+      waiters.current.delete(key);
+      ws.forEach((f) => f(sid));
+    }
+  };
+  const withServerId = (key: string | null, cb: (sid: string | null) => void) => {
+    if (key === null) {
+      cb(null);
+      return;
+    }
+    const row = rowsRef.current.find((r) => r.key === key);
+    if (row?.serverId) {
+      cb(row.serverId);
+      return;
+    }
+    const arr = waiters.current.get(key) ?? [];
+    arr.push((sid) => cb(sid));
+    waiters.current.set(key, arr);
+  };
+
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleRefreshRef = useRef<() => void>(() => {});
   const scheduleRefresh = useCallback(() => {
     if (refreshTimer.current) clearTimeout(refreshTimer.current);
     refreshTimer.current = setTimeout(() => router.refresh(), 1200);
   }, [router]);
+  scheduleRefreshRef.current = scheduleRefresh;
   useEffect(() => () => {
     if (refreshTimer.current) clearTimeout(refreshTimer.current);
   }, []);
@@ -927,7 +965,7 @@ function DeliverablesEditor({
   }, [focusKey, rows]);
 
   const serverIdOf = (key: string | null) =>
-    key ? (rows.find((r) => r.key === key)?.serverId ?? null) : null;
+    key ? (rowsRef.current.find((r) => r.key === key)?.serverId ?? null) : null;
 
   const moveFocus = (fromKey: string, dir: 1 | -1) => {
     const c = boxRef.current;
@@ -968,25 +1006,21 @@ function DeliverablesEditor({
     });
     if (opts.focus !== false) setFocusKey(key);
 
-    const parentServerId = serverIdOf(opts.parentKey);
-    void (async () => {
-      const r = await createRoadmapTask({
-        initiativeId,
-        title: opts.title ?? "",
-        parentTaskId: parentServerId,
-        dueDate: opts.dueDate ?? null,
-        quiet: true,
-      });
-      if (r.id) {
-        setRows((prev) => prev.map((x) => (x.key === key ? { ...x, serverId: r.id! } : x)));
-        const queued = pending.current.get(key);
-        if (queued) {
-          pending.current.delete(key);
-          await updateRoadmapTask(r.id, queued, true);
-        }
-      }
-      scheduleRefresh();
-    })();
+    // Resolve the parent's server id first (it may itself still be creating),
+    // then create — so a sub-deliverable under a brand-new deliverable works.
+    withServerId(opts.parentKey, (parentServerId) => {
+      void (async () => {
+        const r = await createRoadmapTask({
+          initiativeId,
+          title: opts.title ?? "",
+          parentTaskId: parentServerId,
+          dueDate: opts.dueDate ?? null,
+          quiet: true,
+        });
+        if (r.id) settleServerId(key, r.id);
+        scheduleRefresh();
+      })();
+    });
   };
 
   const saveRow = (key: string) => {
@@ -1009,11 +1043,7 @@ function DeliverablesEditor({
     if (newTitle) patch.title = newTitle;
     if (changedDate) patch.dueDate = end as string;
     if (Object.keys(patch).length === 0) return;
-    if (row.serverId) {
-      void updateRoadmapTask(row.serverId, patch, true).then(scheduleRefresh);
-    } else {
-      pending.current.set(key, { ...(pending.current.get(key) ?? {}), ...patch });
-    }
+    withServerId(key, (sid) => sid && void updateRoadmapTask(sid, patch, true).then(scheduleRefresh));
   };
 
   const setTitle = (key: string, title: string) =>
@@ -1021,9 +1051,7 @@ function DeliverablesEditor({
 
   const setDue = (key: string, due: string | null) => {
     setRows((prev) => prev.map((r) => (r.key === key ? { ...r, dueDate: due } : r)));
-    const sid = serverIdOf(key);
-    if (sid) void updateRoadmapTask(sid, { dueDate: due }, true).then(scheduleRefresh);
-    else pending.current.set(key, { ...(pending.current.get(key) ?? {}), dueDate: due });
+    withServerId(key, (sid) => sid && void updateRoadmapTask(sid, { dueDate: due }, true).then(scheduleRefresh));
   };
 
   const toggleDone = (key: string, done: boolean) => {
@@ -1041,6 +1069,7 @@ function DeliverablesEditor({
       return [...prev.slice(0, i), ...prev.slice(end)];
     });
     if (sid) void deleteRoadmapTask(sid, true).then(scheduleRefresh);
+    else removedPending.current.add(key); // create still in flight → delete on backfill
   };
 
   // Keys of `key` plus all its descendants (a contiguous block in `rows`).
@@ -1073,8 +1102,12 @@ function DeliverablesEditor({
       }),
     );
     saveRow(key);
-    const sid = serverIdOf(key);
-    if (sid && prevSib.serverId) void reparentRoadmapTask(sid, prevSib.serverId, true).then(scheduleRefresh);
+    withServerId(key, (sid) => {
+      if (!sid) return;
+      withServerId(prevSib.key, (psid) => {
+        if (psid) void reparentRoadmapTask(sid, psid, true).then(scheduleRefresh);
+      });
+    });
     setFocusKey(key);
   };
 
@@ -1093,8 +1126,12 @@ function DeliverablesEditor({
       }),
     );
     saveRow(key);
-    const sid = serverIdOf(key);
-    if (sid) void reparentRoadmapTask(sid, serverIdOf(grandparentKey), true).then(scheduleRefresh);
+    withServerId(key, (sid) => {
+      if (!sid) return;
+      withServerId(grandparentKey, (gsid) =>
+        void reparentRoadmapTask(sid, gsid, true).then(scheduleRefresh),
+      );
+    });
     setFocusKey(key);
   };
 
