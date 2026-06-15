@@ -29,6 +29,12 @@ they were reactive to live testing/UX feedback, not scoped up front.
 
 Test count: 197 → **202** (5 new todo_query priority phrasings). All passing.
 
+## Cross-repo — Onboarding intake (2026-06-14)
+
+| Task | What | Where | Status |
+|------|------|-------|--------|
+| [TASK-AGB-ONB-001](./TASK-AGB-ONB-001-posada-intake-wizard.md) | Posada onboarding intake wizard — captures a posada and pushes structured intake to the TOUR PMS onboarding endpoint (server-side bearer proxy, idempotent, live-readiness). The CRM half of the PMS AI onboarding pipeline (PMS side ships dark behind `Flags.ONBOARDING`). | `app/(app)/posada-onboarding/`, `components/posada-onboarding/`, `lib/onboarding/intake-contract.ts` | review — built, tsc/eslint/vitest 414/414 green; operator live round-trip pending PMS `FF_ONBOARDING=1` |
+
 ## At a glance
 
 | Phase | Tasks | Open | Claimed | In Progress | Review | Merged |
