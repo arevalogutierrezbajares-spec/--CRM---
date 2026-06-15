@@ -441,6 +441,28 @@ export function BulkEditOutline({ data }: { data: PlanDocData }) {
     else withServerId(key, (sid) => sid && del(sid)); // create in flight → delete on backfill
   };
 
+  // Blur of a never-typed new row → drop it (no "New deliverable"/"New milestone" clutter).
+  const cleanupIfEmpty = (key: string) => {
+    const cur = rowsRef.current;
+    const i = cur.findIndex((r) => r.key === key);
+    if (i < 0) return;
+    const row = cur[i];
+    if (row.isLobNone || !/^b\d+$/.test(key)) return; // only locally-created rows
+    if (row.title.trim() !== "" || endOfSubtree(cur, key) > i + 1) return; // has text or children
+    setRows((prev) => {
+      const j = prev.findIndex((r) => r.key === key);
+      if (j < 0) return prev;
+      return [...prev.slice(0, j), ...prev.slice(endOfSubtree(prev, key))];
+    });
+    const del = (sid: string) => {
+      if (row.kind === "lob") void deleteLob(sid, true).then(scheduleRefresh);
+      else if (row.kind === "init") void deleteInitiative(sid, true).then(scheduleRefresh);
+      else void deleteRoadmapTask(sid, true).then(scheduleRefresh);
+    };
+    if (row.serverId) del(row.serverId);
+    else withServerId(key, (sid) => sid && del(sid));
+  };
+
   const indent = (key: string) => {
     const cur = rowsRef.current;
     const i = cur.findIndex((r) => r.key === key);
@@ -614,6 +636,10 @@ export function BulkEditOutline({ data }: { data: PlanDocData }) {
                 dragValid={activeKey === row.key ? projection != null : null}
                 setTitle={setTitle}
                 commit={commit}
+                onBlur={(k) => {
+                  commit(k);
+                  cleanupIfEmpty(k);
+                }}
                 remove={remove}
                 addSibling={addSibling}
                 addChild={addChild}
@@ -654,6 +680,7 @@ function OutlineRow({
   dragValid,
   setTitle,
   commit,
+  onBlur,
   remove,
   addSibling,
   addChild,
@@ -666,6 +693,7 @@ function OutlineRow({
   dragValid: boolean | null;
   setTitle: (key: string, title: string) => void;
   commit: (key: string) => void;
+  onBlur: (key: string) => void;
   remove: (key: string) => void;
   addSibling: (row: ERow) => void;
   addChild: (row: ERow) => void;
@@ -740,7 +768,7 @@ function OutlineRow({
         value={row.title}
         disabled={isLobNone}
         onChange={(e) => setTitle(row.key, e.target.value)}
-        onBlur={() => commit(row.key)}
+        onBlur={() => onBlur(row.key)}
         onKeyDown={onKeyDown}
         placeholder={row.kind === "lob" ? "Line of business…" : row.kind === "init" ? "Milestone…" : "Deliverable…"}
         className={`flex-1 min-w-0 bg-transparent outline-none placeholder:text-text-tertiary ${fontByKind} disabled:text-text-tertiary`}

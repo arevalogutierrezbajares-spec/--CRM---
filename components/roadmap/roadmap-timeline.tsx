@@ -1073,6 +1073,17 @@ function DeliverablesEditor({
     else removedPending.current.add(key); // create still in flight → delete on backfill
   };
 
+  // Blur of a never-typed new row → drop it (no "New deliverable" clutter).
+  const cleanupIfEmpty = (key: string) => {
+    const cur = rowsRef.current;
+    const i = cur.findIndex((r) => r.key === key);
+    if (i < 0) return;
+    const row = cur[i];
+    if (!/^k\d+$/.test(key)) return; // only locally-created rows
+    if (row.title.trim() !== "" || endOfSubtree(cur, key) > i + 1) return; // has text or children
+    removeRow(key);
+  };
+
   // Keys of `key` plus all its descendants (a contiguous block in `rows`).
   const subtreeKeys = (src: ERow[], key: string): Set<string> => {
     const i = src.findIndex((r) => r.key === key);
@@ -1151,6 +1162,10 @@ function DeliverablesEditor({
             onToggleSelect={() => row.serverId && sel.toggle(row.serverId, "task")}
             setTitle={setTitle}
             saveRow={saveRow}
+            onBlur={(k) => {
+              saveRow(k);
+              cleanupIfEmpty(k);
+            }}
             setDue={setDue}
             toggleDone={toggleDone}
             removeRow={removeRow}
@@ -1183,6 +1198,7 @@ function DelivRow({
   onToggleSelect,
   setTitle,
   saveRow,
+  onBlur,
   setDue,
   toggleDone,
   removeRow,
@@ -1198,6 +1214,7 @@ function DelivRow({
   onToggleSelect: () => void;
   setTitle: (key: string, title: string) => void;
   saveRow: (key: string) => void;
+  onBlur: (key: string) => void;
   setDue: (key: string, due: string | null) => void;
   toggleDone: (key: string, done: boolean) => void;
   removeRow: (key: string) => void;
@@ -1260,7 +1277,7 @@ function DelivRow({
         data-key={row.key}
         value={row.title}
         onChange={(e) => setTitle(row.key, e.target.value)}
-        onBlur={() => saveRow(row.key)}
+        onBlur={() => onBlur(row.key)}
         onKeyDown={onKeyDown}
         placeholder={row.level === 0 ? "Deliverable…" : "Sub-deliverable…"}
         className={`flex-1 min-w-0 bg-transparent text-[13px] outline-none placeholder:text-text-tertiary ${row.done ? "line-through text-text-tertiary" : ""}`}
