@@ -50,14 +50,17 @@ import {
   deleteInitiative,
   deleteLob,
   deleteRoadmapTask,
+  duplicateRoadmapTasks,
   moveInitiative,
   moveRoadmapTask,
   renameLob,
   reorderLobs,
   reparentRoadmapTask,
+  setRoadmapTaskProject,
   updateInitiativeFields,
   updateRoadmapTask,
 } from "@/app/(app)/roadmap/actions";
+import { Check, ClipboardPaste, Copy, Tag } from "lucide-react";
 
 type RowKind = "lob" | "init" | "task";
 type ERow = {
@@ -71,8 +74,17 @@ type ERow = {
   parentTaskKey: string | null;
   startDate: string | null;
   endDate: string | null;
+  project: string | null; // product-line tag (tasks only): caney | vav | all | null
   isLobNone: boolean;
 };
+
+/** Product-line tags. "all" = applies to both products (shows under every filter). */
+const PROJECTS: Array<{ id: string; label: string; short: string; color: string }> = [
+  { id: "caney", label: "CaneyCloud", short: "CC", color: "var(--blue-mid)" },
+  { id: "vav", label: "VAV", short: "VAV", color: "var(--green-mid)" },
+  { id: "all", label: "All (both)", short: "ALL", color: "var(--amber-mid)" },
+];
+const projectMeta = (id: string | null) => PROJECTS.find((p) => p.id === id) ?? null;
 
 const MAX_TASK_LEVEL = 3;
 const NONE_KEY = "__none__";
@@ -93,7 +105,7 @@ function seed(data: PlanDocData): ERow[] {
     for (const t of tasks) {
       rows.push({
         key: t.id, serverId: t.id, kind: "task", title: t.title, level,
-        lobKey: null, initKey, parentTaskKey, startDate: null, endDate: t.dueDate, isLobNone: false,
+        lobKey: null, initKey, parentTaskKey, startDate: null, endDate: t.dueDate, project: t.project ?? null, isLobNone: false,
       });
       if (t.children.length) walkTasks(t.children, initKey, t.id, level + 1);
     }
@@ -102,7 +114,7 @@ function seed(data: PlanDocData): ERow[] {
     for (const init of byLob.get(lobServerId) ?? []) {
       rows.push({
         key: init.id, serverId: init.id, kind: "init", title: init.title, level: 1,
-        lobKey, initKey: null, parentTaskKey: null, startDate: init.startDate, endDate: init.targetEndDate, isLobNone: false,
+        lobKey, initKey: null, parentTaskKey: null, startDate: init.startDate, endDate: init.targetEndDate, project: null, isLobNone: false,
       });
       walkTasks(init.tasks, init.id, null, 2);
     }
@@ -110,14 +122,14 @@ function seed(data: PlanDocData): ERow[] {
   for (const lob of data.lobs) {
     rows.push({
       key: lob.id, serverId: lob.id, kind: "lob", title: lob.title, level: 0,
-      lobKey: lob.id, initKey: null, parentTaskKey: null, startDate: null, endDate: null, isLobNone: false,
+      lobKey: lob.id, initKey: null, parentTaskKey: null, startDate: null, endDate: null, project: null, isLobNone: false,
     });
     emitInits(lob.id, lob.id);
   }
   if ((byLob.get(null) ?? []).length) {
     rows.push({
       key: NONE_KEY, serverId: null, kind: "lob", title: "Cross-venture (no line of business)", level: 0,
-      lobKey: null, initKey: null, parentTaskKey: null, startDate: null, endDate: null, isLobNone: true,
+      lobKey: null, initKey: null, parentTaskKey: null, startDate: null, endDate: null, project: null, isLobNone: true,
     });
     emitInits(null, null);
   }
@@ -252,6 +264,11 @@ export function BulkEditOutline({ data }: { data: PlanDocData }) {
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [overKey, setOverKey] = useState<string | null>(null);
   const [offsetX, setOffsetX] = useState(0);
+  // Multi-select (deliverables only) + copy/paste clipboard + project filter.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [clipboard, setClipboard] = useState<string[]>([]); // server ids of copied roots
+  const [projectFilter, setProjectFilter] = useState<"view-all" | "caney" | "vav">("view-all");
+  const lastClicked = useRef<string | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
@@ -334,7 +351,7 @@ export function BulkEditOutline({ data }: { data: PlanDocData }) {
 
   const mkRow = (over: Partial<ERow>): ERow => ({
     key: nk(), serverId: null, kind: "task", title: "", level: 0,
-    lobKey: null, initKey: null, parentTaskKey: null, startDate: null, endDate: null, isLobNone: false, ...over,
+    lobKey: null, initKey: null, parentTaskKey: null, startDate: null, endDate: null, project: null, isLobNone: false, ...over,
   });
 
   const addLob = (afterKey: string | null) => {
@@ -529,19 +546,128 @@ export function BulkEditOutline({ data }: { data: PlanDocData }) {
     else if (row.level < MAX_TASK_LEVEL) addTask(row.initKey!, row.key, row.level + 1, row.key);
   };
 
+  // ── Project filter (which rows are shown) ──
+  const visibleKeys = useMemo(() => {
+    if (projectFilter === "view-all") return null; // null = everything visible
+    const show = new Set<string>();
+    // Deliverables (level-2 tasks) + their subtrees, when the tag matches.
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      if (r.kind === "task" && r.level === 2 && (r.project === projectFilter || r.project === "all")) {
+        const end = endOfSubtree(rows, r.key);
+        for (let j = i; j < end; j++) show.add(rows[j].key);
+      }
+    }
+    // Reveal ancestor milestones + LoBs that contain a shown deliverable.
+    for (const r of rows) {
+      if (r.kind === "init" && rows.some((t) => t.kind === "task" && t.initKey === r.key && show.has(t.key)))
+        show.add(r.key);
+    }
+    for (const r of rows) {
+      if (r.kind === "lob" && rows.some((i) => i.kind === "init" && i.lobKey === r.key && show.has(i.key)))
+        show.add(r.key);
+    }
+    return show;
+  }, [rows, projectFilter]);
+
+  const filteredRows = useMemo(
+    () => (visibleKeys ? rows.filter((r) => visibleKeys.has(r.key)) : rows),
+    [rows, visibleKeys],
+  );
+
+  // ── Multi-select (deliverables only) ──
+  const toggleSelect = (key: string, opts: { range?: boolean }) => {
+    const tasks = (visibleKeys ? filteredRows : rowsRef.current).filter((r) => r.kind === "task");
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (opts.range && lastClicked.current) {
+        const a = tasks.findIndex((r) => r.key === lastClicked.current);
+        const b = tasks.findIndex((r) => r.key === key);
+        if (a >= 0 && b >= 0) {
+          const [lo, hi] = a < b ? [a, b] : [b, a];
+          for (let i = lo; i <= hi; i++) next.add(tasks[i].key);
+        }
+      } else {
+        if (next.has(key)) next.delete(key);
+        else next.add(key);
+      }
+      return next;
+    });
+    lastClicked.current = key;
+  };
+  const clearSelection = () => setSelected(new Set());
+
+  // Top-level selected keys (drop descendants whose ancestor is also selected).
+  const selectionRoots = useCallback((): ERow[] => {
+    const cur = rowsRef.current;
+    const sel = cur.filter((r) => selected.has(r.key));
+    const isCoveredByAncestor = (row: ERow) => {
+      let p = row.parentTaskKey;
+      while (p) {
+        if (selected.has(p)) return true;
+        p = cur.find((r) => r.key === p)?.parentTaskKey ?? null;
+      }
+      return false;
+    };
+    return sel.filter((r) => !isCoveredByAncestor(r));
+  }, [selected]);
+
+  const copySelection = () => {
+    const ids = selectionRoots()
+      .map((r) => r.serverId)
+      .filter((x): x is string => !!x);
+    setClipboard(ids);
+  };
+
+  const pasteClipboard = () => {
+    if (clipboard.length === 0) return;
+    // Anchor: the last-selected task with a server id (paste as siblings after it).
+    const anchorRow = [...selected]
+      .map((k) => rowsRef.current.find((r) => r.key === k))
+      .filter((r): r is ERow => !!r && r.kind === "task" && !!r.serverId)
+      .pop();
+    const anchorId = anchorRow?.serverId ?? rowsRef.current.find((r) => r.serverId && r.key === clipboard[0])?.serverId ?? null;
+    // Fall back to the first copied root's own id so "copy then paste" duplicates in place.
+    const anchor = anchorId ?? clipboard[clipboard.length - 1];
+    wantReseed.current = true;
+    void duplicateRoadmapTasks(clipboard, anchor, false).then(() => router.refresh());
+  };
+
+  const setProjectForSelection = (project: string | null) => {
+    const ids = rowsRef.current
+      .filter((r) => selected.has(r.key) && r.kind === "task" && r.serverId)
+      .map((r) => r.serverId as string);
+    if (ids.length === 0) return;
+    const keys = new Set(rowsRef.current.filter((r) => selected.has(r.key)).map((r) => r.key));
+    setRows((prev) => prev.map((r) => (keys.has(r.key) && r.kind === "task" ? { ...r, project } : r)));
+    void setRoadmapTaskProject(ids, project, true).then(scheduleRefresh);
+  };
+
+  const setRowProject = (key: string, project: string | null) => {
+    setRows((prev) => prev.map((r) => (r.key === key ? { ...r, project } : r)));
+    withServerId(key, (sid) => sid && void setRoadmapTaskProject([sid], project, true).then(scheduleRefresh));
+  };
+
+  const deleteSelection = () => {
+    if (!confirm(`Delete ${selected.size} selected deliverable(s)?`)) return;
+    selectionRoots().forEach((r) => remove(r.key));
+    clearSelection();
+  };
+
   // ── Drag and drop ──
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
-  // While dragging, hide the active node's descendants (they travel with it).
+  // Render the filtered list; while dragging, hide the active node's
+  // descendants (they travel with it).
   const displayRows = useMemo(() => {
-    if (!activeKey) return rows;
-    const sub = subtreeKeySet(rows, activeKey);
+    if (!activeKey) return filteredRows;
+    const sub = subtreeKeySet(filteredRows, activeKey);
     sub.delete(activeKey);
-    return rows.filter((r) => !sub.has(r.key));
-  }, [rows, activeKey]);
+    return filteredRows.filter((r) => !sub.has(r.key));
+  }, [filteredRows, activeKey]);
 
   const projection = useMemo(() => {
     if (!activeKey || !overKey) return null;
@@ -606,13 +732,80 @@ export function BulkEditOutline({ data }: { data: PlanDocData }) {
 
   const activeRow = activeKey ? rows.find((r) => r.key === activeKey) : null;
 
+  const filterChips: Array<{ id: "view-all" | "caney" | "vav"; label: string }> = [
+    { id: "view-all", label: "All work" },
+    { id: "caney", label: "CaneyCloud" },
+    { id: "vav", label: "VAV" },
+  ];
+
   return (
     <div className="rounded-lg border bg-card p-3" style={{ borderColor: "var(--border-default)" }}>
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
         <p className="text-tiny text-text-tertiary">
-          Enter = new row · ↑↓ = move · Tab / ⇧Tab = indent/outdent · drag ⋮⋮ to move across milestones/LoBs · /END 5/4 sets dates
+          Enter = new row · ↑↓ = move · Tab / ⇧Tab = indent · drag ⋮⋮ to move · ⌘/Ctrl-click to select · /END 5/4 sets dates
         </p>
+        {/* Project filter */}
+        <div className="flex items-center gap-1">
+          <span className="text-tiny text-text-tertiary mr-0.5">Project:</span>
+          {filterChips.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => setProjectFilter(c.id)}
+              className="rounded-full border px-2 py-0.5 text-[11.5px] transition-colors"
+              style={{
+                borderColor: projectFilter === c.id ? "var(--blue-mid)" : "var(--border-default)",
+                background: projectFilter === c.id ? "var(--blue-mid)" : "transparent",
+                color: projectFilter === c.id ? "#fff" : "var(--text-secondary)",
+              }}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
       </div>
+
+      {/* Selection action bar */}
+      {selected.size > 0 && (
+        <div
+          className="flex items-center gap-2 flex-wrap rounded-md border px-2.5 py-1.5 mb-2 text-[12.5px]"
+          style={{ borderColor: "var(--blue-mid)", background: "color-mix(in oklab, var(--blue-mid) 8%, transparent)" }}
+        >
+          <span className="font-medium text-text-primary">{selected.size} selected</span>
+          <span className="h-4 w-px" style={{ background: "var(--border-default)" }} />
+          <button type="button" onClick={copySelection} className="inline-flex items-center gap-1 text-text-secondary hover:text-text-primary">
+            <Copy size={13} /> Copy
+          </button>
+          <button
+            type="button"
+            onClick={pasteClipboard}
+            disabled={clipboard.length === 0}
+            className="inline-flex items-center gap-1 text-text-secondary hover:text-text-primary disabled:opacity-40"
+            title={clipboard.length ? `Paste ${clipboard.length} copied` : "Copy something first"}
+          >
+            <ClipboardPaste size={13} /> Paste{clipboard.length ? ` (${clipboard.length})` : ""}
+          </button>
+          <span className="h-4 w-px" style={{ background: "var(--border-default)" }} />
+          <span className="inline-flex items-center gap-1 text-text-tertiary"><Tag size={12} /> Set project:</span>
+          {PROJECTS.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => setProjectForSelection(p.id)}
+              className="rounded border px-1.5 py-0.5 text-[11px] hover:bg-surface"
+              style={{ borderColor: "var(--border-default)", color: p.color }}
+            >
+              {p.label}
+            </button>
+          ))}
+          <button type="button" onClick={() => setProjectForSelection(null)} className="rounded border px-1.5 py-0.5 text-[11px] text-text-tertiary hover:bg-surface" style={{ borderColor: "var(--border-default)" }}>
+            None
+          </button>
+          <span className="h-4 w-px" style={{ background: "var(--border-default)" }} />
+          <button type="button" onClick={deleteSelection} className="text-[var(--red-mid)] hover:underline">Delete</button>
+          <button type="button" onClick={clearSelection} className="text-text-tertiary hover:text-text-primary ml-auto">Clear</button>
+        </div>
+      )}
 
       <DndContext
         sensors={sensors}
@@ -634,6 +827,9 @@ export function BulkEditOutline({ data }: { data: PlanDocData }) {
                 row={row}
                 projectedDepth={activeKey === row.key && projection ? projection.depth : null}
                 dragValid={activeKey === row.key ? projection != null : null}
+                isSelected={selected.has(row.key)}
+                onSelectToggle={(range) => toggleSelect(row.key, { range })}
+                setRowProject={setRowProject}
                 setTitle={setTitle}
                 commit={commit}
                 onBlur={(k) => {
@@ -678,6 +874,9 @@ function OutlineRow({
   row,
   projectedDepth,
   dragValid,
+  isSelected,
+  onSelectToggle,
+  setRowProject,
   setTitle,
   commit,
   onBlur,
@@ -691,6 +890,9 @@ function OutlineRow({
   row: ERow;
   projectedDepth: number | null;
   dragValid: boolean | null;
+  isSelected: boolean;
+  onSelectToggle: (range: boolean) => void;
+  setRowProject: (key: string, project: string | null) => void;
   setTitle: (key: string, title: string) => void;
   commit: (key: string) => void;
   onBlur: (key: string) => void;
@@ -749,6 +951,7 @@ function OutlineRow({
         transition,
         opacity: isDragging ? 0.4 : 1,
         outline: invalid ? "1px dashed var(--red-mid)" : undefined,
+        background: isSelected ? "color-mix(in oklab, var(--blue-mid) 14%, transparent)" : undefined,
       }}
     >
       {!isLobNone && (
@@ -767,12 +970,20 @@ function OutlineRow({
         data-key={row.key}
         value={row.title}
         disabled={isLobNone}
+        onMouseDown={(e) => {
+          // ⌘/Ctrl-click (or ⇧-click) selects the deliverable instead of editing.
+          if (row.kind === "task" && (e.metaKey || e.ctrlKey || e.shiftKey)) {
+            e.preventDefault();
+            onSelectToggle(e.shiftKey);
+          }
+        }}
         onChange={(e) => setTitle(row.key, e.target.value)}
         onBlur={() => onBlur(row.key)}
         onKeyDown={onKeyDown}
         placeholder={row.kind === "lob" ? "Line of business…" : row.kind === "init" ? "Milestone…" : "Deliverable…"}
         className={`flex-1 min-w-0 bg-transparent outline-none placeholder:text-text-tertiary ${fontByKind} disabled:text-text-tertiary`}
       />
+      {row.kind === "task" && <ProjectChip value={row.project} onChange={(p) => setRowProject(row.key, p)} />}
       {(row.endDate || (row.kind === "init" && row.startDate)) && (
         <span className="shrink-0 text-tiny tabular-nums text-text-tertiary">
           {row.kind === "init" && row.startDate ? `${fmtChip(row.startDate)} → ` : ""}
@@ -812,5 +1023,72 @@ function OutlineRow({
         </button>
       )}
     </div>
+  );
+}
+
+/** Compact product-line tag chip for a deliverable: shows the tag (color-coded)
+ *  and opens a tiny menu (CaneyCloud / VAV / All / None). */
+function ProjectChip({ value, onChange }: { value: string | null; onChange: (p: string | null) => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+  const meta = projectMeta(value);
+  return (
+    <span className="relative shrink-0" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        title={meta ? `Project: ${meta.label}` : "Tag a project"}
+        className="rounded-full border px-1.5 py-0.5 text-[10px] font-semibold tracking-wide tabular-nums transition-opacity"
+        style={
+          meta
+            ? { borderColor: meta.color, color: meta.color, background: `color-mix(in oklab, ${meta.color} 12%, transparent)` }
+            : { borderColor: "var(--border-default)", color: "var(--text-tertiary)" }
+        }
+      >
+        {meta ? meta.short : "tag"}
+      </button>
+      {open && (
+        <span
+          className="absolute right-0 z-30 mt-1 flex flex-col rounded-md border bg-card py-1 shadow-xl"
+          style={{ borderColor: "var(--border-default)", minWidth: 130 }}
+        >
+          {PROJECTS.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => {
+                onChange(p.id);
+                setOpen(false);
+              }}
+              className="flex items-center gap-2 px-2.5 py-1 text-left text-[12px] hover:bg-surface"
+            >
+              <span className="inline-block h-2 w-2 rounded-full" style={{ background: p.color }} />
+              <span className="text-text-primary">{p.label}</span>
+              {value === p.id && <Check size={12} className="ml-auto text-text-tertiary" />}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => {
+              onChange(null);
+              setOpen(false);
+            }}
+            className="flex items-center gap-2 px-2.5 py-1 text-left text-[12px] text-text-tertiary hover:bg-surface"
+          >
+            <span className="inline-block h-2 w-2 rounded-full border" style={{ borderColor: "var(--border-default)" }} />
+            None
+            {value == null && <Check size={12} className="ml-auto" />}
+          </button>
+        </span>
+      )}
+    </span>
   );
 }
