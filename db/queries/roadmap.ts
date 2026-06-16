@@ -347,6 +347,7 @@ export type PlanDocTask = {
   status: string;
   dueDate: string | null;
   assigneeUserId: string | null;
+  project: string | null; // product-line tag: caney | vav | all | null
   children: PlanDocTask[];
 };
 
@@ -422,6 +423,7 @@ export async function getPlanDocData(workspaceId: string): Promise<PlanDocData> 
           status: t.status,
           dueDate: t.dueDate,
           assigneeUserId: t.assigneeUserId ?? t.assignedTo,
+          project: t.project ?? null,
           children: [],
         });
       }
