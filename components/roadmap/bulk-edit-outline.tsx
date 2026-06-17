@@ -43,6 +43,8 @@ import { CSS } from "@dnd-kit/utilities";
 import { ChevronRight, GripVertical, Plus, X } from "lucide-react";
 import type { PlanDocData, PlanDocInitiative, PlanDocTask } from "@/db/queries/roadmap";
 import { fmtChip, parseDateTokens } from "@/lib/roadmap-dates";
+import { MentionInput } from "@/components/ui/mention-input";
+import { PersonChipStack } from "@/components/roadmap/mention-bubbles";
 import {
   createInitiative,
   createLob,
@@ -254,6 +256,10 @@ export function BulkEditOutline({ data }: { data: PlanDocData }) {
   const [offsetX, setOffsetX] = useState(0);
   const boxRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  const onPersonClick = useCallback(
+    (userId: string) => router.push(`/roadmap?person=${userId}`),
+    [router],
+  );
 
   const rowsRef = useRef(rows);
   useEffect(() => {
@@ -610,6 +616,8 @@ export function BulkEditOutline({ data }: { data: PlanDocData }) {
               <OutlineRow
                 key={row.key}
                 row={row}
+                members={data.members}
+                onPersonClick={onPersonClick}
                 projectedDepth={activeKey === row.key && projection ? projection.depth : null}
                 dragValid={activeKey === row.key ? projection != null : null}
                 setTitle={setTitle}
@@ -650,6 +658,8 @@ export function BulkEditOutline({ data }: { data: PlanDocData }) {
 
 function OutlineRow({
   row,
+  members,
+  onPersonClick,
   projectedDepth,
   dragValid,
   setTitle,
@@ -662,6 +672,8 @@ function OutlineRow({
   moveFocus,
 }: {
   row: ERow;
+  members: PlanDocData["members"];
+  onPersonClick: (userId: string) => void;
   projectedDepth: number | null;
   dragValid: boolean | null;
   setTitle: (key: string, title: string) => void;
@@ -674,12 +686,16 @@ function OutlineRow({
   moveFocus: (fromKey: string, dir: 1 | -1) => void;
 }) {
   const isLobNone = row.isLobNone;
+  const mentionPeople = useMemo(
+    () => members.map((m) => ({ userId: m.id, displayName: m.displayName })),
+    [members],
+  );
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: row.key,
     disabled: isLobNone,
   });
 
-  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     if (e.key === "Enter") {
       e.preventDefault();
       commit(row.key);
@@ -735,16 +751,33 @@ function OutlineRow({
         </button>
       )}
       {row.kind !== "lob" && <ChevronRight size={12} className="text-text-tertiary shrink-0 opacity-40" />}
-      <input
-        data-key={row.key}
-        value={row.title}
-        disabled={isLobNone}
-        onChange={(e) => setTitle(row.key, e.target.value)}
-        onBlur={() => commit(row.key)}
-        onKeyDown={onKeyDown}
-        placeholder={row.kind === "lob" ? "Line of business…" : row.kind === "init" ? "Milestone…" : "Deliverable…"}
-        className={`flex-1 min-w-0 bg-transparent outline-none placeholder:text-text-tertiary ${fontByKind} disabled:text-text-tertiary`}
-      />
+      {row.kind === "init" ? (
+        <MentionInput
+          value={row.title}
+          onChange={(v) => setTitle(row.key, v)}
+          onKeyDown={onKeyDown}
+          onBlur={() => commit(row.key)}
+          sources={{ people: mentionPeople, projects: [], docs: [] }}
+          placeholder="Milestone… (type @ to tag people)"
+          className="flex-1 min-w-0"
+          inputClassName={`w-full bg-transparent outline-none placeholder:text-text-tertiary ${fontByKind}`}
+          inputProps={{ "data-key": row.key }}
+        />
+      ) : (
+        <input
+          data-key={row.key}
+          value={row.title}
+          disabled={isLobNone}
+          onChange={(e) => setTitle(row.key, e.target.value)}
+          onBlur={() => commit(row.key)}
+          onKeyDown={onKeyDown}
+          placeholder={row.kind === "lob" ? "Line of business…" : "Deliverable…"}
+          className={`flex-1 min-w-0 bg-transparent outline-none placeholder:text-text-tertiary ${fontByKind} disabled:text-text-tertiary`}
+        />
+      )}
+      {row.kind === "init" && (
+        <PersonChipStack text={row.title} members={mentionPeople} onPersonClick={onPersonClick} />
+      )}
       {(row.endDate || (row.kind === "init" && row.startDate)) && (
         <span className="shrink-0 text-tiny tabular-nums text-text-tertiary">
           {row.kind === "init" && row.startDate ? `${fmtChip(row.startDate)} → ` : ""}

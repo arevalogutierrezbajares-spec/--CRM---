@@ -20,6 +20,7 @@ import {
   type InitiativeDependency,
   type PlanDocData,
 } from "@/db/queries/roadmap";
+import { stripMentionTokens } from "@/lib/roadmap-mentions";
 import { RoadmapToolbar } from "@/components/roadmap/roadmap-toolbar";
 import { RoadmapSelectionProvider } from "@/components/roadmap/roadmap-selection";
 import { UnassignedLane } from "@/components/roadmap/unassigned-lane";
@@ -67,13 +68,14 @@ function leftPct(dateIso: string | null, start: Date, totalMs: number): number {
 export default async function RoadmapPage({
   searchParams,
 }: {
-  searchParams: Promise<{ window?: string }>;
+  searchParams: Promise<{ window?: string; person?: string }>;
 }) {
   const user = await requireUser();
   const sp = await searchParams;
   const windowKey: WindowKey =
     sp.window === "quarter" || sp.window === "year" ? sp.window : "6mo";
   const monthCount = WINDOWS[windowKey].months;
+  const personId = sp.person ?? null;
 
   const [initsRes, sprintsRes, planDocRes, unassignedRes, versionRes, depsRes] =
     await Promise.all([
@@ -100,10 +102,28 @@ export default async function RoadmapPage({
 
   const tl = buildTimeline(monthCount);
 
+  // Person filter (set by clicking a @mention bubble): restrict every surface to
+  // initiatives that person is tagged on. Derived from the people-tags already
+  // attached to each plan-doc initiative.
+  const allowedIds = personId
+    ? new Set(
+        planDocRes.data.initiatives
+          .filter((i) => i.people.some((p) => p.userId === personId))
+          .map((i) => i.id),
+      )
+    : null;
+  const personName = personId
+    ? (planDocRes.data.initiatives
+        .flatMap((i) => i.people)
+        .find((p) => p.userId === personId)?.displayName ?? null)
+    : null;
+  const inPersonFilter = (id: string) => !allowedIds || allowedIds.has(id);
+
   // Only show initiatives with at least a start_date that overlaps the window
   const onTimeline = initsRes.data.filter((i) => {
     if (!i.startDate) return false;
     if (i.status === "cancelled") return false;
+    if (!inPersonFilter(i.id)) return false;
     const s = new Date(i.startDate).getTime();
     const e = i.targetEndDate
       ? new Date(i.targetEndDate).getTime()
@@ -112,8 +132,15 @@ export default async function RoadmapPage({
   });
 
   const offTimeline = initsRes.data.filter(
-    (i) => !i.startDate && i.status !== "cancelled",
+    (i) => !i.startDate && i.status !== "cancelled" && inPersonFilter(i.id),
   );
+
+  const planData = allowedIds
+    ? {
+        ...planDocRes.data,
+        initiatives: planDocRes.data.initiatives.filter((i) => allowedIds.has(i.id)),
+      }
+    : planDocRes.data;
   const todayPct = leftPct(
     new Date().toISOString().slice(0, 10),
     tl.start,
@@ -134,7 +161,7 @@ export default async function RoadmapPage({
       }
       const item: TimelineItem = {
         id: i.id,
-        title: i.title,
+        title: stripMentionTokens(i.title),
         subLabel: i.ownerName ?? null,
         startDate: i.startDate,
         targetEndDate: i.targetEndDate,
@@ -190,6 +217,31 @@ export default async function RoadmapPage({
             <DbBanner error={(initsRes as { error?: string }).error ?? ""} />
           )}
 
+          {personId && (
+            <div
+              className="flex items-center justify-between gap-3 rounded-md border px-3 py-1.5 text-[12.5px]"
+              style={{
+                borderColor: "var(--border-default)",
+                background: "var(--blue-bg, rgba(59,130,246,0.08))",
+              }}
+            >
+              <span className="text-text-secondary">
+                Showing items tagged{" "}
+                <span className="font-medium text-text-primary">
+                  @{personName ?? "person"}
+                </span>{" "}
+                · {allowedIds?.size ?? 0} item
+                {(allowedIds?.size ?? 0) === 1 ? "" : "s"}
+              </span>
+              <Link
+                href={`/roadmap?window=${windowKey}`}
+                className="text-text-secondary hover:text-text-primary"
+              >
+                Clear ✕
+              </Link>
+            </div>
+          )}
+
           {/* Timeline + plan with shared milestone selection (click a bar →
               deliverables expand inline + the plan filters to it). */}
           <RoadmapBoard
@@ -201,10 +253,10 @@ export default async function RoadmapPage({
               todayPct,
               groups: tlGroups,
               detailsById: Object.fromEntries(
-                planDocRes.data.initiatives.map((i) => [i.id, i]),
+                planData.initiatives.map((i) => [i.id, i]),
               ),
             }}
-            planData={planDocRes.data}
+            planData={planData}
             deps={depsRes.data}
           />
         </RoadmapSelectionProvider>
