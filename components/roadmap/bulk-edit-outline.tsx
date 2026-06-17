@@ -928,7 +928,7 @@ function OutlineRow({
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      onBlur(row.key);
+      commit(row.key);
       addSibling(row);
     } else if (e.key === "ArrowDown") {
       e.preventDefault();
