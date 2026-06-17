@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/current-user";
 import { getProjectDoc } from "@/db/queries/docs";
 import { listWorkspaceMembers } from "@/db/queries/team";
-import { DocEditor } from "@/components/lob/doc-editor";
+import { DocEditor } from "@/components/lob/doc-editor-loader";
 import { DocCommentsPanel } from "@/components/lob/doc-comments-panel";
 
 type Params = Promise<{ id: string; docId: string }>;
