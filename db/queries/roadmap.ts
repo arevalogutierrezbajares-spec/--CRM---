@@ -4,6 +4,7 @@ import {
   actionItemInitiatives,
   actionItems,
   initiativeDependencies,
+  initiativePeople,
   initiatives,
   linesOfBusiness,
   milestones,
@@ -12,6 +13,7 @@ import {
   users,
   workspaceMembers,
 } from "@/db/schema";
+import { extractMentionHandles } from "@/lib/town-hall/parse";
 import type {
   RoadmapInitiativeNode,
   RoadmapSnapshot,
@@ -76,6 +78,90 @@ export async function buildOwnerMaps(workspaceId: string): Promise<OwnerMaps> {
   for (const [id, h] of handleByUserId) userIdByHandle.set(h, id);
 
   return { handleByUserId, userIdByHandle };
+}
+
+/* ─── Initiative @-mentions (people tags) ─────────────────────────────── */
+
+/** Resolve the @handles in a title to workspace user ids (deduped, order-stable). */
+export function resolveMentionUserIds(text: string, maps: OwnerMaps): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const handle of extractMentionHandles(text)) {
+    const userId = maps.userIdByHandle.get(handle);
+    if (userId && !seen.has(userId)) {
+      seen.add(userId);
+      out.push(userId);
+    }
+  }
+  return out;
+}
+
+/**
+ * Re-sync the initiative_people index from the @tokens in an initiative's title.
+ * Derived state: we delete the rows that no longer appear and insert the new
+ * ones, so the table always mirrors the title (mirrors Town Hall's post_mentions
+ * re-parse). `maps` is optional so callers batching many initiatives can build
+ * the owner maps once.
+ */
+export async function syncInitiativePeopleFromText(
+  initiativeId: string,
+  workspaceId: string,
+  text: string,
+  maps?: OwnerMaps,
+): Promise<void> {
+  const ownerMaps = maps ?? (await buildOwnerMaps(workspaceId));
+  const wantedRaw = resolveMentionUserIds(text, ownerMaps);
+  // Only tag people who actually belong to this workspace (userIdByHandle is
+  // already workspace-scoped, so every resolved id qualifies).
+  const wanted = new Set(wantedRaw);
+
+  const existing = await db
+    .select({ userId: initiativePeople.userId })
+    .from(initiativePeople)
+    .where(eq(initiativePeople.initiativeId, initiativeId));
+  const have = new Set(existing.map((r) => r.userId));
+
+  const toAdd = [...wanted].filter((id) => !have.has(id));
+  const toRemove = [...have].filter((id) => !wanted.has(id));
+
+  if (toRemove.length) {
+    await db
+      .delete(initiativePeople)
+      .where(
+        and(
+          eq(initiativePeople.initiativeId, initiativeId),
+          inArray(initiativePeople.userId, toRemove),
+        ),
+      );
+  }
+  if (toAdd.length) {
+    await db
+      .insert(initiativePeople)
+      .values(toAdd.map((userId) => ({ initiativeId, userId })))
+      .onConflictDoNothing();
+  }
+}
+
+export type InitiativePerson = {
+  initiativeId: string;
+  userId: string;
+  displayName: string;
+};
+
+/** All people-tags across a workspace's initiatives, for rendering + filtering. */
+export async function listInitiativePeople(
+  workspaceId: string,
+): Promise<InitiativePerson[]> {
+  return db
+    .select({
+      initiativeId: initiativePeople.initiativeId,
+      userId: initiativePeople.userId,
+      displayName: users.displayName,
+    })
+    .from(initiativePeople)
+    .innerJoin(initiatives, eq(initiatives.id, initiativePeople.initiativeId))
+    .innerJoin(users, eq(users.id, initiativePeople.userId))
+    .where(eq(initiatives.workspaceId, workspaceId));
 }
 
 /* ─── Snapshot builder (FR-RMD-1 / FR-UNI-1) ──────────────────────────── */
@@ -364,6 +450,8 @@ export type PlanDocInitiative = {
   ownerUserId: string | null;
   lobId: string | null;
   lobTitle: string | null;
+  /** People @-tagged in this initiative's title (the bubble owners). */
+  people: Array<{ userId: string; displayName: string }>;
   tasks: PlanDocTask[];
 };
 
@@ -396,18 +484,40 @@ export async function getPlanDocData(workspaceId: string): Promise<PlanDocData> 
   const lobTitleById = new Map(lobRows.map((l) => [l.id, l.title]));
 
   const initIds = inits.map((i) => i.id);
-  const taskRows = initIds.length
-    ? await db
-        .select()
-        .from(milestones)
-        .where(
-          and(
-            inArray(milestones.initiativeId, initIds),
-            ne(milestones.status, "cancelled"),
-          ),
-        )
-        .orderBy(asc(milestones.order), asc(milestones.createdAt))
-    : [];
+  const [taskRows, peopleRows] = await Promise.all([
+    initIds.length
+      ? db
+          .select()
+          .from(milestones)
+          .where(
+            and(
+              inArray(milestones.initiativeId, initIds),
+              ne(milestones.status, "cancelled"),
+            ),
+          )
+          .orderBy(asc(milestones.order), asc(milestones.createdAt))
+      : Promise.resolve([]),
+    initIds.length
+      ? db
+          .select({
+            initiativeId: initiativePeople.initiativeId,
+            userId: initiativePeople.userId,
+            displayName: users.displayName,
+          })
+          .from(initiativePeople)
+          .innerJoin(users, eq(users.id, initiativePeople.userId))
+          .where(inArray(initiativePeople.initiativeId, initIds))
+      : Promise.resolve([]),
+  ]);
+  const peopleByInit = new Map<
+    string,
+    Array<{ userId: string; displayName: string }>
+  >();
+  for (const p of peopleRows) {
+    const list = peopleByInit.get(p.initiativeId) ?? [];
+    list.push({ userId: p.userId, displayName: p.displayName });
+    peopleByInit.set(p.initiativeId, list);
+  }
 
   return {
     members,
@@ -447,6 +557,7 @@ export async function getPlanDocData(workspaceId: string): Promise<PlanDocData> 
         ownerUserId: init.ownerUserId,
         lobId: init.lobId,
         lobTitle: init.lobId ? (lobTitleById.get(init.lobId) ?? null) : null,
+        people: peopleByInit.get(init.id) ?? [],
         tasks: roots,
       };
     }),

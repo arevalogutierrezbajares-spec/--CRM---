@@ -28,6 +28,7 @@ import {
   getPlanVersion,
   nextPlanVersionNumber,
   resolveProjectForInitiative,
+  syncInitiativePeopleFromText,
 } from "@/db/queries/roadmap";
 
 /* ─── Export (FR-RMD-1) + Copy for AI (FR-RMD-2) ──────────────────────── */
@@ -419,6 +420,10 @@ export async function updateInitiativeFields(
     .update(initiatives)
     .set(set)
     .where(and(eq(initiatives.id, id), eq(initiatives.workspaceId, user.workspaceId)));
+  // Re-sync the people-tags index whenever the title (which carries the @tokens)
+  // changes, so bubbles + the person filter stay in lockstep with the text.
+  if (parsed.data.title !== undefined)
+    await syncInitiativePeopleFromText(id, user.workspaceId, parsed.data.title);
   if (quiet) return; // editor refreshes coarsely on its own (router.refresh)
   revalidatePath("/roadmap");
   revalidatePath("/initiatives");

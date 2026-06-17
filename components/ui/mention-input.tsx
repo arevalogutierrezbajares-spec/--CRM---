@@ -40,12 +40,16 @@ export function MentionInput({
   sources,
   onPick,
   onSubmit,
+  onKeyDown: onKeyDownPassthrough,
+  onBlur,
   multiline = false,
   placeholder,
   autoFocus,
   rows = 3,
+  disabled,
   className,
   inputClassName,
+  inputProps,
   "aria-label": ariaLabel,
 }: {
   value: string;
@@ -53,12 +57,22 @@ export function MentionInput({
   sources: MentionSources;
   onPick?: (e: PickedEntity) => void;
   onSubmit?: () => void;
+  /**
+   * Forwarded keydown for keys the autocomplete menu did NOT consume. Lets a
+   * host (e.g. the roadmap outline) keep its own Enter/Tab/Arrow navigation
+   * while the menu still owns those keys when open.
+   */
+  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
+  onBlur?: (e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
   multiline?: boolean;
   placeholder?: string;
   autoFocus?: boolean;
   rows?: number;
+  disabled?: boolean;
   className?: string;
   inputClassName?: string;
+  inputProps?: React.HTMLAttributes<HTMLInputElement | HTMLTextAreaElement> &
+    Record<`data-${string}`, string>;
   "aria-label"?: string;
 }) {
   const ref = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
@@ -158,6 +172,9 @@ export function MentionInput({
         return;
       }
     }
+    // Menu didn't capture the key — let the host handle navigation first.
+    onKeyDownPassthrough?.(e);
+    if (e.defaultPrevented) return;
     // Submit when the menu is not capturing the key.
     const wantSubmit = multiline ? (e.metaKey || e.ctrlKey) && e.key === "Enter" : e.key === "Enter";
     if (wantSubmit && onSubmit) {
@@ -174,9 +191,11 @@ export function MentionInput({
   };
 
   const shared = {
+    ...inputProps,
     value,
     autoFocus,
     placeholder,
+    disabled,
     "aria-label": ariaLabel,
     role: "combobox" as const,
     "aria-expanded": showMenu,
@@ -192,6 +211,7 @@ export function MentionInput({
     onKeyUp: syncCaret,
     onClick: syncCaret,
     onKeyDown,
+    onBlur,
   };
 
   return (

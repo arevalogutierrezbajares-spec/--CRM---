@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronRight, Plus } from "lucide-react";
 import type { PlanDocData, PlanDocInitiative, PlanDocTask } from "@/db/queries/roadmap";
 import {
@@ -10,6 +11,8 @@ import {
   updateInitiativeFields,
   updateRoadmapTask,
 } from "@/app/(app)/roadmap/actions";
+import { MentionInput } from "@/components/ui/mention-input";
+import { MentionText, type MentionMember } from "@/components/roadmap/mention-bubbles";
 
 /** The plan as an editable document (FR-RVW-1): initiative sections with
  *  inline-editable metadata and a nested task checklist. Edits save in place
@@ -177,7 +180,13 @@ function InitiativeSection({
 }) {
   const [open, setOpen] = useState(true);
   const [, startTransition] = useTransition();
+  const router = useRouter();
   const { done, total } = countDone(init.tasks);
+  const mentionPeople = useMemo<MentionMember[]>(
+    () => members.map((m) => ({ userId: m.id, displayName: m.displayName })),
+    [members],
+  );
+  const onPersonClick = (userId: string) => router.push(`/roadmap?person=${userId}`);
 
   const save = (patch: Parameters<typeof updateInitiativeFields>[1]) =>
     startTransition(() => updateInitiativeFields(init.id, patch));
@@ -206,6 +215,9 @@ function InitiativeSection({
           value={init.title}
           className="text-[14.5px] font-medium flex-1 min-w-0"
           onSave={(title) => title && save({ title })}
+          people={mentionPeople}
+          onPersonClick={onPersonClick}
+          placeholder="Untitled milestone"
         />
         <span className="text-[12px] text-text-tertiary tabular-nums shrink-0">
           {total > 0 ? `${done}/${total}` : "—"}
@@ -340,7 +352,13 @@ function InitiativeSection({
           </div>
 
           {/* Task checklist */}
-          <TaskList initiativeId={init.id} tasks={init.tasks} depth={0} />
+          <TaskList
+            initiativeId={init.id}
+            tasks={init.tasks}
+            depth={0}
+            people={mentionPeople}
+            onPersonClick={onPersonClick}
+          />
         </div>
       )}
     </section>
@@ -354,16 +372,28 @@ function TaskList({
   tasks,
   depth,
   parentTaskId = null,
+  people,
+  onPersonClick,
 }: {
   initiativeId: string;
   tasks: PlanDocTask[];
   depth: number;
   parentTaskId?: string | null;
+  /** Workspace members for @-tagging deliverables (same as the milestone title). */
+  people?: MentionMember[];
+  onPersonClick?: (userId: string) => void;
 }) {
   return (
     <ul className={depth === 0 ? "space-y-0.5" : "space-y-0.5 ml-6"}>
       {tasks.map((t) => (
-        <TaskRow key={t.id} task={t} initiativeId={initiativeId} depth={depth} />
+        <TaskRow
+          key={t.id}
+          task={t}
+          initiativeId={initiativeId}
+          depth={depth}
+          people={people}
+          onPersonClick={onPersonClick}
+        />
       ))}
       {depth === 0 && (
         <li>
@@ -378,10 +408,14 @@ function TaskRow({
   task,
   initiativeId,
   depth,
+  people,
+  onPersonClick,
 }: {
   task: PlanDocTask;
   initiativeId: string;
   depth: number;
+  people?: MentionMember[];
+  onPersonClick?: (userId: string) => void;
 }) {
   const [, startTransition] = useTransition();
   const [checked, setChecked] = useState(task.done);
@@ -404,6 +438,8 @@ function TaskRow({
           onSave={(title) =>
             title && startTransition(() => updateRoadmapTask(task.id, { title }))
           }
+          people={people}
+          onPersonClick={onPersonClick}
         />
         <input
           type="date"
@@ -424,6 +460,8 @@ function TaskRow({
           tasks={task.children}
           depth={depth + 1}
           parentTaskId={task.id}
+          people={people}
+          onPersonClick={onPersonClick}
         />
       )}
     </li>
@@ -468,23 +506,52 @@ function EditableText({
   onSave,
   className = "",
   placeholder,
+  people,
+  onPersonClick,
 }: {
   value: string;
   onSave: (v: string) => void;
   className?: string;
   placeholder?: string;
+  /** When set, @tokens render as person bubbles and the editor offers @ autocomplete. */
+  people?: MentionMember[];
+  onPersonClick?: (userId: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
+  const commit = () => {
+    setEditing(false);
+    const v = draft.trim();
+    if (v && v !== value) onSave(v);
+  };
+  const startEdit = () => {
+    setDraft(value);
+    setEditing(true);
+  };
 
   if (!editing) {
+    // Mention-aware read state: a click-to-edit container whose @tokens render
+    // as bubbles. Bubbles stop propagation, so clicking one filters instead of
+    // entering edit mode.
+    if (people && people.length) {
+      return (
+        <span
+          onClick={startEdit}
+          className={`cursor-text ${className}`}
+          title="Click to edit"
+        >
+          <MentionText
+            text={value || placeholder || "—"}
+            members={people}
+            onPersonClick={onPersonClick}
+          />
+        </span>
+      );
+    }
     return (
       <button
         type="button"
-        onClick={() => {
-          setDraft(value);
-          setEditing(true);
-        }}
+        onClick={startEdit}
         className={`truncate text-left hover:opacity-80 ${className}`}
         title="Click to edit"
       >
@@ -492,11 +559,24 @@ function EditableText({
       </button>
     );
   }
-  const commit = () => {
-    setEditing(false);
-    const v = draft.trim();
-    if (v && v !== value) onSave(v);
-  };
+  if (people) {
+    return (
+      <MentionInput
+        value={draft}
+        onChange={setDraft}
+        onSubmit={commit}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") setEditing(false);
+        }}
+        sources={{ people, projects: [], docs: [] }}
+        autoFocus
+        placeholder={placeholder}
+        className={className}
+        inputClassName="w-full bg-transparent border-b outline-none"
+      />
+    );
+  }
   return (
     <input
       autoFocus

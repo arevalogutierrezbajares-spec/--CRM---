@@ -43,6 +43,8 @@ import { CSS } from "@dnd-kit/utilities";
 import { ChevronRight, GripVertical, Plus, X } from "lucide-react";
 import type { PlanDocData, PlanDocInitiative, PlanDocTask } from "@/db/queries/roadmap";
 import { fmtChip, parseDateTokens } from "@/lib/roadmap-dates";
+import { MentionInput } from "@/components/ui/mention-input";
+import { PersonChipStack } from "@/components/roadmap/mention-bubbles";
 import {
   createInitiative,
   createLob,
@@ -271,6 +273,10 @@ export function BulkEditOutline({ data }: { data: PlanDocData }) {
   const lastClicked = useRef<string | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  const onPersonClick = useCallback(
+    (userId: string) => router.push(`/roadmap?person=${userId}`),
+    [router],
+  );
 
   const rowsRef = useRef(rows);
   useEffect(() => {
@@ -825,6 +831,8 @@ export function BulkEditOutline({ data }: { data: PlanDocData }) {
               <OutlineRow
                 key={row.key}
                 row={row}
+                members={data.members}
+                onPersonClick={onPersonClick}
                 projectedDepth={activeKey === row.key && projection ? projection.depth : null}
                 dragValid={activeKey === row.key ? projection != null : null}
                 isSelected={selected.has(row.key)}
@@ -872,6 +880,8 @@ export function BulkEditOutline({ data }: { data: PlanDocData }) {
 
 function OutlineRow({
   row,
+  members,
+  onPersonClick,
   projectedDepth,
   dragValid,
   isSelected,
@@ -888,6 +898,8 @@ function OutlineRow({
   moveFocus,
 }: {
   row: ERow;
+  members: PlanDocData["members"];
+  onPersonClick: (userId: string) => void;
   projectedDepth: number | null;
   dragValid: boolean | null;
   isSelected: boolean;
@@ -904,12 +916,16 @@ function OutlineRow({
   moveFocus: (fromKey: string, dir: 1 | -1) => void;
 }) {
   const isLobNone = row.isLobNone;
+  const mentionPeople = useMemo(
+    () => members.map((m) => ({ userId: m.id, displayName: m.displayName })),
+    [members],
+  );
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: row.key,
     disabled: isLobNone,
   });
 
-  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     if (e.key === "Enter") {
       e.preventDefault();
       commit(row.key);
@@ -966,24 +982,48 @@ function OutlineRow({
         </button>
       )}
       {row.kind !== "lob" && <ChevronRight size={12} className="text-text-tertiary shrink-0 opacity-40" />}
-      <input
-        data-key={row.key}
-        value={row.title}
-        disabled={isLobNone}
-        onMouseDown={(e) => {
-          // ⌘/Ctrl-click (or ⇧-click) selects the deliverable instead of editing.
-          if (row.kind === "task" && (e.metaKey || e.ctrlKey || e.shiftKey)) {
-            e.preventDefault();
-            onSelectToggle(e.shiftKey);
+      {row.kind === "lob" ? (
+        <input
+          data-key={row.key}
+          value={row.title}
+          disabled={isLobNone}
+          onChange={(e) => setTitle(row.key, e.target.value)}
+          onBlur={() => onBlur(row.key)}
+          onKeyDown={onKeyDown}
+          placeholder="Line of business…"
+          className={`flex-1 min-w-0 bg-transparent outline-none placeholder:text-text-tertiary ${fontByKind} disabled:text-text-tertiary`}
+        />
+      ) : (
+        // Milestones AND deliverables/sub-deliverables get @-mention tagging.
+        <MentionInput
+          value={row.title}
+          onChange={(v) => setTitle(row.key, v)}
+          onKeyDown={onKeyDown}
+          onBlur={() => onBlur(row.key)}
+          sources={{ people: mentionPeople, projects: [], docs: [] }}
+          placeholder={
+            row.kind === "init"
+              ? "Milestone… (type @ to tag people)"
+              : "Deliverable… (type @ to tag people)"
           }
-        }}
-        onChange={(e) => setTitle(row.key, e.target.value)}
-        onBlur={() => onBlur(row.key)}
-        onKeyDown={onKeyDown}
-        placeholder={row.kind === "lob" ? "Line of business…" : row.kind === "init" ? "Milestone…" : "Deliverable…"}
-        className={`flex-1 min-w-0 bg-transparent outline-none placeholder:text-text-tertiary ${fontByKind} disabled:text-text-tertiary`}
-      />
+          className="flex-1 min-w-0"
+          inputClassName={`w-full bg-transparent outline-none placeholder:text-text-tertiary ${fontByKind}`}
+          inputProps={{
+            "data-key": row.key,
+            onMouseDown: (e) => {
+              // ⌘/Ctrl-click (or ⇧-click) selects the deliverable instead of editing.
+              if (row.kind === "task" && (e.metaKey || e.ctrlKey || e.shiftKey)) {
+                e.preventDefault();
+                onSelectToggle(e.shiftKey);
+              }
+            },
+          }}
+        />
+      )}
       {row.kind === "task" && <ProjectChip value={row.project} onChange={(p) => setRowProject(row.key, p)} />}
+      {row.kind !== "lob" && (
+        <PersonChipStack text={row.title} members={mentionPeople} onPersonClick={onPersonClick} />
+      )}
       {(row.endDate || (row.kind === "init" && row.startDate)) && (
         <span className="shrink-0 text-tiny tabular-nums text-text-tertiary">
           {row.kind === "init" && row.startDate ? `${fmtChip(row.startDate)} → ` : ""}
