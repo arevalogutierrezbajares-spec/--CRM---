@@ -819,6 +819,44 @@ export const projectDocContents = pgTable("project_doc_contents", {
   updatedBy: uuid("updated_by").references(() => users.id),
 });
 
+// FR-DOC-COMMENTS: threaded discussion + @mentions on any project_links row
+// (a file OR a collaborative doc). Mentioning a teammate fans out an in-app
+// notification (entityType='doc_comment', entityId=link_id) and a WhatsApp DM,
+// mirroring the Town Hall pipeline. Soft-deleted (deletedAt) so threads keep
+// their shape.
+export const docComments = pgTable("doc_comments", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  linkId: uuid("link_id")
+    .notNull()
+    .references(() => projectLinks.id, { onDelete: "cascade" }),
+  authorId: uuid("author_id")
+    .notNull()
+    .references(() => users.id),
+  body: text("body").notNull(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+// Who was @mentioned in a comment (also powers a "people tagged on this doc"
+// view). One row per (comment, user).
+export const docCommentMentions = pgTable("doc_comment_mentions", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  commentId: uuid("comment_id")
+    .notNull()
+    .references(() => docComments.id, { onDelete: "cascade" }),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // PARTNER ACCESS — curated partner rooms + share ledger. Rooms are the future
 // external surface; shares are useful immediately as an internal audit trail.

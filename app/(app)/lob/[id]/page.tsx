@@ -38,6 +38,7 @@ import { listContacts } from "@/db/queries/contacts";
 import { listAttachedPaths } from "@/lib/project-files/storage";
 import { recordProjectVisit } from "@/db/queries/pins";
 import { listTouchesForLob } from "@/db/queries/touches";
+import { listWorkspaceMembers } from "@/db/queries/team";
 import {
   listResearchNotes,
   type ResearchNoteListItem,
@@ -197,6 +198,12 @@ export default async function ProjectDetailPage(props: {
           : l.kind === "doc"
             ? true
             : false,
+  }));
+
+  // Workspace roster for the @mention composer on document comments.
+  const mentionMembers = (await listWorkspaceMembers(user.workspaceId)).map((m) => ({
+    userId: m.userId,
+    displayName: m.displayName,
   }));
 
   // Record the visit for Home's "Recently opened" (best-effort, non-blocking).
@@ -452,6 +459,7 @@ export default async function ProjectDetailPage(props: {
           links={linksView}
           currentUserId={user.id}
           currentUserRole={user.workspaceRole}
+          members={mentionMembers}
           shareContacts={shareContactsRes.data.map((contact) => ({
             id: contact.id,
             name: contact.name,
