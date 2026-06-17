@@ -44,6 +44,7 @@ export function FilePreviewModal({
   loading,
   onEditDetails,
   onEditContent,
+  comments,
 }: {
   file: PreviewFile | null;
   open: boolean;
@@ -55,6 +56,8 @@ export function FilePreviewModal({
   onEditDetails?: () => void;
   /** Provided when the file is editable text/markdown and the user may edit it. */
   onEditContent?: () => void;
+  /** Comment thread + @mention composer for this file (rendered as a side panel). */
+  comments?: React.ReactNode;
 }) {
   const kind = file ? previewKind(file.filename) : "none";
   const chip = file ? chipForFile(file.filename, file.mime) : "FILE";
@@ -81,31 +84,39 @@ export function FilePreviewModal({
           </DialogTitle>
         </DialogHeader>
 
-        <div
-          className={`relative w-full overflow-hidden rounded-md border border-[var(--border)] bg-surface ${
-            // Cap deck height so header + footer + 84vh can never push the
-            // dialog past the viewport on short screens (which clipped the
-            // preview bottom).
-            isDeck ? "h-[min(84vh,calc(100vh-170px))]" : "h-[72vh]"
-          }`}
-        >
-          {loading && (
-            <div className="absolute inset-0 grid place-items-center text-text-tertiary">
-              <Loader2 className="h-6 w-6 animate-spin" />
-            </div>
-          )}
-
-          {error && !loading && (
-            <div className="absolute inset-0 grid place-items-center px-6 text-center">
-              <div>
-                <FileQuestion className="mx-auto mb-2 h-7 w-7 text-text-tertiary" />
-                <p className="text-sm text-text-secondary">{error}</p>
+        <div className="flex min-h-0 gap-3">
+          <div
+            className={`relative min-w-0 flex-1 overflow-hidden rounded-md border border-[var(--border)] bg-surface ${
+              // Cap deck height so header + footer + 84vh can never push the
+              // dialog past the viewport on short screens (which clipped the
+              // preview bottom).
+              isDeck ? "h-[min(84vh,calc(100vh-170px))]" : "h-[72vh]"
+            }`}
+          >
+            {loading && (
+              <div className="absolute inset-0 grid place-items-center text-text-tertiary">
+                <Loader2 className="h-6 w-6 animate-spin" />
               </div>
-            </div>
-          )}
+            )}
 
-          {url && !loading && file && (
-            <PreviewBody kind={kind} url={url} label={file.label} linkId={file.linkId} />
+            {error && !loading && (
+              <div className="absolute inset-0 grid place-items-center px-6 text-center">
+                <div>
+                  <FileQuestion className="mx-auto mb-2 h-7 w-7 text-text-tertiary" />
+                  <p className="text-sm text-text-secondary">{error}</p>
+                </div>
+              </div>
+            )}
+
+            {url && !loading && file && (
+              <PreviewBody kind={kind} url={url} label={file.label} linkId={file.linkId} />
+            )}
+          </div>
+
+          {comments && (
+            <aside className="hidden w-80 shrink-0 self-stretch overflow-hidden rounded-md border border-[var(--border)] lg:flex">
+              {comments}
+            </aside>
           )}
         </div>
 

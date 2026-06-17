@@ -3,7 +3,7 @@ import { and, desc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db, schema } from "@/db";
 
-const { posts, postMentions, postRefs, postReactions, notifications, users, workspaceMembers } = schema;
+const { posts, postMentions, postRefs, postReactions, notifications, users, workspaceMembers, projectLinks } = schema;
 // Second alias of users so a notification can join BOTH the post author and the
 // actor (who assigned/pinged) in one query.
 const actorUsers = alias(users, "actor_users");
@@ -224,12 +224,24 @@ export type NotificationView = {
   href: string;
 };
 
-/** Deep-link for a notification — to the item drawer, the meeting, or the feed. */
-function notificationHref(entityType: string | null, entityId: string | null): string {
+/** Deep-link for a notification — to the item drawer, the meeting, or the feed.
+ *  `link` carries the resolved project_links row (lob + kind) for doc-comment
+ *  mentions, whose entityId is the link id. */
+function notificationHref(
+  entityType: string | null,
+  entityId: string | null,
+  link?: { lobId: string | null; kind: string | null },
+): string {
   if (entityType && entityId) {
     if (entityType === "action_item" || entityType === "milestone") return `/?item=${entityType}:${entityId}`;
     if (entityType === "meeting") return `/meetings/${entityId}`;
     if (entityType === "partner_room") return `/partner-access/rooms/${entityId}`;
+    if (entityType === "doc_comment" && link?.lobId) {
+      // Docs have a dedicated editor route; files open via the LinksBoard ?doc= deep-link.
+      return link.kind === "doc"
+        ? `/lob/${link.lobId}/docs/${entityId}`
+        : `/lob/${link.lobId}?doc=${entityId}`;
+    }
   }
   return "/town-hall";
 }
@@ -345,11 +357,20 @@ export async function listNotifications(opts: {
       body: posts.body,
       postAuthor: users.displayName,
       actorName: actorUsers.displayName,
+      linkLobId: projectLinks.lobId,
+      linkKind: projectLinks.kind,
     })
     .from(notifications)
     .leftJoin(posts, eq(posts.id, notifications.postId))
     .leftJoin(users, eq(users.id, posts.authorId))
     .leftJoin(actorUsers, eq(actorUsers.id, notifications.actorId))
+    // Resolve doc-comment targets (entityId = project_links.id) for deep-linking.
+    // Fence the join to this workspace so it can never surface a foreign link's
+    // lob/kind (defense in depth — the notification row is already fenced).
+    .leftJoin(
+      projectLinks,
+      and(eq(projectLinks.id, notifications.entityId), eq(projectLinks.workspaceId, opts.workspaceId)),
+    )
     .where(and(...conds))
     .orderBy(desc(notifications.createdAt))
     .limit(opts.limit ?? 30);
@@ -366,7 +387,7 @@ export async function listNotifications(opts: {
     entityId: r.entityId,
     title: r.title,
     snoozedUntil: r.snoozedUntil,
-    href: notificationHref(r.entityType, r.entityId),
+    href: notificationHref(r.entityType, r.entityId, { lobId: r.linkLobId, kind: r.linkKind }),
   }));
 }
 
