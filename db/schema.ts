@@ -2233,6 +2233,30 @@ export const initiatives = pgTable("initiatives", {
     .defaultNow(),
 });
 
+// People @-tagged on an initiative in the roadmap. Distinct from the single
+// formal owner (initiatives.owner_user_id): an item can carry many tagged
+// collaborators. Rows are a derived index — re-synced from the @tokens in the
+// initiative title on each title save (mirrors Town Hall's post_mentions),
+// and power the "filter roadmap by person" bubble click.
+export const initiativePeople = pgTable(
+  "initiative_people",
+  {
+    initiativeId: uuid("initiative_id")
+      .notNull()
+      .references(() => initiatives.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.initiativeId, t.userId] }),
+    byUser: index("initiative_people_user_idx").on(t.userId),
+  }),
+);
+
 // ─── Plan versions (Roadmap Module, FR-PLV-1..3) ─────────────────────────
 // One row per export / applied import / plan commit. The md snapshot IS the
 // artifact users saw and serves as the 3-way merge base for re-imports.
@@ -2410,8 +2434,20 @@ export const initiativesRelations = relations(
     }),
     themes: many(initiativeThemes),
     sprints: many(sprints),
+    people: many(initiativePeople),
   }),
 );
+
+export const initiativePeopleRelations = relations(initiativePeople, ({ one }) => ({
+  initiative: one(initiatives, {
+    fields: [initiativePeople.initiativeId],
+    references: [initiatives.id],
+  }),
+  user: one(users, {
+    fields: [initiativePeople.userId],
+    references: [users.id],
+  }),
+}));
 
 export const sprintsRelations = relations(sprints, ({ one }) => ({
   initiative: one(initiatives, {
