@@ -475,6 +475,132 @@ export async function toggleRoadmapTask(
   revalidatePath("/");
 }
 
+/* ─── Roadmap product-line tag (caney | vav | all | null) ─────────────── */
+
+const PROJECTS = ["caney", "vav", "all"] as const;
+type ProjectTag = (typeof PROJECTS)[number] | null;
+const normProject = (p: string | null): ProjectTag =>
+  p && (PROJECTS as readonly string[]).includes(p) ? (p as ProjectTag) : null;
+
+/** Set (or clear) the product-line tag on one or more deliverables. */
+export async function setRoadmapTaskProject(
+  ids: string[],
+  project: string | null,
+  quiet = false,
+): Promise<{ ok: boolean }> {
+  const user = await requireUser();
+  const clean = ids.filter(Boolean);
+  if (clean.length === 0) return { ok: true };
+  await db
+    .update(milestones)
+    .set({ project: normProject(project) })
+    .where(and(inArray(milestones.id, clean), eq(milestones.workspaceId, user.workspaceId)));
+  if (!quiet) {
+    revalidatePath("/roadmap");
+    revalidatePath("/work");
+  }
+  return { ok: true };
+}
+
+/** Copy/paste: duplicate task subtrees (deliverables + their descendants) as
+ *  siblings after `anchorId` — same initiative + parent, structure preserved. */
+export async function duplicateRoadmapTasks(
+  rootIds: string[],
+  anchorId: string,
+  quiet = false,
+): Promise<{ ok: boolean; error?: string; newRootIds?: string[] }> {
+  const user = await requireUser();
+  const roots = rootIds.filter(Boolean);
+  if (roots.length === 0) return { ok: true, newRootIds: [] };
+
+  const [anchor] = await db
+    .select({
+      initiativeId: milestones.initiativeId,
+      parentMilestoneId: milestones.parentMilestoneId,
+      projectId: milestones.projectId,
+    })
+    .from(milestones)
+    .where(and(eq(milestones.id, anchorId), eq(milestones.workspaceId, user.workspaceId)))
+    .limit(1);
+  if (!anchor || !anchor.initiativeId) return { ok: false, error: "Paste target not found" };
+
+  const newRootIds: string[] = [];
+  try {
+    await db.transaction(async (tx) => {
+      const t = tx as unknown as typeof db;
+      const all = await t
+        .select()
+        .from(milestones)
+        .where(eq(milestones.workspaceId, user.workspaceId));
+      const byId = new Map(all.map((m) => [m.id, m]));
+      const childrenOf = new Map<string, string[]>();
+      for (const m of all) {
+        if (m.parentMilestoneId) {
+          const a = childrenOf.get(m.parentMilestoneId) ?? [];
+          a.push(m.id);
+          childrenOf.set(m.parentMilestoneId, a);
+        }
+      }
+      // order siblings of children by their `order`
+      const sortKids = (kids: string[]) =>
+        kids.sort((a, b) => (byId.get(a)!.order ?? 0) - (byId.get(b)!.order ?? 0));
+
+      // next order at the anchor's sibling group
+      let nextOrder =
+        Math.max(
+          0,
+          ...all
+            .filter(
+              (m) =>
+                m.initiativeId === anchor.initiativeId &&
+                (m.parentMilestoneId ?? null) === (anchor.parentMilestoneId ?? null),
+            )
+            .map((m) => m.order ?? 0),
+        ) + 1;
+
+      const cloneSubtree = async (
+        srcId: string,
+        parentMilestoneId: string | null,
+        order: number,
+      ): Promise<string | null> => {
+        const src = byId.get(srcId);
+        if (!src) return null;
+        const [row] = await t
+          .insert(milestones)
+          .values({
+            workspaceId: user.workspaceId,
+            projectId: anchor.projectId,
+            initiativeId: anchor.initiativeId,
+            parentMilestoneId,
+            title: src.title,
+            description: src.description,
+            dueDate: src.dueDate,
+            project: src.project,
+            order,
+            createdBy: user.id,
+          })
+          .returning({ id: milestones.id });
+        const kids = sortKids([...(childrenOf.get(srcId) ?? [])]);
+        for (let k = 0; k < kids.length; k++) await cloneSubtree(kids[k], row.id, k);
+        return row.id;
+      };
+
+      for (const r of roots) {
+        const id = await cloneSubtree(r, anchor.parentMilestoneId ?? null, nextOrder++);
+        if (id) newRootIds.push(id);
+      }
+    });
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Paste failed" };
+  }
+
+  if (!quiet) {
+    revalidatePath("/roadmap");
+    revalidatePath("/work");
+  }
+  return { ok: true, newRootIds };
+}
+
 export async function createRoadmapTask(opts: {
   initiativeId: string;
   title: string;

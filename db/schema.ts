@@ -1561,6 +1561,9 @@ export const milestones = pgTable("milestones", {
   sourceMeetingId: uuid("source_meeting_id"),
   completedAt: timestamp("completed_at", { withTimezone: true }),
   order: integer("order").notNull().default(0),
+  // Roadmap product-line tag: 'caney' | 'vav' | 'all' (applies to both) | null.
+  // Distinct from projectId (the internal project grouping).
+  project: text("project"),
   // ─── Work-mgmt extensions (R1) ────────────────────────────────────
   initiativeId: uuid("initiative_id"),
   sprintId: uuid("sprint_id"),
