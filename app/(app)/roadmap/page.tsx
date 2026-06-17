@@ -19,8 +19,9 @@ import {
   nextPlanVersionNumber,
   type InitiativeDependency,
   type PlanDocData,
+  type PlanDocTask,
 } from "@/db/queries/roadmap";
-import { stripMentionTokens } from "@/lib/roadmap-mentions";
+import { mentionedMembers, stripMentionTokens } from "@/lib/roadmap-mentions";
 import { RoadmapToolbar } from "@/components/roadmap/roadmap-toolbar";
 import { RoadmapSelectionProvider } from "@/components/roadmap/roadmap-selection";
 import { UnassignedLane } from "@/components/roadmap/unassigned-lane";
@@ -105,17 +106,31 @@ export default async function RoadmapPage({
   // Person filter (set by clicking a @mention bubble): restrict every surface to
   // initiatives that person is tagged on. Derived from the people-tags already
   // attached to each plan-doc initiative.
+  // Match a person tagged on the initiative title (i.people) OR on any of its
+  // deliverable / sub-deliverable titles (the @token lives inline in the title).
+  const planMembers = planDocRes.data.members.map((m) => ({
+    userId: m.id,
+    displayName: m.displayName,
+  }));
+  const tasksMention = (tasks: PlanDocTask[], uid: string): boolean =>
+    tasks.some(
+      (t) =>
+        mentionedMembers(t.title, planMembers).some((m) => m.userId === uid) ||
+        tasksMention(t.children, uid),
+    );
   const allowedIds = personId
     ? new Set(
         planDocRes.data.initiatives
-          .filter((i) => i.people.some((p) => p.userId === personId))
+          .filter(
+            (i) =>
+              i.people.some((p) => p.userId === personId) ||
+              tasksMention(i.tasks, personId),
+          )
           .map((i) => i.id),
       )
     : null;
   const personName = personId
-    ? (planDocRes.data.initiatives
-        .flatMap((i) => i.people)
-        .find((p) => p.userId === personId)?.displayName ?? null)
+    ? (planMembers.find((m) => m.userId === personId)?.displayName ?? null)
     : null;
   const inPersonFilter = (id: string) => !allowedIds || allowedIds.has(id);
 

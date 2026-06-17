@@ -352,7 +352,13 @@ function InitiativeSection({
           </div>
 
           {/* Task checklist */}
-          <TaskList initiativeId={init.id} tasks={init.tasks} depth={0} />
+          <TaskList
+            initiativeId={init.id}
+            tasks={init.tasks}
+            depth={0}
+            people={mentionPeople}
+            onPersonClick={onPersonClick}
+          />
         </div>
       )}
     </section>
@@ -366,16 +372,28 @@ function TaskList({
   tasks,
   depth,
   parentTaskId = null,
+  people,
+  onPersonClick,
 }: {
   initiativeId: string;
   tasks: PlanDocTask[];
   depth: number;
   parentTaskId?: string | null;
+  /** Workspace members for @-tagging deliverables (same as the milestone title). */
+  people?: MentionMember[];
+  onPersonClick?: (userId: string) => void;
 }) {
   return (
     <ul className={depth === 0 ? "space-y-0.5" : "space-y-0.5 ml-6"}>
       {tasks.map((t) => (
-        <TaskRow key={t.id} task={t} initiativeId={initiativeId} depth={depth} />
+        <TaskRow
+          key={t.id}
+          task={t}
+          initiativeId={initiativeId}
+          depth={depth}
+          people={people}
+          onPersonClick={onPersonClick}
+        />
       ))}
       {depth === 0 && (
         <li>
@@ -390,10 +408,14 @@ function TaskRow({
   task,
   initiativeId,
   depth,
+  people,
+  onPersonClick,
 }: {
   task: PlanDocTask;
   initiativeId: string;
   depth: number;
+  people?: MentionMember[];
+  onPersonClick?: (userId: string) => void;
 }) {
   const [, startTransition] = useTransition();
   const [checked, setChecked] = useState(task.done);
@@ -416,6 +438,8 @@ function TaskRow({
           onSave={(title) =>
             title && startTransition(() => updateRoadmapTask(task.id, { title }))
           }
+          people={people}
+          onPersonClick={onPersonClick}
         />
         <input
           type="date"
@@ -436,6 +460,8 @@ function TaskRow({
           tasks={task.children}
           depth={depth + 1}
           parentTaskId={task.id}
+          people={people}
+          onPersonClick={onPersonClick}
         />
       )}
     </li>

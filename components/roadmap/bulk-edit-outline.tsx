@@ -982,39 +982,46 @@ function OutlineRow({
         </button>
       )}
       {row.kind !== "lob" && <ChevronRight size={12} className="text-text-tertiary shrink-0 opacity-40" />}
-      {row.kind === "init" ? (
+      {row.kind === "lob" ? (
+        <input
+          data-key={row.key}
+          value={row.title}
+          disabled={isLobNone}
+          onChange={(e) => setTitle(row.key, e.target.value)}
+          onBlur={() => onBlur(row.key)}
+          onKeyDown={onKeyDown}
+          placeholder="Line of business…"
+          className={`flex-1 min-w-0 bg-transparent outline-none placeholder:text-text-tertiary ${fontByKind} disabled:text-text-tertiary`}
+        />
+      ) : (
+        // Milestones AND deliverables/sub-deliverables get @-mention tagging.
         <MentionInput
           value={row.title}
           onChange={(v) => setTitle(row.key, v)}
           onKeyDown={onKeyDown}
           onBlur={() => onBlur(row.key)}
           sources={{ people: mentionPeople, projects: [], docs: [] }}
-          placeholder="Milestone… (type @ to tag people)"
+          placeholder={
+            row.kind === "init"
+              ? "Milestone… (type @ to tag people)"
+              : "Deliverable… (type @ to tag people)"
+          }
           className="flex-1 min-w-0"
           inputClassName={`w-full bg-transparent outline-none placeholder:text-text-tertiary ${fontByKind}`}
-          inputProps={{ "data-key": row.key }}
-        />
-      ) : (
-        <input
-          data-key={row.key}
-          value={row.title}
-          disabled={isLobNone}
-          onMouseDown={(e) => {
-            // ⌘/Ctrl-click (or ⇧-click) selects the deliverable instead of editing.
-            if (row.kind === "task" && (e.metaKey || e.ctrlKey || e.shiftKey)) {
-              e.preventDefault();
-              onSelectToggle(e.shiftKey);
-            }
+          inputProps={{
+            "data-key": row.key,
+            onMouseDown: (e) => {
+              // ⌘/Ctrl-click (or ⇧-click) selects the deliverable instead of editing.
+              if (row.kind === "task" && (e.metaKey || e.ctrlKey || e.shiftKey)) {
+                e.preventDefault();
+                onSelectToggle(e.shiftKey);
+              }
+            },
           }}
-          onChange={(e) => setTitle(row.key, e.target.value)}
-          onBlur={() => onBlur(row.key)}
-          onKeyDown={onKeyDown}
-          placeholder={row.kind === "lob" ? "Line of business…" : "Deliverable…"}
-          className={`flex-1 min-w-0 bg-transparent outline-none placeholder:text-text-tertiary ${fontByKind} disabled:text-text-tertiary`}
         />
       )}
       {row.kind === "task" && <ProjectChip value={row.project} onChange={(p) => setRowProject(row.key, p)} />}
-      {row.kind === "init" && (
+      {row.kind !== "lob" && (
         <PersonChipStack text={row.title} members={mentionPeople} onPersonClick={onPersonClick} />
       )}
       {(row.endDate || (row.kind === "init" && row.startDate)) && (
