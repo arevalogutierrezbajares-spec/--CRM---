@@ -43,6 +43,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { ChevronRight, GripVertical, Plus, X } from "lucide-react";
 import type { PlanDocData, PlanDocInitiative, PlanDocTask } from "@/db/queries/roadmap";
 import { fmtChip, parseDateTokens } from "@/lib/roadmap-dates";
+import { PROJECT_TAG_OPTIONS } from "@/lib/products";
 import { MentionInput } from "@/components/ui/mention-input";
 import { PersonChipStack } from "@/components/roadmap/mention-bubbles";
 import {
@@ -80,12 +81,8 @@ type ERow = {
   isLobNone: boolean;
 };
 
-/** Product-line tags. "all" = applies to both products (shows under every filter). */
-const PROJECTS: Array<{ id: string; label: string; short: string; color: string }> = [
-  { id: "caney", label: "CaneyCloud", short: "CC", color: "var(--blue-mid)" },
-  { id: "vav", label: "VAV", short: "VAV", color: "var(--green-mid)" },
-  { id: "all", label: "All (both)", short: "ALL", color: "var(--amber-mid)" },
-];
+/** Product-line tags (shared taxonomy). "all" = every product. */
+const PROJECTS = PROJECT_TAG_OPTIONS;
 const projectMeta = (id: string | null) => PROJECTS.find((p) => p.id === id) ?? null;
 
 const MAX_TASK_LEVEL = 3;

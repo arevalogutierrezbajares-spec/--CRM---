@@ -18,6 +18,7 @@ import { listWorkspaceMembers, findMembers, getMemberPhones } from "@/db/queries
 import { createPostAction } from "@/app/(app)/town-hall/actions";
 import { findProjectByName } from "@/db/queries/items";
 import { notifyUsers } from "@/db/queries/town-hall";
+import { captureProductEnhancementsFor } from "@/db/queries/enhancements";
 import { parseCapture } from "@/lib/nlp/parse-capture";
 import { sendWhatsAppText } from "@/lib/whatsapp";
 import { todayInTz, addDaysToISODate } from "@/lib/date/today";
@@ -53,6 +54,19 @@ export async function createActionItemAction(opts: {
     contactId: opts.contactId,
     assigneeUserId: opts.assigneeUserId,
   });
+  // #func tags in the title/description → capture to the Tech Board.
+  try {
+    await captureProductEnhancementsFor({
+      workspaceId: user.workspaceId,
+      userId: user.id,
+      text: `${opts.title} ${opts.description ?? ""}`,
+      source: "action_item",
+      sourceRefId: id,
+      sourceLabel: opts.title.trim().slice(0, 140),
+    });
+  } catch {
+    /* ignore — capture must never block the action item */
+  }
   refresh();
   return { ok: true, id };
 }

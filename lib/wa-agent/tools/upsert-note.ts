@@ -14,6 +14,7 @@
 import { and, desc, eq, gt, ilike } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { safeStr, type ToolEntry } from "./_types";
+import { captureProductEnhancementsFor } from "@/db/queries/enhancements";
 
 const { contacts, touches } = schema;
 
@@ -132,6 +133,19 @@ export const upsertNote: ToolEntry = {
     if (created.length) parts.push(`created on ${created.join(", ")}`);
     if (updated.length) parts.push(`updated on ${updated.join(", ")}`);
     const speak = `Note ${parts.join("; ")}.`;
+
+    // #CCfunc/#VAVfunc/#CCAfunc/#CRMfunc in the note → capture to the Tech Board.
+    try {
+      await captureProductEnhancementsFor({
+        workspaceId: ctx.workspaceId,
+        userId: ctx.userId,
+        text: body,
+        source: "doc",
+        sourceLabel: (title || body).slice(0, 140),
+      });
+    } catch {
+      /* ignore */
+    }
 
     return { ok: true, data: { results }, speak };
   },

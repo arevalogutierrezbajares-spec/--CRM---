@@ -32,6 +32,7 @@ export const MCP_TOOL_NAMES = [
   "mark_milestone_done",
   "assign_contact",
   "schedule_reminder",
+  "file_enhancement",
 ] as const;
 
 const ALLOWED = new Set<string>(MCP_TOOL_NAMES);

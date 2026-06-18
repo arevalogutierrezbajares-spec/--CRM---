@@ -485,9 +485,9 @@ export async function toggleRoadmapTask(
   revalidatePath("/");
 }
 
-/* ─── Roadmap product-line tag (caney | vav | all | null) ─────────────── */
+/* ─── Roadmap product-line tag (caney | vav | cca | crm | all | null) ──── */
 
-const PROJECTS = ["caney", "vav", "all"] as const;
+const PROJECTS = ["caney", "vav", "cca", "crm", "all"] as const;
 type ProjectTag = (typeof PROJECTS)[number] | null;
 const normProject = (p: string | null): ProjectTag =>
   p && (PROJECTS as readonly string[]).includes(p) ? (p as ProjectTag) : null;
