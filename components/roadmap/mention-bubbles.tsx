@@ -10,9 +10,12 @@
  */
 
 import { useMemo } from "react";
+import { Users } from "lucide-react";
 import {
   MENTION_TOKEN_RE,
   buildHandleIndex,
+  hasAllMention,
+  isAllToken,
   mentionedMembers,
   type MentionMember,
 } from "@/lib/roadmap-mentions";
@@ -65,7 +68,32 @@ export function PersonBubble({
   );
 }
 
-/** Render a title with its @tokens turned into person bubbles. */
+/** `@all` bubble — represents everyone on the team (tooltip lists them). */
+export function EveryoneBubble({ members }: { members: MentionMember[] }) {
+  const names = members.map((m) => m.displayName).join(", ");
+  return (
+    <span
+      title={members.length ? `Everyone: ${names}` : "Everyone on the team"}
+      className="inline-flex items-center gap-1 rounded-full border px-1.5 py-px align-baseline text-[11.5px] font-medium leading-tight"
+      style={{
+        borderColor: "var(--amber-mid, #b45309)",
+        background: "color-mix(in oklab, var(--amber-mid, #b45309) 12%, transparent)",
+        color: "var(--amber-mid, #b45309)",
+      }}
+    >
+      <span
+        className="grid h-3.5 w-3.5 place-items-center rounded-full"
+        style={{ background: "var(--amber-mid, #b45309)" }}
+        aria-hidden
+      >
+        <Users size={9} color="#fff" />
+      </span>
+      Everyone{members.length ? ` · ${members.length}` : ""}
+    </span>
+  );
+}
+
+/** Render a title with its @tokens turned into person (or @all) bubbles. */
 export function MentionText({
   text,
   members,
@@ -83,6 +111,7 @@ export function MentionText({
     <span className={className}>
       {parts.map((part, i) => {
         if (part.startsWith("@")) {
+          if (isAllToken(part)) return <EveryoneBubble key={i} members={members} />;
           const member = index.get(part.slice(1).toLowerCase());
           if (member) {
             return <PersonBubble key={i} member={member} onClick={onPersonClick} />;
@@ -105,9 +134,11 @@ export function PersonChipStack({
   onPersonClick?: (userId: string) => void;
 }) {
   const tagged = mentionedMembers(text, members);
-  if (tagged.length === 0) return null;
+  const everyone = hasAllMention(text);
+  if (!everyone && tagged.length === 0) return null;
   return (
     <span className="flex shrink-0 items-center gap-1">
+      {everyone && <EveryoneBubble members={members} />}
       {tagged.map((m) => (
         <PersonBubble key={m.userId} member={m} onClick={onPersonClick} />
       ))}
