@@ -47,6 +47,22 @@ export function mentionedMembers(
   return out;
 }
 
+/** The broadcast token `@all` (and synonyms) means "everyone on the team". */
+const ALL_TOKENS = new Set(["all", "everyone", "team"]);
+
+/** True if a token (with or without leading @) is the everyone/broadcast token. */
+export function isAllToken(token: string): boolean {
+  return ALL_TOKENS.has(token.replace(/^@/, "").toLowerCase());
+}
+
+/** True if the text contains an `@all` / `@everyone` / `@team` broadcast token. */
+export function hasAllMention(text: string): boolean {
+  for (const m of text.matchAll(MENTION_TOKEN_RE_G)) {
+    if (isAllToken(m[1])) return true;
+  }
+  return false;
+}
+
 /**
  * Remove @tokens from a title for compact displays (e.g. timeline bars) where
  * bubbles are too heavy. Collapses the whitespace the token leaves behind.
