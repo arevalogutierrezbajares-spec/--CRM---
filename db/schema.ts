@@ -3590,3 +3590,37 @@ export const demoLinks = pgTable("demo_links", {
     .defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }),
 });
+
+// ─── Tech Board: product enhancements ──────────────────────────────────────
+// A lightweight enhancement/feature item per product (CaneyCloud/VAV/CCA/CRM).
+// Can be captured from anywhere via #CCfunc/#VAVfunc/#CCAfunc/#CRMfunc and
+// linked to a roadmap initiative/deliverable. See lib/products.ts.
+export const enhancements = pgTable("enhancements", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  product: text("product").notNull(), // caney | vav | cca | crm
+  title: text("title").notNull(),
+  detail: text("detail"),
+  status: text("status").notNull().default("idea"), // idea | planned | building | shipped | declined
+  priority: text("priority").notNull().default("next"), // now | next | later
+  sortOrder: integer("sort_order").notNull().default(0),
+  // capture provenance (where a #func tag came from)
+  source: text("source").notNull().default("manual"), // manual | townhall | doc | mcp | action_item | roadmap
+  sourceRefId: text("source_ref_id"),
+  sourceLabel: text("source_label"),
+  sourceUrl: text("source_url"),
+  // roadmap linkage
+  linkedInitiativeId: uuid("linked_initiative_id").references(() => initiatives.id, {
+    onDelete: "set null",
+  }),
+  linkedMilestoneId: uuid("linked_milestone_id").references(() => milestones.id, {
+    onDelete: "set null",
+  }),
+  createdBy: uuid("created_by")
+    .notNull()
+    .references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});

@@ -33,6 +33,7 @@ import { editActionItem } from "./edit-action-item";
 import { editTask } from "./edit-task";
 import { findMember } from "./find-member";
 import { postToTownHall } from "./post-to-townhall";
+import { fileEnhancement } from "./file-enhancement";
 
 export const TOOLS: Record<string, ToolEntry> = {
   find_contact: findContact,
@@ -62,6 +63,7 @@ export const TOOLS: Record<string, ToolEntry> = {
   edit_task: editTask,
   find_member: findMember,
   post_to_townhall: postToTownHall,
+  file_enhancement: fileEnhancement,
 };
 
 export const TOOL_NAMES = Object.keys(TOOLS);

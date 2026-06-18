@@ -6,6 +6,7 @@ import { db, schema } from "@/db";
 import { inArray } from "drizzle-orm";
 import { requireUser } from "@/lib/current-user";
 import { listWorkspaceMembers } from "@/db/queries/team";
+import { captureProductEnhancementsFor } from "@/db/queries/enhancements";
 import { isNigoMentioned, runNigoReply, NIGO_USER_ID } from "@/lib/nigo";
 import {
   createPost,
@@ -147,6 +148,22 @@ export async function createPostAction(input: {
     refs: validRefs,
     parentPostId,
   });
+
+  // #CCfunc/#VAVfunc/#CCAfunc/#CRMfunc → capture to the Tech Board (best-effort;
+  // a capture failure must never break the post).
+  try {
+    await captureProductEnhancementsFor({
+      workspaceId: user.workspaceId,
+      userId: user.id,
+      text: body,
+      source: "townhall",
+      sourceRefId: postId,
+      sourceLabel: snippet(body),
+      sourceUrl: `${process.env.NEXT_PUBLIC_SITE_URL ?? ""}/town-hall`,
+    });
+  } catch {
+    /* ignore */
+  }
 
   // 4. WhatsApp out. Mentioned members get a DM; if alsoWhatsApp, the whole
   //    team gets it (their inbox is WhatsApp). Each recipient is messaged once.

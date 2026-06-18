@@ -30,6 +30,8 @@ type Member = { id: string; displayName: string };
 const PROJECTS: Record<string, { label: string; color: string }> = {
   caney: { label: "CaneyCloud", color: "var(--blue-mid)" },
   vav: { label: "VAV", color: "var(--green-mid)" },
+  cca: { label: "CaneyAcademy", color: "var(--purple-mid, #7c3aed)" },
+  crm: { label: "CRM", color: "var(--amber-mid)" },
   all: { label: "All", color: "var(--amber-mid)" },
 };
 const TODAY = new Date().toISOString().slice(0, 10);
