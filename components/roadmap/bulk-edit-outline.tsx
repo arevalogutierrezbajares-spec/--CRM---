@@ -1001,6 +1001,7 @@ function OutlineRow({
           onKeyDown={onKeyDown}
           onBlur={() => onBlur(row.key)}
           sources={{ people: mentionPeople, projects: [], docs: [] }}
+        submitCompletedToken
           placeholder={
             row.kind === "init"
               ? "Milestone… (type @ to tag people)"
