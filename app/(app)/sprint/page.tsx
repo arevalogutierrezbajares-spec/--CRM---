@@ -9,6 +9,7 @@ import {
   listWorkspaceMembers,
   type WorkTask,
 } from "@/db/queries/work";
+import { mentionedMembers } from "@/lib/roadmap-mentions";
 import { FortnightBoard, type FTask } from "@/components/work/fortnight-board";
 
 const WINDOW_DAYS = 14;
@@ -27,16 +28,38 @@ export default async function SprintPage() {
     ),
   ]);
 
-  const tasks: FTask[] = tasksRes.data.map((t) => ({
-    id: t.id,
-    title: t.title,
-    dueDate: t.dueDate,
-    status: t.status,
-    project: t.project ?? null,
-    initiativeTitle: t.initiativeTitle,
-    ownerUserId: t.ownerUserId,
-    ownerName: t.assigneeName,
+  // For tasks with no explicit assignee, fall back to the first @mentioned
+  // teammate in the title so a tagged deliverable still groups under its owner
+  // (display-only — does not write an assignee).
+  const mentionPeople = membersRes.data.map((m) => ({
+    userId: m.id,
+    displayName: m.displayName,
   }));
+
+  const tasks: FTask[] = tasksRes.data.map((t) => {
+    let ownerUserId = t.ownerUserId;
+    let ownerName = t.assigneeName;
+    let ownerFromMention = false;
+    if (!ownerUserId) {
+      const tagged = mentionedMembers(t.title, mentionPeople)[0];
+      if (tagged) {
+        ownerUserId = tagged.userId;
+        ownerName = tagged.displayName;
+        ownerFromMention = true;
+      }
+    }
+    return {
+      id: t.id,
+      title: t.title,
+      dueDate: t.dueDate,
+      status: t.status,
+      project: t.project ?? null,
+      initiativeTitle: t.initiativeTitle,
+      ownerUserId,
+      ownerName,
+      ownerFromMention,
+    };
+  });
 
   return (
     <>

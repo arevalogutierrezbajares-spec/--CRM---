@@ -24,6 +24,8 @@ export type FTask = {
   initiativeTitle: string | null;
   ownerUserId: string | null;
   ownerName: string | null;
+  /** Owner was inferred from an @mention in the title, not explicitly assigned. */
+  ownerFromMention?: boolean;
 };
 type Member = { id: string; displayName: string };
 
@@ -79,7 +81,11 @@ export function FortnightBoard({
   };
   const reassign = (id: string, userId: string | null) => {
     setTasks((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, ownerUserId: userId, ownerName: userId ? memberName.get(userId) ?? null : null } : t)),
+      prev.map((t) =>
+        t.id === id
+          ? { ...t, ownerUserId: userId, ownerName: userId ? memberName.get(userId) ?? null : null, ownerFromMention: false }
+          : t,
+      ),
     );
     startTransition(async () => {
       await updateRoadmapTask(id, { assigneeUserId: userId }, false);
@@ -320,13 +326,25 @@ function TaskRow({
           {proj.label}
         </span>
       )}
-      {/* owner picker */}
+      {/* owner picker — dashed border + @ hint when inferred from a mention */}
+      {t.ownerFromMention && (
+        <span
+          className="shrink-0 text-[11px] font-semibold"
+          style={{ color: "var(--blue-mid)" }}
+          title="Owner inferred from an @mention in the title — not yet assigned. Pick a name to make it stick."
+        >
+          @
+        </span>
+      )}
       <select
         value={t.ownerUserId ?? ""}
         onChange={(e) => onReassign(e.target.value || null)}
         className="shrink-0 rounded border bg-card px-1 py-0.5 text-[11.5px] text-text-secondary"
-        style={{ borderColor: "var(--border-default)" }}
-        title="Assign owner"
+        style={{
+          borderColor: t.ownerFromMention ? "var(--blue-mid)" : "var(--border-default)",
+          borderStyle: t.ownerFromMention ? "dashed" : "solid",
+        }}
+        title={t.ownerFromMention ? "Owner inferred from @mention — pick a name to assign explicitly" : "Assign owner"}
       >
         <option value="">Unassigned</option>
         {members.map((m) => (
