@@ -748,7 +748,7 @@ export function BulkEditOutline({ data }: { data: PlanDocData }) {
     <div className="rounded-lg border bg-card p-3" style={{ borderColor: "var(--border-default)" }}>
       <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
         <p className="text-tiny text-text-tertiary">
-          Enter = new row · ↑↓ = move · Tab / ⇧Tab = indent · drag ⋮⋮ to move · ⌘/Ctrl-click to select · /END 5/4 sets dates
+          Enter = new row · ↑↓ = move · Tab / ⇧Tab = indent · drag ⋮⋮ to move · ⌘/Ctrl-click to select · @ to tag · #9/21 or #10 (biz days) = due date
         </p>
         {/* Project filter */}
         <div className="flex items-center gap-1">

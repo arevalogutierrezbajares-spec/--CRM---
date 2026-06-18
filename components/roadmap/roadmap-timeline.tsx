@@ -13,6 +13,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   useTransition,
@@ -39,6 +40,8 @@ import {
 } from "@/app/(app)/roadmap/actions";
 import { DateField } from "./date-field";
 import { parseDateTokens } from "@/lib/roadmap-dates";
+import { MentionInput } from "@/components/ui/mention-input";
+import { PersonChipStack } from "@/components/roadmap/mention-bubbles";
 
 export type TimelineItem = {
   id: string;
@@ -580,7 +583,7 @@ export function RoadmapTimeline({
                                   <div className="text-tiny font-semibold uppercase tracking-wider text-text-tertiary mb-1.5">
                                     Deliverables
                                   </div>
-                                  <DeliverablesEditor initiativeId={item.id} tasks={detail.tasks} />
+                                  <DeliverablesEditor initiativeId={item.id} tasks={detail.tasks} members={members} />
                                 </div>
                               </div>
                             </motion.div>
@@ -891,10 +894,16 @@ function endOfSubtree(rows: ERow[], key: string): number {
 function DeliverablesEditor({
   initiativeId,
   tasks,
+  members,
 }: {
   initiativeId: string;
   tasks: PlanDocTask[];
+  members: Member[];
 }) {
+  const mentionPeople = useMemo(
+    () => members.map((m) => ({ userId: m.id, displayName: m.displayName })),
+    [members],
+  );
   // Seed once per mount (reopening a milestone remounts → fresh seed). We do
   // NOT re-seed from props, so background revalidations never disturb edits.
   const [rows, setRows] = useState<ERow[]>(() => seedRows(tasks));
@@ -1150,13 +1159,14 @@ function DeliverablesEditor({
   return (
     <div ref={boxRef}>
       <p className="text-tiny text-text-tertiary mb-1.5">
-        Enter = new row · Tab = sub-deliverable · ↑↓ = move · /END 5/20 sets a date
+        Enter = new row · Tab = sub-deliverable · ↑↓ = move · @ to tag · #9/21 or #10 (business days) sets a due date
       </p>
       <div className="space-y-0.5">
         {rows.map((row) => (
           <DelivRow
             key={row.key}
             row={row}
+            mentionPeople={mentionPeople}
             selectMode={sel.selectMode}
             isSelected={row.serverId ? sel.isSelected(row.serverId) : false}
             onToggleSelect={() => row.serverId && sel.toggle(row.serverId, "task")}
@@ -1183,6 +1193,7 @@ function DeliverablesEditor({
       </div>
       <InlineAddTask
         moveFocus={moveFocus}
+        mentionPeople={mentionPeople}
         onAdd={(title, dueDate) =>
           addRow({ afterKey: null, level: 0, parentKey: null, title, dueDate, focus: false })
         }
@@ -1193,6 +1204,7 @@ function DeliverablesEditor({
 
 function DelivRow({
   row,
+  mentionPeople,
   selectMode,
   isSelected,
   onToggleSelect,
@@ -1209,6 +1221,7 @@ function DelivRow({
   onOutdent,
 }: {
   row: ERow;
+  mentionPeople: Array<{ userId: string; displayName: string }>;
   selectMode: boolean;
   isSelected: boolean;
   onToggleSelect: () => void;
@@ -1225,7 +1238,7 @@ function DelivRow({
   onOutdent: () => void;
 }) {
   const pending = row.serverId === null;
-  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     if (e.key === "Enter") {
       e.preventDefault();
       saveRow(row.key);
@@ -1273,15 +1286,18 @@ function DelivRow({
         className="shrink-0"
         title="Mark done"
       />
-      <input
-        data-key={row.key}
+      <MentionInput
         value={row.title}
-        onChange={(e) => setTitle(row.key, e.target.value)}
+        onChange={(v) => setTitle(row.key, v)}
         onBlur={() => onBlur(row.key)}
         onKeyDown={onKeyDown}
-        placeholder={row.level === 0 ? "Deliverable…" : "Sub-deliverable…"}
-        className={`flex-1 min-w-0 bg-transparent text-[13px] outline-none placeholder:text-text-tertiary ${row.done ? "line-through text-text-tertiary" : ""}`}
+        sources={{ people: mentionPeople, projects: [], docs: [] }}
+        placeholder={row.level === 0 ? "Deliverable…  (@ to tag · # for a due date)" : "Sub-deliverable…  (@ · #)"}
+        className="flex-1 min-w-0"
+        inputClassName={`w-full bg-transparent text-[13px] outline-none placeholder:text-text-tertiary ${row.done ? "line-through text-text-tertiary" : ""}`}
+        inputProps={{ "data-key": row.key }}
       />
+      <PersonChipStack text={row.title} members={mentionPeople} />
       {row.level < MAX_DELIV_DEPTH && (
         <button
           type="button"
@@ -1307,9 +1323,11 @@ function DelivRow({
 
 function InlineAddTask({
   moveFocus,
+  mentionPeople,
   onAdd,
 }: {
   moveFocus: (fromKey: string, dir: 1 | -1) => void;
+  mentionPeople: Array<{ userId: string; displayName: string }>;
   onAdd: (title: string, dueDate: string | null) => void;
 }) {
   const [value, setValue] = useState("");
@@ -1323,10 +1341,10 @@ function InlineAddTask({
   return (
     <div className="flex items-center gap-2 px-1 py-0.5 mt-0.5">
       <Plus size={13} className="text-text-tertiary shrink-0" />
-      <input
-        data-key="__add__"
+      <MentionInput
         value={value}
-        onChange={(e) => setValue(e.target.value)}
+        onChange={setValue}
+        sources={{ people: mentionPeople, projects: [], docs: [] }}
         onKeyDown={(e) => {
           if (e.key === "Enter") {
             e.preventDefault();
@@ -1337,8 +1355,10 @@ function InlineAddTask({
           }
         }}
         onBlur={submit}
-        placeholder="Add deliverable…  (try: QA pass /END 5/20)"
-        className="flex-1 bg-transparent text-[13px] outline-none placeholder:text-text-tertiary"
+        placeholder="Add deliverable…  (@ to tag · #9/21 or #10 for a due date)"
+        className="flex-1 min-w-0"
+        inputClassName="w-full bg-transparent text-[13px] outline-none placeholder:text-text-tertiary"
+        inputProps={{ "data-key": "__add__" }}
       />
     </div>
   );
