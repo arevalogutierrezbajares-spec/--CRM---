@@ -1292,6 +1292,7 @@ function DelivRow({
         onBlur={() => onBlur(row.key)}
         onKeyDown={onKeyDown}
         sources={{ people: mentionPeople, projects: [], docs: [] }}
+        submitCompletedToken
         placeholder={row.level === 0 ? "Deliverable…  (@ to tag · # for a due date)" : "Sub-deliverable…  (@ · #)"}
         className="flex-1 min-w-0"
         inputClassName={`w-full bg-transparent text-[13px] outline-none placeholder:text-text-tertiary ${row.done ? "line-through text-text-tertiary" : ""}`}
@@ -1345,6 +1346,7 @@ function InlineAddTask({
         value={value}
         onChange={setValue}
         sources={{ people: mentionPeople, projects: [], docs: [] }}
+        submitCompletedToken
         onKeyDown={(e) => {
           if (e.key === "Enter") {
             e.preventDefault();
