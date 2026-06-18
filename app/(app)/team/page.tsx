@@ -10,5 +10,7 @@ export default async function TeamPage() {
     listWorkspaceActivity(user.workspaceId),
   ]);
 
-  return <TeamView members={members} activity={activity} selfId={user.id} />;
+  return (
+    <TeamView members={members} activity={activity} selfId={user.id} selfRole={user.workspaceRole} />
+  );
 }
