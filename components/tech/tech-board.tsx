@@ -9,7 +9,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ExternalLink, Plus, X } from "lucide-react";
+import { ChevronRight, ExternalLink, Plus, X } from "lucide-react";
 import { productMeta, type ProductId } from "@/lib/products";
 import {
   createEnhancement,
@@ -123,10 +123,32 @@ export function TechBoard({
     return byStatus;
   }, [items]);
 
+  const summary = useMemo(() => {
+    const open = items.filter((e) => e.status !== "shipped" && e.status !== "declined").length;
+    const captured = items.filter((e) => e.source !== "manual").length;
+    const now = items.filter((e) => e.priority === "now" && e.status !== "shipped").length;
+    return { total: items.length, open, captured, now };
+  }, [items]);
+
   return (
-    <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
-      {/* Enhancements */}
-      <div className="space-y-4">
+    <div className="space-y-4">
+      {/* Summary strip */}
+      <div
+        className="flex flex-wrap items-center gap-x-5 gap-y-1.5 rounded-lg border bg-card px-4 py-2.5"
+        style={{ borderColor: "var(--border-default)" }}
+      >
+        <Stat n={summary.total} label="enhancements" color={meta.color} />
+        <Stat n={summary.open} label="open" />
+        <Stat n={summary.now} label="priority now" tone={summary.now ? "red" : undefined} />
+        <Stat n={summary.captured} label="captured via #func" />
+        <span className="ml-auto text-tiny text-text-tertiary">
+          Capture anywhere with <code className="text-[11px]">#{meta.hashtag}</code>
+        </span>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+        {/* Enhancements */}
+        <div className="space-y-4">
         {/* Add */}
         <div className="flex items-center gap-2 rounded-lg border bg-card p-2" style={{ borderColor: "var(--border-default)" }}>
           <Plus size={15} style={{ color: meta.color }} className="shrink-0" />
@@ -176,6 +198,7 @@ export function TechBoard({
                       first={i === 0}
                       initiatives={initiatives}
                       onTitle={(t) => patch(e.id, { title: t }, { title: t })}
+                      onDetail={(d) => patch(e.id, { detail: d }, { detail: d })}
                       onPriority={(pr) => patch(e.id, { priority: pr }, { priority: pr as never })}
                       onStatus={(st) => patch(e.id, { status: st }, { status: st as never })}
                       onLink={(initId) =>
@@ -229,7 +252,18 @@ export function TechBoard({
           </a>
         </div>
       </aside>
+      </div>
     </div>
+  );
+}
+
+function Stat({ n, label, tone, color }: { n: number; label: string; tone?: "red"; color?: string }) {
+  const c = tone === "red" ? "var(--red-mid)" : color ?? "var(--text-primary)";
+  return (
+    <span className="inline-flex items-baseline gap-1">
+      <span className="text-[16px] font-semibold tabular-nums" style={{ color: c }}>{n}</span>
+      <span className="text-[12px] text-text-tertiary">{label}</span>
+    </span>
   );
 }
 
@@ -253,6 +287,7 @@ function Row({
   first,
   initiatives,
   onTitle,
+  onDetail,
   onPriority,
   onStatus,
   onLink,
@@ -262,24 +297,33 @@ function Row({
   first: boolean;
   initiatives: Array<{ id: string; title: string }>;
   onTitle: (t: string) => void;
+  onDetail: (d: string | null) => void;
   onPriority: (p: string) => void;
   onStatus: (s: string) => void;
   onLink: (initId: string | null) => void;
   onRemove: () => void;
 }) {
   const [title, setTitle] = useState(e.title);
+  const [open, setOpen] = useState(false);
+  const [detail, setDetail] = useState(e.detail ?? "");
   const srcMuted = e.source !== "manual";
   return (
-    <div
-      className="group flex items-center gap-2 px-2.5 py-1.5 hover:bg-surface"
-      style={{ borderTop: first ? undefined : "1px solid var(--border-default)" }}
-    >
+    <div style={{ borderTop: first ? undefined : "1px solid var(--border-default)" }}>
+    <div className="group flex flex-wrap items-center gap-2 px-2.5 py-1.5 hover:bg-surface">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        title={e.detail ? "Show/hide detail" : "Add detail"}
+        className="shrink-0 text-text-tertiary hover:text-text-primary"
+      >
+        <ChevronRight size={13} style={{ transform: open ? "rotate(90deg)" : "none", transition: "transform .12s", color: e.detail ? "var(--blue-mid)" : undefined }} />
+      </button>
       <PriorityChip value={e.priority} onChange={onPriority} />
       <input
         value={title}
         onChange={(ev) => setTitle(ev.target.value)}
         onBlur={() => title.trim() && title !== e.title && onTitle(title.trim())}
-        className="min-w-0 flex-1 bg-transparent text-[13px] text-text-primary outline-none"
+        className="min-w-[8rem] flex-1 bg-transparent text-[13px] text-text-primary outline-none"
       />
       {srcMuted && (
         <span
@@ -332,6 +376,20 @@ function Row({
       >
         <X size={13} />
       </button>
+    </div>
+      {open && (
+        <div className="px-2.5 pb-2 pl-9">
+          <textarea
+            value={detail}
+            onChange={(ev) => setDetail(ev.target.value)}
+            onBlur={() => detail !== (e.detail ?? "") && onDetail(detail.trim() || null)}
+            placeholder="Add detail / context…"
+            rows={2}
+            className="w-full rounded border bg-card px-2 py-1 text-[12.5px] outline-none placeholder:text-text-tertiary"
+            style={{ borderColor: "var(--border-default)" }}
+          />
+        </div>
+      )}
     </div>
   );
 }
