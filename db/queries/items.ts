@@ -290,6 +290,16 @@ export async function updateTask(input: {
   return rows[0] ?? null;
 }
 
+/** Hard-delete a task (milestone), workspace-scoped. Returns true if a row was
+ *  removed. Child rows (themes, initiative joins) cascade via FK. */
+export async function deleteTask(workspaceId: string, id: string): Promise<boolean> {
+  const rows = await db
+    .delete(schema.milestones)
+    .where(and(eq(schema.milestones.id, id), eq(schema.milestones.workspaceId, workspaceId)))
+    .returning({ id: schema.milestones.id });
+  return rows.length > 0;
+}
+
 /* ── attachments ──────────────────────────────────────────────────────── */
 
 export async function listItemAttachments(

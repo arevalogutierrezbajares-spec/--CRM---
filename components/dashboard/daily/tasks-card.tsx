@@ -3,14 +3,24 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, ListChecks, Plus, Search, SlidersHorizontal, X } from "lucide-react";
+import { CalendarClock, CheckCircle2, ListChecks, Plus, Search, SlidersHorizontal, Trash2, UserPlus2, X } from "lucide-react";
 import { toast } from "sonner";
 import { DashCard } from "../shared/dash-card";
 import { SectionLabel } from "../shared/section-label";
 import { DashBadge, type BadgeVariant } from "../shared/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { MentionInput, type MentionSources, type PickedEntity } from "@/components/ui/mention-input";
+import type { MemberOption } from "@/components/town-hall/types";
 import { CaptureChips, useCapturePicks } from "./capture-chips";
 import {
   Select,
@@ -19,7 +29,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { captureItemAction } from "@/app/(app)/dashboard/item-actions";
+import {
+  captureItemAction,
+  deleteTaskAction,
+  extendTaskDueDateAction,
+  updateTaskAction,
+} from "@/app/(app)/dashboard/item-actions";
 import { parseCapture } from "@/lib/nlp/parse-capture";
 import { cn } from "@/lib/utils";
 import { useItemDrawer } from "../item-drawer";
@@ -67,10 +82,164 @@ function taskMatchesStatus(task: DashTask, filter: StatusFilter): boolean {
   return !task.isOverdue && task.status !== "blocked";
 }
 
-export function TasksCard({ tasks, scope, sources }: TasksCardProps) {
+function initialOf(name: string): string {
+  return name.trim().charAt(0).toUpperCase() || "?";
+}
+
+const EXTEND_DAYS = [2, 5, 7] as const;
+
+/**
+ * Assign / reassign / clear a task's owner via an @-style picker. Renders the
+ * owner as a clickable person bubble (or a "+ assign" affordance when empty);
+ * clicking opens a searchable people list — pick to (re)assign, "Unassign" to
+ * clear. (FR-E1-3)
+ */
+function AssigneeControl({
+  task,
+  people,
+  onAssign,
+}: {
+  task: DashTask;
+  people: MemberOption[];
+  onAssign: (userId: string | null, displayName: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const filtered = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    return t ? people.filter((p) => p.displayName.toLowerCase().includes(t)) : people;
+  }, [people, q]);
+
+  const trigger = task.ownerName ? (
+    <button
+      type="button"
+      title={`Owner: ${task.ownerName} — click to reassign`}
+      className="inline-flex max-w-[120px] shrink-0 items-center gap-1 truncate rounded-full bg-surface px-1 py-0.5 text-tiny text-text-secondary transition-colors hover:bg-card sm:px-2"
+    >
+      <span aria-hidden className="grid h-4 w-4 shrink-0 place-items-center rounded-full bg-[var(--blue-text)] text-[8px] font-semibold text-white">
+        {initialOf(task.ownerName)}
+      </span>
+      <span className="hidden truncate sm:inline">{task.ownerName.split(/\s+/)[0]}</span>
+    </button>
+  ) : (
+    <button
+      type="button"
+      title="Assign someone"
+      aria-label="Assign task"
+      className="inline-flex shrink-0 items-center gap-1 rounded-full bg-surface px-2 py-0.5 text-tiny text-text-tertiary transition-colors hover:bg-card hover:text-text-secondary"
+    >
+      <UserPlus2 size={12} /> <span className="hidden sm:inline">Assign</span>
+    </button>
+  );
+
+  return (
+    <Popover open={open} onOpenChange={(o) => { setOpen(o); if (!o) setQ(""); }}>
+      <PopoverTrigger asChild>{trigger}</PopoverTrigger>
+      <PopoverContent align="end" className="w-56 p-1.5">
+        <div className="relative mb-1">
+          <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-text-tertiary">@</span>
+          <Input
+            autoFocus
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="assign…"
+            className="h-[34px] pl-6 text-[12px]"
+          />
+        </div>
+        <div className="max-h-56 overflow-auto">
+          {task.ownerUserId && (
+            <button
+              type="button"
+              onClick={() => { onAssign(null, null); setOpen(false); }}
+              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[12px] text-text-tertiary hover:bg-surface"
+            >
+              <X size={13} /> Unassign
+            </button>
+          )}
+          {filtered.length === 0 ? (
+            <p className="px-2 py-2 text-tiny text-text-tertiary">No matches.</p>
+          ) : (
+            filtered.map((m) => {
+              const active = m.userId === task.ownerUserId;
+              return (
+                <button
+                  key={m.userId}
+                  type="button"
+                  onClick={() => { onAssign(m.userId, m.displayName); setOpen(false); }}
+                  className={cn(
+                    "flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[12px] hover:bg-surface",
+                    active ? "text-text-primary" : "text-text-secondary",
+                  )}
+                >
+                  <span aria-hidden className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-[var(--blue-text)] text-[9px] font-semibold text-white">
+                    {initialOf(m.displayName)}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate">{m.displayName}</span>
+                  {active && <CheckCircle2 size={13} className="shrink-0 text-[var(--blue-text)]" />}
+                </button>
+              );
+            })
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/** Overdue badge that opens an "extend by N days" menu on click. (FR-E1-4) */
+function OverdueExtendBadge({ onExtend }: { onExtend: (days: number) => void }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          title="Overdue — click to extend the due date"
+          className="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-tiny font-medium transition-colors"
+          style={{ background: "var(--red-bg, rgba(139,32,32,0.12))", color: "var(--red-text)" }}
+        >
+          <CalendarClock size={11} /> Overdue
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-40">
+        <DropdownMenuLabel>Extend due date</DropdownMenuLabel>
+        {EXTEND_DAYS.map((d) => (
+          <DropdownMenuItem key={d} onClick={() => onExtend(d)}>
+            +{d} days
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+export function TasksCard({ tasks: tasksProp, scope, sources }: TasksCardProps) {
   const router = useRouter();
   const drawer = useItemDrawer();
   const projects = useMemo(() => drawer?.projects ?? [], [drawer]);
+  // Optimistic layer: rows removed (completed/deleted) and per-row field patches
+  // (reassign / extend) applied over the server snapshot until the refresh lands.
+  const [removed, setRemoved] = useState<Set<string>>(new Set());
+  const [overrides, setOverrides] = useState<Map<string, Partial<DashTask>>>(new Map());
+  // When the server snapshot changes (router.refresh after a mutation) it becomes
+  // the truth — drop the optimistic layer so nothing stays stale-hidden or
+  // double-patched. Reset DURING render on prop change (React's documented
+  // "store info from previous render" pattern) rather than in an effect.
+  const [prevTasksProp, setPrevTasksProp] = useState(tasksProp);
+  if (prevTasksProp !== tasksProp) {
+    setPrevTasksProp(tasksProp);
+    setRemoved(new Set());
+    setOverrides(new Map());
+  }
+  const tasks = useMemo(
+    () =>
+      tasksProp
+        .map((t) => {
+          const o = overrides.get(t.id);
+          return o ? { ...t, ...o } : t;
+        })
+        .filter((t) => !removed.has(t.id)),
+    [tasksProp, overrides, removed],
+  );
   const [newTitle, setNewTitle] = useState("");
   const [quickProjectId, setQuickProjectId] = useState("");
   const [query, setQuery] = useState("");
@@ -188,6 +357,76 @@ export function TasksCard({ tasks, scope, sources }: TasksCardProps) {
     });
   }
 
+  const clearOptimistic = (id: string) => {
+    setRemoved((s) => {
+      const n = new Set(s);
+      n.delete(id);
+      return n;
+    });
+    setOverrides((m) => {
+      const n = new Map(m);
+      n.delete(id);
+      return n;
+    });
+  };
+  const patchTask = (id: string, p: Partial<DashTask>) =>
+    setOverrides((m) => new Map(m).set(id, { ...(m.get(id) ?? {}), ...p }));
+
+  function completeTask(t: DashTask) {
+    setRemoved((s) => new Set(s).add(t.id));
+    startTransition(async () => {
+      const res = await updateTaskAction({ id: t.id, status: "done" });
+      if (res.ok) {
+        toast.success("Done ✓", { duration: 1200 });
+        router.refresh();
+      } else {
+        clearOptimistic(t.id);
+        toast.error(res.error);
+      }
+    });
+  }
+
+  function removeTask(t: DashTask) {
+    if (!confirm(`Delete "${t.title}"? This can't be undone.`)) return;
+    setRemoved((s) => new Set(s).add(t.id));
+    startTransition(async () => {
+      const res = await deleteTaskAction({ id: t.id });
+      if (res.ok) {
+        toast.success("Deleted", { duration: 1200 });
+        router.refresh();
+      } else {
+        clearOptimistic(t.id);
+        toast.error(res.error);
+      }
+    });
+  }
+
+  function reassignTask(t: DashTask, userId: string | null, displayName: string | null) {
+    patchTask(t.id, { ownerUserId: userId, ownerName: displayName });
+    startTransition(async () => {
+      const res = await updateTaskAction({ id: t.id, assigneeUserId: userId });
+      if (res.ok) router.refresh();
+      else {
+        clearOptimistic(t.id);
+        toast.error(res.error);
+      }
+    });
+  }
+
+  function extendTask(t: DashTask, days: number) {
+    patchTask(t.id, { isOverdue: false });
+    startTransition(async () => {
+      const res = await extendTaskDueDateAction({ id: t.id, days });
+      if (res.ok) {
+        toast.success(`Extended +${days} days`, { duration: 1200 });
+        router.refresh();
+      } else {
+        clearOptimistic(t.id);
+        toast.error(res.error);
+      }
+    });
+  }
+
   return (
     <DashCard>
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -301,11 +540,12 @@ export function TasksCard({ tasks, scope, sources }: TasksCardProps) {
             const badge = bucketBadge(t);
             return (
               <li key={t.id} className="group flex min-h-[50px] items-center gap-2 rounded-md px-2 py-1.5 transition-colors hover:bg-surface">
-                <span
-                  aria-hidden
-                  className={`h-2.5 w-2.5 shrink-0 rounded-full ${
-                    t.isOverdue ? "bg-[var(--red-text)]" : t.status === "blocked" ? "bg-[var(--amber-text)]" : "bg-[var(--blue-text)]"
-                  }`}
+                <Checkbox
+                  checked={false}
+                  onCheckedChange={() => completeTask(t)}
+                  aria-label={`Mark "${t.title}" complete`}
+                  title="Mark complete"
+                  className="shrink-0"
                 />
                 {drawer ? (
                   <button
@@ -322,22 +562,25 @@ export function TasksCard({ tasks, scope, sources }: TasksCardProps) {
                     <div className="truncate text-tiny text-text-tertiary">{t.projectTitle} · {shortDate(t.dueDate)}</div>
                   </Link>
                 )}
-                {t.ownerName ? (
-                  <span
-                    title={`Owner: ${t.ownerName}`}
-                    className="inline-flex max-w-[112px] shrink-0 items-center gap-1 truncate rounded-full bg-surface px-1 py-0.5 text-tiny text-text-secondary sm:px-2"
-                  >
-                    <span aria-hidden className="grid h-4 w-4 shrink-0 place-items-center rounded-full bg-[var(--blue-text)] text-[8px] font-semibold text-white">
-                      {t.ownerName.trim().charAt(0).toUpperCase()}
-                    </span>
-                    <span className="hidden truncate sm:inline">{t.ownerName.split(/\s+/)[0]}</span>
-                  </span>
+                <AssigneeControl
+                  task={t}
+                  people={effectiveSources.people}
+                  onAssign={(userId, displayName) => reassignTask(t, userId, displayName)}
+                />
+                {t.isOverdue ? (
+                  <OverdueExtendBadge onExtend={(days) => extendTask(t, days)} />
                 ) : (
-                  <span className="hidden shrink-0 rounded-full bg-surface px-2 py-0.5 text-tiny text-text-tertiary sm:inline">
-                    Unassigned
-                  </span>
+                  <DashBadge variant={badge.variant}>{badge.label}</DashBadge>
                 )}
-                <DashBadge variant={badge.variant}>{badge.label}</DashBadge>
+                <button
+                  type="button"
+                  onClick={() => removeTask(t)}
+                  aria-label={`Delete "${t.title}"`}
+                  title="Delete task"
+                  className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-text-tertiary opacity-0 transition-opacity hover:bg-card hover:text-[var(--red-text)] focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] group-hover:opacity-100 [@media(hover:none)]:opacity-100"
+                >
+                  <Trash2 size={13} />
+                </button>
               </li>
             );
           })}

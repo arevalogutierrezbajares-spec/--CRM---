@@ -4,15 +4,18 @@ import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronRight, Plus } from "lucide-react";
+import { toast } from "sonner";
 import type { PlanDocData, PlanDocInitiative, PlanDocTask } from "@/db/queries/roadmap";
 import {
   createRoadmapTask,
+  setInitiativeFunction,
+  setInitiativePeople,
   toggleRoadmapTask,
   updateInitiativeFields,
   updateRoadmapTask,
 } from "@/app/(app)/roadmap/actions";
 import { MentionInput } from "@/components/ui/mention-input";
-import { MentionText, type MentionMember } from "@/components/roadmap/mention-bubbles";
+import { InitiativePeople, MentionText, type MentionMember } from "@/components/roadmap/mention-bubbles";
 
 /** The plan as an editable document (FR-RVW-1): initiative sections with
  *  inline-editable metadata and a nested task checklist. Edits save in place
@@ -83,6 +86,7 @@ export function PlanDoc({
           inits={g.inits}
           members={data.members}
           lobs={data.lobs}
+          functions={data.functions}
         />
       ))}
       <Link
@@ -102,11 +106,13 @@ function LobGroup({
   inits,
   members,
   lobs,
+  functions,
 }: {
   lobTitle: string;
   inits: PlanDocInitiative[];
   members: PlanDocData["members"];
   lobs: PlanDocData["lobs"];
+  functions: PlanDocData["functions"];
 }) {
   const [open, setOpen] = useState(true);
   const done = inits.reduce((n, i) => n + countDone(i.tasks).done, 0);
@@ -139,6 +145,7 @@ function LobGroup({
               init={init}
               members={members}
               lobs={lobs}
+              functions={functions}
             />
           ))}
         </div>
@@ -173,10 +180,12 @@ function InitiativeSection({
   init,
   members,
   lobs,
+  functions,
 }: {
   init: PlanDocInitiative;
   members: PlanDocData["members"];
   lobs: PlanDocData["lobs"];
+  functions: PlanDocData["functions"];
 }) {
   const [open, setOpen] = useState(true);
   const [, startTransition] = useTransition();
@@ -190,6 +199,21 @@ function InitiativeSection({
 
   const save = (patch: Parameters<typeof updateInitiativeFields>[1]) =>
     startTransition(() => updateInitiativeFields(init.id, patch));
+
+  // FR-E5: people are written straight to initiative_people, not title tokens.
+  // Optimistic local copy so bubbles update instantly; roll back on failure.
+  const [people, setPeopleState] = useState<MentionMember[]>(init.people);
+  const setPeople = (next: MentionMember[]) => {
+    const prev = people;
+    setPeopleState(next);
+    startTransition(async () => {
+      const res = await setInitiativePeople(init.id, next.map((p) => p.userId));
+      if (!res.ok) {
+        setPeopleState(prev);
+        toast.error(res.error ?? "Couldn't update assignees");
+      }
+    });
+  };
 
   return (
     <section
@@ -215,9 +239,14 @@ function InitiativeSection({
           value={init.title}
           className="text-[14.5px] font-medium flex-1 min-w-0"
           onSave={(title) => title && save({ title })}
-          people={mentionPeople}
-          onPersonClick={onPersonClick}
           placeholder="Untitled milestone"
+        />
+        {/* FR-E5: assignment bubbles, source of truth = initiative_people */}
+        <InitiativePeople
+          people={people}
+          members={mentionPeople}
+          onChange={setPeople}
+          onPersonClick={onPersonClick}
         />
         <span className="text-[12px] text-text-tertiary tabular-nums shrink-0">
           {total > 0 ? `${done}/${total}` : "—"}
@@ -306,6 +335,28 @@ function InitiativeSection({
                 {lobs.map((l) => (
                   <option key={l.id} value={l.id}>
                     {l.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {/* FR-E6: the horizontal axis. Defaults to Uncategorized; picking a
+                real function moves the initiative out of the fix-me bucket. */}
+            <label className="flex items-center gap-1.5 text-text-secondary">
+              Function
+              <select
+                value={init.functionId ?? ""}
+                onChange={(e) =>
+                  startTransition(() => {
+                    void setInitiativeFunction(init.id, e.target.value || null);
+                  })
+                }
+                className="rounded border bg-card px-1 py-0.5"
+                style={{ borderColor: "var(--border-default)" }}
+              >
+                {functions.length === 0 && <option value="">—</option>}
+                {functions.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.name}
                   </option>
                 ))}
               </select>

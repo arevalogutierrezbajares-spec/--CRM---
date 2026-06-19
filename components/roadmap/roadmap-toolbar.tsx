@@ -2,9 +2,10 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { CheckSquare, Trash2 } from "lucide-react";
+import { CheckSquare, GitBranch, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
+  addInitiativeDependency,
   bulkDeleteRoadmap,
   exportRoadmap,
   getCopyForAiPayload,
@@ -14,11 +15,46 @@ import { useRoadmapSelection } from "./roadmap-selection";
 const btn =
   "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[12.5px] font-medium text-text-primary hover:bg-surface transition-colors disabled:opacity-50";
 
-/** Roadmap-MD round-trip controls (FR-RMD-1/2/3, FR-PLV-2) + multi-select delete. */
-export function RoadmapToolbar({ currentVersion }: { currentVersion: number }) {
+/** Roadmap-MD round-trip controls (FR-RMD-1/2/3, FR-PLV-2) + multi-select delete
+ *  + select-two dependency linking (FR-E4). */
+export function RoadmapToolbar({
+  currentVersion,
+  initiativeTitles = {},
+}: {
+  currentVersion: number;
+  /** id → title, so the select-two dependency control reads in plain language. */
+  initiativeTitles?: Record<string, string>;
+}) {
   const [pending, startTransition] = useTransition();
   const [flash, setFlash] = useState<string | null>(null);
   const sel = useRoadmapSelection();
+
+  // Dependency linking: pick exactly two milestones; the first selected is the
+  // predecessor (blocks), the second depends on it. Order is the Map insertion
+  // order, preserved by the selection provider.
+  const canLink = sel.initiativeIds.length === 2 && sel.taskIds.length === 0;
+  const shortTitle = (id: string) => {
+    const t = initiativeTitles[id] ?? "milestone";
+    return t.length > 22 ? `${t.slice(0, 21)}…` : t;
+  };
+  const depHint = canLink
+    ? `“${shortTitle(sel.initiativeIds[0])}” blocks “${shortTitle(sel.initiativeIds[1])}”`
+    : "Pick exactly 2 milestones to link";
+
+  const onAddDependency = () => {
+    if (!canLink) return;
+    const [fromId, toId] = sel.initiativeIds;
+    startTransition(async () => {
+      const r = await addInitiativeDependency(fromId, toId);
+      if (r.ok) {
+        sel.clear();
+        sel.setSelectMode(false);
+        toast.success("Dependency added");
+      } else {
+        toast.error(r.error ?? "Couldn't add dependency");
+      }
+    });
+  };
 
   const note = (msg: string) => {
     setFlash(msg);
@@ -117,6 +153,20 @@ export function RoadmapToolbar({ currentVersion }: { currentVersion: number }) {
         <>
           <button
             type="button"
+            onClick={onAddDependency}
+            disabled={pending || !canLink}
+            className={btn}
+            style={{
+              borderColor: canLink ? "var(--blue-mid)" : "var(--border-default)",
+              color: canLink ? "var(--blue-mid)" : undefined,
+            }}
+            title={depHint}
+          >
+            <GitBranch size={14} />
+            Add dependency
+          </button>
+          <button
+            type="button"
             onClick={onDelete}
             disabled={pending || sel.count === 0}
             className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12.5px] font-medium text-white transition-colors disabled:opacity-40"
@@ -125,6 +175,9 @@ export function RoadmapToolbar({ currentVersion }: { currentVersion: number }) {
             <Trash2 size={14} />
             Delete{sel.count > 0 ? ` (${sel.count})` : ""}
           </button>
+          {canLink && (
+            <span className="text-[12px] text-text-secondary">{depHint}</span>
+          )}
           {sel.count > 0 && (
             <button
               type="button"

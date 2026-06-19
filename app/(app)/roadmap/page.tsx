@@ -87,7 +87,7 @@ export default async function RoadmapPage({
       safeRead<SprintWithStats[]>(() => listSprints(user.workspaceId), []),
       safeRead<PlanDocData>(
         () => getPlanDocData(user.workspaceId),
-        { initiatives: [], members: [], lobs: [] },
+        { initiatives: [], members: [], lobs: [], functions: [] },
       ),
       safeRead(
         () => listUnassignedTasks(user.workspaceId),
@@ -200,13 +200,25 @@ export default async function RoadmapPage({
               The plan, end to end — edit anything in place. Changes save automatically.
             </p>
           </div>
+          <Link
+            href="/roadmap/by-project"
+            className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[12.5px] font-medium text-text-secondary hover:text-text-primary"
+            style={{ borderColor: "var(--border-default)" }}
+          >
+            ⊞ By project
+          </Link>
         </header>
 
         <WorkNav />
 
         <RoadmapSelectionProvider>
           <div className="flex items-center justify-between gap-3 flex-wrap">
-            <RoadmapToolbar currentVersion={currentVersion} />
+            <RoadmapToolbar
+              currentVersion={currentVersion}
+              initiativeTitles={Object.fromEntries(
+                initsRes.data.map((i) => [i.id, stripMentionTokens(i.title)]),
+              )}
+            />
             {/* FR-RVW-3: three zoom levels only */}
             <div
               className="flex items-center rounded-md border overflow-hidden"

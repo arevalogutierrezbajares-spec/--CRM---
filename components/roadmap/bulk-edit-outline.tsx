@@ -41,10 +41,11 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { ChevronRight, GripVertical, Plus, X } from "lucide-react";
+import { toast } from "sonner";
 import type { PlanDocData, PlanDocInitiative, PlanDocTask } from "@/db/queries/roadmap";
 import { fmtChip, parseDateTokens } from "@/lib/roadmap-dates";
 import { MentionInput } from "@/components/ui/mention-input";
-import { PersonChipStack } from "@/components/roadmap/mention-bubbles";
+import { InitiativePeople, PersonChipStack } from "@/components/roadmap/mention-bubbles";
 import {
   createInitiative,
   createLob,
@@ -58,6 +59,7 @@ import {
   renameLob,
   reorderLobs,
   reparentRoadmapTask,
+  setInitiativePeople,
   setRoadmapTaskProject,
   updateInitiativeFields,
   updateRoadmapTask,
@@ -77,6 +79,8 @@ type ERow = {
   startDate: string | null;
   endDate: string | null;
   project: string | null; // product-line tag (tasks only): caney | vav | all | null
+  /** Assigned people (init rows only) — source of truth is initiative_people. */
+  people: Array<{ userId: string; displayName: string }>;
   isLobNone: boolean;
 };
 
@@ -107,7 +111,7 @@ function seed(data: PlanDocData): ERow[] {
     for (const t of tasks) {
       rows.push({
         key: t.id, serverId: t.id, kind: "task", title: t.title, level,
-        lobKey: null, initKey, parentTaskKey, startDate: null, endDate: t.dueDate, project: t.project ?? null, isLobNone: false,
+        lobKey: null, initKey, parentTaskKey, startDate: null, endDate: t.dueDate, project: t.project ?? null, people: [], isLobNone: false,
       });
       if (t.children.length) walkTasks(t.children, initKey, t.id, level + 1);
     }
@@ -116,7 +120,7 @@ function seed(data: PlanDocData): ERow[] {
     for (const init of byLob.get(lobServerId) ?? []) {
       rows.push({
         key: init.id, serverId: init.id, kind: "init", title: init.title, level: 1,
-        lobKey, initKey: null, parentTaskKey: null, startDate: init.startDate, endDate: init.targetEndDate, project: null, isLobNone: false,
+        lobKey, initKey: null, parentTaskKey: null, startDate: init.startDate, endDate: init.targetEndDate, project: null, people: init.people, isLobNone: false,
       });
       walkTasks(init.tasks, init.id, null, 2);
     }
@@ -124,14 +128,14 @@ function seed(data: PlanDocData): ERow[] {
   for (const lob of data.lobs) {
     rows.push({
       key: lob.id, serverId: lob.id, kind: "lob", title: lob.title, level: 0,
-      lobKey: lob.id, initKey: null, parentTaskKey: null, startDate: null, endDate: null, project: null, isLobNone: false,
+      lobKey: lob.id, initKey: null, parentTaskKey: null, startDate: null, endDate: null, project: null, people: [], isLobNone: false,
     });
     emitInits(lob.id, lob.id);
   }
   if ((byLob.get(null) ?? []).length) {
     rows.push({
       key: NONE_KEY, serverId: null, kind: "lob", title: "Cross-venture (no line of business)", level: 0,
-      lobKey: null, initKey: null, parentTaskKey: null, startDate: null, endDate: null, project: null, isLobNone: true,
+      lobKey: null, initKey: null, parentTaskKey: null, startDate: null, endDate: null, project: null, people: [], isLobNone: true,
     });
     emitInits(null, null);
   }
@@ -357,7 +361,7 @@ export function BulkEditOutline({ data }: { data: PlanDocData }) {
 
   const mkRow = (over: Partial<ERow>): ERow => ({
     key: nk(), serverId: null, kind: "task", title: "", level: 0,
-    lobKey: null, initKey: null, parentTaskKey: null, startDate: null, endDate: null, project: null, isLobNone: false, ...over,
+    lobKey: null, initKey: null, parentTaskKey: null, startDate: null, endDate: null, project: null, people: [], isLobNone: false, ...over,
   });
 
   const addLob = (afterKey: string | null) => {
@@ -400,6 +404,18 @@ export function BulkEditOutline({ data }: { data: PlanDocData }) {
 
   const setTitle = (key: string, title: string) =>
     setRows((prev) => prev.map((r) => (r.key === key ? { ...r, title } : r)));
+
+  // FR-E5: assign people directly to initiative_people (not via title tokens).
+  // Optimistic local update + a quiet server write; coarse refresh reconciles.
+  const setPeople = (key: string, people: ERow["people"]) => {
+    setRows((prev) => prev.map((r) => (r.key === key ? { ...r, people } : r)));
+    const sid = rowsRef.current.find((r) => r.key === key)?.serverId;
+    if (sid)
+      void setInitiativePeople(sid, people.map((p) => p.userId), true).then((res) => {
+        if (!res.ok) toast.error(res.error ?? "Couldn't update assignees");
+        scheduleRefresh();
+      });
+  };
 
   const commit = (key: string) => {
     const row = rowsRef.current.find((r) => r.key === key);
@@ -839,6 +855,7 @@ export function BulkEditOutline({ data }: { data: PlanDocData }) {
                 onSelectToggle={(range) => toggleSelect(row.key, { range })}
                 setRowProject={setRowProject}
                 setTitle={setTitle}
+                setPeople={setPeople}
                 commit={commit}
                 onBlur={(k) => {
                   commit(k);
@@ -888,6 +905,7 @@ function OutlineRow({
   onSelectToggle,
   setRowProject,
   setTitle,
+  setPeople,
   commit,
   onBlur,
   remove,
@@ -906,6 +924,7 @@ function OutlineRow({
   onSelectToggle: (range: boolean) => void;
   setRowProject: (key: string, project: string | null) => void;
   setTitle: (key: string, title: string) => void;
+  setPeople: (key: string, people: ERow["people"]) => void;
   commit: (key: string) => void;
   onBlur: (key: string) => void;
   remove: (key: string) => void;
@@ -993,19 +1012,27 @@ function OutlineRow({
           placeholder="Line of business…"
           className={`flex-1 min-w-0 bg-transparent outline-none placeholder:text-text-tertiary ${fontByKind} disabled:text-text-tertiary`}
         />
+      ) : row.kind === "init" ? (
+        // FR-E5: milestone titles are plain prose. People are assigned via the
+        // dedicated bubble control (right), NOT @tokens in the title.
+        <input
+          data-key={row.key}
+          value={row.title}
+          onChange={(e) => setTitle(row.key, e.target.value)}
+          onBlur={() => onBlur(row.key)}
+          onKeyDown={onKeyDown}
+          placeholder="Milestone…"
+          className={`flex-1 min-w-0 bg-transparent outline-none placeholder:text-text-tertiary ${fontByKind}`}
+        />
       ) : (
-        // Milestones AND deliverables/sub-deliverables get @-mention tagging.
+        // Deliverables/sub-deliverables still use inline @-mention tagging.
         <MentionInput
           value={row.title}
           onChange={(v) => setTitle(row.key, v)}
           onKeyDown={onKeyDown}
           onBlur={() => onBlur(row.key)}
           sources={{ people: mentionPeople, projects: [], docs: [] }}
-          placeholder={
-            row.kind === "init"
-              ? "Milestone… (type @ to tag people)"
-              : "Deliverable… (type @ to tag people)"
-          }
+          placeholder="Deliverable… (type @ to tag people)"
           className="flex-1 min-w-0"
           inputClassName={`w-full bg-transparent outline-none placeholder:text-text-tertiary ${fontByKind}`}
           inputProps={{
@@ -1021,7 +1048,15 @@ function OutlineRow({
         />
       )}
       {row.kind === "task" && <ProjectChip value={row.project} onChange={(p) => setRowProject(row.key, p)} />}
-      {row.kind !== "lob" && (
+      {row.kind === "init" && (
+        <InitiativePeople
+          people={row.people}
+          members={mentionPeople}
+          onChange={(p) => setPeople(row.key, p)}
+          onPersonClick={onPersonClick}
+        />
+      )}
+      {row.kind === "task" && (
         <PersonChipStack text={row.title} members={mentionPeople} onPersonClick={onPersonClick} />
       )}
       {(row.endDate || (row.kind === "init" && row.startDate)) && (
