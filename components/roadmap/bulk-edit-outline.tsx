@@ -44,6 +44,7 @@ import { ChevronRight, GripVertical, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import type { PlanDocData, PlanDocInitiative, PlanDocTask } from "@/db/queries/roadmap";
 import { fmtChip, parseDateTokens } from "@/lib/roadmap-dates";
+import { PROJECT_TAG_OPTIONS } from "@/lib/products";
 import { MentionInput } from "@/components/ui/mention-input";
 import { InitiativePeople, PersonChipStack } from "@/components/roadmap/mention-bubbles";
 import {
@@ -84,12 +85,8 @@ type ERow = {
   isLobNone: boolean;
 };
 
-/** Product-line tags. "all" = applies to both products (shows under every filter). */
-const PROJECTS: Array<{ id: string; label: string; short: string; color: string }> = [
-  { id: "caney", label: "CaneyCloud", short: "CC", color: "var(--blue-mid)" },
-  { id: "vav", label: "VAV", short: "VAV", color: "var(--green-mid)" },
-  { id: "all", label: "All (both)", short: "ALL", color: "var(--amber-mid)" },
-];
+/** Product-line tags (shared taxonomy). "all" = every product. */
+const PROJECTS = PROJECT_TAG_OPTIONS;
 const projectMeta = (id: string | null) => PROJECTS.find((p) => p.id === id) ?? null;
 
 const MAX_TASK_LEVEL = 3;
@@ -764,7 +761,7 @@ export function BulkEditOutline({ data }: { data: PlanDocData }) {
     <div className="rounded-lg border bg-card p-3" style={{ borderColor: "var(--border-default)" }}>
       <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
         <p className="text-tiny text-text-tertiary">
-          Enter = new row · ↑↓ = move · Tab / ⇧Tab = indent · drag ⋮⋮ to move · ⌘/Ctrl-click to select · /END 5/4 sets dates
+          Enter = new row · ↑↓ = move · Tab / ⇧Tab = indent · drag ⋮⋮ to move · ⌘/Ctrl-click to select · @ to tag · #9/21 or #10 (biz days) = due date
         </p>
         {/* Project filter */}
         <div className="flex items-center gap-1">
@@ -1032,6 +1029,7 @@ function OutlineRow({
           onKeyDown={onKeyDown}
           onBlur={() => onBlur(row.key)}
           sources={{ people: mentionPeople, projects: [], docs: [] }}
+          submitCompletedToken
           placeholder="Deliverable… (type @ to tag people)"
           className="flex-1 min-w-0"
           inputClassName={`w-full bg-transparent outline-none placeholder:text-text-tertiary ${fontByKind}`}

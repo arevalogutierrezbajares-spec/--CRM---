@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
   Briefcase,
@@ -51,6 +51,8 @@ import { createDocAction } from "@/app/(app)/lob/docs-actions";
 import { AddLinkModal, type LinkModalInitial } from "./add-link-modal";
 import { EditFileModal, type FileEditInitial } from "./edit-file-modal";
 import { FilePreviewModal, type PreviewFile } from "./file-preview-modal";
+import { DocCommentsPanel } from "./doc-comments-panel";
+import type { MemberOption } from "@/components/town-hall/types";
 import {
   EditFileContentModal,
   type EditFileTarget,
@@ -139,15 +141,19 @@ export function LinksBoard({
   links,
   currentUserId,
   currentUserRole,
+  members = [],
   shareContacts = [],
 }: {
   lobId: string;
   links: ProjectLinkView[];
   currentUserId: string;
   currentUserRole: "owner" | "admin" | "member";
+  /** Workspace roster for the @mention composer on comments. */
+  members?: MemberOption[];
   shareContacts?: ShareContactOption[];
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [pending, startTransition] = useTransition();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<LinkModalInitial | undefined>(undefined);
@@ -286,6 +292,25 @@ export function LinksBoard({
       setPreviewLoading(false);
     });
   }
+
+  // Deep-link: /lob/[id]?doc=<linkId> (used by comment-mention notifications)
+  // opens that file's preview, or routes to a doc's editor. Fires once per id.
+  const handledDocParam = useRef<string | null>(null);
+  useEffect(() => {
+    const docParam = searchParams.get("doc");
+    if (!docParam || handledDocParam.current === docParam) return;
+    const l = links.find((x) => x.id === docParam);
+    if (!l) return;
+    handledDocParam.current = docParam;
+    // Defer the open one frame so the state updates aren't synchronous in the
+    // effect body (cascading-render rule), matching the rest of this module.
+    const raf = requestAnimationFrame(() => {
+      if (l.kind === "doc") openDoc(l);
+      else preview(l);
+    });
+    return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, links]);
 
   function openEditContent(l: ProjectLinkView) {
     setEditContentFile({
@@ -719,6 +744,18 @@ export function LinksBoard({
               openEditContent(l);
             };
           })()}
+          comments={
+            previewFile ? (
+              <DocCommentsPanel
+                key={previewFile.linkId}
+                linkId={previewFile.linkId}
+                members={members}
+                currentUserId={currentUserId}
+                currentUserRole={currentUserRole}
+                className="w-full"
+              />
+            ) : undefined
+          }
         />
 
         <EditFileContentModal

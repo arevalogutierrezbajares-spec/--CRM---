@@ -62,7 +62,7 @@ export default async function SettingsPage() {
             <ConfigSection
               title="Call Capture"
               description="Record & transcribe both sides of your calls from your Mac."
-              icon={Headphones}
+              icon={<Headphones className="h-5 w-5" />}
             >
               <CallCaptureConfig
                 download={release}
@@ -75,7 +75,7 @@ export default async function SettingsPage() {
             <ConfigSection
               title="Claude · MCP"
               description="Operate the CRM from Claude Code or the Claude Desktop connector."
-              icon={Plug}
+              icon={<Plug className="h-5 w-5" />}
               badge={
                 connections.length > 0 ? (
                   <span className="flex-none rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-700">

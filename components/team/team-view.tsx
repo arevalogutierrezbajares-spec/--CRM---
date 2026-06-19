@@ -1,9 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { UserMinus } from "lucide-react";
+import { toast } from "sonner";
 import { usePresence } from "@/lib/presence/presence-context";
 import { formatRelative } from "@/lib/utils";
+import { removeMemberAction } from "@/app/(app)/team/actions";
 import type { TeamMember } from "@/db/queries/team";
 import type { ActivityEvent } from "@/db/queries/activity";
 
@@ -37,12 +41,38 @@ export function TeamView({
   members,
   activity,
   selfId,
+  selfRole,
 }: {
   members: TeamMember[];
   activity: ActivityEvent[];
   selfId: string;
+  selfRole: "owner" | "admin" | "member";
 }) {
   const presence = usePresence();
+  const router = useRouter();
+  const [removed, setRemoved] = useState<Set<string>>(new Set());
+  const [, startTransition] = useTransition();
+  const canManage = selfRole === "owner" || selfRole === "admin";
+
+  const remove = (m: TeamMember) => {
+    if (!confirm(`Remove ${m.displayName} from the workspace and revoke their access? They'll keep their login but lose all access to this team's data.`))
+      return;
+    setRemoved((s) => new Set(s).add(m.userId)); // optimistic
+    startTransition(async () => {
+      const r = await removeMemberAction(m.userId);
+      if (r.ok) {
+        toast.success(`Removed ${m.displayName} and revoked access`);
+        router.refresh();
+      } else {
+        setRemoved((s) => {
+          const n = new Set(s);
+          n.delete(m.userId);
+          return n;
+        });
+        toast.error(r.error ?? "Couldn't remove member");
+      }
+    });
+  };
   const onlineById = useMemo(() => {
     const m = new Map<string, string>(); // userId → "working on" label
     for (const p of presence?.online ?? []) m.set(p.userId, p.label);
@@ -50,13 +80,15 @@ export function TeamView({
   }, [presence]);
 
   const sortedMembers = useMemo(() => {
-    return [...members].sort((a, b) => {
-      const ao = onlineById.has(a.userId) ? 0 : 1;
-      const bo = onlineById.has(b.userId) ? 0 : 1;
-      if (ao !== bo) return ao - bo;
-      return a.displayName.localeCompare(b.displayName);
-    });
-  }, [members, onlineById]);
+    return [...members]
+      .filter((m) => !removed.has(m.userId))
+      .sort((a, b) => {
+        const ao = onlineById.has(a.userId) ? 0 : 1;
+        const bo = onlineById.has(b.userId) ? 0 : 1;
+        if (ao !== bo) return ao - bo;
+        return a.displayName.localeCompare(b.displayName);
+      });
+  }, [members, onlineById, removed]);
 
   const today = activity.filter((e) => isToday(e.at));
   const earlier = activity.filter((e) => !isToday(e.at));
@@ -78,10 +110,15 @@ export function TeamView({
           {sortedMembers.map((m) => {
             const online = onlineById.has(m.userId);
             const workingOn = onlineById.get(m.userId);
+            const canRemove =
+              canManage &&
+              m.userId !== selfId &&
+              m.role !== "owner" &&
+              (m.role !== "admin" || selfRole === "owner");
             return (
               <div
                 key={m.userId}
-                className="flex items-center gap-3 rounded-md px-2 py-2 hover:bg-surface"
+                className="group flex items-center gap-3 rounded-md px-2 py-2 hover:bg-surface"
               >
                 <div className="relative">
                   <Avatar name={m.displayName} color={colorFromId(m.userId)} />
@@ -114,6 +151,17 @@ export function TeamView({
                         : "Hasn't signed in yet"}
                   </div>
                 </div>
+                {canRemove && (
+                  <button
+                    type="button"
+                    onClick={() => remove(m)}
+                    title={`Remove ${m.displayName} and revoke access`}
+                    aria-label={`Remove ${m.displayName}`}
+                    className="shrink-0 rounded-md p-1.5 text-text-tertiary opacity-0 transition-opacity hover:bg-[var(--red-soft,rgba(239,68,68,0.12))] hover:text-[var(--red-mid)] focus-visible:opacity-100 group-hover:opacity-100"
+                  >
+                    <UserMinus className="h-4 w-4" />
+                  </button>
+                )}
               </div>
             );
           })}

@@ -819,6 +819,44 @@ export const projectDocContents = pgTable("project_doc_contents", {
   updatedBy: uuid("updated_by").references(() => users.id),
 });
 
+// FR-DOC-COMMENTS: threaded discussion + @mentions on any project_links row
+// (a file OR a collaborative doc). Mentioning a teammate fans out an in-app
+// notification (entityType='doc_comment', entityId=link_id) and a WhatsApp DM,
+// mirroring the Town Hall pipeline. Soft-deleted (deletedAt) so threads keep
+// their shape.
+export const docComments = pgTable("doc_comments", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  linkId: uuid("link_id")
+    .notNull()
+    .references(() => projectLinks.id, { onDelete: "cascade" }),
+  authorId: uuid("author_id")
+    .notNull()
+    .references(() => users.id),
+  body: text("body").notNull(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+// Who was @mentioned in a comment (also powers a "people tagged on this doc"
+// view). One row per (comment, user).
+export const docCommentMentions = pgTable("doc_comment_mentions", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  commentId: uuid("comment_id")
+    .notNull()
+    .references(() => docComments.id, { onDelete: "cascade" }),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // PARTNER ACCESS — curated partner rooms + share ledger. Rooms are the future
 // external surface; shares are useful immediately as an internal audit trail.
@@ -3608,4 +3646,38 @@ export const demoLinks = pgTable("demo_links", {
     .notNull()
     .defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }),
+});
+
+// ─── Tech Board: product enhancements ──────────────────────────────────────
+// A lightweight enhancement/feature item per product (CaneyCloud/VAV/CCA/CRM).
+// Can be captured from anywhere via #CCfunc/#VAVfunc/#CCAfunc/#CRMfunc and
+// linked to a roadmap initiative/deliverable. See lib/products.ts.
+export const enhancements = pgTable("enhancements", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  product: text("product").notNull(), // caney | vav | cca | crm
+  title: text("title").notNull(),
+  detail: text("detail"),
+  status: text("status").notNull().default("idea"), // idea | planned | building | shipped | declined
+  priority: text("priority").notNull().default("next"), // now | next | later
+  sortOrder: integer("sort_order").notNull().default(0),
+  // capture provenance (where a #func tag came from)
+  source: text("source").notNull().default("manual"), // manual | townhall | doc | mcp | action_item | roadmap
+  sourceRefId: text("source_ref_id"),
+  sourceLabel: text("source_label"),
+  sourceUrl: text("source_url"),
+  // roadmap linkage
+  linkedInitiativeId: uuid("linked_initiative_id").references(() => initiatives.id, {
+    onDelete: "set null",
+  }),
+  linkedMilestoneId: uuid("linked_milestone_id").references(() => milestones.id, {
+    onDelete: "set null",
+  }),
+  createdBy: uuid("created_by")
+    .notNull()
+    .references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

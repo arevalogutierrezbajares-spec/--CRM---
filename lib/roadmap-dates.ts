@@ -49,11 +49,29 @@ export function parseSmartDate(input: string): string | null {
   return parseFlexDate(s);
 }
 
-/** Pull /start /end /eta /due (or ETA: / END:) date tokens out of a title. */
+/** N business days (Mon–Fri) from `from` (today by default) → ISO. */
+export function addBusinessDays(n: number, from: Date = new Date()): string {
+  const d = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+  let added = 0;
+  while (added < n) {
+    d.setDate(d.getDate() + 1);
+    const day = d.getDay();
+    if (day !== 0 && day !== 6) added++; // skip Sat/Sun
+  }
+  return toIso(d);
+}
+
+/**
+ * Pull date tokens out of a title. Supports two styles:
+ *   • `#9/21`  → due date Sept 21 (M/D[/Y])
+ *   • `#10`    → due date ten *business* days from today
+ *   • legacy `/START 5/4`, `/END 5/4`, `due: 5/4`, `ETA: 5/4`
+ */
 export function parseDateTokens(raw: string): { title: string; start?: string; end?: string } {
   let start: string | undefined;
   let end: string | undefined;
   const title = raw
+    // legacy keyword form
     .replace(
       /(?:\/)?(start|end|eta|due)\s*[:\s]\s*(\d{1,2}[\/\-.]\d{1,2}(?:[\/\-.]\d{2,4})?)/gi,
       (_full, kw: string, dateStr: string) => {
@@ -65,6 +83,20 @@ export function parseDateTokens(raw: string): { title: string; start?: string; e
         return "";
       },
     )
+    // #M/D[/Y] → due date
+    .replace(/#(\d{1,2}[\/\-.]\d{1,2}(?:[\/\-.]\d{2,4})?)/g, (full, dateStr: string) => {
+      const iso = parseFlexDate(dateStr);
+      if (iso) {
+        end = iso;
+        return "";
+      }
+      return full;
+    })
+    // #N → N business days from today (no separator → a plain count)
+    .replace(/#(\d{1,3})(?![\d\/\-.])/g, (_full, nStr: string) => {
+      end = addBusinessDays(parseInt(nStr, 10));
+      return "";
+    })
     .replace(/\s{2,}/g, " ")
     .trim();
   return { title, start, end };

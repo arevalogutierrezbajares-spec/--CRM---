@@ -30,6 +30,7 @@ import {
   createPlanVersion,
   getPlanVersion,
   nextPlanVersionNumber,
+  resolveMentionUserIds,
   resolveProjectForInitiative,
 } from "@/db/queries/roadmap";
 
@@ -448,13 +449,22 @@ export async function updateRoadmapTask(
   const user = await requireUser();
   const parsed = taskPatchSchema.safeParse(patch);
   if (!parsed.success) throw new Error("Invalid task patch");
+  const set: Record<string, unknown> = { ...parsed.data };
+  // @mention sets the assignee: when the title gains an @person tag and the
+  // caller didn't set an explicit assignee, the first resolved person becomes
+  // the owner (so the fortnight board can group by owner). Never auto-clears.
+  if (parsed.data.assigneeUserId === undefined && parsed.data.title?.includes("@")) {
+    const ids = resolveMentionUserIds(parsed.data.title, await buildOwnerMaps(user.workspaceId));
+    if (ids.length) set.assigneeUserId = ids[0];
+  }
   await db
     .update(milestones)
-    .set(parsed.data)
+    .set(set)
     .where(and(eq(milestones.id, id), eq(milestones.workspaceId, user.workspaceId)));
   if (quiet) return; // editor refreshes coarsely on its own (router.refresh)
   revalidatePath("/roadmap");
   revalidatePath("/work");
+  revalidatePath("/sprint");
 }
 
 /** FR-UNI-1 made tangible: the same row the home box checks off. */
@@ -477,9 +487,9 @@ export async function toggleRoadmapTask(
   revalidatePath("/");
 }
 
-/* ─── Roadmap product-line tag (caney | vav | all | null) ─────────────── */
+/* ─── Roadmap product-line tag (caney | vav | cca | crm | all | null) ──── */
 
-const PROJECTS = ["caney", "vav", "all"] as const;
+const PROJECTS = ["caney", "vav", "cca", "crm", "all"] as const;
 type ProjectTag = (typeof PROJECTS)[number] | null;
 const normProject = (p: string | null): ProjectTag =>
   p && (PROJECTS as readonly string[]).includes(p) ? (p as ProjectTag) : null;
@@ -628,6 +638,12 @@ export async function createRoadmapTask(opts: {
     initiativeId: opts.initiativeId,
     createdBy: user.id,
   });
+  // @mention sets the assignee at creation too (e.g. paste/import of "@Maria …").
+  let assigneeUserId: string | null = null;
+  if (title.includes("@")) {
+    const ids = resolveMentionUserIds(title, await buildOwnerMaps(user.workspaceId));
+    assigneeUserId = ids[0] ?? null;
+  }
   const [row] = await db
     .insert(milestones)
     .values({
@@ -637,12 +653,14 @@ export async function createRoadmapTask(opts: {
       parentMilestoneId: opts.parentTaskId ?? null,
       title,
       dueDate: opts.dueDate ?? null,
+      assigneeUserId,
       createdBy: user.id,
     })
     .returning({ id: milestones.id });
   if (!opts.quiet) {
     revalidatePath("/roadmap");
     revalidatePath("/work");
+    revalidatePath("/sprint");
   }
   return { ok: true, id: row.id };
 }

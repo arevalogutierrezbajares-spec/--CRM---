@@ -50,6 +50,7 @@ export function MentionInput({
   className,
   inputClassName,
   inputProps,
+  submitCompletedToken = false,
   "aria-label": ariaLabel,
 }: {
   value: string;
@@ -57,6 +58,13 @@ export function MentionInput({
   sources: MentionSources;
   onPick?: (e: PickedEntity) => void;
   onSubmit?: () => void;
+  /**
+   * When true, pressing Enter on an *already fully-typed* token (e.g. you typed
+   * "@all" and the menu's active option is exactly "@all") does NOT re-pick —
+   * it falls through so the host can commit. Makes "@all⏎" a one-press action
+   * in the roadmap editors while still completing partial queries ("@al⏎").
+   */
+  submitCompletedToken?: boolean;
   /**
    * Forwarded keydown for keys the autocomplete menu did NOT consume. Lets a
    * host (e.g. the roadmap outline) keep its own Enter/Tab/Arrow navigation
@@ -155,6 +163,13 @@ export function MentionInput({
     [trigger, value, caret, onChange, onPick],
   );
 
+  const tokenFor = (s: Sugg): string =>
+    s.section === "Everyone"
+      ? "@all"
+      : s.section === "People"
+        ? personToken(s.person.displayName)
+        : refToken(trigger?.kind ?? "@", s.ref.label);
+
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     if (showMenu) {
       if (e.key === "ArrowDown") {
@@ -168,9 +183,19 @@ export function MentionInput({
         return;
       }
       if (e.key === "Enter" || e.key === "Tab") {
-        e.preventDefault();
-        pick(suggestions[activeIdx]);
-        return;
+        const s = suggestions[activeIdx];
+        // If the active token is already fully typed and the host opted in,
+        // Enter falls through to commit instead of re-picking (one-press @all).
+        const typed = trigger ? value.slice(trigger.start, caret) : "";
+        const alreadyComplete =
+          submitCompletedToken &&
+          e.key === "Enter" &&
+          typed.toLowerCase() === tokenFor(s).toLowerCase();
+        if (!alreadyComplete) {
+          e.preventDefault();
+          pick(s);
+          return;
+        }
       }
       if (e.key === "Escape") {
         e.preventDefault();

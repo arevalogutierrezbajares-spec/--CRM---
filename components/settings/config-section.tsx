@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { ChevronDown, type LucideIcon } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
@@ -14,14 +14,17 @@ import { cn } from "@/lib/utils";
 export function ConfigSection({
   title,
   description,
-  icon: Icon,
+  icon,
   badge,
   defaultOpen = false,
   children,
 }: {
   title: string;
   description?: string;
-  icon?: LucideIcon;
+  /** Rendered icon element (e.g. `<Headphones className="h-5 w-5" />`). A
+   *  rendered element is serializable across the server→client boundary; an
+   *  icon *component* (function) is not, so callers pass an element. */
+  icon?: ReactNode;
   /** Optional short status pill on the right of the header (e.g. "Connected"). */
   badge?: ReactNode;
   defaultOpen?: boolean;
@@ -36,9 +39,9 @@ export function ConfigSection({
         aria-expanded={open}
         className="flex w-full items-center gap-3 p-5 text-left transition-colors hover:bg-[var(--muted)]/30"
       >
-        {Icon && (
+        {icon && (
           <span className="flex h-9 w-9 flex-none items-center justify-center rounded-md bg-[var(--muted)]/50 text-[var(--muted-foreground)]">
-            <Icon className="h-5 w-5" />
+            {icon}
           </span>
         )}
         <span className="min-w-0 flex-1">

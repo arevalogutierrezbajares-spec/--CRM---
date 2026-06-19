@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, lte, notInArray, or, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 
 const {
@@ -294,4 +294,67 @@ export async function listWorkTasks(opts: {
     );
   }
   return enriched;
+}
+
+/** Workspace members (id + name), for owner pickers/grouping. */
+export async function listWorkspaceMembers(
+  workspaceId: string,
+): Promise<Array<{ id: string; displayName: string }>> {
+  return db
+    .select({ id: schema.users.id, displayName: schema.users.displayName })
+    .from(schema.workspaceMembers)
+    .innerJoin(schema.users, eq(schema.users.id, schema.workspaceMembers.userId))
+    .where(eq(schema.workspaceMembers.workspaceId, workspaceId))
+    .orderBy(asc(schema.users.displayName));
+}
+
+/**
+ * "On the table" for the rolling fortnight board: open deliverables (milestones)
+ * that are due within `days` (default 14), already overdue, or in progress.
+ * Excludes done + cancelled. Owner = coalesce(assigneeUserId, assignedTo).
+ */
+export async function listFortnightTasks(
+  workspaceId: string,
+  days = 14,
+): Promise<WorkTask[]> {
+  const end = new Date();
+  end.setDate(end.getDate() + days);
+  const endIso = end.toISOString().slice(0, 10);
+  const ownerExpr = sql<string | null>`coalesce(${milestones.assigneeUserId}, ${milestones.assignedTo})`;
+
+  const rows = await db
+    .select({
+      ms: milestones,
+      projectTitle: projects.title,
+      initiativeTitle: initiatives.title,
+      sprintName: sprints.name,
+      ownerUserId: ownerExpr,
+      assigneeName: users.displayName,
+    })
+    .from(milestones)
+    .innerJoin(projects, eq(projects.id, milestones.projectId))
+    .leftJoin(initiatives, eq(initiatives.id, milestones.initiativeId))
+    .leftJoin(sprints, eq(sprints.id, milestones.sprintId))
+    .leftJoin(users, eq(users.id, ownerExpr))
+    .where(
+      and(
+        eq(projects.workspaceId, workspaceId),
+        notInArray(milestones.status, ["done", "cancelled"]),
+        or(
+          and(isNotNull(milestones.dueDate), lte(milestones.dueDate, endIso)),
+          eq(milestones.status, "in_progress"),
+        ),
+      ),
+    )
+    .orderBy(asc(milestones.dueDate), desc(milestones.createdAt));
+
+  return rows.map(({ ms, projectTitle, initiativeTitle, sprintName, ownerUserId, assigneeName }) => ({
+    ...ms,
+    projectTitle,
+    initiativeTitle,
+    sprintName,
+    ownerUserId,
+    assigneeName,
+    themes: [],
+  }));
 }
