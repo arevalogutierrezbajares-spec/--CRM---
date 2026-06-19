@@ -27,6 +27,18 @@ const CULL_RANK: Record<number, number> = {
 const SPELL_STAGGER = 0.022;
 const CULL_STAGGER = 0.035;
 
+// Pixar "Luxo" drop-in: the lockup jumps in from above, overshoots past its
+// resting line, then springs back up to settle — the top-to-bottom bounce.
+const introVariants = {
+  hidden: { opacity: 0, y: -26, scale: 0.62 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: { type: "spring" as const, stiffness: 540, damping: 12, mass: 0.9 },
+  },
+} as const;
+
 type Phase = "idle" | "spell" | "hold" | "cull" | "settle";
 
 const PHASE_AFTER: Record<Exclude<Phase, "idle">, { next: Phase; ms: number }> = {
@@ -92,6 +104,9 @@ function phaseLabel(phase: Phase): "hidden" | "shown" | "culled" {
 export function BrandWidget({ rail = false }: { rail?: boolean }) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [runKey, setRunKey] = useState(0);
+  // Drives the Pixar drop-in bounce. Bumping the key replays the spring from
+  // rest; reduced-motion users skip straight to "visible".
+  const [introKey, setIntroKey] = useState(0);
   const reduced = useReducedMotion();
   const playing = phase !== "idle";
 
@@ -101,6 +116,11 @@ export function BrandWidget({ rail = false }: { rail?: boolean }) {
     setPhase("spell");
   }, [reduced]);
 
+  const bounce = useCallback(() => {
+    if (reduced) return;
+    setIntroKey((k) => k + 1);
+  }, [reduced]);
+
   useEffect(() => {
     if (phase === "idle") return;
     const { next, ms } = PHASE_AFTER[phase];
@@ -108,18 +128,21 @@ export function BrandWidget({ rail = false }: { rail?: boolean }) {
     return () => clearTimeout(t);
   }, [phase, runKey]);
 
-  // Play once per browser session (inline, not a popup).
+  // Pixar drop-in once per browser session (inline, not a popup): the lockup
+  // jumps in top-to-bottom and bounces to rest shortly after mount.
   useEffect(() => {
+    // Check reduced-motion first so it doesn't burn the once-per-session flag
+    // (a user who later disables reduced-motion still gets the intro).
+    if (reduced) return;
     try {
       if (sessionStorage.getItem(SEEN_KEY)) return;
       sessionStorage.setItem(SEEN_KEY, "1");
     } catch {
       return;
     }
-    if (reduced) return;
-    const t = setTimeout(play, 500);
+    const t = setTimeout(bounce, 220);
     return () => clearTimeout(t);
-  }, [play, reduced]);
+  }, [bounce, reduced]);
 
   useEffect(() => {
     const onReplay = () => play();
@@ -169,12 +192,21 @@ export function BrandWidget({ rail = false }: { rail?: boolean }) {
         title="AGB Technologies — Home"
         className="relative flex items-center justify-center text-text-primary transition-opacity hover:opacity-80 active:scale-[0.96]"
       >
-        <BrandPillars key={runKey} size={24} play={playing} settle={phase === "settle"} className="shrink-0 text-text-primary" />
-        {playing && (
-          <span className="pointer-events-none absolute left-full top-1/2 z-30 ml-2 -translate-y-1/2 rounded-md bg-[var(--bg-page)] px-2 py-1 shadow-md">
-            {letters}
-          </span>
-        )}
+        <motion.span
+          key={introKey}
+          variants={introVariants}
+          initial={introKey === 0 ? false : "hidden"}
+          animate="visible"
+          className="relative flex items-center justify-center"
+          style={{ transformOrigin: "50% 0%" }}
+        >
+          <BrandPillars key={runKey} size={24} play={playing} settle={phase === "settle"} className="shrink-0 text-text-primary" />
+          {playing && (
+            <span className="pointer-events-none absolute left-full top-1/2 z-30 ml-2 -translate-y-1/2 rounded-md bg-[var(--bg-page)] px-2 py-1 shadow-md">
+              {letters}
+            </span>
+          )}
+        </motion.span>
       </Link>
     );
   }
@@ -188,8 +220,16 @@ export function BrandWidget({ rail = false }: { rail?: boolean }) {
       title="AGB Technologies — Home"
       className="flex min-w-0 items-center gap-2 text-text-primary transition-opacity hover:opacity-80 active:scale-[0.98]"
     >
-      <BrandPillars key={runKey} size={24} play={playing} settle={phase === "settle"} className="shrink-0 text-text-primary" />
-      <span className="relative inline-block">
+      <motion.span
+        key={introKey}
+        variants={introVariants}
+        initial={introKey === 0 ? false : "hidden"}
+        animate="visible"
+        className="flex min-w-0 items-center gap-2"
+        style={{ transformOrigin: "50% 0%" }}
+      >
+        <BrandPillars key={runKey} size={24} play={playing} settle={phase === "settle"} className="shrink-0 text-text-primary" />
+        <span className="relative inline-block">
         {/* Resting lockup — sets the slot width; fades out while animating. */}
         <span
           className={`whitespace-nowrap text-[15px] leading-none tracking-tight ${playing ? "opacity-0" : ""}`}
@@ -204,7 +244,8 @@ export function BrandWidget({ rail = false }: { rail?: boolean }) {
             {letters}
           </span>
         )}
-      </span>
+        </span>
+      </motion.span>
     </Link>
   );
 }

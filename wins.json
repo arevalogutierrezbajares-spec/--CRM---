@@ -1,0 +1,256 @@
+{
+  "weekOf": "2026-06-15",
+  "generatedAt": "2026-06-18T05:31:37.235Z",
+  "repo": "AGB-CRM",
+  "totals": {
+    "w": 15,
+    "W": 6,
+    "DUB": 3,
+    "all": 24
+  },
+  "days": [
+    {
+      "day": "2026-06-15",
+      "commits": 4,
+      "sessions": 0,
+      "activeMin": 0,
+      "tokens": 0
+    },
+    {
+      "day": "2026-06-16",
+      "commits": 6,
+      "sessions": 0,
+      "activeMin": 0,
+      "tokens": 0
+    },
+    {
+      "day": "2026-06-17",
+      "commits": 1,
+      "sessions": 2,
+      "activeMin": 51,
+      "tokens": 406813
+    },
+    {
+      "day": "2026-06-18",
+      "commits": 0,
+      "sessions": 1,
+      "activeMin": 35,
+      "tokens": 243492
+    },
+    {
+      "day": "2026-06-19",
+      "commits": 0,
+      "sessions": 0,
+      "activeMin": 0,
+      "tokens": 0
+    },
+    {
+      "day": "2026-06-20",
+      "commits": 0,
+      "sessions": 0,
+      "activeMin": 0,
+      "tokens": 0
+    },
+    {
+      "day": "2026-06-21",
+      "commits": 0,
+      "sessions": 0,
+      "activeMin": 0,
+      "tokens": 0
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-06-15T00:17:16-04:00",
+      "day": "2026-06-15",
+      "tier": "w",
+      "source": "commit",
+      "label": "feat(roadmap): auto-drop never-typed new rows on blur (#9)",
+      "value": 1
+    },
+    {
+      "ts": "2026-06-15T00:38:30-04:00",
+      "day": "2026-06-15",
+      "tier": "w",
+      "source": "commit",
+      "label": "feat(nav): add Posada Onboarding sidebar entry",
+      "value": 1
+    },
+    {
+      "ts": "2026-06-15T00:51:02-04:00",
+      "day": "2026-06-15",
+      "tier": "w",
+      "source": "commit",
+      "label": "docs: VAV<->CaneyCloud<->AGB-CRM integration sync-status map",
+      "value": 1
+    },
+    {
+      "ts": "2026-06-15T21:12:53-04:00",
+      "day": "2026-06-15",
+      "tier": "w",
+      "source": "commit",
+      "label": "feat(roadmap): bulk select + copy/paste + per-deliverable project tag (#10)",
+      "value": 1
+    },
+    {
+      "ts": "2026-06-16T20:00:00Z",
+      "day": "2026-06-16",
+      "tier": "DUB",
+      "source": "streak",
+      "label": "2-day streak",
+      "value": 2
+    },
+    {
+      "ts": "2026-06-16T22:39:22-04:00",
+      "day": "2026-06-16",
+      "tier": "w",
+      "source": "commit",
+      "label": "feat(roadmap): add initiative_people table for @-mention tags",
+      "value": 1
+    },
+    {
+      "ts": "2026-06-16T22:39:32-04:00",
+      "day": "2026-06-16",
+      "tier": "w",
+      "source": "commit",
+      "label": "feat(roadmap): sync @-mention people-tags on title save",
+      "value": 1
+    },
+    {
+      "ts": "2026-06-16T22:39:42-04:00",
+      "day": "2026-06-16",
+      "tier": "w",
+      "source": "commit",
+      "label": "test(roadmap): unit tests for @-mention parse/strip/round-trip",
+      "value": 1
+    },
+    {
+      "ts": "2026-06-16T22:39:42-04:00",
+      "day": "2026-06-16",
+      "tier": "w",
+      "source": "commit",
+      "label": "feat(roadmap): @-mention autocomplete + person bubbles + filter",
+      "value": 1
+    },
+    {
+      "ts": "2026-06-16T22:41:52-04:00",
+      "day": "2026-06-16",
+      "tier": "w",
+      "source": "commit",
+      "label": "Merge remote-tracking branch 'origin/main' into feat/roadmap-mentions",
+      "value": 1
+    },
+    {
+      "ts": "2026-06-16T22:42:56-04:00",
+      "day": "2026-06-16",
+      "tier": "w",
+      "source": "commit",
+      "label": "fix(roadmap): preserve plain commit on Enter in merged outline",
+      "value": 1
+    },
+    {
+      "ts": "2026-06-17T00:21:57-04:00",
+      "day": "2026-06-17",
+      "tier": "w",
+      "source": "commit",
+      "label": "fix(roadmap): enable @-mention tagging on deliverables + sub-deliverables",
+      "value": 1
+    },
+    {
+      "ts": "2026-06-17T12:00:00Z",
+      "day": "2026-06-17",
+      "tier": "w",
+      "source": "session",
+      "label": "2 Claude sessions",
+      "value": 2
+    },
+    {
+      "ts": "2026-06-17T12:00:00Z",
+      "day": "2026-06-17",
+      "tier": "w",
+      "source": "focus",
+      "label": "51 min focused",
+      "value": 51
+    },
+    {
+      "ts": "2026-06-17T12:00:00Z",
+      "day": "2026-06-17",
+      "tier": "W",
+      "source": "tokens",
+      "label": "407k tokens generated",
+      "value": 406813
+    },
+    {
+      "ts": "2026-06-17T12:00:00Z",
+      "day": "2026-06-17",
+      "tier": "W",
+      "source": "tokens",
+      "label": "407k tokens generated",
+      "value": 406813
+    },
+    {
+      "ts": "2026-06-17T12:00:00Z",
+      "day": "2026-06-17",
+      "tier": "W",
+      "source": "tokens",
+      "label": "407k tokens generated",
+      "value": 406813
+    },
+    {
+      "ts": "2026-06-17T12:00:00Z",
+      "day": "2026-06-17",
+      "tier": "W",
+      "source": "tokens",
+      "label": "407k tokens generated",
+      "value": 406813
+    },
+    {
+      "ts": "2026-06-17T20:00:00Z",
+      "day": "2026-06-17",
+      "tier": "DUB",
+      "source": "streak",
+      "label": "3-day streak",
+      "value": 3
+    },
+    {
+      "ts": "2026-06-18T12:00:00Z",
+      "day": "2026-06-18",
+      "tier": "w",
+      "source": "session",
+      "label": "1 Claude session",
+      "value": 1
+    },
+    {
+      "ts": "2026-06-18T12:00:00Z",
+      "day": "2026-06-18",
+      "tier": "w",
+      "source": "focus",
+      "label": "35 min focused",
+      "value": 35
+    },
+    {
+      "ts": "2026-06-18T12:00:00Z",
+      "day": "2026-06-18",
+      "tier": "W",
+      "source": "tokens",
+      "label": "243k tokens generated",
+      "value": 243492
+    },
+    {
+      "ts": "2026-06-18T12:00:00Z",
+      "day": "2026-06-18",
+      "tier": "W",
+      "source": "tokens",
+      "label": "243k tokens generated",
+      "value": 243492
+    },
+    {
+      "ts": "2026-06-18T20:00:00Z",
+      "day": "2026-06-18",
+      "tier": "DUB",
+      "source": "streak",
+      "label": "4-day streak",
+      "value": 4
+    }
+  ]
+}

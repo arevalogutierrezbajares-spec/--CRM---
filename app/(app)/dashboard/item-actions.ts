@@ -7,6 +7,7 @@ import {
   updateActionItem,
   createTask,
   updateTask,
+  deleteTask,
   addItemAttachment,
   removeItemAttachment,
   getItemDetail,
@@ -154,6 +155,33 @@ export async function updateTaskAction(opts: {
 }): Promise<Result> {
   const user = await requireUser();
   const ok = await updateTask({ workspaceId: user.workspaceId, ...opts });
+  if (!ok) return { ok: false, error: "Task not found" };
+  refresh();
+  return { ok: true, id: opts.id };
+}
+
+/** Delete a task (milestone) from the home/work surfaces. Workspace-scoped. */
+export async function deleteTaskAction(opts: { id: string }): Promise<Result> {
+  const user = await requireUser();
+  const ok = await deleteTask(user.workspaceId, opts.id);
+  if (!ok) return { ok: false, error: "Task not found" };
+  refresh();
+  return { ok: true, id: opts.id };
+}
+
+/**
+ * Extend an overdue task's due date — push it to N days from *today* in the
+ * operator's timezone (so a "click overdue → +2 days" reliably clears the
+ * overdue state; the same today-anchored basis the action-item snooze uses).
+ */
+export async function extendTaskDueDateAction(opts: {
+  id: string;
+  days: number;
+}): Promise<Result> {
+  const user = await requireUser();
+  const days = Math.max(1, Math.min(opts.days, 90));
+  const dueDate = addDaysToISODate(todayInTz(user.timezone), days);
+  const ok = await updateTask({ workspaceId: user.workspaceId, id: opts.id, dueDate });
   if (!ok) return { ok: false, error: "Task not found" };
   refresh();
   return { ok: true, id: opts.id };

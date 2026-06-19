@@ -7,10 +7,13 @@ import { db } from "@/db";
 import {
   actionItemInitiatives,
   actionItems,
+  functions,
   initiativeDependencies,
+  initiativePeople,
   initiatives,
   linesOfBusiness,
   milestones,
+  workspaceMembers,
 } from "@/db/schema";
 import { requireUser } from "@/lib/current-user";
 import {
@@ -29,7 +32,6 @@ import {
   nextPlanVersionNumber,
   resolveMentionUserIds,
   resolveProjectForInitiative,
-  syncInitiativePeopleFromText,
 } from "@/db/queries/roadmap";
 
 /* ─── Export (FR-RMD-1) + Copy for AI (FR-RMD-2) ──────────────────────── */
@@ -421,10 +423,10 @@ export async function updateInitiativeFields(
     .update(initiatives)
     .set(set)
     .where(and(eq(initiatives.id, id), eq(initiatives.workspaceId, user.workspaceId)));
-  // Re-sync the people-tags index whenever the title (which carries the @tokens)
-  // changes, so bubbles + the person filter stay in lockstep with the text.
-  if (parsed.data.title !== undefined)
-    await syncInitiativePeopleFromText(id, user.workspaceId, parsed.data.title);
+  // FR-E5: people are NO LONGER derived from title @tokens. The title is plain
+  // prose; assignments are written directly to initiative_people by the
+  // assignment control (setInitiativePeople / add / remove below). So a title
+  // save must not touch the people index.
   if (quiet) return; // editor refreshes coarsely on its own (router.refresh)
   revalidatePath("/roadmap");
   revalidatePath("/initiatives");
@@ -886,6 +888,172 @@ export async function removeInitiativeDependency(id: string): Promise<void> {
   revalidatePath("/roadmap");
 }
 
+/* ─── Initiative people (FR-E5: assignment control, not title tokens) ──── */
+
+/** Verify the initiative belongs to the caller's workspace. */
+async function ownInitiative(workspaceId: string, initiativeId: string): Promise<boolean> {
+  const rows = await db
+    .select({ id: initiatives.id })
+    .from(initiatives)
+    .where(and(eq(initiatives.id, initiativeId), eq(initiatives.workspaceId, workspaceId)));
+  return rows.length > 0;
+}
+
+/** Workspace member ids (for validating + the "Everyone" expansion). */
+async function workspaceMemberIds(workspaceId: string): Promise<string[]> {
+  const rows = await db
+    .select({ userId: workspaceMembers.userId })
+    .from(workspaceMembers)
+    .where(eq(workspaceMembers.workspaceId, workspaceId));
+  return rows.map((r) => r.userId);
+}
+
+type PeopleResult = { ok: boolean; error?: string };
+
+/** Replace an initiative's assigned people with exactly `userIds` (the source of
+ *  truth — title tokens no longer participate). Invalid / non-member ids are
+ *  dropped. Pass the full member set for the "Everyone" convention. */
+export async function setInitiativePeople(
+  initiativeId: string,
+  userIds: string[],
+  quiet = false,
+): Promise<PeopleResult> {
+  const user = await requireUser();
+  if (!(await ownInitiative(user.workspaceId, initiativeId)))
+    return { ok: false, error: "Initiative not found" };
+  const valid = new Set(await workspaceMemberIds(user.workspaceId));
+  const wanted = Array.from(new Set(userIds)).filter((id) => valid.has(id));
+  await db.transaction(async (tx) => {
+    const t = tx as unknown as typeof db;
+    await t.delete(initiativePeople).where(eq(initiativePeople.initiativeId, initiativeId));
+    if (wanted.length)
+      await t
+        .insert(initiativePeople)
+        .values(wanted.map((userId) => ({ initiativeId, userId })))
+        .onConflictDoNothing();
+  });
+  if (!quiet) {
+    revalidatePath("/roadmap");
+    revalidatePath("/initiatives");
+  }
+  return { ok: true };
+}
+
+
+/* ─── Functions (FR-E6: the horizontal axis) ──────────────────────────── */
+
+function slugifyFn(s: string): string {
+  return (
+    s
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 40) || "fn"
+  );
+}
+
+/** The reserved no-orphan bucket; created on demand if the seed missed it. */
+async function uncategorizedFunctionId(workspaceId: string): Promise<string | null> {
+  const found = await db
+    .select({ id: functions.id })
+    .from(functions)
+    .where(and(eq(functions.workspaceId, workspaceId), eq(functions.slug, "uncategorized")));
+  if (found[0]) return found[0].id;
+  await db
+    .insert(functions)
+    .values({ workspaceId, name: "Uncategorized", slug: "uncategorized", sortOrder: 99 })
+    .onConflictDoNothing();
+  const again = await db
+    .select({ id: functions.id })
+    .from(functions)
+    .where(and(eq(functions.workspaceId, workspaceId), eq(functions.slug, "uncategorized")));
+  return again[0]?.id ?? null;
+}
+
+/** Create a new function (horizontal). Slug is derived + de-duped per workspace. */
+export async function createFunction(
+  name: string,
+): Promise<{ ok: boolean; id?: string; error?: string }> {
+  const user = await requireUser();
+  const n = name.trim();
+  if (!n) return { ok: false, error: "Name required" };
+  const existing = await db
+    .select({ slug: functions.slug, sortOrder: functions.sortOrder })
+    .from(functions)
+    .where(eq(functions.workspaceId, user.workspaceId));
+  const slugs = new Set(existing.map((e) => e.slug));
+  let slug = slugifyFn(n);
+  if (slugs.has(slug)) {
+    let i = 2;
+    while (slugs.has(`${slug}-${i}`)) i++;
+    slug = `${slug}-${i}`;
+  }
+  // Keep the reserved Uncategorized (99) last.
+  const maxReal = existing.filter((e) => e.slug !== "uncategorized").reduce((m, e) => Math.max(m, e.sortOrder), -1);
+  const [row] = await db
+    .insert(functions)
+    .values({ workspaceId: user.workspaceId, name: n, slug, sortOrder: Math.min(maxReal + 1, 98) })
+    .returning({ id: functions.id });
+  revalidatePath("/roadmap");
+  revalidatePath("/roadmap/by-project");
+  return { ok: true, id: row.id };
+}
+
+/** Rename a function (the reserved Uncategorized bucket can't be renamed). */
+export async function renameFunction(
+  id: string,
+  name: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireUser();
+  const n = name.trim();
+  if (!n) return { ok: false, error: "Name required" };
+  const rows = await db
+    .select({ slug: functions.slug })
+    .from(functions)
+    .where(and(eq(functions.id, id), eq(functions.workspaceId, user.workspaceId)));
+  if (!rows[0]) return { ok: false, error: "Function not found" };
+  if (rows[0].slug === "uncategorized") return { ok: false, error: "The Uncategorized bucket can't be renamed" };
+  await db
+    .update(functions)
+    .set({ name: n })
+    .where(and(eq(functions.id, id), eq(functions.workspaceId, user.workspaceId)));
+  revalidatePath("/roadmap");
+  revalidatePath("/roadmap/by-project");
+  return { ok: true };
+}
+
+/** Assign an initiative to a function. Passing null resolves to Uncategorized so
+ *  an initiative is NEVER orphaned from the horizontal axis (FR-E6-6). */
+export async function setInitiativeFunction(
+  initiativeId: string,
+  functionId: string | null,
+  quiet = false,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireUser();
+  if (!(await ownInitiative(user.workspaceId, initiativeId)))
+    return { ok: false, error: "Initiative not found" };
+  let fid = functionId;
+  if (fid) {
+    const owned = await db
+      .select({ id: functions.id })
+      .from(functions)
+      .where(and(eq(functions.id, fid), eq(functions.workspaceId, user.workspaceId)));
+    if (!owned.length) return { ok: false, error: "Function not found" };
+  } else {
+    fid = await uncategorizedFunctionId(user.workspaceId);
+  }
+  await db
+    .update(initiatives)
+    .set({ functionId: fid, updatedAt: new Date() })
+    .where(and(eq(initiatives.id, initiativeId), eq(initiatives.workspaceId, user.workspaceId)));
+  if (!quiet) {
+    revalidatePath("/roadmap");
+    revalidatePath("/roadmap/by-project");
+  }
+  return { ok: true };
+}
+
 /* ─── Bulk-edit structural ops (LoBs · initiatives · tasks) ───────────── */
 
 export async function createLob(
@@ -935,20 +1103,31 @@ export async function deleteLob(id: string, quiet = false): Promise<void> {
 
 export async function createInitiative(opts: {
   lobId?: string | null;
+  functionId?: string | null;
   title?: string;
   quiet?: boolean;
 }): Promise<{ ok: boolean; id?: string }> {
   const user = await requireUser();
+  // FR-E6-6a: default to the reserved Uncategorized function so a new initiative
+  // is never orphaned from the horizontal axis.
+  const functionId =
+    opts.functionId !== undefined && opts.functionId !== null
+      ? opts.functionId
+      : await uncategorizedFunctionId(user.workspaceId);
   const [row] = await db
     .insert(initiatives)
     .values({
       workspaceId: user.workspaceId,
       lobId: opts.lobId ?? null,
+      functionId,
       title: (opts.title ?? "").trim() || "New milestone",
       createdBy: user.id,
     })
     .returning({ id: initiatives.id });
-  if (!opts.quiet) revalidatePath("/roadmap");
+  if (!opts.quiet) {
+    revalidatePath("/roadmap");
+    revalidatePath("/roadmap/by-project");
+  }
   return { ok: true, id: row.id };
 }
 

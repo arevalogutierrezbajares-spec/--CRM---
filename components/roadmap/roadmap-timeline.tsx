@@ -456,8 +456,16 @@ export function RoadmapTimeline({
                               checked={sel.isSelected(item.id)}
                               onChange={() => sel.toggle(item.id, "init")}
                               className="ml-3 mr-1 shrink-0"
-                              title="Select milestone for delete"
+                              title="Select milestone (delete, or pick 2 to link a dependency)"
                             />
+                          )}
+                          {sel.selectMode && sel.isSelected(item.id) && sel.initiativeIds.length === 2 && (
+                            <span
+                              className="mr-1 shrink-0 rounded px-1 py-px text-[9px] font-semibold uppercase tracking-wide"
+                              style={{ background: "color-mix(in oklab, var(--blue-mid) 16%, transparent)", color: "var(--blue-mid)" }}
+                            >
+                              {sel.initiativeIds[0] === item.id ? "1 · blocks" : "2 · depends"}
+                            </span>
                           )}
                           <button
                             type="button"
@@ -785,8 +793,6 @@ function DependsOn({
   const [, startTransition] = useTransition();
   const titleOf = (id: string) => initiativeList.find((i) => i.id === id)?.title ?? "—";
   const preds = deps.filter((d) => d.toInitiativeId === initId);
-  const predIds = new Set(preds.map((p) => p.fromInitiativeId));
-  const options = initiativeList.filter((i) => i.id !== initId && !predIds.has(i.id));
   return (
     <div>
       <div className="text-tiny font-semibold uppercase tracking-wider text-text-tertiary mb-1.5">
@@ -811,27 +817,12 @@ function DependsOn({
           </span>
         ))}
         {preds.length === 0 && <span className="text-[12px] text-text-tertiary">none yet</span>}
-        <select
-          value=""
-          onChange={(e) => {
-            const from = e.target.value;
-            if (!from) return;
-            startTransition(async () => {
-              const r = await addInitiativeDependency(from, initId);
-              if (!r.ok && r.error) toast.error(r.error);
-            });
-          }}
-          className="rounded border bg-card px-1.5 py-1 text-[12px]"
-          style={{ borderColor: "var(--border-default)" }}
-        >
-          <option value="">+ add predecessor…</option>
-          {options.map((o) => (
-            <option key={o.id} value={o.id}>
-              {o.title}
-            </option>
-          ))}
-        </select>
       </div>
+      {/* FR-E4: no dropdown — link by selecting two milestones. */}
+      <p className="mt-1.5 text-tiny text-text-tertiary">
+        To add: hit <span className="font-medium text-text-secondary">Select</span>, tick two
+        milestones (1st blocks 2nd), then <span className="font-medium text-text-secondary">Add dependency</span> — or drag from a bar&apos;s link handle.
+      </p>
     </div>
   );
 }

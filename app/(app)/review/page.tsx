@@ -26,6 +26,9 @@ import { listBlockedProjects, type BlockedProject } from "@/db/queries/this-week
 import { listOpenActionItems, type DashActionItem } from "@/db/queries/dashboard";
 import { listPosts, type PostView } from "@/db/queries/town-hall";
 import { weekMondayOf, getReviewForWeek, listReviews, type ReviewListItem } from "@/db/queries/review";
+import { WinsBoard, type WinsData } from "@/components/review/wins-board";
+import { getWinsForWeek, type WinsWeek } from "@/db/queries/wins";
+import winsJson from "@/wins.json";
 
 const STATUS_TONE: Record<string, string> = {
   on_track: "var(--green-mid)",
@@ -77,7 +80,7 @@ export default async function ReviewPage() {
   const weekOf = weekMondayOf(todayStr);
   const quarter = quarterOf(new Date(todayStr));
 
-  const [scorecardRes, objectivesRes, blockedRes, actionItemsRes, headlinesRes, savedRes, pastRes] =
+  const [scorecardRes, objectivesRes, blockedRes, actionItemsRes, headlinesRes, savedRes, pastRes, winsRes] =
     await Promise.all([
       safeRead<ScorecardRow[]>(() => listScorecard(user.workspaceId, quarter), []),
       safeRead<ObjectiveView[]>(() => listObjectives(user.workspaceId, quarter), []),
@@ -86,7 +89,11 @@ export default async function ReviewPage() {
       safeRead<PostView[]>(() => listPosts({ workspaceId: user.workspaceId, viewerId: user.id, limit: 6 }), []),
       safeRead<{ notes: string | null } | null>(() => getReviewForWeek(user.workspaceId, weekOf), null),
       safeRead<ReviewListItem[]>(() => listReviews(user.workspaceId), []),
+      safeRead<WinsWeek | null>(() => getWinsForWeek(user.workspaceId, weekOf), null),
     ]);
+
+  // Live DB row if this week has been ingested; otherwise the bundled snapshot.
+  const wins = (winsRes.data ?? winsJson) as WinsData;
 
   const scorecard = scorecardRes.data;
   const objectives = objectivesRes.data;
@@ -124,6 +131,9 @@ export default async function ReviewPage() {
           </div>
           <span className="text-tiny text-text-tertiary">Facilitator: {user.displayName}</span>
         </div>
+
+        {/* 0 — Wins board (dynamic Reel) */}
+        <WinsBoard data={wins} />
 
         {/* 1 — Scorecard */}
         <Section icon={BarChart3} title="Scorecard" hint="are the numbers green?">

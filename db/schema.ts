@@ -2234,6 +2234,32 @@ export const themes = pgTable("themes", {
     .defaultNow(),
 });
 
+// Functions (FR-E6): the HORIZONTAL categorization that cuts across LoBs
+// (Product, Engineering, Growth, Operations, Finance …). LoBs are the verticals;
+// functions are the horizontals. Workspace-scoped + user-editable, so a table
+// (not an enum). A reserved `uncategorized` slug is the no-orphan fix-me bucket.
+export const functions = pgTable(
+  "functions",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    slug: text("slug").notNull(),
+    color: text("color"), // hex accent for the matrix row
+    icon: text("icon"), // lucide name
+    sortOrder: integer("sort_order").notNull().default(0),
+    archived: boolean("archived").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    bySlug: uniqueIndex("functions_workspace_slug_uniq").on(t.workspaceId, t.slug),
+  }),
+);
+
 export const initiatives = pgTable("initiatives", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   workspaceId: uuid("workspace_id")
@@ -2241,6 +2267,11 @@ export const initiatives = pgTable("initiatives", {
     .references(() => workspaces.id, { onDelete: "cascade" }),
   // Optional venture (LoB) — initiatives can be cross-venture
   lobId: uuid("lob_id").references(() => linesOfBusiness.id, {
+    onDelete: "set null",
+  }),
+  // FR-E6: horizontal function (cross-LoB). Nullable at the DB level (deploy-safe)
+  // but the UX always resolves it to a real or the reserved Uncategorized bucket.
+  functionId: uuid("function_id").references(() => functions.id, {
     onDelete: "set null",
   }),
   title: text("title").notNull(),
@@ -3444,6 +3475,32 @@ export const weeklyReviews = pgTable("weekly_reviews", {
   snapshot: jsonb("snapshot"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// WINS board — one row per (workspace, ISO week-Monday) holding the scored
+// W-events + daily aggregates for the weekly-review Reel. Written by
+// scripts/wins-ingest.ts (Claude CLI usage + AGB-CRM git activity), read by
+// /review. Volume-based; no PII beyond commit subjects.
+export const winsWeeks = pgTable(
+  "wins_weeks",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    weekOf: date("week_of").notNull(),
+    generatedAt: timestamp("generated_at", { withTimezone: true }).notNull().defaultNow(),
+    totals: jsonb("totals").$type<{ w: number; W: number; DUB: number; all: number }>().notNull(),
+    days: jsonb("days")
+      .$type<{ day: string; commits: number; sessions: number; activeMin: number; tokens: number }[]>()
+      .notNull(),
+    events: jsonb("events")
+      .$type<{ ts: string; day: string; tier: "w" | "W" | "DUB"; source: string; label: string; value: number }[]>()
+      .notNull(),
+  },
+  (t) => ({
+    workspaceWeekUniq: uniqueIndex("wins_weeks_workspace_week_uniq").on(t.workspaceId, t.weekOf),
+  }),
+);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MCP — Model Context Protocol server. Lets a user connect their Claude Code to

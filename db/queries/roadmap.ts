@@ -3,6 +3,7 @@ import { db } from "@/db";
 import {
   actionItemInitiatives,
   actionItems,
+  functions,
   initiativeDependencies,
   initiativePeople,
   initiatives,
@@ -450,19 +451,31 @@ export type PlanDocInitiative = {
   ownerUserId: string | null;
   lobId: string | null;
   lobTitle: string | null;
-  /** People @-tagged in this initiative's title (the bubble owners). */
+  /** FR-E6: horizontal function id (resolved to Uncategorized when unset). */
+  functionId: string | null;
+  /** Assigned people (FR-E5 source of truth = initiative_people). */
   people: Array<{ userId: string; displayName: string }>;
   tasks: PlanDocTask[];
+};
+
+export type FunctionRow = {
+  id: string;
+  name: string;
+  slug: string;
+  sortOrder: number;
+  color: string | null;
+  archived: boolean;
 };
 
 export type PlanDocData = {
   initiatives: PlanDocInitiative[];
   members: Array<{ id: string; displayName: string }>;
   lobs: Array<{ id: string; title: string }>;
+  functions: FunctionRow[];
 };
 
 export async function getPlanDocData(workspaceId: string): Promise<PlanDocData> {
-  const [inits, members, lobRows] = await Promise.all([
+  const [inits, members, lobRows, functionRows] = await Promise.all([
     db
       .select()
       .from(initiatives)
@@ -480,6 +493,18 @@ export async function getPlanDocData(workspaceId: string): Promise<PlanDocData> 
       .from(linesOfBusiness)
       .where(eq(linesOfBusiness.workspaceId, workspaceId))
       .orderBy(asc(linesOfBusiness.sortOrder), asc(linesOfBusiness.createdAt)),
+    db
+      .select({
+        id: functions.id,
+        name: functions.name,
+        slug: functions.slug,
+        sortOrder: functions.sortOrder,
+        color: functions.color,
+        archived: functions.archived,
+      })
+      .from(functions)
+      .where(eq(functions.workspaceId, workspaceId))
+      .orderBy(asc(functions.sortOrder), asc(functions.name)),
   ]);
   const lobTitleById = new Map(lobRows.map((l) => [l.id, l.title]));
 
@@ -522,6 +547,7 @@ export async function getPlanDocData(workspaceId: string): Promise<PlanDocData> 
   return {
     members,
     lobs: lobRows,
+    functions: functionRows,
     initiatives: inits.map((init) => {
       const mine = taskRows.filter((t) => t.initiativeId === init.id);
       const byId = new Map<string, PlanDocTask>();
@@ -557,6 +583,7 @@ export async function getPlanDocData(workspaceId: string): Promise<PlanDocData> 
         ownerUserId: init.ownerUserId,
         lobId: init.lobId,
         lobTitle: init.lobId ? (lobTitleById.get(init.lobId) ?? null) : null,
+        functionId: init.functionId,
         people: peopleByInit.get(init.id) ?? [],
         tasks: roots,
       };

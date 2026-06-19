@@ -89,19 +89,20 @@ export function PinnedProjects({
   const selected = pinned.find((p) => p.id === open) ?? pinned[0] ?? null;
   const recentUnpinned = recent.filter((r) => !pinnedIds.has(r.id));
 
-  // The single most-recently-touched doc per pinned project, newest first —
-  // the "what changed since I last looked" rail.
+  // Every recently-touched doc across ALL pinned projects, flattened and newest
+  // first — the "what changed since I last looked" rail. Side-scrolls so the
+  // full set lives in one fixed-height strip (FR-E2-1). Capped for first paint.
+  const RAIL_CAP = 40;
   const recentUpdates = useMemo(
     () =>
       pinned
-        .map((p) => (p.latestDocs[0] ? { project: p, doc: p.latestDocs[0] } : null))
-        .filter((x): x is { project: PinnedProject; doc: PinnedDoc } => Boolean(x))
+        .flatMap((p) => p.docs.map((doc) => ({ project: p, doc })))
         .sort(
           (a, b) =>
             (Date.parse(b.doc.updatedAt ?? "") || 0) -
             (Date.parse(a.doc.updatedAt ?? "") || 0),
         )
-        .slice(0, 6),
+        .slice(0, RAIL_CAP),
     [pinned],
   );
 

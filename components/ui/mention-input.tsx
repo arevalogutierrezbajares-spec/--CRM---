@@ -141,6 +141,12 @@ export function MentionInput({
             : refToken(trigger.kind, s.ref.label);
       const { next, caret: newCaret } = spliceToken(value, trigger.start, caret, token);
       onChange(next);
+      // Advance the caret synchronously (not only in the rAF below) so the
+      // memoized `trigger` recomputes against the post-insert text+caret in the
+      // SAME render — otherwise a stale caret keeps detecting the old @token and
+      // the menu stays stuck open after a pick. (FR-E5-3)
+      setCaret(newCaret);
+      setActive(0);
       setDismissedStart(null);
       if (s.section === "Everyone") onPick?.({ kind: "all" });
       else if (s.section === "People") onPick?.({ kind: "person", userId: s.person.userId, label: s.person.displayName });
