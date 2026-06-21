@@ -17,6 +17,7 @@
 
 import { useBrain } from "@/components/brain/canvas/graph-provider";
 import { SearchTrigger } from "@/components/brain/canvas/chrome/search-trigger";
+import { Insights } from "@/components/brain/canvas/chrome/insights";
 import { PRESET_LIST } from "@/lib/brain/presets";
 import { FUNCS, FN_COLOR } from "@/lib/brain/functions";
 import {
@@ -149,6 +150,11 @@ export function Rail() {
           value={view.preset}
           onChange={(v) => actions.setPreset(v as (typeof PRESET_LIST)[number]["id"])}
         />
+      </Section>
+
+      {/* ── Insights (graphology gap-finding overlay) ────────────────── */}
+      <Section title="Insights">
+        <Insights />
       </Section>
 
       {/* ── Status legend (double-encoded) ───────────────────────────── */}
