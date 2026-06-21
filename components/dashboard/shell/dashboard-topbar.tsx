@@ -1,6 +1,5 @@
 import { UserMenu } from "@/components/layout/user-menu";
 import { MobileNav } from "@/components/layout/mobile-nav";
-import { FounderPresence } from "@/components/presence/founder-presence";
 import { NotificationBell } from "@/components/town-hall/notification-bell";
 import { MobileTownHallButton } from "@/components/town-hall/mobile-townhall-button";
 import { CommandSearchButton } from "@/components/command/command-search-button";
@@ -25,7 +24,6 @@ export function DashboardTopbar({ email, displayName, header }: DashboardTopbarP
     >
       <div className="flex min-w-0 flex-1 items-center gap-3">
         <MobileNav />
-        <FounderPresence />
         {header}
       </div>
 
