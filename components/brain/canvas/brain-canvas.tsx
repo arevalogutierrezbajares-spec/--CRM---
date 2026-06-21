@@ -29,6 +29,8 @@ import {
   Controls,
   ReactFlow,
   ReactFlowProvider,
+  useNodesInitialized,
+  useNodesState,
   useReactFlow,
   type Edge,
   type EdgeTypes,
@@ -36,6 +38,7 @@ import {
   type NodeTypes,
 } from "@xyflow/react";
 import { useReducedMotion } from "framer-motion";
+import { resolveOverlaps } from "@/lib/brain/layout/resolve-overlaps";
 
 import { graph as defaultGraph } from "@/lib/brain/data/graph";
 import { loadPins, savePins } from "@/lib/brain/layout/pin";
@@ -148,7 +151,7 @@ function CanvasInner() {
 
   // Re-derive the visible graph through the active lens. Pure + synchronous —
   // memoized so React Flow only re-renders when an input actually changes.
-  const { nodes, edges, isEmpty } = useMemo(() => {
+  const { nodes: derivedNodes, edges, isEmpty } = useMemo(() => {
     const lens = LENS_FN[view.lens] ?? navigationLens;
     const result = lens(graph, queryFor(view));
 
@@ -217,6 +220,97 @@ function CanvasInner() {
 
     return { nodes: rfNodes, edges: rfEdges, isEmpty: rfNodes.length === 0 };
   }, [graph, view]);
+
+  /* ── Measured no-overlap layout ──────────────────────────────────────────
+   * The lens seeds children on a ring, but chips have variable widths and the
+   * seed can overlap on dense levels. We render the seed, let React Flow MEASURE
+   * the real chip rects, then run a deterministic separation pass (the focused
+   * parent pinned at center) so NO two bubbles overlap — then refit. `displayNodes`
+   * is what React Flow renders; it tracks `derivedNodes` for the node SET +
+   * positions, and is patched in place for data/selection-only changes so a
+   * selection never re-triggers a relayout. */
+  const [displayNodes, setDisplayNodes, onNodesChange] = useNodesState<Node>([]);
+  const nodesInitialized = useNodesInitialized();
+  const resolvedSigRef = useRef("");
+
+  // Signature of the node SET + altitude — changes only on drill/up/axis/preset/
+  // cluster-expand (NOT lens or selection), which is exactly when positions reseed.
+  const layoutSig = `${view.axis}:${view.level}:${view.focusSystemId ?? ""}:${
+    view.focusDomainId ?? ""
+  }:${derivedNodes.length}:${derivedNodes.map((n) => n.id).join(",")}`;
+
+  // Reseed positions + data when the SET changes; mark it for a fresh resolve.
+  useEffect(() => {
+    setDisplayNodes(derivedNodes);
+    resolvedSigRef.current = "";
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layoutSig]);
+
+  // Patch data/selection on every derive WITHOUT moving nodes (so selecting a
+  // node never reshuffles the layout).
+  useEffect(() => {
+    setDisplayNodes((cur) => {
+      if (cur.length !== derivedNodes.length) return cur; // SET effect owns this
+      const byId = new Map(derivedNodes.map((n) => [n.id, n]));
+      let changed = false;
+      const next = cur.map((n) => {
+        const d = byId.get(n.id);
+        if (!d || (d.data === n.data && d.selected === n.selected)) return n;
+        changed = true;
+        return { ...n, data: d.data, selected: d.selected };
+      });
+      return changed ? next : cur;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [derivedNodes]);
+
+  // Once React Flow has measured the chips, separate any overlaps and refit.
+  // Sizes are read straight off the DOM (offsetWidth/Height = unscaled chip
+  // size) so the pass uses the REAL footprint — the hub orb's tall label stack
+  // included — regardless of React Flow's internal measured-field shape.
+  useEffect(() => {
+    if (!nodesInitialized || resolvedSigRef.current === layoutSig) return;
+    const wrap = graphWrapRef.current;
+    if (!wrap) return;
+    const raf = requestAnimationFrame(() => {
+      const dims = new Map<string, { w: number; h: number }>();
+      wrap.querySelectorAll<HTMLElement>(".react-flow__node").forEach((el) => {
+        const id = el.getAttribute("data-id");
+        if (id) dims.set(id, { w: el.offsetWidth, h: el.offsetHeight });
+      });
+      const measured = rf.getNodes();
+      if (measured.length === 0 || dims.size < measured.length) return;
+      const centerId =
+        view.level >= 2
+          ? view.focusDomainId
+          : view.level === 1
+            ? view.focusSystemId
+            : null;
+      const resolved = resolveOverlaps(
+        measured.map((n) => {
+          const d = dims.get(n.id) ?? { w: 140, h: 60 };
+          return {
+            id: n.id,
+            x: n.position.x,
+            y: n.position.y,
+            w: d.w,
+            h: d.h,
+            fixed: n.id === centerId,
+          };
+        }),
+        { gap: 30 },
+      );
+      resolvedSigRef.current = layoutSig;
+      setDisplayNodes((cur) =>
+        cur.map((n) => (resolved[n.id] ? { ...n, position: resolved[n.id] } : n)),
+      );
+      requestAnimationFrame(() =>
+        rf.fitView({ padding: 0.18, maxZoom: 1.45, duration: reduceMotion ? 0 : 360 }),
+      );
+    });
+    return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodesInitialized, layoutSig, reduceMotion]);
 
   // Esc = one of the 3 up-paths (back button + breadcrumb are the other two).
   useEffect(() => {
@@ -301,7 +395,7 @@ function CanvasInner() {
   // it loudly in development so it can never regress invisibly again.
   useEffect(() => {
     if (process.env.NODE_ENV === "production") return;
-    const ids = new Set(nodes.map((n) => n.id));
+    const ids = new Set(derivedNodes.map((n) => n.id));
     const dangling = edges.filter((e) => !ids.has(e.source) || !ids.has(e.target));
     if (dangling.length > 0) {
       console.warn(
@@ -309,7 +403,7 @@ function CanvasInner() {
         dangling.map((e) => `${e.id} (${e.source}→${e.target})`),
       );
     }
-  }, [nodes, edges]);
+  }, [derivedNodes, edges]);
 
   return (
     <div
@@ -350,8 +444,9 @@ function CanvasInner() {
         >
           <ReactFlow
             colorMode="dark"
-            nodes={nodes}
+            nodes={displayNodes}
             edges={edges}
+            onNodesChange={onNodesChange}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             onPaneClick={onPaneClick}

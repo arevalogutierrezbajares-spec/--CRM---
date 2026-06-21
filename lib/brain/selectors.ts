@@ -201,7 +201,9 @@ export function capNodes<T>(nodes: T[], cap = NODE_CAP): T[] {
  */
 function ringRadius(count: number): number {
   const n = Math.max(1, count);
-  return Math.min(760, Math.max(300, Math.round((n * 170) / (2 * Math.PI))));
+  // ~230u of arc per child seeds a ring roomy enough that the measured overlap
+  // pass (brain-canvas) only has to nudge, not rebuild — keeping the fan neat.
+  return Math.min(1100, Math.max(320, Math.round((n * 230) / (2 * Math.PI))));
 }
 
 /**
