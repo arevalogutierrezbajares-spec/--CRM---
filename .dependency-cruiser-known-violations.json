@@ -1,0 +1,86 @@
+[
+  {
+    "type": "dependency",
+    "from": "lib/presence/presence-context.tsx",
+    "to": "app/(app)/team/actions.ts",
+    "unresolvedTo": "@/app/(app)/team/actions",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "lib-stays-app-agnostic"
+    }
+  },
+  {
+    "type": "dependency",
+    "from": "lib/project-files/upload-client.ts",
+    "to": "app/(app)/lob/actions.ts",
+    "unresolvedTo": "@/app/(app)/lob/actions",
+    "dependencyTypes": [
+      "aliased",
+      "aliased-tsconfig",
+      "aliased-tsconfig-paths",
+      "local",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "lib-stays-app-agnostic"
+    }
+  },
+  {
+    "type": "cycle",
+    "from": "components/meetings/present/material-renderer.tsx",
+    "to": "components/meetings/present/present-stage.tsx",
+    "unresolvedTo": "./present-stage",
+    "dependencyTypes": [
+      "local",
+      "type-only",
+      "import"
+    ],
+    "rule": {
+      "severity": "error",
+      "name": "no-circular"
+    },
+    "cycle": [
+      {
+        "name": "components/meetings/present/present-stage.tsx",
+        "dependencyTypes": [
+          "local",
+          "type-only",
+          "import"
+        ]
+      },
+      {
+        "name": "components/meetings/present/material-renderer.tsx",
+        "dependencyTypes": [
+          "local",
+          "import"
+        ]
+      }
+    ]
+  },
+  {
+    "type": "module",
+    "from": "lib/wa-agent/media/links.ts",
+    "to": "lib/wa-agent/media/links.ts",
+    "rule": {
+      "severity": "warn",
+      "name": "no-orphans"
+    }
+  },
+  {
+    "type": "module",
+    "from": "lib/wa-agent/media/vcard.ts",
+    "to": "lib/wa-agent/media/vcard.ts",
+    "rule": {
+      "severity": "warn",
+      "name": "no-orphans"
+    }
+  }
+]
