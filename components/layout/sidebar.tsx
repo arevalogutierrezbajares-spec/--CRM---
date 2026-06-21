@@ -10,6 +10,7 @@ import { NAV_GROUPS, NAV_FOOTER, type NavLeaf } from "./nav-groups";
 import { BrandWidget } from "@/components/brand/brand-widget";
 import { ExplorerTree } from "./explorer-tree";
 import { PresenceDots } from "@/components/presence/presence-dots";
+import { FounderPresence } from "@/components/presence/founder-presence";
 import type { WorkspaceDoc } from "@/db/queries/items";
 
 const STORAGE_KEY = "agb_sidebar_collapsed_v1";
@@ -155,6 +156,12 @@ export function Sidebar({
 
       {rail ? (
         <nav aria-label="Primary" className="flex flex-1 flex-col gap-0.5 overflow-y-auto p-2">
+          <div
+            className="mb-1.5 flex justify-center border-b pb-2"
+            style={{ borderColor: "var(--border-default)" }}
+          >
+            <FounderPresence rail />
+          </div>
           <button
             type="button"
             onClick={() => openGlobalUpload()}
@@ -170,6 +177,12 @@ export function Sidebar({
         </nav>
       ) : (
         <nav aria-label="Primary" className="flex flex-1 flex-col gap-1 overflow-y-auto p-2">
+          <div
+            className="mb-1.5 border-b pb-2"
+            style={{ borderColor: "var(--border-default)" }}
+          >
+            <FounderPresence />
+          </div>
           <button
             type="button"
             onClick={() => openGlobalUpload()}
