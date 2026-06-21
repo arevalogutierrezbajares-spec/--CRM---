@@ -34,6 +34,7 @@ import { EXTERNALS, ARTIFACT_PATH, SNAPSHOT_DIR, REPO_ROOTS } from "./config.mjs
 
 import { extractOpenApiSurfaces } from "./extractors/openapi-surfaces.mjs";
 import { extractMigrationEntities } from "./extractors/migration-entities.mjs";
+import { extractSurfaceEdges } from "./extractors/surface-edges.mjs";
 import { extractDomainClusters } from "./extractors/domain-cluster.mjs";
 import { extractInterchanges } from "./extractors/interchange-detector.mjs";
 import { extractStateOverlay } from "./extractors/state-overlay.mjs";
@@ -111,6 +112,16 @@ async function main() {
   gb.addNodes(surfaces.nodes);
   gb.addEdges(surfaces.edges);
   gb.addNodes(migrations.nodes);
+
+  // 3b. Surface→table reads_writes / calls micro-edges (the 40-blocker). Runs
+  //     after surfaces + entities exist so it can resolve their ids. SCAFFOLD:
+  //     emits [] until the resolvers in surface-edges.mjs are filled
+  //     (docs/brain-surface-edges-plan.md), so the artifact is unchanged today.
+  const surfaceEdges = extractSurfaceEdges({
+    surfaceNodes: surfaces.nodes,
+    entityNodes: migrations.nodes,
+  });
+  gb.addEdges(surfaceEdges.edges);
 
   // 4. FR-PIPE-4 / FR-XSYS-1 — the 5 LIVE interchange edges.
   const interchanges = extractInterchanges();

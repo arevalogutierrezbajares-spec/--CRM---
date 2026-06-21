@@ -361,12 +361,24 @@ export function visibleEdges(graph: BrainGraph, q: VisibleQuery): BrainEdge[] {
     }
   }
 
-  // Real cross-system interchanges that happen to span two on-screen nodes —
-  // membership-checked through the SAME endpoint resolver the renderer uses.
+  // Real relational edges that span two on-screen nodes — cross-system
+  // interchanges, plus the micro-level reads_writes (route→table) and calls
+  // (service→service) links once the surface-edges extractor emits them
+  // (scripts/brain/extractors/surface-edges.mjs). Membership-checked through the
+  // SAME endpoint resolver the renderer uses, so nothing can dangle. This makes
+  // the canvas render real micro-links the instant the data lands — no further
+  // render work needed (see docs/brain-surface-edges-plan.md).
+  const RELATIONAL = new Set(["interchange", "reads_writes", "calls"]);
   for (const e of graph.edges) {
-    if (e.kind !== "interchange") continue;
+    if (!RELATIONAL.has(e.kind)) continue;
     const { source, target } = renderedEndpoints(e, q.level);
-    if (visibleIds.has(source) && visibleIds.has(target)) out.push(e);
+    if (
+      source !== target &&
+      visibleIds.has(source) &&
+      visibleIds.has(target)
+    ) {
+      out.push(e);
+    }
   }
 
   return out;
