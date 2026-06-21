@@ -59,17 +59,29 @@ function SpokeEdge({
         ? SYSTEM_ACCENT[edge.from.system as System]
         : "var(--ink-faint)";
 
+  // Data-flow direction (route→table): a WRITE pushes data in (denser, brighter
+  // thread); a READ pulls (sparser, lighter). Captured from the edge subtype.
+  const isWrite = edge?.subtype === "writes";
+
   // Opacity: bumped for legibility — the prior 0.3 spoke read as a barely-there
   // hairline. Planned/dimmed still recede but stay perceptible so the
   // hub-and-spoke fan is always readable when you drill in.
-  let opacity = isInterchange ? 0.6 : isDataFlow ? 0.5 : 0.46;
+  let opacity = isInterchange ? 0.6 : isDataFlow ? (isWrite ? 0.58 : 0.42) : 0.46;
   if (isPlanned || d?.dimmed) opacity = isInterchange ? 0.32 : 0.24;
   if (selected) opacity = Math.min(1, opacity + 0.35);
 
   // Dashed when planned, dark health, the lens recedes it, OR it's a data-flow
-  // edge (dotted thread).
+  // edge (dotted thread — denser dots for writes, sparser for reads).
   const dashed = isPlanned || health === "dark" || d?.dimmed || isDataFlow;
-  const dash = isDataFlow ? "1 5" : dashed ? (isInterchange ? "7 7" : "4 6") : undefined;
+  const dash = isDataFlow
+    ? isWrite
+      ? "1.5 4"
+      : "1 8"
+    : dashed
+      ? isInterchange
+        ? "7 7"
+        : "4 6"
+      : undefined;
 
   return (
     <path

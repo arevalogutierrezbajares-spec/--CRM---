@@ -35,6 +35,30 @@ describe("brain: generated reads_writes edges (Phase 1 extractor)", () => {
     expect(targets).toContain("vav.entity.guest_bookings");
   });
 
+  it("emits the 3 honest Caney (Python) route→table edges (Phase 3)", () => {
+    const pair = (from: string, to: string) =>
+      readsWrites.some((e) => e.from.domain === from && e.to.domain === to);
+    expect(pair("caney.surface.get-availability", "caney.entity.availability")).toBe(true);
+    expect(pair("caney.surface.get-bookings", "caney.entity.bookings")).toBe(true);
+    expect(
+      pair("caney.surface.post-internal-quotes-compute", "caney.entity.rate_plans"),
+    ).toBe(true);
+  });
+
+  it("does NOT fabricate the accounting→journal-entries edge (no real reference)", () => {
+    expect(
+      readsWrites.some((e) => e.to.domain === "caney.entity.acc_journal_entries"),
+    ).toBe(false);
+  });
+
+  it("classifies read vs write direction (subtype) on every micro-edge", () => {
+    expect(readsWrites.every((e) => e.subtype === "reads" || e.subtype === "writes")).toBe(true);
+    // POST /api/holds WRITES the hold/quote it creates but READS guest_bookings.
+    const holds = readsWrites.filter((e) => e.from.domain === "vav.surface.post-api-holds");
+    expect(holds.find((e) => e.to.domain === "vav.entity.pms_holds")?.subtype).toBe("writes");
+    expect(holds.find((e) => e.to.domain === "vav.entity.guest_bookings")?.subtype).toBe("reads");
+  });
+
   it("renders those route→table edges at the vav.booking L2 view", () => {
     const res = navigationLens(graph, {
       level: 2,

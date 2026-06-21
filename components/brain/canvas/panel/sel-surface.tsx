@@ -34,12 +34,22 @@ export interface SurfaceTarget {
 }
 
 export function SelSurface({ target }: { target: SurfaceTarget }) {
-  const { actions } = useBrain();
+  const { graph, view, actions } = useBrain();
   const accent = systemAccent(target.system);
   const s = shapeSurface(target.raw);
 
   const repoUrl = repoUrlFor(target.system, target.raw);
   const docsUrl = contractUrlFor(target.docsRef ?? null);
+
+  // Phase 4 — the route's data flow: which tables it writes vs reads, derived
+  // from the signature-validated reads_writes micro-edges for THIS surface node.
+  const tableLabel = (id: string) =>
+    graph.nodes.find((n) => n.id === id)?.label ?? id;
+  const rw = graph.edges.filter(
+    (e) => e.kind === "reads_writes" && e.from.domain === view.selection,
+  );
+  const writes = rw.filter((e) => e.subtype === "writes").map((e) => tableLabel(e.to.domain));
+  const reads = rw.filter((e) => e.subtype !== "writes").map((e) => tableLabel(e.to.domain));
 
   return (
     <>
@@ -104,6 +114,24 @@ export function SelSurface({ target }: { target: SurfaceTarget }) {
             )}
           </pre>
         </section>
+
+        {/* Data flow — route → table reads_writes (Phase 4) */}
+        {writes.length > 0 || reads.length > 0 ? (
+          <section className="d-sec">
+            <h5>Data flow</h5>
+            {writes.length > 0 ? (
+              <p>
+                <b style={{ color: "var(--caney)" }}>Writes</b>{" "}
+                {writes.join(", ")}
+              </p>
+            ) : null}
+            {reads.length > 0 ? (
+              <p>
+                <b style={{ color: "var(--ink-dim)" }}>Reads</b> {reads.join(", ")}
+              </p>
+            ) : null}
+          </section>
+        ) : null}
 
         {/* Docs doorway (FR-DETAIL-5) */}
         <section className="d-sec" style={{ borderBottom: "none" }}>

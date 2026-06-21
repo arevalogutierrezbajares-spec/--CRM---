@@ -118,7 +118,7 @@ export function extractMigrationEntities() {
     { t: "availability", d: "caney.availability" },
     { t: "rate_plans", d: "caney.pricing" },
     { t: "invoices", d: "caney.payments" },
-    { t: "accounting_journal_entries", d: "caney.accounting" },
+    { t: "acc_journal_entries", d: "caney.accounting" },
   ];
   for (const { t, d } of caneyEntitySeeds) {
     nodes.push(

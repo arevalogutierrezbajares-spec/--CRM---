@@ -1,10 +1,10 @@
 {
   "version": "1.1",
-  "generatedAt": "2026-06-21T11:02:27.495Z",
+  "generatedAt": "2026-06-21T16:33:41.985Z",
   "commit": {
     "vav": "e7950c6c9",
-    "caney": "e1731073",
-    "crm": "6aa536a",
+    "caney": "2eeb0871",
+    "crm": "b980385",
     "restaurants": "2f77a2b",
     "academy": null
   },
@@ -374,7 +374,7 @@
       "last_commit": null,
       "docs_ref": null,
       "surfaces": [],
-      "meta": "36 api · 135 mig · 9 domains",
+      "meta": "36 api · 137 mig · 9 domains",
       "summary": null,
       "pos": {
         "x": 494.5,
@@ -1921,11 +1921,11 @@
       }
     },
     {
-      "id": "caney.entity.accounting_journal_entries",
+      "id": "caney.entity.acc_journal_entries",
       "level": 3,
       "kind": "entity",
       "parentId": "caney.accounting",
-      "label": "accounting_journal_entries",
+      "label": "acc_journal_entries",
       "system": "caney",
       "source": "migrations",
       "hosted_by": null,
@@ -3228,7 +3228,7 @@
     {
       "id": "rw.vav.surface.post-api-holds.vav.entity.pms_holds",
       "kind": "reads_writes",
-      "subtype": null,
+      "subtype": "writes",
       "from": {
         "system": "vav",
         "domain": "vav.surface.post-api-holds"
@@ -3242,7 +3242,7 @@
     {
       "id": "rw.vav.surface.post-api-holds.vav.entity.quotes",
       "kind": "reads_writes",
-      "subtype": null,
+      "subtype": "writes",
       "from": {
         "system": "vav",
         "domain": "vav.surface.post-api-holds"
@@ -3256,7 +3256,7 @@
     {
       "id": "rw.vav.surface.post-api-holds.vav.entity.guest_bookings",
       "kind": "reads_writes",
-      "subtype": null,
+      "subtype": "reads",
       "from": {
         "system": "vav",
         "domain": "vav.surface.post-api-holds"
@@ -3268,9 +3268,51 @@
       "contract_status": "live"
     },
     {
+      "id": "rw.caney.surface.get-availability.caney.entity.availability",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.get-availability"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.availability"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.caney.surface.get-bookings.caney.entity.bookings",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.get-bookings"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.bookings"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.caney.surface.post-internal-quotes-compute.caney.entity.rate_plans",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.post-internal-quotes-compute"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.rate_plans"
+      },
+      "contract_status": "live"
+    },
+    {
       "id": "rw.crm.surface.api-access-token-comments.crm.entity.partner_rooms",
       "kind": "reads_writes",
-      "subtype": null,
+      "subtype": "writes",
       "from": {
         "system": "crm",
         "domain": "crm.surface.api-access-token-comments"

@@ -45,8 +45,9 @@ export type NodeSize = "sm" | "md" | "lg";
 
 export type EdgeKind = "contains" | "calls" | "reads_writes" | "interchange";
 
-/** `host_mount` = module-mounted-in-host (restaurants → caney). */
-export type EdgeSubtype = "host_mount" | null;
+/** `host_mount` = module-mounted-in-host (restaurants → caney);
+ * `reads`/`writes` = direction of a reads_writes route→table micro-edge. */
+export type EdgeSubtype = "host_mount" | "reads" | "writes" | null;
 
 /** Interchange edge health (FR-XSYS-4). */
 export type Health = "ok" | "warn" | "dark";
