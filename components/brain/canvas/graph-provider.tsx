@@ -182,7 +182,13 @@ function makeReducer(graph: BrainGraph) {
 
       case "SET_PRESET": {
         const p = getPreset(action.preset);
-        // Preset adopts its default axis+lens and returns to portfolio.
+        // A preset adopts its lens. When its axis matches the current one it
+        // KEEPS your drill position (no jarring eject to portfolio); it only
+        // resets to the root when it switches axis, since the two axes are
+        // distinct roots (uxflow-03 fix).
+        if (p.defaultAxis === state.axis) {
+          return { ...state, preset: action.preset, lens: p.defaultLens };
+        }
         return {
           ...state,
           preset: action.preset,

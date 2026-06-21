@@ -11,9 +11,10 @@
  */
 
 import type { BrainGraph } from "../types";
-import { isClusterNode, visibleEdges, visibleNodes, type VisibleQuery } from "../selectors";
-import type { LensResult, RFEdge, RFNode } from "./types";
+import { isClusterNode, visibleNodes, type VisibleQuery } from "../selectors";
+import type { LensResult, RFNode } from "./types";
 import { nodeTypeFor } from "./navigation";
+import { mapEdges } from "./shared";
 
 /** Emphasis applied to `needed` nodes under the State lens (mockup dims to .5). */
 const NEEDED_EMPHASIS = 0.5;
@@ -35,17 +36,12 @@ export function stateLens(graph: BrainGraph, q: VisibleQuery): LensResult {
     };
   });
 
-  const edges: RFEdge[] = visibleEdges(graph, q).map((e) => ({
-    id: e.id,
-    source: e.from.system,
-    target: e.to.system,
-    type: e.kind === "interchange" ? "station" : "spoke",
-    data: {
-      edge: e,
-      lens: "state",
-      dimmed: e.contract_status === "planned",
-    },
-  }));
+  const edges = mapEdges(
+    graph,
+    q,
+    "state",
+    (e) => e.contract_status === "planned",
+  );
 
   return { nodes, edges };
 }

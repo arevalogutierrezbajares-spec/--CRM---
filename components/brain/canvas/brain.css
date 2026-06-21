@@ -64,6 +64,14 @@
   --disp: var(--font-sans), Inter, system-ui, sans-serif;
   --body: var(--font-sans), Inter, system-ui, sans-serif;
 
+  /* Modular type scale (~1.3 ratio) — gives the canvas a real macro→micro
+   * hierarchy instead of a flat 11px field. --t-data stays mono-11 for dense
+   * readouts; names/percentages step up so they read as headings. */
+  --t-display: 22px;
+  --t-title: 18px;
+  --t-body: 13px;
+  --t-data: 11px;
+
   position: relative;
   height: 100%;
   width: 100%;

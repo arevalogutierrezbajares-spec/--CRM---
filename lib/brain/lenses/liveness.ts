@@ -8,9 +8,10 @@
  */
 
 import type { BrainGraph } from "../types";
-import { isClusterNode, visibleEdges, visibleNodes, type VisibleQuery } from "../selectors";
-import type { LensResult, RFEdge, RFNode } from "./types";
+import { isClusterNode, visibleNodes, type VisibleQuery } from "../selectors";
+import type { LensResult, RFNode } from "./types";
 import { nodeTypeFor } from "./navigation";
+import { mapEdges } from "./shared";
 
 /** Emphasis applied to dead nodes once the v2 extractor populates liveness. */
 const DEAD_EMPHASIS = 0.3;
@@ -32,17 +33,7 @@ export function livenessLens(graph: BrainGraph, q: VisibleQuery): LensResult {
     };
   });
 
-  const edges: RFEdge[] = visibleEdges(graph, q).map((e) => ({
-    id: e.id,
-    source: e.from.system,
-    target: e.to.system,
-    type: e.kind === "interchange" ? "station" : "spoke",
-    data: {
-      edge: e,
-      lens: "liveness",
-      dimmed: false,
-    },
-  }));
+  const edges = mapEdges(graph, q, "liveness", () => false);
 
   return { nodes, edges };
 }

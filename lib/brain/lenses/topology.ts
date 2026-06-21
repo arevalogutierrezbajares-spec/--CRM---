@@ -9,9 +9,10 @@
  */
 
 import type { BrainGraph } from "../types";
-import { isClusterNode, visibleEdges, visibleNodes, type VisibleQuery } from "../selectors";
-import type { LensResult, RFEdge, RFNode } from "./types";
+import { isClusterNode, visibleNodes, type VisibleQuery } from "../selectors";
+import type { LensResult, RFNode } from "./types";
 import { nodeTypeFor } from "./navigation";
+import { mapEdges } from "./shared";
 
 /** Emphasis applied to nodes with no cross-system link under Topology. */
 const NON_XLINK_EMPHASIS = 0.32;
@@ -42,17 +43,12 @@ export function topologyLens(graph: BrainGraph, q: VisibleQuery): LensResult {
     };
   });
 
-  const edges: RFEdge[] = visibleEdges(graph, q).map((e) => ({
-    id: e.id,
-    source: e.from.system,
-    target: e.to.system,
-    type: e.kind === "interchange" ? "station" : "spoke",
-    data: {
-      edge: e,
-      lens: "topology",
-      dimmed: e.kind !== "interchange",
-    },
-  }));
+  const edges = mapEdges(
+    graph,
+    q,
+    "topology",
+    (e) => e.kind !== "interchange",
+  );
 
   return { nodes, edges };
 }

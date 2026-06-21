@@ -22,18 +22,20 @@
 import "@xyflow/react/dist/style.css";
 import "./brain.css";
 
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import {
   Background,
   BackgroundVariant,
+  Controls,
   ReactFlow,
   ReactFlowProvider,
+  useReactFlow,
   type Edge,
   type EdgeTypes,
   type Node,
   type NodeTypes,
 } from "@xyflow/react";
-import { motion, useReducedMotion } from "framer-motion";
+import { useReducedMotion } from "framer-motion";
 
 import { graph as defaultGraph } from "@/lib/brain/data/graph";
 import { loadPins, savePins } from "@/lib/brain/layout/pin";
@@ -129,6 +131,8 @@ function FloatingBreadcrumb() {
 function CanvasInner() {
   const { graph, view, actions } = useBrain();
   const reduceMotion = useReducedMotion();
+  const rf = useReactFlow();
+  const graphWrapRef = useRef<HTMLDivElement>(null);
 
   // Load persisted pin positions from localStorage once on mount (client-only).
   // Uses seed semantics: authored pos already seeded from the graph wins;
@@ -215,11 +219,48 @@ function CanvasInner() {
     if (view.selection != null) actions.clear();
   }, [actions, view.selection]);
 
-  // Zoom choreography key — re-mounts the motion wrapper on altitude/focus
-  // change so the spring re-plays from the new altitude (FR-NAV-6).
-  const choreoKey = `${view.axis}:${view.level}:${view.focusSystemId ?? ""}:${
+  // Altitude signature — changes only on a real navigation (drill / up / axis /
+  // preset), NOT on lens or selection. Drives the camera glide + focus restore.
+  const altitudeKey = `${view.axis}:${view.level}:${view.focusSystemId ?? ""}:${
     view.focusFn ?? ""
-  }:${view.focusDomainId ?? ""}:${view.lens}`;
+  }:${view.focusDomainId ?? ""}`;
+
+  // Camera glide + focus management on every altitude change. Replaces the old
+  // remount-crossfade that teleported the viewport and dropped keyboard focus to
+  // <body>. React Flow tweens the viewport FROM the previous framing INTO the
+  // new node set, so drilling reads as a continuous zoom (FR-NAV-6); reduced
+  // motion → instant. Afterward, if focus left the canvas (the node you
+  // activated just unmounted), restore it to the first node so keyboard users
+  // keep their place — :focus-visible keeps the ring keyboard-only, so a mouse
+  // user who clicked to drill sees no focus flash.
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => {
+      rf.fitView({ padding: 0.18, maxZoom: 1.45, duration: reduceMotion ? 0 : 460 });
+      const wrap = graphWrapRef.current;
+      if (wrap && !wrap.contains(document.activeElement)) {
+        wrap
+          .querySelector<HTMLElement>(".react-flow__node button")
+          ?.focus({ preventScroll: true });
+      }
+    });
+    return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [altitudeKey, reduceMotion]);
+
+  // Dev guard: a derived edge whose endpoints aren't in the visible node set is
+  // exactly the class of bug that shipped the silent edge-drop (link-06). Surface
+  // it loudly in development so it can never regress invisibly again.
+  useEffect(() => {
+    if (process.env.NODE_ENV === "production") return;
+    const ids = new Set(nodes.map((n) => n.id));
+    const dangling = edges.filter((e) => !ids.has(e.source) || !ids.has(e.target));
+    if (dangling.length > 0) {
+      console.warn(
+        `[brain] ${dangling.length} derived edge(s) reference a node not on screen and will be dropped:`,
+        dangling.map((e) => `${e.id} (${e.source}→${e.target})`),
+      );
+    }
+  }, [nodes, edges]);
 
   return (
     <div
@@ -243,17 +284,7 @@ function CanvasInner() {
         aria-label="Architecture graph"
         style={{ position: "relative", flex: 1, minWidth: 0, minHeight: 0 }}
       >
-        <motion.div
-          key={choreoKey}
-          initial={reduceMotion ? false : { opacity: 0, scale: 0.985 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={
-            reduceMotion
-              ? { duration: 0 }
-              : { type: "spring", duration: 0.5, bounce: 0.15 }
-          }
-          style={{ position: "absolute", inset: 0 }}
-        >
+        <div ref={graphWrapRef} style={{ position: "absolute", inset: 0 }}>
           <ReactFlow
             colorMode="dark"
             nodes={nodes}
@@ -262,7 +293,7 @@ function CanvasInner() {
             edgeTypes={edgeTypes}
             onPaneClick={onPaneClick}
             fitView
-            fitViewOptions={{ padding: 0.14, maxZoom: 1.45 }}
+            fitViewOptions={{ padding: 0.18, maxZoom: 1.45 }}
             minZoom={0.2}
             maxZoom={1.6}
             proOptions={{ hideAttribution: true }}
@@ -273,11 +304,17 @@ function CanvasInner() {
             disableKeyboardA11y
             elementsSelectable
             panOnScroll
-            zoomOnDoubleClick={false}
           >
             <Background variant={BackgroundVariant.Dots} gap={42} size={1} />
+            {/* On-screen zoom for mouse/keyboard users (trackpad pinch already
+                works). Themed via --xy-controls-* in brain.css. */}
+            <Controls
+              showInteractive={false}
+              position="bottom-left"
+              aria-label="Zoom and fit controls"
+            />
           </ReactFlow>
-        </motion.div>
+        </div>
 
         {/* Chrome overlays (absolute, above the flow surface). */}
         <AltitudePill />

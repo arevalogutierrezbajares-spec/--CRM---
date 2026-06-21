@@ -99,9 +99,27 @@
   color: var(--ink-faint);
 }
 
-/* Reduced motion: kill the pin pop. */
+/* ── Live "data flowing" marching-ants on interchange stations ───────────────
+ * The highest-leverage "alive" signal: the cross-system LINKS (the headline
+ * "where they connect" story) visibly flow instead of sitting as inert lines.
+ * Scoped to the station edge group so the hub-and-spoke spokes stay quiet. */
+@keyframes brain-flow {
+  to {
+    stroke-dashoffset: -18;
+  }
+}
+.brain-root .react-flow__edge-station .react-flow__edge-path {
+  stroke-dasharray: 2 7;
+  animation: brain-flow 1.1s linear infinite;
+}
+
+/* Reduced motion: kill the pin pop AND the flow (fall back to static line). */
 @media (prefers-reduced-motion: reduce) {
   .brain-root .station .pin {
     transition: none;
+  }
+  .brain-root .react-flow__edge-station .react-flow__edge-path {
+    animation: none;
+    stroke-dasharray: none;
   }
 }

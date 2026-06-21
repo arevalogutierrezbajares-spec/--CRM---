@@ -9,8 +9,9 @@
  */
 
 import type { BrainGraph } from "../types";
-import { isClusterNode, visibleEdges, visibleNodes, type VisibleQuery } from "../selectors";
-import type { LensResult, RFEdge, RFNode } from "./types";
+import { isClusterNode, visibleNodes, type VisibleQuery } from "../selectors";
+import type { LensResult, RFNode } from "./types";
+import { mapEdges } from "./shared";
 
 export function navigationLens(graph: BrainGraph, q: VisibleQuery): LensResult {
   const nodes: RFNode[] = visibleNodes(graph, q).map((n) => ({
@@ -26,17 +27,7 @@ export function navigationLens(graph: BrainGraph, q: VisibleQuery): LensResult {
     },
   }));
 
-  const edges: RFEdge[] = visibleEdges(graph, q).map((e) => ({
-    id: e.id,
-    source: e.from.system,
-    target: e.to.system,
-    type: e.kind === "interchange" ? "station" : "spoke",
-    data: {
-      edge: e,
-      lens: "navigation",
-      dimmed: false,
-    },
-  }));
+  const edges = mapEdges(graph, q, "navigation", () => false);
 
   return { nodes, edges };
 }

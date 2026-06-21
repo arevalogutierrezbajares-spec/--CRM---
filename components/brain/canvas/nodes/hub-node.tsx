@@ -49,8 +49,15 @@ function hubPercent(data: RFNodeData): number {
 
 export default function HubNode({ data, selected }: NodeProps) {
   const d = data as unknown as RFNodeData;
-  const { actions, view } = useBrain();
+  const { graph, actions, view } = useBrain();
   const node = d.node;
+
+  // Child-domain count, folded into the accessible label so the graph structure
+  // is perceivable to screen readers (the spokes themselves are decorative).
+  const childCount =
+    node.level === 1
+      ? graph.nodes.filter((n) => n.parentId === node.id && n.level === 2).length
+      : 0;
 
   const isFnLens = d.lens === "function";
   const accent =
@@ -101,7 +108,9 @@ export default function HubNode({ data, selected }: NodeProps) {
       data-live={node.liveness ?? undefined}
       onClick={drill}
       onKeyDown={onKeyDown}
-      aria-label={`${node.label} — ${label}, ${pct}% built. Drill in.`}
+      aria-label={`${node.label} — ${label}, ${pct}% built${
+        childCount ? `, contains ${childCount} domains` : ""
+      }. Drill in.`}
       style={
         {
           display: "flex",
@@ -160,7 +169,7 @@ export default function HubNode({ data, selected }: NodeProps) {
         style={{
           fontFamily: "var(--disp)",
           fontWeight: 600,
-          fontSize: 15,
+          fontSize: "var(--t-title)",
           letterSpacing: "-.01em",
           color: "var(--ink)",
           /* double-encode: a solid (built/wip) vs dashed (needed) accent bar. */

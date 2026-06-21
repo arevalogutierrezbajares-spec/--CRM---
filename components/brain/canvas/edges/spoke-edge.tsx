@@ -51,9 +51,11 @@ export default function SpokeEdge({
       ? SYSTEM_ACCENT[edge.from.system as System]
       : "var(--ink-faint)";
 
-  // Opacity: interchange spokes a touch brighter; planned/dimmed recede.
-  let opacity = isInterchange ? 0.5 : 0.3;
-  if (isPlanned || d?.dimmed) opacity = isInterchange ? 0.28 : 0.16;
+  // Opacity: bumped for legibility — the prior 0.3 spoke read as a barely-there
+  // hairline. Planned/dimmed still recede but stay perceptible so the
+  // hub-and-spoke fan is always readable when you drill in.
+  let opacity = isInterchange ? 0.6 : 0.46;
+  if (isPlanned || d?.dimmed) opacity = isInterchange ? 0.32 : 0.24;
   if (selected) opacity = Math.min(1, opacity + 0.35);
 
   // Dashed when planned, dark health, or the lens recedes it.

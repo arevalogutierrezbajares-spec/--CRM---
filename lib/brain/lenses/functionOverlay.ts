@@ -12,9 +12,10 @@
 
 import { FN_COLOR } from "../functions";
 import type { BrainGraph } from "../types";
-import { isClusterNode, visibleEdges, visibleNodes, type VisibleQuery } from "../selectors";
-import type { LensResult, RFEdge, RFNode } from "./types";
+import { isClusterNode, visibleNodes, type VisibleQuery } from "../selectors";
+import type { LensResult, RFNode } from "./types";
 import { nodeTypeFor } from "./navigation";
+import { mapEdges } from "./shared";
 
 /** Emphasis applied to uncategorized (fn === null) nodes. */
 const UNCATEGORIZED_EMPHASIS = 0.4;
@@ -38,17 +39,7 @@ export function functionOverlayLens(graph: BrainGraph, q: VisibleQuery): LensRes
     };
   });
 
-  const edges: RFEdge[] = visibleEdges(graph, q).map((e) => ({
-    id: e.id,
-    source: e.from.system,
-    target: e.to.system,
-    type: e.kind === "interchange" ? "station" : "spoke",
-    data: {
-      edge: e,
-      lens: "function",
-      dimmed: true,
-    },
-  }));
+  const edges = mapEdges(graph, q, "function", () => true);
 
   return { nodes, edges };
 }

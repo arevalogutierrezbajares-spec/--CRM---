@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Command } from "cmdk";
+import * as Dialog from "@radix-ui/react-dialog";
 import { toast } from "sonner";
 import {
   Plus,
@@ -190,6 +191,9 @@ export function CommandPalette() {
       shouldFilter={false}
       className="fixed left-1/2 top-[16%] z-[100] w-[min(600px,94vw)] -translate-x-1/2 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--background)] shadow-2xl"
     >
+      {/* Radix Dialog.Content (which cmdk renders) requires an accessible title;
+          visually hidden so it satisfies screen readers without changing the UI. */}
+      <Dialog.Title className="sr-only">Command palette</Dialog.Title>
       <div className="flex items-center gap-2 border-b border-[var(--border)] px-3">
         <Search size={15} className="text-text-tertiary" />
         <Command.Input

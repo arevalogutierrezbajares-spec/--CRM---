@@ -17,6 +17,7 @@ import type {
   NodeState,
   System,
 } from "./types";
+import { ringLayout } from "./layout/radial";
 
 export type Axis = "system" | "function";
 
@@ -192,6 +193,39 @@ export function capNodes<T>(nodes: T[], cap = NODE_CAP): T[] {
 }
 
 /**
+ * Ring radius (abstract units) that keeps adjacent chips ~170u apart along the
+ * arc, clamped to [300, 760] so a single child still reads centered and a full
+ * 30-child level never explodes. Density-driven (NFR-SCALE-2): more children ⇒
+ * a wider ring, so dense BUILT systems (CRM, restaurants) fan out instead of
+ * piling into a hairball.
+ */
+function ringRadius(count: number): number {
+  const n = Math.max(1, count);
+  return Math.min(760, Math.max(300, Math.round((n * 170) / (2 * Math.PI))));
+}
+
+/**
+ * Place a focused parent at the origin and fan its children on a ring around it
+ * (deterministic by sorted id, NFR-LAYOUT-1). This is what makes drill-in read
+ * as a hub-and-spoke: the center anchors the spokes synthesized in
+ * `visibleEdges`, and the ring guarantees siblings never share coordinates
+ * (fixes the all-at-(0,0) surface pile). When the parent is absent the children
+ * still ring the origin so nothing stacks.
+ */
+function layoutAround(
+  center: BrainNode | undefined,
+  children: BrainNode[],
+): BrainNode[] {
+  const ring = ringLayout(
+    children.map((c) => c.id),
+    { radius: ringRadius(children.length), startAngleDeg: -90 },
+  );
+  const placed = children.map((c) => ({ ...c, pos: ring[c.id] ?? c.pos }));
+  if (!center) return placed;
+  return [{ ...center, pos: { x: 0, y: 0 } }, ...placed];
+}
+
+/**
  * The set of nodes visible at the current view. PURE.
  *
  * - L0 system axis  → the system (L1) hub nodes (portfolio overview).
@@ -220,26 +254,77 @@ export function visibleNodes(graph: BrainGraph, q: VisibleQuery): BrainNode[] {
     }
     if (!q.focusSystemId) return [];
     const systemHubId = `${q.focusSystemId}`;
+    // The focused system hub is rendered AT CENTER so its domain spokes have an
+    // anchor (FR-NAV-6 hub-and-spoke). Domains fan around it on a ring.
+    const hub = graph.nodes.find((n) => n.id === systemHubId && n.level === 1);
     const domains = childrenOf(graph, systemHubId).filter((n) => n.level === 2);
     const clustered = clusterNeeded(
       domains,
       systemHubId,
       expanded.has(`${systemHubId}.__roadmap`),
     );
-    return capNodes(clustered);
+    return layoutAround(hub, capNodes(clustered));
   }
 
-  // L2 (and L3 fallthrough): surfaces under the focused domain.
+  // L2 (and L3 fallthrough): the focused domain AT CENTER + its surfaces fanned
+  // around it (every L3 surface is authored at (0,0), so the ring layout is what
+  // stops them stacking into one pile).
   if (q.focusDomainId) {
-    return capNodes(childrenOf(graph, q.focusDomainId).filter((n) => n.level === 3));
+    const domain = graph.nodes.find((n) => n.id === q.focusDomainId);
+    const surfaces = capNodes(
+      childrenOf(graph, q.focusDomainId).filter((n) => n.level === 3),
+    );
+    return layoutAround(domain, surfaces);
   }
   return [];
 }
 
 /**
- * Edges visible at the current view. PURE. At L0 we surface interchange edges
- * (the cross-system stations); at L1/L2 we surface the contains/calls edges
- * touching the visible node set.
+ * The React Flow node ids an edge connects to, at a given altitude.
+ *
+ * THIS IS THE FIX for the silent edge-drop: at L0 the visible nodes ARE the
+ * system hubs (ids === the System enum, e.g. "vav"), so interchange stations
+ * map by `.system`. At every deeper level the visible nodes are domains/
+ * surfaces whose ids are the dotted `.domain` field (e.g. "vav.booking"), so
+ * contains/calls/interchange edges MUST map by `.domain` — mapping by `.system`
+ * produced endpoints that no visible node owned, and React Flow dropped them.
+ * Both `visibleEdges` (membership filter) and every lens (RF edge mapping) go
+ * through this one helper so the two can never disagree again (perf-04 dedup).
+ */
+export function renderedEndpoints(
+  e: BrainEdge,
+  level: NodeLevel,
+): { source: string; target: string } {
+  if (e.kind === "interchange" && level === 0) {
+    return { source: e.from.system, target: e.to.system };
+  }
+  return { source: e.from.domain, target: e.to.domain };
+}
+
+/**
+ * Synthesize a parent→child "contains" spoke. Built from `parentId` rather than
+ * the data's contains edges because only 15/37 surfaces ship a contains edge —
+ * the structural parent link is always known, so the fan is always complete.
+ * `needed` children get a planned (dashed/dim) spoke.
+ */
+function spokeEdge(centerId: string, child: BrainNode): BrainEdge {
+  const system = (child.system ?? "vav") as System;
+  return {
+    id: `spoke.${centerId}.${child.id}`,
+    kind: "contains",
+    subtype: null,
+    from: { system, domain: centerId },
+    to: { system, domain: child.id },
+    contract_status: child.state === "needed" ? "planned" : "live",
+  };
+}
+
+/**
+ * Edges visible at the current view. PURE. At L0 we surface the LIVE interchange
+ * stations (cross-system). On drill-in we synthesize the hub→child spokes (so
+ * the map shows a connected fan, not a disconnected dot-field) PLUS any real
+ * interchange whose BOTH rendered endpoints are currently on screen — every
+ * edge is filtered to the visible node set so none can dangle (link-02 fix).
  */
 export function visibleEdges(graph: BrainGraph, q: VisibleQuery): BrainEdge[] {
   // The By-Function axis is a capability grouping, not a wiring diagram — no
@@ -253,14 +338,30 @@ export function visibleEdges(graph: BrainGraph, q: VisibleQuery): BrainEdge[] {
       (e) => e.kind === "interchange" && e.contract_status === "live",
     );
   }
-  const visibleIds = new Set(visibleNodes(graph, q).map((n) => n.id));
-  return graph.edges.filter((e) => {
-    // Edge endpoints are {system,domain}; match against visible domain labels.
-    return (
-      visibleIds.size > 0 &&
-      (e.kind === "interchange" || e.kind === "contains" || e.kind === "calls")
-    );
-  });
+
+  const visible = visibleNodes(graph, q);
+  const visibleIds = new Set(visible.map((n) => n.id));
+  const centerId = q.level === 1 ? q.focusSystemId ?? null : q.focusDomainId ?? null;
+
+  const out: BrainEdge[] = [];
+
+  // Hub→child spokes (the "linked when you zoom in" fan).
+  if (centerId && visibleIds.has(centerId)) {
+    for (const n of visible) {
+      if (n.id === centerId) continue;
+      out.push(spokeEdge(centerId, n));
+    }
+  }
+
+  // Real cross-system interchanges that happen to span two on-screen nodes —
+  // membership-checked through the SAME endpoint resolver the renderer uses.
+  for (const e of graph.edges) {
+    if (e.kind !== "interchange") continue;
+    const { source, target } = renderedEndpoints(e, q.level);
+    if (visibleIds.has(source) && visibleIds.has(target)) out.push(e);
+  }
+
+  return out;
 }
 
 /**
