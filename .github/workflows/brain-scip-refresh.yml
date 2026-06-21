@@ -1,0 +1,71 @@
+# THE BRAIN — refresh the committed SCIP Caney edge report.
+#
+# Rebuilds the precise route→table edge set from the CaneyCloud backend and
+# commits lib/brain/generated/scip-caney-report.json when it changes, so the
+# gated SCIP build (BRAIN_SCIP=1) stays fresh without anyone running scip-python
+# locally. The build itself never needs the 29MB index — only this job does.
+#
+# Prerequisites (one-time):
+#   - Secret CANEY_REPO_TOKEN: a read-only token that can clone the CaneyCloud repo.
+#   - Confirm the org's GitHub Actions billing is active (was suspended 2026-06).
+# Runs weekly + on demand. Opt-in: nothing else triggers it.
+
+name: brain-scip-refresh
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "0 6 * * 1" # Mondays 06:00 UTC
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout AGB-CRM
+        uses: actions/checkout@v4
+        with:
+          path: agb-crm
+
+      - name: Checkout CaneyCloud backend
+        uses: actions/checkout@v4
+        with:
+          repository: arevalogutierrezbajares-spec/tour-pms-main
+          token: ${{ secrets.CANEY_REPO_TOKEN }}
+          path: caney
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install SCIP toolchain
+        run: |
+          npm i -g @sourcegraph/scip-python
+          curl -sL "https://github.com/sourcegraph/scip/releases/latest/download/scip-linux-x86_64.tar.gz" \
+            | tar xz -C /usr/local/bin scip
+
+      - name: Install deps
+        working-directory: agb-crm
+        run: npm i -g pnpm && pnpm install --frozen-lockfile
+
+      - name: Rebuild SCIP report
+        working-directory: agb-crm
+        env:
+          BRAIN_ROOT_CRM: ${{ github.workspace }}/agb-crm
+          BRAIN_ROOT_CANEY: ${{ github.workspace }}/caney
+        run: pnpm brain:scip:refresh
+
+      - name: Commit report if changed
+        working-directory: agb-crm
+        run: |
+          if ! git diff --quiet -- lib/brain/generated/scip-caney-report.json; then
+            git config user.name "brain-bot"
+            git config user.email "brain-bot@users.noreply.github.com"
+            git add lib/brain/generated/scip-caney-report.json
+            git commit -m "chore(brain): refresh SCIP Caney edge report"
+            git push
+          else
+            echo "report unchanged — nothing to commit"
+          fi

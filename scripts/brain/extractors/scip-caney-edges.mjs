@@ -42,6 +42,56 @@ export function scipIndexPath() {
   return process.env.BRAIN_SCIP_INDEX || join(CANEY_BACKEND, ".brain", "caney-scip.json");
 }
 
+/** The committed, compact edge report — the production source when the raw 29MB
+ * index isn't around (CI / fresh clone). Written by scripts/brain/scip/report.mjs. */
+export function scipReportPath() {
+  return join(REPO_ROOTS.crm ?? "", "lib", "brain", "generated", "scip-caney-report.json");
+}
+
+/** Load pre-extracted edges from the committed report (no index / no scip-python
+ * needed). Returns the same `{ edges, stats }` shape as extractScipCaneyEdges. */
+export function loadScipReport(reportPath = scipReportPath()) {
+  const empty = { edges: [], stats: { routeFiles: 0, tables: 0, available: false, source: "none" } };
+  if (!reportPath || !existsSync(reportPath)) return empty;
+  try {
+    const r = JSON.parse(readFileSync(reportPath, "utf8"));
+    const edges = (r.edges ?? []).map((e) => ({
+      routeFile: e.routeFile,
+      cls: e.cls,
+      table: e.table,
+      direction: e.direction,
+    }));
+    if (edges.length === 0) return empty;
+    return {
+      edges,
+      stats: {
+        routeFiles: r.routeFiles ?? new Set(edges.map((e) => e.routeFile)).size,
+        tables: r.tables ?? new Set(edges.map((e) => e.table)).size,
+        available: true,
+        source: "report",
+      },
+    };
+  } catch {
+    return empty;
+  }
+}
+
+/**
+ * Caney route→table edges from the FRESHEST available source: the raw SCIP index
+ * when present (re-extracts with live direction), else the committed report.
+ * This is what makes BRAIN_SCIP portable — CI needs neither the 29MB index nor
+ * scip-python, just the committed report.
+ */
+export function scipCaneyEdges({ indexPath = scipIndexPath() } = {}) {
+  if (indexPath && existsSync(indexPath)) {
+    const fromIndex = extractScipCaneyEdges({ indexPath });
+    if (fromIndex.stats.available) {
+      return { ...fromIndex, stats: { ...fromIndex.stats, source: "index" } };
+    }
+  }
+  return loadScipReport();
+}
+
 /* ── Pure helpers (unit-testable in isolation) ───────────────────────────── */
 
 /** True for a SCIP occurrence carrying the Definition role bit. PURE. */
@@ -264,7 +314,7 @@ export function extractScipCaneyGraph({
   existingEntityIds = new Set(),
   indexPath = scipIndexPath(),
 } = {}) {
-  const { edges: raw, stats } = extractScipCaneyEdges({ indexPath });
+  const { edges: raw, stats } = scipCaneyEdges({ indexPath });
   if (!stats.available) return { nodes: [], edges: [], stats };
 
   // Deterministic order: route file, then table.

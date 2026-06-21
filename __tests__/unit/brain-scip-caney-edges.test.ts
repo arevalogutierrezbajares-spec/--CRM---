@@ -15,6 +15,8 @@ import {
   parseRouteTableRefs,
   parseClassTables,
   isRouteDoc,
+  loadScipReport,
+  scipCaneyEdges,
 } from "@/scripts/brain/extractors/scip-caney-edges.mjs";
 
 const sym = (mod: string, tail: string) =>
@@ -129,5 +131,32 @@ describe("parseClassTables", () => {
       Channel: "channels",
       Message: "messages",
     });
+  });
+});
+
+describe("loadScipReport / scipCaneyEdges (portable source)", () => {
+  it("loads pre-extracted edges from the committed report (no index needed)", () => {
+    const { edges, stats } = loadScipReport();
+    expect(stats.available).toBe(true);
+    expect(stats.source).toBe("report");
+    expect(edges.length).toBeGreaterThan(0);
+    // shape is identical to the index extractor's output
+    for (const e of edges.slice(0, 3)) {
+      expect(e).toHaveProperty("routeFile");
+      expect(e).toHaveProperty("table");
+      expect(["reads", "writes"]).toContain(e.direction);
+    }
+  });
+
+  it("degrades to empty when the report is absent", () => {
+    const r = loadScipReport("/definitely/not/a/report.json");
+    expect(r.stats.available).toBe(false);
+    expect(r.edges).toEqual([]);
+  });
+
+  it("falls back to the report when no raw index is present", () => {
+    const { stats } = scipCaneyEdges({ indexPath: "/definitely/not/an/index.json" });
+    expect(stats.available).toBe(true);
+    expect(stats.source).toBe("report");
   });
 });
