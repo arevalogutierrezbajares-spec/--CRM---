@@ -15,6 +15,7 @@ import {
   CalendarCheck,
   KanbanSquare,
   Contact2,
+  DoorOpen,
   Network,
   HeartHandshake,
   UsersRound,
@@ -84,6 +85,7 @@ export const NAV_GROUPS: NavGroup[] = [
     tree: true,
     items: [
       { href: "/contacts", label: "Contacts", icon: Contact2 },
+      { href: "/partner-access", label: "Partner Rooms", icon: DoorOpen },
       { href: "/reconnect", label: "Reconnect", icon: HeartHandshake },
       { href: "/network", label: "Network", icon: Network },
       { href: "/team", label: "Team", icon: UsersRound },

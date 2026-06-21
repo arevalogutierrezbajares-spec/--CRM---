@@ -5,6 +5,8 @@ import { and, eq, ilike, isNull } from "drizzle-orm";
 import { requireUser } from "@/lib/current-user";
 import { db } from "@/db";
 import * as schema from "@/db/schema";
+import { listWorkspaceMembers } from "@/db/queries/team";
+import { founderProfileFor } from "@/lib/founder-photos";
 
 /** Heartbeat — stamp the current user's last-seen. Called from the app shell. */
 export async function heartbeatAction(): Promise<void> {
@@ -13,6 +15,29 @@ export async function heartbeatAction(): Promise<void> {
     .update(schema.users)
     .set({ lastSeenAt: new Date() })
     .where(eq(schema.users.id, user.id));
+}
+
+/**
+ * Last-seen for the founders, keyed by canonical name — powers the "last seen…"
+ * tooltip on offline presence bubbles. Live online state comes from the
+ * realtime presence channel; this only fills in the offline timestamps.
+ */
+export async function listFounderLastSeenAction(): Promise<
+  { name: string; lastSeenAt: string | null }[]
+> {
+  const user = await requireUser();
+  const members = await listWorkspaceMembers(user.workspaceId);
+  const out: { name: string; lastSeenAt: string | null }[] = [];
+  for (const m of members) {
+    const founder = founderProfileFor(m.displayName, m.email);
+    if (founder) {
+      out.push({
+        name: founder.displayName,
+        lastSeenAt: m.lastSeenAt ? m.lastSeenAt.toISOString() : null,
+      });
+    }
+  }
+  return out;
 }
 
 /**
