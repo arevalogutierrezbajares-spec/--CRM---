@@ -13,8 +13,9 @@
  */
 
 import { Handle, Position, type NodeProps } from "@xyflow/react";
-import type { NodeSource } from "@/lib/brain/types";
+import { SYSTEM_ACCENT, type NodeSource, type System } from "@/lib/brain/types";
 import type { RFNodeData } from "@/lib/brain/lenses/types";
+import { emphasisOf } from "@/lib/brain/analytics";
 import { useBrain } from "../graph-provider";
 import "./brain-nodes.css";
 
@@ -55,6 +56,10 @@ export default function SurfaceNode({ data, selected }: NodeProps) {
   const { method, path } = parseSurface(node.label);
   const lang = langFor(path, node.source);
 
+  // Analytics overlay: a surface/entity can be a hub (e.g. POST /api/holds).
+  const emph = emphasisOf(node.id);
+  const accent = node.system ? SYSTEM_ACCENT[node.system as System] : "var(--ext)";
+
   const onActivate = () => actions.select(node.id);
   const onKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
     if (e.key === "Enter" || e.key === " ") {
@@ -70,9 +75,12 @@ export default function SurfaceNode({ data, selected }: NodeProps) {
       data-state={node.state}
       data-size={node.size}
       data-live={node.liveness ?? undefined}
+      data-emph={emph?.kind}
       onClick={onActivate}
       onKeyDown={onKeyDown}
-      aria-label={`Surface ${method ? `${method} ` : ""}${path} (${lang})`}
+      aria-label={`Surface ${method ? `${method} ` : ""}${path} (${lang})${
+        emph?.kind === "hub" ? `, hub (${emph.degree} links)` : ""
+      }`}
       style={
         {
           background: "transparent",
@@ -81,6 +89,7 @@ export default function SurfaceNode({ data, selected }: NodeProps) {
           cursor: "pointer",
           opacity: d.emphasis,
           transition: "opacity .2s var(--ease)",
+          "--emph-accent": emph?.kind === "hub" ? accent : undefined,
         } as React.CSSProperties
       }
     >

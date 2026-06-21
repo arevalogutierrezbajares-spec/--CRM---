@@ -21,6 +21,7 @@
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { STATE_GLYPH, STATE_LABEL, SYSTEM_ACCENT, type System } from "@/lib/brain/types";
 import type { RFNodeData } from "@/lib/brain/lenses/types";
+import { emphasisOf } from "@/lib/brain/analytics";
 import { useBrain } from "../graph-provider";
 import "./brain-nodes.css";
 
@@ -50,6 +51,9 @@ export default function DomainNode({ data, selected }: NodeProps) {
       : node.system
         ? SYSTEM_ACCENT[node.system as System]
         : "var(--ext)";
+
+  // Analytics overlay: hub (god-object) or orphan (no mapped data-flow).
+  const emph = emphasisOf(node.id);
 
   const glyph = STATE_GLYPH[node.state];
   const surfaceCount = node.surfaces.length;
@@ -82,15 +86,24 @@ export default function DomainNode({ data, selected }: NodeProps) {
       data-xlink={isXlink ? "1" : undefined}
       data-fn={d.lens === "function" && node.fn ? node.fn : undefined}
       data-live={node.liveness ?? undefined}
+      data-emph={emph?.kind}
       onClick={drill}
       onKeyDown={onKeyDown}
       aria-label={`${node.label} — ${STATE_LABEL[node.state]}${
         isXlink ? ", cross-system link" : ""
+      }${
+        emph?.kind === "hub"
+          ? `, hub (${emph.degree} links)`
+          : emph?.kind === "orphan"
+            ? ", blind spot — no mapped data-flow"
+            : ""
       }. ${surfaceCount} surfaces.`}
       style={
         {
           // --accent drives the chip border-color on hover + selection (brain.css).
           "--accent": accent,
+          // --emph-accent tints the hub marker/border (analytics overlay).
+          "--emph-accent": emph?.kind === "hub" ? accent : undefined,
           display: "flex",
           flexDirection: "column",
           alignItems: "flex-start",

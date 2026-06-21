@@ -244,6 +244,40 @@
   }
 }
 
+/* ── Analytics emphasis (graphology overlay) ─────────────────────────────────
+ * Surfaces the gap-finding insights directly on the canvas. GLOW-FREE per
+ * NFR-A11Y-6: a hub reads as elevated via a crisp accent ring + corner marker +
+ * --shadow-med (never a neon halo); a blind-spot (orphan) domain is dimmed +
+ * desaturated, reusing the same fade language as `needed` / dead nodes. No size
+ * change → the deterministic overlap resolver measures identical rects. */
+.brain-root .nd[data-emph="hub"] .chip,
+.brain-root .surface[data-emph="hub"] .chip {
+  position: relative;
+  border-color: var(--emph-accent, var(--accent));
+  box-shadow:
+    inset 0 0 0 1px color-mix(in oklch, var(--emph-accent, var(--accent)) 60%, transparent),
+    var(--shadow-med), var(--gleam);
+}
+/* Corner marker — same affordance grammar as the ⇄ xlink badge, pinned left so
+ * it never collides with it. */
+.brain-root .nd[data-emph="hub"] .chip::before,
+.brain-root .surface[data-emph="hub"] .chip::before {
+  content: "";
+  position: absolute;
+  left: -5px;
+  top: -5px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--emph-accent, var(--accent));
+  box-shadow: 0 0 0 2px var(--bg);
+}
+.brain-root .nd[data-emph="orphan"] .chip,
+.brain-root .surface[data-emph="orphan"] .chip {
+  opacity: 0.5;
+  filter: saturate(0.3);
+}
+
 /* ── Liveness lens (v2): dim dead surfaces (data-live="dead") ─────────────── */
 .brain-root .react-flow[data-lens="liveness"] [data-live="dead"] {
   opacity: 0.4;
