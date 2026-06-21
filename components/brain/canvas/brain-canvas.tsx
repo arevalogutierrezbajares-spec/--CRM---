@@ -381,6 +381,17 @@ function CanvasInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reduceMotion]);
 
+  // Edges are decorative for screen readers — React Flow otherwise exposes every
+  // path as role="img" with a machine id label ("Edge from <id> to <id>"), so a
+  // dense level spews dozens of meaningless announcements. The structure is
+  // already conveyed by the focusable node buttons + the detail panel; the
+  // interchange station BUTTONS live in a separate edge-label layer, so hiding
+  // the edge SVG doesn't hide them (a11y-01).
+  useEffect(() => {
+    const svg = graphWrapRef.current?.querySelector(".react-flow__edges");
+    svg?.setAttribute("aria-hidden", "true");
+  }, [nodesInitialized]);
+
   // Dev guard: a derived edge whose endpoints aren't in the visible node set is
   // exactly the class of bug that shipped the silent edge-drop (link-06). Surface
   // it loudly in development so it can never regress invisibly again.
