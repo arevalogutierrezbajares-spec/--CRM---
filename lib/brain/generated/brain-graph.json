@@ -1,0 +1,3825 @@
+{
+  "version": "1.1",
+  "generatedAt": "2026-06-21T07:43:41.920Z",
+  "commit": {
+    "vav": "e7950c6c9",
+    "caney": "3ed413fc",
+    "crm": "bd86e78",
+    "restaurants": "2f77a2b",
+    "academy": null
+  },
+  "nodes": [
+    {
+      "id": "portfolio",
+      "level": 0,
+      "kind": "system",
+      "parentId": null,
+      "label": "Portfolio",
+      "system": null,
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "doing",
+      "liveness": null,
+      "size": "lg",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": null,
+      "surfaces": [],
+      "meta": "5 systems · 9 externals",
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "vav",
+      "level": 1,
+      "kind": "system",
+      "parentId": "portfolio",
+      "label": "VAV",
+      "system": "vav",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "lg",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": null,
+      "surfaces": [],
+      "meta": "10 api · 141 mig · 10 domains",
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": -520
+      }
+    },
+    {
+      "id": "vav.marketplace",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "vav",
+      "label": "Marketplace Core",
+      "system": "vav",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": "growth",
+      "state": "done",
+      "liveness": null,
+      "size": "lg",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": null,
+      "surfaces": [
+        "/app/api/listings",
+        "/app/api/packages",
+        "/app/(tourist)",
+        "GET /api/listings/{slug}/availability"
+      ],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": -256.8,
+        "y": -560.7
+      }
+    },
+    {
+      "id": "vav.booking",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "vav",
+      "label": "Booking Pipeline",
+      "system": "vav",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": "sales",
+      "state": "done",
+      "liveness": null,
+      "size": "lg",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": null,
+      "surfaces": [
+        "POST /api/quotes",
+        "POST /api/holds",
+        "GET /api/holds/{id}",
+        "DELETE /api/holds/{id}",
+        "POST /api/holds/{id}/extend"
+      ],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": -231.7,
+        "y": -638
+      }
+    },
+    {
+      "id": "vav.pms-integration",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "vav",
+      "label": "PMS Integration",
+      "system": "vav",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": "sales",
+      "state": "done",
+      "liveness": null,
+      "size": "lg",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": null,
+      "surfaces": [
+        "POST /api/pms/webhook/caneyclouds",
+        "GET /api/listings/{slug}/pms-availability",
+        "GET /api/pms/health",
+        "POST /api/admin/pms/webhook/replay/{eventId}"
+      ],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": -183.8,
+        "y": -703.8
+      }
+    },
+    {
+      "id": "vav.identity",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "vav",
+      "label": "Identity & Access",
+      "system": "vav",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": "platform",
+      "state": "done",
+      "liveness": null,
+      "size": "lg",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": null,
+      "surfaces": [
+        "/app/(auth)",
+        "/lib/auth",
+        "/app/(provider)",
+        "/app/(admin)"
+      ],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": -118,
+        "y": -751.7
+      }
+    },
+    {
+      "id": "vav.payments",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "vav",
+      "label": "Payments & Money",
+      "system": "vav",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": "admin",
+      "state": "done",
+      "liveness": null,
+      "size": "lg",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": null,
+      "surfaces": [
+        "POST /api/stripe/checkout",
+        "POST /api/stripe/webhooks",
+        "/api/payouts",
+        "/lib/stripe"
+      ],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": -40.7,
+        "y": -776.8
+      }
+    },
+    {
+      "id": "vav.messaging-crm",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "vav",
+      "label": "Messaging & CRM",
+      "system": "vav",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": "cx",
+      "state": "done",
+      "liveness": null,
+      "size": "lg",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": null,
+      "surfaces": [
+        "POST /api/whatsapp/webhook",
+        "/lib/whatsapp",
+        "/lib/crm"
+      ],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 40.7,
+        "y": -776.8
+      }
+    },
+    {
+      "id": "vav.operator",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "vav",
+      "label": "Operator Features",
+      "system": "vav",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": "ops",
+      "state": "done",
+      "liveness": null,
+      "size": "lg",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": null,
+      "surfaces": [
+        "/api/cron/pms-watchdog",
+        "/api/cron/parity-audit",
+        "/app/(admin)/pms",
+        "/app/(admin)/analytics"
+      ],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 118,
+        "y": -751.7
+      }
+    },
+    {
+      "id": "vav.growth-affiliates",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "vav",
+      "label": "Growth & Affiliates",
+      "system": "vav",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": "growth",
+      "state": "done",
+      "liveness": null,
+      "size": "lg",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": null,
+      "surfaces": [
+        "/api/discount-codes",
+        "/api/affiliate",
+        "/lib/affiliates"
+      ],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 183.8,
+        "y": -703.8
+      }
+    },
+    {
+      "id": "vav.ruta-rides",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "vav",
+      "label": "Ruta Rides",
+      "system": "vav",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": "sales",
+      "state": "doing",
+      "liveness": null,
+      "size": "md",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": null,
+      "surfaces": [
+        "/app/(ruta)",
+        "/app/api/ruta"
+      ],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 231.7,
+        "y": -638
+      }
+    },
+    {
+      "id": "vav.specialized-content",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "vav",
+      "label": "Specialized Content",
+      "system": "vav",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": "growth",
+      "state": "done",
+      "liveness": null,
+      "size": "lg",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": null,
+      "surfaces": [
+        "/api/experience-products",
+        "/api/discover",
+        "/lib/birding",
+        "/lib/food"
+      ],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 256.8,
+        "y": -560.7
+      }
+    },
+    {
+      "id": "caney",
+      "level": 1,
+      "kind": "system",
+      "parentId": "portfolio",
+      "label": "CaneyCloud",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "lg",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": null,
+      "surfaces": [],
+      "meta": "36 api · 134 mig · 9 domains",
+      "summary": null,
+      "pos": {
+        "x": 494.5,
+        "y": -160.7
+      }
+    },
+    {
+      "id": "caney.booking-core",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "caney",
+      "label": "Booking Core",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": "sales",
+      "state": "done",
+      "liveness": null,
+      "size": "lg",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": null,
+      "surfaces": [
+        "POST /bookings/hold",
+        "POST /bookings/confirm",
+        "POST /bookings/{id}/cancel",
+        "POST /bookings/{id}/move",
+        "GET /bookings/{id}",
+        "GET /bookings"
+      ],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 458.3,
+        "y": -418.2
+      }
+    },
+    {
+      "id": "caney.availability",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "caney",
+      "label": "Availability & Inventory",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": "sales",
+      "state": "done",
+      "liveness": null,
+      "size": "lg",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": null,
+      "surfaces": [
+        "GET /availability",
+        "POST /availability/block",
+        "POST /internal/availability/check"
+      ],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 548.5,
+        "y": -415
+      }
+    },
+    {
+      "id": "caney.pricing",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "caney",
+      "label": "Pricing & Quotes",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": "sales",
+      "state": "done",
+      "liveness": null,
+      "size": "md",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": null,
+      "surfaces": [
+        "POST /quotes",
+        "POST /internal/quotes/compute"
+      ],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 632.3,
+        "y": -381.2
+      }
+    },
+    {
+      "id": "caney.properties",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "caney",
+      "label": "Properties & Rooms",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": "ops",
+      "state": "done",
+      "liveness": null,
+      "size": "lg",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": null,
+      "surfaces": [
+        "GET/POST /admin/properties",
+        "GET/POST /admin/properties/{id}/rooms",
+        "GET/POST /admin/policies"
+      ],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 699.4,
+        "y": -320.8
+      }
+    },
+    {
+      "id": "caney.channels",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "caney",
+      "label": "Channels & Distribution",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": "ops",
+      "state": "done",
+      "liveness": null,
+      "size": "lg",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": null,
+      "surfaces": [
+        "GET/POST /admin/channels",
+        "POST /api/v1/channel/...",
+        "POST /api/internal/channel-outbox/drain"
+      ],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 741.8,
+        "y": -241.1
+      }
+    },
+    {
+      "id": "caney.messaging",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "caney",
+      "label": "Messaging & Communications",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": "cx",
+      "state": "done",
+      "liveness": null,
+      "size": "lg",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": null,
+      "surfaces": [
+        "POST /api/internal/messaging/ingest",
+        "POST /comms/send-email",
+        "POST /comms/send-sms",
+        "GET/POST /notifications"
+      ],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 754.3,
+        "y": -151.6
+      }
+    },
+    {
+      "id": "caney.payments",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "caney",
+      "label": "Payments & Finance",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": "admin",
+      "state": "done",
+      "liveness": null,
+      "size": "lg",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": null,
+      "surfaces": [
+        "POST /internal/payment-links",
+        "GET/POST /admin/invoices",
+        "GET/POST /admin/folios",
+        "POST /webhooks/stripe",
+        "POST /webhooks/bdv"
+      ],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 735.6,
+        "y": -63.3
+      }
+    },
+    {
+      "id": "caney.accounting",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "caney",
+      "label": "Accounting & Reporting",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": "admin",
+      "state": "doing",
+      "liveness": null,
+      "size": "lg",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": null,
+      "surfaces": [
+        "GET /accounting/dashboard",
+        "GET/POST /accounting/source-events",
+        "GET /accounting/journal-entries",
+        "GET /accounting/periods",
+        "POST /accounting/periods/{id}/close",
+        "GET/POST /accounting/export-profiles"
+      ],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 687.7,
+        "y": 13.3
+      }
+    },
+    {
+      "id": "caney.auth",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "caney",
+      "label": "Auth & Access",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": "platform",
+      "state": "done",
+      "liveness": null,
+      "size": "lg",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": null,
+      "surfaces": [
+        "POST /auth/login",
+        "POST /auth/refresh",
+        "POST /auth/logout",
+        "GET/POST /api/v1/permissions",
+        "GET/POST /admin/staff"
+      ],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 616.6,
+        "y": 68.9
+      }
+    },
+    {
+      "id": "crm",
+      "level": 1,
+      "kind": "system",
+      "parentId": "portfolio",
+      "label": "AGB-CRM",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "lg",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": null,
+      "surfaces": [],
+      "meta": "77 routes · 72 pages · 109 tables",
+      "summary": null,
+      "pos": {
+        "x": 305.6,
+        "y": 420.7
+      }
+    },
+    {
+      "id": "crm.contacts",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "crm",
+      "label": "Contacts & Network",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": "cx",
+      "state": "done",
+      "liveness": null,
+      "size": "lg",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": null,
+      "surfaces": [
+        "/api/capture/members",
+        "/api/capture/sessions",
+        "/api/contact-logo"
+      ],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 534.1,
+        "y": 296.7
+      }
+    },
+    {
+      "id": "crm.projects",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "crm",
+      "label": "Projects & Portfolio",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": "ops",
+      "state": "done",
+      "liveness": null,
+      "size": "lg",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": null,
+      "surfaces": [
+        "/api/export/projects",
+        "/api/materials/{id}/view",
+        "/api/room-items"
+      ],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 558.4,
+        "y": 360
+      }
+    },
+    {
+      "id": "crm.meetings",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "crm",
+      "label": "Meetings & Touches",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": "cx",
+      "state": "done",
+      "liveness": null,
+      "size": "lg",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": null,
+      "surfaces": [
+        "/api/meetings",
+        "/api/voice/transcribe",
+        "/api/capture/notes"
+      ],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 565.5,
+        "y": 427.5
+      }
+    },
+    {
+      "id": "crm.research",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "crm",
+      "label": "Research & Intelligence",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": "platform",
+      "state": "done",
+      "liveness": null,
+      "size": "md",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": null,
+      "surfaces": [
+        "POST /api/research/sync",
+        "GET /api/research/{id}"
+      ],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 554.9,
+        "y": 494.6
+      }
+    },
+    {
+      "id": "crm.treasury",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "crm",
+      "label": "Treasury & Finance",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": "admin",
+      "state": "done",
+      "liveness": null,
+      "size": "md",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": null,
+      "surfaces": [
+        "/api/equity/advisor"
+      ],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 527.3,
+        "y": 556.6
+      }
+    },
+    {
+      "id": "crm.email",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "crm",
+      "label": "Email",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": "cx",
+      "state": "done",
+      "liveness": null,
+      "size": "lg",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": null,
+      "surfaces": [
+        "/api/email",
+        "/api/postmark/inbound",
+        "/api/cron/email-sync"
+      ],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 484.6,
+        "y": 609.3
+      }
+    },
+    {
+      "id": "crm.partner-rooms",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "crm",
+      "label": "Partner Rooms & Access",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": "growth",
+      "state": "done",
+      "liveness": null,
+      "size": "lg",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": null,
+      "surfaces": [
+        "/api/access/{token}",
+        "/api/partner-uploads",
+        "/api/room-items"
+      ],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 429.6,
+        "y": 649.2
+      }
+    },
+    {
+      "id": "crm.overlord",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "crm",
+      "label": "Overlord & Work Mgmt",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": "ops",
+      "state": "done",
+      "liveness": null,
+      "size": "md",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": null,
+      "surfaces": [
+        "POST /api/overlord/sync"
+      ],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 366.3,
+        "y": 673.5
+      }
+    },
+    {
+      "id": "crm.capture",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "crm",
+      "label": "Voice & Capture",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": "cx",
+      "state": "done",
+      "liveness": null,
+      "size": "lg",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": null,
+      "surfaces": [
+        "/api/voice/call",
+        "/api/voice/live-token",
+        "/api/capture",
+        "/api/whatsapp/webhook",
+        "/api/agent/transcribe"
+      ],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 298.8,
+        "y": 680.6
+      }
+    },
+    {
+      "id": "crm.pitch-feedback",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "crm",
+      "label": "Pitch Feedback",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": "growth",
+      "state": "done",
+      "liveness": null,
+      "size": "md",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": null,
+      "surfaces": [
+        "/app/presentations",
+        "pitch_feedback_campaigns"
+      ],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 231.7,
+        "y": 670
+      }
+    },
+    {
+      "id": "crm.reminders",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "crm",
+      "label": "Reminders & Nudges",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": "cx",
+      "state": "done",
+      "liveness": null,
+      "size": "md",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": null,
+      "surfaces": [
+        "POST /api/cron/reminders",
+        "POST /api/cron/nudges"
+      ],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 169.7,
+        "y": 642.4
+      }
+    },
+    {
+      "id": "crm.intelligence",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "crm",
+      "label": "Intelligence & AI",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": "ops",
+      "state": "done",
+      "liveness": null,
+      "size": "lg",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": null,
+      "surfaces": [
+        "POST /api/dashboard/ai-actions",
+        "POST /api/brain/feedback",
+        "POST /api/mcp"
+      ],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 117,
+        "y": 599.7
+      }
+    },
+    {
+      "id": "vav.surface.post-api-admin-pms-webhook-replay-eventid",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "vav.pms-integration",
+      "label": "POST /api/admin/pms/webhook/replay/{eventId}",
+      "system": "vav",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "openapi",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "vav.surface.post-api-holds",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "vav.booking",
+      "label": "POST /api/holds",
+      "system": "vav",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "openapi",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "vav.surface.get-api-listings-slug-availability",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "vav.marketplace",
+      "label": "GET /api/listings/{slug}/availability",
+      "system": "vav",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "openapi",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "vav.surface.get-api-pms-health",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "vav.operator",
+      "label": "GET /api/pms/health",
+      "system": "vav",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "openapi",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.get-accounting-accountant-access-tokens",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.accounting",
+      "label": "GET /accounting/accountant-access-tokens",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "openapi#accountingListAccessTokens",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.get-availability",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.availability",
+      "label": "GET /availability",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "openapi#listAvailability",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.get-bookings",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.booking-core",
+      "label": "GET /bookings",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "openapi#listBookings",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.post-internal-payment-links",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.payments",
+      "label": "POST /internal/payment-links",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "openapi#internalCreatePaymentLink",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.post-internal-quotes-compute",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.pricing",
+      "label": "POST /internal/quotes/compute",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "openapi#internalQuoteCompute",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-access-token-comments",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.partner-rooms",
+      "label": "/api/access/[token]/comments",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-agent-transcribe",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.capture",
+      "label": "/api/agent/transcribe",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-brain-feedback",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.intelligence",
+      "label": "/api/brain/feedback",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-capture-action-items",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.overlord",
+      "label": "/api/capture/action-items",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-capture-members",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.contacts",
+      "label": "/api/capture/members",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-capture-notes",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.research",
+      "label": "/api/capture/notes",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.entity.contacts",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "crm.contacts",
+      "label": "contacts",
+      "system": "crm",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "db/schema.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.entity.projects",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "crm.projects",
+      "label": "projects",
+      "system": "crm",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "db/schema.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.entity.meetings",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "crm.meetings",
+      "label": "meetings",
+      "system": "crm",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "db/schema.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.entity.research_notes",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "crm.research",
+      "label": "research_notes",
+      "system": "crm",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "db/schema.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.entity.fin_accounts",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "crm.treasury",
+      "label": "fin_accounts",
+      "system": "crm",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "db/schema.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.entity.email_threads",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "crm.email",
+      "label": "email_threads",
+      "system": "crm",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "db/schema.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.entity.partner_rooms",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "crm.partner-rooms",
+      "label": "partner_rooms",
+      "system": "crm",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "db/schema.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.entity.overlord_tasks",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "crm.overlord",
+      "label": "overlord_tasks",
+      "system": "crm",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "db/schema.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.entity.voice_notes",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "crm.research",
+      "label": "voice_notes",
+      "system": "crm",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "db/schema.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.entity.pitch_feedback_campaigns",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "crm.pitch-feedback",
+      "label": "pitch_feedback_campaigns",
+      "system": "crm",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "db/schema.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.entity.reminders",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "crm.reminders",
+      "label": "reminders",
+      "system": "crm",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "db/schema.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.entity.mcp_oauth_clients",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "crm.intelligence",
+      "label": "mcp_oauth_clients",
+      "system": "crm",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "db/schema.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "vav.entity.pms_availability",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "vav.pms-integration",
+      "label": "pms_availability",
+      "system": "vav",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "supabase/migrations",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "vav.entity.pms_holds",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "vav.booking",
+      "label": "pms_holds",
+      "system": "vav",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "supabase/migrations",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "vav.entity.quotes",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "vav.booking",
+      "label": "quotes",
+      "system": "vav",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "supabase/migrations",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "vav.entity.guest_bookings",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "vav.booking",
+      "label": "guest_bookings",
+      "system": "vav",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "supabase/migrations",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "vav.entity.stripe_webhook_events",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "vav.payments",
+      "label": "stripe_webhook_events",
+      "system": "vav",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "supabase/migrations",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.entity.bookings",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "caney.booking-core",
+      "label": "bookings",
+      "system": "caney",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "APP/backend/alembic/versions",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.entity.availability",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "caney.availability",
+      "label": "availability",
+      "system": "caney",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "APP/backend/alembic/versions",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.entity.rate_plans",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "caney.pricing",
+      "label": "rate_plans",
+      "system": "caney",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "APP/backend/alembic/versions",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.entity.invoices",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "caney.payments",
+      "label": "invoices",
+      "system": "caney",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "APP/backend/alembic/versions",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.entity.accounting_journal_entries",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "caney.accounting",
+      "label": "accounting_journal_entries",
+      "system": "caney",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "APP/backend/alembic/versions",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "restaurants",
+      "level": 1,
+      "kind": "system",
+      "parentId": "portfolio",
+      "label": "Caney Restaurants",
+      "system": "restaurants",
+      "source": "host_mount",
+      "hosted_by": "caney",
+      "fn": null,
+      "state": "doing",
+      "liveness": null,
+      "size": "lg",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "caneycloud-restaurant/MODULE-INTEGRATION.md",
+      "surfaces": [],
+      "meta": "host-mounted in CaneyCloud · release: dark · 13 modules",
+      "summary": null,
+      "pos": {
+        "x": -305.6,
+        "y": 420.7
+      }
+    },
+    {
+      "id": "restaurants.floor-ops",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "restaurants",
+      "label": "Floor Operations & Seating",
+      "system": "restaurants",
+      "source": "host_mount",
+      "hosted_by": "caney",
+      "fn": "ops",
+      "state": "doing",
+      "liveness": null,
+      "size": "lg",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "caneycloud-restaurant/MODULE-INTEGRATION.md",
+      "surfaces": [
+        "/api/v1/m02/seating",
+        "/api/v1/m02/layout",
+        "/api/v1/m02/waitlist",
+        "/api/v1/m02/reservations"
+      ],
+      "meta": "module M02",
+      "summary": null,
+      "pos": {
+        "x": -115.2,
+        "y": 597.7
+      }
+    },
+    {
+      "id": "restaurants.pos",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "restaurants",
+      "label": "Order Management & Fulfillment",
+      "system": "restaurants",
+      "source": "host_mount",
+      "hosted_by": "caney",
+      "fn": "sales",
+      "state": "doing",
+      "liveness": null,
+      "size": "lg",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "caneycloud-restaurant/MODULE-INTEGRATION.md",
+      "surfaces": [
+        "/api/v1/m02/orders",
+        "/api/v1/m02/checkout",
+        "/api/v1/m02/courses",
+        "/api/v1/m02/bill-preview",
+        "/api/v1/m02/expo"
+      ],
+      "meta": "module M02",
+      "summary": null,
+      "pos": {
+        "x": -163.1,
+        "y": 638.2
+      }
+    },
+    {
+      "id": "restaurants.kds",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "restaurants",
+      "label": "Kitchen Display & Routing",
+      "system": "restaurants",
+      "source": "host_mount",
+      "hosted_by": "caney",
+      "fn": "ops",
+      "state": "doing",
+      "liveness": null,
+      "size": "md",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "caneycloud-restaurant/MODULE-INTEGRATION.md",
+      "surfaces": [
+        "/api/v1/m_kds/stream",
+        "/api/v1/m_kds/state"
+      ],
+      "meta": "module M_KDS",
+      "summary": null,
+      "pos": {
+        "x": -219.3,
+        "y": 666
+      }
+    },
+    {
+      "id": "restaurants.inventory",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "restaurants",
+      "label": "Inventory & Recipes",
+      "system": "restaurants",
+      "source": "host_mount",
+      "hosted_by": "caney",
+      "fn": "ops",
+      "state": "doing",
+      "liveness": null,
+      "size": "lg",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "caneycloud-restaurant/MODULE-INTEGRATION.md",
+      "surfaces": [
+        "/api/v1/m_inv/deliveries",
+        "/api/v1/m_inv/recipes",
+        "/api/v1/m_inv/reorder",
+        "/api/v1/m_inv/stock-counts"
+      ],
+      "meta": "module M_INV",
+      "summary": null,
+      "pos": {
+        "x": -280.5,
+        "y": 679.5
+      }
+    },
+    {
+      "id": "restaurants.operator-console",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "restaurants",
+      "label": "Platform Integration & Operator Console",
+      "system": "restaurants",
+      "source": "host_mount",
+      "hosted_by": "caney",
+      "fn": "ops",
+      "state": "doing",
+      "liveness": null,
+      "size": "lg",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "caneycloud-restaurant/MODULE-INTEGRATION.md",
+      "surfaces": [
+        "/api/v1/operator/overview",
+        "/api/v1/operator/kpi",
+        "/api/v1/operator/diagnostics",
+        "/api/v1/platform/release-mode"
+      ],
+      "meta": "module M17",
+      "summary": null,
+      "pos": {
+        "x": -343.1,
+        "y": 678
+      }
+    },
+    {
+      "id": "restaurants.diner-web",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "restaurants",
+      "label": "Diner Web & Self-Service",
+      "system": "restaurants",
+      "source": "host_mount",
+      "hosted_by": "caney",
+      "fn": "cx",
+      "state": "doing",
+      "liveness": null,
+      "size": "lg",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "caneycloud-restaurant/MODULE-INTEGRATION.md",
+      "surfaces": [
+        "diner-web SPA (127.0.0.1:5173)",
+        "/api/v1/m02/diner-journey",
+        "/api/v1/m02/self-order"
+      ],
+      "meta": "module M02",
+      "summary": null,
+      "pos": {
+        "x": -403.6,
+        "y": 661.5
+      }
+    },
+    {
+      "id": "restaurants.menu",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "restaurants",
+      "label": "Menu & Catalog",
+      "system": "restaurants",
+      "source": "host_mount",
+      "hosted_by": "caney",
+      "fn": "growth",
+      "state": "doing",
+      "liveness": null,
+      "size": "lg",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "caneycloud-restaurant/MODULE-INTEGRATION.md",
+      "surfaces": [
+        "/api/v1/m02/menu-availability",
+        "/api/v1/m02/courses",
+        "/api/v1/m02/kitchen-lines"
+      ],
+      "meta": "module M02",
+      "summary": null,
+      "pos": {
+        "x": -458.4,
+        "y": 631.1
+      }
+    },
+    {
+      "id": "restaurants.guest-crm",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "restaurants",
+      "label": "Guest Intelligence & CRM",
+      "system": "restaurants",
+      "source": "host_mount",
+      "hosted_by": "caney",
+      "fn": "cx",
+      "state": "doing",
+      "liveness": null,
+      "size": "lg",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "caneycloud-restaurant/MODULE-INTEGRATION.md",
+      "surfaces": [
+        "/api/v1/m02/guest-segment",
+        "/api/v1/m02/campaign-segments",
+        "/api/v1/m02/crm-outreach",
+        "/api/v1/m02/revenue-offers"
+      ],
+      "meta": "module M02",
+      "summary": null,
+      "pos": {
+        "x": -504.3,
+        "y": 588.4
+      }
+    },
+    {
+      "id": "restaurants.payments",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "restaurants",
+      "label": "Payment & Settlement",
+      "system": "restaurants",
+      "source": "host_mount",
+      "hosted_by": "caney",
+      "fn": "admin",
+      "state": "doing",
+      "liveness": null,
+      "size": "lg",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "caneycloud-restaurant/MODULE-INTEGRATION.md",
+      "surfaces": [
+        "/api/v1/m01/payment-sessions",
+        "/api/v1/m01/acquirer",
+        "/api/v1/m01/operator-payment-actions"
+      ],
+      "meta": "module M01",
+      "summary": null,
+      "pos": {
+        "x": -538.7,
+        "y": 536
+      }
+    },
+    {
+      "id": "restaurants.fiscal",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "restaurants",
+      "label": "Fiscal & Tax Compliance",
+      "system": "restaurants",
+      "source": "host_mount",
+      "hosted_by": "caney",
+      "fn": "admin",
+      "state": "doing",
+      "liveness": null,
+      "size": "lg",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "caneycloud-restaurant/MODULE-INTEGRATION.md",
+      "surfaces": [
+        "/api/v1/m_fiscal/control-numbers",
+        "/api/v1/m_fiscal/documents",
+        "/api/v1/m_fiscal/contingencies"
+      ],
+      "meta": "module M_FISCAL",
+      "summary": null,
+      "pos": {
+        "x": -559.5,
+        "y": 476.8
+      }
+    },
+    {
+      "id": "restaurants.accounting",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "restaurants",
+      "label": "Finance & Export",
+      "system": "restaurants",
+      "source": "host_mount",
+      "hosted_by": "caney",
+      "fn": "admin",
+      "state": "doing",
+      "liveness": null,
+      "size": "lg",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "caneycloud-restaurant/MODULE-INTEGRATION.md",
+      "surfaces": [
+        "/api/v1/m12/payroll-export",
+        "/api/v1/m12/accounting-export",
+        "/api/v1/m12/audit-export",
+        "/api/v1/m12/finance-mapping"
+      ],
+      "meta": "module M12",
+      "summary": null,
+      "pos": {
+        "x": -565.5,
+        "y": 414.4
+      }
+    },
+    {
+      "id": "restaurants.onboarding",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "restaurants",
+      "label": "Referral & Onboarding",
+      "system": "restaurants",
+      "source": "host_mount",
+      "hosted_by": "caney",
+      "fn": "growth",
+      "state": "doing",
+      "liveness": null,
+      "size": "lg",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "caneycloud-restaurant/MODULE-INTEGRATION.md",
+      "surfaces": [
+        "/api/v1/restaurants/referral-suggestions",
+        "/api/v1/restaurants/onboarding",
+        "/api/v1/restaurants/instagram"
+      ],
+      "meta": "module M05",
+      "summary": null,
+      "pos": {
+        "x": -556.5,
+        "y": 352.4
+      }
+    },
+    {
+      "id": "restaurants.identity",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "restaurants",
+      "label": "Identity & Access Control",
+      "system": "restaurants",
+      "source": "host_mount",
+      "hosted_by": "caney",
+      "fn": "platform",
+      "state": "doing",
+      "liveness": null,
+      "size": "lg",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "caneycloud-restaurant/MODULE-INTEGRATION.md",
+      "surfaces": [
+        "/api/v1/auth/ops",
+        "/api/v1/auth/password",
+        "/api/v1/auth/otp",
+        "/api/v1/auth/step-up"
+      ],
+      "meta": "module shared",
+      "summary": null,
+      "pos": {
+        "x": -532.8,
+        "y": 294.4
+      }
+    },
+    {
+      "id": "academy",
+      "level": 1,
+      "kind": "system",
+      "parentId": "portfolio",
+      "label": "Caney Academy",
+      "system": "academy",
+      "source": "manifest",
+      "hosted_by": null,
+      "fn": null,
+      "state": "needed",
+      "liveness": null,
+      "size": "lg",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "vz-avitourism-curriculum/modules/lms-integration-plan.md",
+      "surfaces": [],
+      "meta": "planned · from curriculum manifest · 7 domains (14 courses, 4 trails)",
+      "summary": null,
+      "pos": {
+        "x": -494.5,
+        "y": -160.7
+      }
+    },
+    {
+      "id": "academy.curriculum",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "academy",
+      "label": "Curriculum Content Architecture",
+      "system": "academy",
+      "source": "manifest",
+      "hosted_by": null,
+      "fn": "education",
+      "state": "needed",
+      "liveness": null,
+      "size": "md",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "vz-avitourism-curriculum/CURRICULUM.md",
+      "surfaces": [
+        "PUT /courses/{slug}",
+        "GET /courses/{slug}"
+      ],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": -627.9,
+        "y": 62.5
+      }
+    },
+    {
+      "id": "academy.species-ref",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "academy",
+      "label": "Species Reference & Quiz Bank",
+      "system": "academy",
+      "source": "manifest",
+      "hosted_by": null,
+      "fn": "education",
+      "state": "needed",
+      "liveness": null,
+      "size": "lg",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "vz-avitourism-curriculum/data/endemic-species-catalog.md",
+      "surfaces": [
+        "GET /species",
+        "GET /species/{id}",
+        "POST /quizzes/generate",
+        "GET /species/{id}/cards/pdf"
+      ],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": -711.5,
+        "y": -17.5
+      }
+    },
+    {
+      "id": "academy.hotspots",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "academy",
+      "label": "Regional Hotspots & Logistics",
+      "system": "academy",
+      "source": "manifest",
+      "hosted_by": null,
+      "fn": "education",
+      "state": "needed",
+      "liveness": null,
+      "size": "lg",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "vz-avitourism-curriculum/data/regional-hotspots.md",
+      "surfaces": [
+        "GET /regions",
+        "GET /regions/{slug}",
+        "GET /hotspots/{region}",
+        "POST /permits/lookup"
+      ],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": -752.1,
+        "y": -125.8
+      }
+    },
+    {
+      "id": "academy.localization",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "academy",
+      "label": "Localization & Bilingual Framework",
+      "system": "academy",
+      "source": "manifest",
+      "hosted_by": null,
+      "fn": "education",
+      "state": "needed",
+      "liveness": null,
+      "size": "md",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "modules/lms-integration-plan.md#7",
+      "surfaces": [
+        "author_avitourism.py (i18n es/en)"
+      ],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": -741.8,
+        "y": -241.1
+      }
+    },
+    {
+      "id": "academy.assessment",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "academy",
+      "label": "Assessment & Submissions",
+      "system": "academy",
+      "source": "manifest",
+      "hosted_by": null,
+      "fn": "education",
+      "state": "needed",
+      "liveness": null,
+      "size": "md",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "modules/lms-integration-plan.md#6",
+      "surfaces": [
+        "POST /assessments/submit",
+        "GET /assessments/{user_id}/portfolio"
+      ],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": -682.4,
+        "y": -340.4
+      }
+    },
+    {
+      "id": "academy.certification",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "academy",
+      "label": "Certification (Blended)",
+      "system": "academy",
+      "source": "manifest",
+      "hosted_by": null,
+      "fn": "education",
+      "state": "needed",
+      "liveness": null,
+      "size": "lg",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "modules/lms-integration-plan.md#6",
+      "surfaces": [
+        "POST /certificates/request",
+        "PUT /certificates/{id}/mentor-sign-off",
+        "GET /certificates/{id}"
+      ],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": -585.8,
+        "y": -404.1
+      }
+    },
+    {
+      "id": "academy.enrollment",
+      "level": 2,
+      "kind": "domain",
+      "parentId": "academy",
+      "label": "Course Authoring & Enrollment",
+      "system": "academy",
+      "source": "manifest",
+      "hosted_by": null,
+      "fn": "education",
+      "state": "needed",
+      "liveness": null,
+      "size": "md",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "modules/lms-integration-plan.md#3",
+      "surfaces": [
+        "POST /trails",
+        "POST /courses (author script)"
+      ],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": -471.2,
+        "y": -419.7
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "contains.vav.vav.marketplace",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "vav",
+        "domain": "vav"
+      },
+      "to": {
+        "system": "vav",
+        "domain": "vav.marketplace"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.vav.vav.booking",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "vav",
+        "domain": "vav"
+      },
+      "to": {
+        "system": "vav",
+        "domain": "vav.booking"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.vav.vav.pms-integration",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "vav",
+        "domain": "vav"
+      },
+      "to": {
+        "system": "vav",
+        "domain": "vav.pms-integration"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.vav.vav.identity",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "vav",
+        "domain": "vav"
+      },
+      "to": {
+        "system": "vav",
+        "domain": "vav.identity"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.vav.vav.payments",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "vav",
+        "domain": "vav"
+      },
+      "to": {
+        "system": "vav",
+        "domain": "vav.payments"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.vav.vav.messaging-crm",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "vav",
+        "domain": "vav"
+      },
+      "to": {
+        "system": "vav",
+        "domain": "vav.messaging-crm"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.vav.vav.operator",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "vav",
+        "domain": "vav"
+      },
+      "to": {
+        "system": "vav",
+        "domain": "vav.operator"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.vav.vav.growth-affiliates",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "vav",
+        "domain": "vav"
+      },
+      "to": {
+        "system": "vav",
+        "domain": "vav.growth-affiliates"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.vav.vav.ruta-rides",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "vav",
+        "domain": "vav"
+      },
+      "to": {
+        "system": "vav",
+        "domain": "vav.ruta-rides"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.vav.vav.specialized-content",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "vav",
+        "domain": "vav"
+      },
+      "to": {
+        "system": "vav",
+        "domain": "vav.specialized-content"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.caney.caney.booking-core",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "caney",
+        "domain": "caney"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.booking-core"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.caney.caney.availability",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "caney",
+        "domain": "caney"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.availability"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.caney.caney.pricing",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "caney",
+        "domain": "caney"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.pricing"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.caney.caney.properties",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "caney",
+        "domain": "caney"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.properties"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.caney.caney.channels",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "caney",
+        "domain": "caney"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.channels"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.caney.caney.messaging",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "caney",
+        "domain": "caney"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.messaging"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.caney.caney.payments",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "caney",
+        "domain": "caney"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.payments"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.caney.caney.accounting",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "caney",
+        "domain": "caney"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.accounting"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.caney.caney.auth",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "caney",
+        "domain": "caney"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.auth"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.crm.contacts",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.contacts"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.crm.projects",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.projects"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.crm.meetings",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.meetings"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.crm.research",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.research"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.crm.treasury",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.treasury"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.crm.email",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.email"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.crm.partner-rooms",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.partner-rooms"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.crm.overlord",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.overlord"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.crm.capture",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.capture"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.crm.pitch-feedback",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.pitch-feedback"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.crm.reminders",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.reminders"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.crm.intelligence",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.intelligence"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.vav.surface.post-api-admin-pms-webhook-replay-eventid",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "vav",
+        "domain": "vav.pms-integration"
+      },
+      "to": {
+        "system": "vav",
+        "domain": "vav.surface.post-api-admin-pms-webhook-replay-eventid"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.vav.surface.post-api-holds",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "vav",
+        "domain": "vav.booking"
+      },
+      "to": {
+        "system": "vav",
+        "domain": "vav.surface.post-api-holds"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.vav.surface.get-api-listings-slug-availability",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "vav",
+        "domain": "vav.marketplace"
+      },
+      "to": {
+        "system": "vav",
+        "domain": "vav.surface.get-api-listings-slug-availability"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.vav.surface.get-api-pms-health",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "vav",
+        "domain": "vav.operator"
+      },
+      "to": {
+        "system": "vav",
+        "domain": "vav.surface.get-api-pms-health"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.caney.surface.get-accounting-accountant-access-tokens",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "caney",
+        "domain": "caney.accounting"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.surface.get-accounting-accountant-access-tokens"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.caney.surface.get-availability",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "caney",
+        "domain": "caney.availability"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.surface.get-availability"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.caney.surface.get-bookings",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "caney",
+        "domain": "caney.booking-core"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.surface.get-bookings"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.caney.surface.post-internal-payment-links",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "caney",
+        "domain": "caney.payments"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.surface.post-internal-payment-links"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.caney.surface.post-internal-quotes-compute",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "caney",
+        "domain": "caney.pricing"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.surface.post-internal-quotes-compute"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-access-token-comments",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.partner-rooms"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-access-token-comments"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-agent-transcribe",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.capture"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-agent-transcribe"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-brain-feedback",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.intelligence"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-brain-feedback"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-capture-action-items",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.overlord"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-capture-action-items"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-capture-members",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.contacts"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-capture-members"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-capture-notes",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.research"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-capture-notes"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "ix1",
+      "kind": "interchange",
+      "subtype": null,
+      "from": {
+        "system": "vav",
+        "domain": "vav.pms-integration"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.booking-core"
+      },
+      "purpose": "PMS booking sync — CaneyCloud pushes ARI + reservation events to VAV's mirror",
+      "health": "ok",
+      "contract_status": "live",
+      "route": "POST /api/pms/webhook/caneyclouds (HMAC-SHA256)",
+      "contract_ref": "VZ_Tourism_Project/docs/pms-integration/05-api/openapi.yaml",
+      "contract_hash": null,
+      "breaks": [
+        "VAV availability mirror goes stale",
+        "overselling risk if ARI not synced",
+        "hold→reservation conversion fails"
+      ]
+    },
+    {
+      "id": "ix2",
+      "kind": "interchange",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.research"
+      },
+      "to": {
+        "system": "vav",
+        "domain": "vav.identity"
+      },
+      "purpose": "CRM reads VAV platform/user state via service-role for portfolio intelligence",
+      "health": "ok",
+      "contract_status": "live",
+      "route": "VAV_SUPABASE_* service-role read",
+      "contract_ref": "AGB-CRM/lib/platforms/status.server.ts",
+      "contract_hash": null,
+      "breaks": [
+        "CRM platform status widget blanks",
+        "research notes lose live VAV linkage"
+      ]
+    },
+    {
+      "id": "ix3",
+      "kind": "interchange",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.projects"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.properties"
+      },
+      "purpose": "Posada onboarding intake — CRM pushes structured posada profile to CaneyCloud",
+      "health": "warn",
+      "contract_status": "live",
+      "route": "posada onboarding intake (FF_ONBOARDING, dark behind flag)",
+      "contract_ref": "AGB-CRM/lib/onboarding/intake-contract.ts",
+      "contract_hash": null,
+      "breaks": [
+        "new posadas don't provision in PMS",
+        "operator live round-trip blocked until FF_ONBOARDING=1"
+      ]
+    },
+    {
+      "id": "ix4",
+      "kind": "interchange",
+      "subtype": null,
+      "from": {
+        "system": "caney",
+        "domain": "caney.messaging"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.intelligence"
+      },
+      "purpose": "CaneyCloud messaging agent calls CRM MCP tools for guest CRM context",
+      "health": "ok",
+      "contract_status": "live",
+      "route": "MCP client → CRM guest CRM tools",
+      "contract_ref": "tour-pms-main/.../mcp_registry.py",
+      "contract_hash": null,
+      "breaks": [
+        "agent loses guest-history context",
+        "duplicate contact creation"
+      ]
+    },
+    {
+      "id": "ix5",
+      "kind": "interchange",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.overlord"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.projects"
+      },
+      "purpose": "Overlord board sync — task/section state reconciles into portfolio projects",
+      "health": "ok",
+      "contract_status": "live",
+      "route": "POST /api/overlord/sync",
+      "contract_ref": "AGB-CRM/docs/VAV-CaneyCloud-CRM-sync-status.md",
+      "contract_hash": null,
+      "breaks": [
+        "portfolio status drifts from the real task board",
+        "initiative/milestone nodes go stale"
+      ]
+    },
+    {
+      "id": "contains.restaurants.restaurants.floor-ops",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "restaurants",
+        "domain": "restaurants"
+      },
+      "to": {
+        "system": "restaurants",
+        "domain": "restaurants.floor-ops"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.restaurants.restaurants.pos",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "restaurants",
+        "domain": "restaurants"
+      },
+      "to": {
+        "system": "restaurants",
+        "domain": "restaurants.pos"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.restaurants.restaurants.kds",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "restaurants",
+        "domain": "restaurants"
+      },
+      "to": {
+        "system": "restaurants",
+        "domain": "restaurants.kds"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.restaurants.restaurants.inventory",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "restaurants",
+        "domain": "restaurants"
+      },
+      "to": {
+        "system": "restaurants",
+        "domain": "restaurants.inventory"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.restaurants.restaurants.operator-console",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "restaurants",
+        "domain": "restaurants"
+      },
+      "to": {
+        "system": "restaurants",
+        "domain": "restaurants.operator-console"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.restaurants.restaurants.diner-web",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "restaurants",
+        "domain": "restaurants"
+      },
+      "to": {
+        "system": "restaurants",
+        "domain": "restaurants.diner-web"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.restaurants.restaurants.menu",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "restaurants",
+        "domain": "restaurants"
+      },
+      "to": {
+        "system": "restaurants",
+        "domain": "restaurants.menu"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.restaurants.restaurants.guest-crm",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "restaurants",
+        "domain": "restaurants"
+      },
+      "to": {
+        "system": "restaurants",
+        "domain": "restaurants.guest-crm"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.restaurants.restaurants.payments",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "restaurants",
+        "domain": "restaurants"
+      },
+      "to": {
+        "system": "restaurants",
+        "domain": "restaurants.payments"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.restaurants.restaurants.fiscal",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "restaurants",
+        "domain": "restaurants"
+      },
+      "to": {
+        "system": "restaurants",
+        "domain": "restaurants.fiscal"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.restaurants.restaurants.accounting",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "restaurants",
+        "domain": "restaurants"
+      },
+      "to": {
+        "system": "restaurants",
+        "domain": "restaurants.accounting"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.restaurants.restaurants.onboarding",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "restaurants",
+        "domain": "restaurants"
+      },
+      "to": {
+        "system": "restaurants",
+        "domain": "restaurants.onboarding"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.restaurants.restaurants.identity",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "restaurants",
+        "domain": "restaurants"
+      },
+      "to": {
+        "system": "restaurants",
+        "domain": "restaurants.identity"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "ix6",
+      "kind": "interchange",
+      "subtype": "host_mount",
+      "from": {
+        "system": "restaurants",
+        "domain": "restaurants.operator-console"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.auth"
+      },
+      "purpose": "Restaurant module mounted in CaneyCloud host — release-mode + frontend flags gate visibility; host forwards X-Restaurant-Id + JWT",
+      "health": "dark",
+      "contract_status": "live",
+      "route": "GET /api/v1/platform/release-mode (X-Restaurant-Id)",
+      "contract_ref": "caneycloud-restaurant/MODULE-INTEGRATION.md",
+      "contract_hash": null,
+      "breaks": [
+        "restaurant nav item disappears from CaneyCloud host",
+        "tenant scoping (X-Restaurant-Id) breaks → cross-tenant leak",
+        "go-live gate not honored"
+      ]
+    },
+    {
+      "id": "contains.academy.academy.curriculum",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "academy",
+        "domain": "academy"
+      },
+      "to": {
+        "system": "academy",
+        "domain": "academy.curriculum"
+      },
+      "contract_status": "planned"
+    },
+    {
+      "id": "contains.academy.academy.species-ref",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "academy",
+        "domain": "academy"
+      },
+      "to": {
+        "system": "academy",
+        "domain": "academy.species-ref"
+      },
+      "contract_status": "planned"
+    },
+    {
+      "id": "contains.academy.academy.hotspots",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "academy",
+        "domain": "academy"
+      },
+      "to": {
+        "system": "academy",
+        "domain": "academy.hotspots"
+      },
+      "contract_status": "planned"
+    },
+    {
+      "id": "contains.academy.academy.localization",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "academy",
+        "domain": "academy"
+      },
+      "to": {
+        "system": "academy",
+        "domain": "academy.localization"
+      },
+      "contract_status": "planned"
+    },
+    {
+      "id": "contains.academy.academy.assessment",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "academy",
+        "domain": "academy"
+      },
+      "to": {
+        "system": "academy",
+        "domain": "academy.assessment"
+      },
+      "contract_status": "planned"
+    },
+    {
+      "id": "contains.academy.academy.certification",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "academy",
+        "domain": "academy"
+      },
+      "to": {
+        "system": "academy",
+        "domain": "academy.certification"
+      },
+      "contract_status": "planned"
+    },
+    {
+      "id": "contains.academy.academy.enrollment",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "academy",
+        "domain": "academy"
+      },
+      "to": {
+        "system": "academy",
+        "domain": "academy.enrollment"
+      },
+      "contract_status": "planned"
+    },
+    {
+      "id": "ix7",
+      "kind": "interchange",
+      "subtype": null,
+      "from": {
+        "system": "vav",
+        "domain": "vav.specialized-content"
+      },
+      "to": {
+        "system": "restaurants",
+        "domain": "restaurants.menu"
+      },
+      "purpose": "Dining experiences from restaurants surface into the VAV marketplace (planned)",
+      "health": "dark",
+      "contract_status": "planned",
+      "contract_ref": "vz-avitourism-curriculum/modules/lms-integration-plan.md",
+      "contract_hash": null,
+      "breaks": [
+        "no restaurant dining inventory in VAV marketplace"
+      ]
+    },
+    {
+      "id": "ix8",
+      "kind": "interchange",
+      "subtype": null,
+      "from": {
+        "system": "academy",
+        "domain": "academy.certification"
+      },
+      "to": {
+        "system": "vav",
+        "domain": "vav.identity"
+      },
+      "purpose": "Certified bird guides flow into VAV as verified providers (planned)",
+      "health": "dark",
+      "contract_status": "planned",
+      "contract_ref": "vz-avitourism-curriculum/modules/lms-integration-plan.md",
+      "contract_hash": null,
+      "breaks": [
+        "guide certification not reflected in VAV provider profiles"
+      ]
+    },
+    {
+      "id": "ix9",
+      "kind": "interchange",
+      "subtype": null,
+      "from": {
+        "system": "academy",
+        "domain": "academy.enrollment"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.contacts"
+      },
+      "purpose": "Academy enrollment intake feeds CRM contacts/network (planned)",
+      "health": "dark",
+      "contract_status": "planned",
+      "contract_ref": "vz-avitourism-curriculum/modules/lms-integration-plan.md",
+      "contract_hash": null,
+      "breaks": [
+        "learner enrollments not captured as CRM contacts"
+      ]
+    }
+  ],
+  "functions": [
+    {
+      "id": "growth",
+      "name": "Marketing & Growth",
+      "pct": 86,
+      "members": [
+        "vav.marketplace",
+        "vav.growth-affiliates",
+        "vav.specialized-content",
+        "crm.partner-rooms",
+        "crm.pitch-feedback",
+        "restaurants.menu",
+        "restaurants.onboarding"
+      ]
+    },
+    {
+      "id": "sales",
+      "name": "Sales & Revenue",
+      "pct": 86,
+      "members": [
+        "vav.booking",
+        "vav.pms-integration",
+        "vav.ruta-rides",
+        "caney.booking-core",
+        "caney.availability",
+        "caney.pricing",
+        "restaurants.pos"
+      ]
+    },
+    {
+      "id": "ops",
+      "name": "Operations",
+      "pct": 80,
+      "members": [
+        "vav.operator",
+        "caney.properties",
+        "caney.channels",
+        "crm.projects",
+        "crm.overlord",
+        "crm.intelligence",
+        "restaurants.floor-ops",
+        "restaurants.kds",
+        "restaurants.inventory",
+        "restaurants.operator-console"
+      ]
+    },
+    {
+      "id": "cx",
+      "name": "Customer Experience",
+      "pct": 89,
+      "members": [
+        "vav.messaging-crm",
+        "caney.messaging",
+        "crm.contacts",
+        "crm.meetings",
+        "crm.email",
+        "crm.capture",
+        "crm.reminders",
+        "restaurants.diner-web",
+        "restaurants.guest-crm"
+      ]
+    },
+    {
+      "id": "admin",
+      "name": "Business Admin & Finance",
+      "pct": 71,
+      "members": [
+        "vav.payments",
+        "caney.payments",
+        "caney.accounting",
+        "crm.treasury",
+        "restaurants.payments",
+        "restaurants.fiscal",
+        "restaurants.accounting"
+      ]
+    },
+    {
+      "id": "platform",
+      "name": "Platform & Data",
+      "pct": 88,
+      "members": [
+        "vav.identity",
+        "caney.auth",
+        "crm.research",
+        "restaurants.identity"
+      ]
+    },
+    {
+      "id": "education",
+      "name": "Education & Training",
+      "pct": 0,
+      "members": [
+        "academy.curriculum",
+        "academy.species-ref",
+        "academy.hotspots",
+        "academy.localization",
+        "academy.assessment",
+        "academy.certification",
+        "academy.enrollment"
+      ]
+    }
+  ],
+  "externals": [
+    "Stripe",
+    "Anthropic",
+    "WhatsApp",
+    "Mapbox",
+    "SiteMinder",
+    "Inngest",
+    "Resend",
+    "PostHog",
+    "Sentry"
+  ]
+}

@@ -1,0 +1,520 @@
+/* ============================================================================
+ * THE BRAIN — detail-panel styles, ported VERBATIM from the finalized mockup
+ * (docs/requirements/brain-phase1/02-design-tokens.md §5 "Detail panel").
+ *
+ * Scoped under `.brain-root` so every rule resolves against the tokens declared
+ * in brain.css (--ink, --panel-s, --line-2, --done/--doing/--needed, --ok/
+ * --warn/--dark, --mono, --disp, --shadow-*, --gleam, …). This file owns ONLY
+ * the right-side detail panel chrome; it adds no new tokens.
+ *
+ * Anti-slop (NFR-A11Y-6): no neon glow — elevation is shadow + surface
+ * lightness only. Status is never color-alone: every badge/row carries a glyph
+ * + text label as well (FR-GRAPH-4 / FR-XSYS-8 / NFR-A11Y-1).
+ * ========================================================================== */
+
+.brain-root .brain-detail {
+  width: 326px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--line);
+  overflow: hidden;
+  font-family: var(--body);
+  color: var(--ink);
+}
+
+/* Scroll body. */
+.brain-root .brain-detail .d-scroll {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Head ─────────────────────────────────────────────────────────────────── */
+.brain-root .brain-detail .d-head {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+  position: relative;
+}
+.brain-root .brain-detail .d-kind {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.brain-root .brain-detail .d-title {
+  font-family: var(--disp);
+  font-weight: 700;
+  font-size: 17px;
+  letter-spacing: -0.011em;
+  margin: 4px 0 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  line-height: 1.2;
+}
+.brain-root .brain-detail .d-title .tdot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--accent, var(--ink-dim));
+  flex: none;
+}
+.brain-root .brain-detail .d-route {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--caney);
+  margin-top: 6px;
+  word-break: break-all;
+  line-height: 1.45;
+}
+
+/* Close button (top-right of head). */
+.brain-root .brain-detail .d-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line-2);
+  box-shadow: var(--gleam);
+  color: var(--ink-dim);
+  font-family: var(--mono);
+  font-size: 13px;
+  cursor: pointer;
+  transition: color 0.18s var(--ease), border-color 0.18s var(--ease),
+    background 0.18s var(--ease);
+}
+.brain-root .brain-detail .d-close:hover {
+  color: var(--ink);
+  border-color: var(--line-2);
+  background: var(--panel-s);
+}
+
+/* Back/up affordance row (mono, faint → ink on hover). */
+.brain-root .brain-detail .d-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  margin-bottom: 9px;
+  transition: color 0.18s var(--ease);
+}
+.brain-root .brain-detail .d-back:hover {
+  color: var(--ink-dim);
+}
+
+/* ── Badges ───────────────────────────────────────────────────────────────── */
+.brain-root .brain-detail .d-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 11px;
+}
+.brain-root .brain-detail .badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 4px 9px;
+  border-radius: 7px;
+  border: 1px solid var(--line-2);
+  box-shadow: var(--gleam);
+  color: var(--ink-dim);
+}
+.brain-root .brain-detail .badge .gi {
+  font-weight: 600;
+}
+.brain-root .brain-detail .badge.ok {
+  color: #bdf0d6;
+  border-color: rgba(88, 206, 151, 0.45);
+}
+.brain-root .brain-detail .badge.ok .gi {
+  color: var(--ok);
+}
+.brain-root .brain-detail .badge.warn {
+  color: #f0e3bd;
+  border-color: rgba(227, 182, 94, 0.45);
+}
+.brain-root .brain-detail .badge.warn .gi {
+  color: var(--warn);
+}
+.brain-root .brain-detail .badge.dark {
+  color: #c2cad8;
+  border-color: var(--line-2);
+}
+.brain-root .brain-detail .badge.dark .gi {
+  color: var(--dark);
+}
+/* Node-state badge tints (double-encode: glyph + label + colored glyph). */
+.brain-root .brain-detail .badge.done .gi {
+  color: var(--done);
+}
+.brain-root .brain-detail .badge.doing .gi {
+  color: var(--doing);
+}
+.brain-root .brain-detail .badge.needed {
+  border-style: dashed;
+}
+.brain-root .brain-detail .badge.needed .gi {
+  color: var(--needed);
+}
+
+/* ── Section ──────────────────────────────────────────────────────────────── */
+.brain-root .brain-detail .d-sec {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.brain-root .brain-detail .d-sec h5 {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 10px;
+  font-weight: 500;
+}
+.brain-root .brain-detail .d-sec p {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ink-dim);
+  margin: 0;
+}
+.brain-root .brain-detail .d-sec p + p {
+  margin-top: 8px;
+}
+
+/* Key-value rows (mono, tabular). */
+.brain-root .brain-detail .kv {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-dim);
+  padding: 3px 0;
+}
+.brain-root .brain-detail .kv b {
+  color: var(--ink);
+  font-weight: 500;
+  text-align: right;
+  word-break: break-word;
+}
+
+/* Mini list (clickable rows: status glyph + label + right count). */
+.brain-root .brain-detail .mini {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.brain-root .brain-detail .mini .m {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: none;
+  border: 1px solid transparent;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  color: var(--ink-dim);
+  font-family: var(--body);
+  font-size: 12px;
+  transition: background 0.16s var(--ease), border-color 0.16s var(--ease);
+}
+.brain-root .brain-detail .mini .m:hover {
+  background: var(--panel-s);
+  border-color: var(--line);
+}
+.brain-root .brain-detail .mini .m .si {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  width: 13px;
+  flex: none;
+  text-align: center;
+}
+.brain-root .brain-detail .mini .m[data-state="done"] .si {
+  color: var(--done);
+}
+.brain-root .brain-detail .mini .m[data-state="doing"] .si {
+  color: var(--doing);
+}
+.brain-root .brain-detail .mini .m[data-state="needed"] .si {
+  color: var(--needed);
+}
+.brain-root .brain-detail .mini .m .ml {
+  flex: 1;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.brain-root .brain-detail .mini .m .ct {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  flex: none;
+}
+
+/* Cross-system link rows. */
+.brain-root .brain-detail .xrow {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 10px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.02);
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  margin-bottom: 6px;
+  transition: border-color 0.18s var(--ease), background 0.18s var(--ease);
+}
+.brain-root .brain-detail .xrow:last-child {
+  margin-bottom: 0;
+}
+.brain-root .brain-detail .xrow:hover {
+  border-color: var(--warn);
+}
+.brain-root .brain-detail .xrow .g {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  width: 16px;
+  flex: none;
+  text-align: center;
+}
+.brain-root .brain-detail .xrow[data-health="ok"] .g {
+  color: var(--ok);
+}
+.brain-root .brain-detail .xrow[data-health="warn"] .g {
+  color: var(--warn);
+}
+.brain-root .brain-detail .xrow[data-health="dark"] .g {
+  color: var(--dark);
+}
+.brain-root .brain-detail .xrow .xbody {
+  flex: 1;
+  min-width: 0;
+}
+.brain-root .brain-detail .xrow .to {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink);
+  display: block;
+}
+.brain-root .brain-detail .xrow .pp {
+  font-size: 11px;
+  color: var(--ink-dim);
+  line-height: 1.4;
+  margin-top: 2px;
+  display: block;
+}
+
+/* Code block (contract / endpoint snippet). */
+.brain-root .brain-detail .code {
+  background: #070b12;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: #b2bdd1;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  padding: 11px 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+  margin: 0;
+}
+.brain-root .brain-detail .code .k {
+  color: var(--caney);
+}
+.brain-root .brain-detail .code .s {
+  color: var(--done);
+}
+.brain-root .brain-detail .code .c {
+  color: var(--ink-faint);
+}
+
+/* "What breaks" warning callout (FR-XSYS-7). */
+.brain-root .brain-detail .breaks {
+  background: rgba(227, 182, 94, 0.08);
+  border: 1px solid rgba(227, 182, 94, 0.28);
+  border-radius: 10px;
+  padding: 11px 12px;
+}
+.brain-root .brain-detail .breaks .bt {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--warn);
+  margin: 0 0 8px;
+}
+.brain-root .brain-detail .breaks ul {
+  margin: 0;
+  padding-left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.brain-root .brain-detail .breaks li {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-dim);
+}
+.brain-root .brain-detail .breaks li code {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--vav);
+}
+
+/* Function-readiness rows (portfolio: the 7-function bars). */
+.brain-root .brain-detail .fnrow {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 5px 0;
+}
+.brain-root .brain-detail .fnrow .fdot {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  flex: none;
+  background: var(--fc, var(--ink-dim));
+}
+.brain-root .brain-detail .fnrow .fname {
+  flex: 1;
+  font-size: 12px;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.brain-root .brain-detail .fnrow .fbar {
+  width: 64px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--line-2);
+  overflow: hidden;
+  flex: none;
+}
+.brain-root .brain-detail .fnrow .fbar > span {
+  display: block;
+  height: 100%;
+  background: var(--fc, var(--ink-dim));
+}
+.brain-root .brain-detail .fnrow .fpct {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-dim);
+  width: 30px;
+  text-align: right;
+  flex: none;
+}
+
+/* Aggregate / per-system readiness chips. */
+.brain-root .brain-detail .sysrow {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 5px 0;
+}
+.brain-root .brain-detail .sysrow .swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex: none;
+  background: var(--accent, var(--ink-dim));
+}
+
+/* ── Actions (FR-DETAIL-7) — stacked buttons at the bottom ────────────────── */
+.brain-root .brain-detail .d-actions {
+  margin-top: auto;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.brain-root .brain-detail .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 9px 12px;
+  border-radius: 9px;
+  border: 1px solid var(--line-2);
+  background: rgba(255, 255, 255, 0.035);
+  box-shadow: var(--gleam);
+  color: var(--ink);
+  cursor: pointer;
+  text-decoration: none;
+  transition: transform 0.2s var(--ease-back), border-color 0.18s var(--ease),
+    background 0.18s var(--ease);
+}
+.brain-root .brain-detail .btn:hover {
+  transform: translateY(-1px);
+  border-color: var(--line-2);
+  background: var(--panel-s);
+}
+.brain-root .brain-detail .btn:active {
+  transform: translateY(0);
+}
+.brain-root .brain-detail .hint {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+  text-align: center;
+  margin: 2px 0 0;
+}
+
+/* Empty state (no selection) — never a blank panel (NFR-OBS-4). */
+.brain-root .brain-detail .d-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 32px 20px;
+  text-align: center;
+  color: var(--ink-faint);
+}
+.brain-root .brain-detail .d-empty .ei {
+  font-size: 22px;
+  opacity: 0.6;
+}
+.brain-root .brain-detail .d-empty p {
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0;
+}
