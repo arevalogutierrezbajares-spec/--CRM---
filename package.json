@@ -17,6 +17,7 @@
     "obsidian:sync": "tsx scripts/obsidian-sync.ts",
     "greetings:gen": "tsx scripts/gen-greetings.ts",
     "brain:build": "node scripts/brain/build-graph.mjs",
+    "brain:check": "node scripts/brain/check-staleness.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:db": "bash scripts/test-db.sh",
