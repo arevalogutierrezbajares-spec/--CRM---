@@ -2,7 +2,7 @@
 
 **Goal.** Emit real L3 `reads_writes` (route→table) and `calls` (service→service) edges so that when you drill to L2 (a domain), the canvas shows the true micro-level wiring — e.g. `POST /api/holds` → `pms_holds` / `quotes` / `guest_bookings` — instead of only the structural domain→surface spokes. This is the last item that moves **correctness** and **ux_flow** toward 5/5 (critique residual; the rubric's "real, not drawn" anti-goal).
 
-**Status:** render path is READY (this is prep). Data extraction is the remaining work.
+**Status:** render path READY + **Phase 1 (CRM + VAV) SHIPPED** — `surface-edges.mjs` emits 4 real `reads_writes` edges into the artifact, incl. the canonical `POST /api/holds → pms_holds / quotes / guest_bookings` (renders as dotted data-flow threads at `vav.booking` L2). Remaining: Phase 3 = Caney (Python/SQLAlchemy); optional read/write subtype + `calls` edges; cross-domain "data coupling" view.
 
 ## What's already done (prep, shipped)
 
