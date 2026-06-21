@@ -1,0 +1,217 @@
+/* ============================================================================
+ * THE BRAIN — node chip / cluster / status styling.
+ *
+ * Ported VERBATIM from the finalized mockup (docs/requirements/brain-phase1/
+ * 02-design-tokens.md §4 NODE CARD ANATOMY). Scoped under `.brain-root`. Lives
+ * with the node components (Track B NODES) because the spine's brain.css ports
+ * only tokens + orb + glass + motion; the chip/state/cluster selectors that the
+ * lens CSS keys off (data-state / data-xlink / data-fn / data-live) ship here.
+ *
+ * Anti-slop (NFR-A11Y-6): elevation via --shadow-* + --gleam + surface lightness
+ * only — NO neon glow. Status is DOUBLE-ENCODED: color + glyph + solid/dashed
+ * left-border + opacity (never color alone, NFR-A11Y-1).
+ * ========================================================================== */
+
+/* ── Domain chip (.nd) ──────────────────────────────────────────────────── */
+.brain-root .nd .chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--panel-s);
+  border: 1px solid var(--line-2);
+  box-shadow: var(--shadow-low), var(--gleam);
+  transition: transform 0.28s var(--ease-back), border-color 0.2s var(--ease),
+    box-shadow 0.2s var(--ease);
+  position: relative;
+}
+.brain-root .nd:hover .chip,
+.brain-root .nd:focus-visible .chip {
+  transform: translateY(-3px);
+  border-color: var(--accent);
+  box-shadow: var(--shadow-med), var(--gleam);
+}
+
+/* Status icon glyph — fixed width so chips align regardless of glyph. */
+.brain-root .nd .chip .si {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  width: 13px;
+  text-align: center;
+  flex: none;
+}
+/* Chip title. */
+.brain-root .nd .chip .t {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink);
+  white-space: nowrap;
+}
+/* Secondary readout under the chip (surface count / state label). */
+.brain-root .nd .more {
+  font-family: var(--mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+  padding-left: 2px;
+}
+
+/* ── Sizes (data-size) — magnitude encoding: lg reads visually larger (#7) ── */
+.brain-root .nd[data-size="lg"] .chip {
+  padding: 11px 17px;
+  min-width: 130px;
+}
+.brain-root .nd[data-size="lg"] .chip .t {
+  font-size: 13px;
+}
+.brain-root .nd[data-size="lg"] .chip .si {
+  font-size: 13px;
+}
+.brain-root .nd[data-size="sm"] .chip {
+  padding: 5px 9px;
+  min-width: 72px;
+}
+.brain-root .nd[data-size="sm"] .chip .t {
+  font-size: 11px;
+}
+
+/* ── Status DOUBLE-ENCODING (color + glyph + border treatment + opacity) ──── */
+.brain-root .nd[data-state="done"] .si {
+  color: var(--done);
+}
+.brain-root .nd[data-state="done"] .chip {
+  border-left: 3px solid var(--done);
+}
+.brain-root .nd[data-state="doing"] .si {
+  color: var(--doing);
+}
+.brain-root .nd[data-state="doing"] .chip {
+  border-left: 3px solid var(--doing);
+}
+.brain-root .nd[data-state="needed"] .si {
+  color: var(--needed);
+}
+.brain-root .nd[data-state="needed"] .chip {
+  border-left: 3px dashed var(--needed);
+  opacity: 0.72;
+}
+
+/* ── Function-overlay recolor: when data-fn is set the lens passes --accent =
+ * the function color, so the left-border + glyph follow the function hue. ──── */
+.brain-root .nd[data-fn] .chip {
+  border-left-color: var(--accent);
+}
+.brain-root .nd[data-fn] .si {
+  color: var(--accent);
+}
+.brain-root .nd[data-fn] .more {
+  color: var(--accent);
+}
+
+/* ── Cross-system link badge (⇄), pinned top-right (data-xlink="1") ───────── */
+.brain-root .nd[data-xlink="1"] .chip::after {
+  content: "⇄";
+  position: absolute;
+  right: -7px;
+  top: -7px;
+  font-size: 9px;
+  color: var(--warn);
+  background: var(--bg);
+  border: 1px solid var(--line-2);
+  border-radius: 50%;
+  width: 15px;
+  height: 15px;
+  display: grid;
+  place-items: center;
+}
+
+/* ── Selected state (.sel) — accent border + inset ring, NO glow ──────────── */
+.brain-root .nd.sel .chip,
+.brain-root .hub.sel .orb {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent), var(--shadow-med);
+}
+
+/* ── Cluster node (collapsed roadmap) — hatched + dashed (FR-NAV-7) ───────── */
+.brain-root .nd.cluster .chip {
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(124, 137, 163, 0.1) 0 7px,
+    transparent 7px 14px
+  );
+  border: 1px dashed var(--line-2);
+}
+.brain-root .nd.cluster .chip .si {
+  color: var(--needed);
+}
+
+/* ── Surface chip (L3): method/path + file/lang badge ─────────────────────── */
+.brain-root .surface .chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 11px;
+  border-radius: 9px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-low), var(--gleam);
+  transition: transform 0.28s var(--ease-back), border-color 0.2s var(--ease),
+    box-shadow 0.2s var(--ease);
+}
+.brain-root .surface:hover .chip,
+.brain-root .surface:focus-visible .chip {
+  transform: translateY(-2px);
+  border-color: var(--line-2);
+  box-shadow: var(--shadow-med), var(--gleam);
+}
+.brain-root .surface .method {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 2px 5px;
+  border-radius: 5px;
+  border: 1px solid var(--line-2);
+  color: var(--caney);
+  flex: none;
+}
+.brain-root .surface .path {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.brain-root .surface .lang {
+  font-family: var(--mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-faint);
+  padding: 1px 5px;
+  border-radius: 5px;
+  border: 1px solid var(--line);
+  flex: none;
+}
+
+/* ── Reduced motion: disable hover lift transforms on chips (#8) ─────────────
+ * The spawn/zoom keyframes are already gated in brain.css — this gates the
+ * per-chip translateY hover effects so they become instant cuts. */
+@media (prefers-reduced-motion: reduce) {
+  .brain-root .nd .chip,
+  .brain-root .nd:hover .chip,
+  .brain-root .nd:focus-visible .chip,
+  .brain-root .surface .chip,
+  .brain-root .surface:hover .chip,
+  .brain-root .surface:focus-visible .chip {
+    transform: none !important;
+    transition: border-color 0.2s var(--ease), box-shadow 0.2s var(--ease);
+  }
+}
+
+/* ── Liveness lens (v2): dim dead surfaces (data-live="dead") ─────────────── */
+.brain-root .react-flow[data-lens="liveness"] [data-live="dead"] {
+  opacity: 0.4;
+}

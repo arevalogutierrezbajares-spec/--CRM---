@@ -1,0 +1,107 @@
+/* ============================================================================
+ * THE BRAIN — interchange station pin styling (L0).
+ *
+ * Ported VERBATIM from the finalized mockup (docs/requirements/brain-phase1/
+ * 02-design-tokens.md §7). Scoped under `.brain-root`. Health is DOUBLE-ENCODED:
+ * ok = solid green pin w/ ✓ · warn = solid amber pin w/ ! · dark = DASHED gray
+ * pin w/ · (never color alone, NFR-A11Y-1). No neon glow (NFR-A11Y-6) —
+ * elevation via --shadow-* + --gleam only.
+ * ========================================================================== */
+
+.brain-root .station {
+  display: grid;
+  place-items: center;
+}
+
+/* The square station pin (default = warn until health overrides). */
+.brain-root .station .pin {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  background: var(--bg-2);
+  border: 2px solid var(--warn);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--warn);
+  cursor: pointer;
+  box-shadow: var(--shadow-med), var(--gleam);
+  transition: transform 0.26s var(--ease-back);
+}
+.brain-root .station:hover .pin,
+.brain-root .station.sel .pin {
+  transform: scale(1.12);
+}
+
+/* Health double-encoding (color + glyph supplied by JS; border treatment here). */
+.brain-root .station[data-health="ok"] .pin {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+.brain-root .station[data-health="warn"] .pin {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+.brain-root .station[data-health="dark"] .pin {
+  border-color: var(--dark);
+  color: var(--dark);
+  border-style: dashed;
+}
+
+/* Purpose tooltip — hidden until hover / selection. */
+.brain-root .station .lbl {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translate(-50%, 6px);
+  margin-top: 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 132px;
+  max-width: 220px;
+  padding: 7px 9px;
+  border: 1px solid var(--line-2);
+  border-radius: 7px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--ink-dim);
+  box-shadow: var(--shadow-low), var(--gleam);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s var(--ease);
+  z-index: 5;
+}
+.brain-root .station:hover .lbl,
+.brain-root .station.sel .lbl,
+.brain-root .station .pin:focus-visible ~ .lbl {
+  opacity: 1;
+}
+.brain-root .station .lbl b {
+  color: var(--ink);
+  font-weight: 600;
+}
+.brain-root .station .lbl .hp {
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--warn);
+}
+.brain-root .station[data-health="ok"] .lbl .hp {
+  color: var(--ok);
+}
+.brain-root .station[data-health="dark"] .lbl .hp {
+  color: var(--dark);
+}
+.brain-root .station .lbl .pp {
+  color: var(--ink-faint);
+}
+
+/* Reduced motion: kill the pin pop. */
+@media (prefers-reduced-motion: reduce) {
+  .brain-root .station .pin {
+    transition: none;
+  }
+}

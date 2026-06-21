@@ -73,6 +73,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/priorities", label: "Priorities", icon: Target },
       { href: "/review", label: "Weekly Review", icon: CalendarCheck },
       { href: "/roadmap", label: "Roadmap", icon: Map },
+      { href: "/brain", label: "Brain", icon: Brain },
       { href: "/sprint", label: "Sprint", icon: Flag },
       // /initiatives dropped — it renders the same Work module and is reachable
       // via the Work tab strip; keeping it here duplicated the nav.

@@ -1,0 +1,328 @@
+/* ============================================================================
+ * THE BRAIN — design tokens, ported VERBATIM from the finalized mockup `:root`
+ * (docs/requirements/brain-phase1/02-design-tokens.md), scoped under
+ * `.brain-root` so the canvas keeps its bespoke dark palette while the rest of
+ * AGB-CRM uses its own tokens.
+ *
+ * Typography harmonization: mockup `--body`/`--disp`/`--mono` map onto the
+ * fonts AGB-CRM already loads — Inter (`--font-sans`) + JetBrains Mono
+ * (`--font-mono`). We deliberately do NOT load Space Grotesk; `--disp` falls
+ * back to `--font-sans` 700.
+ *
+ * Anti-slop (NFR-A11Y-6): elevation is via the shadow stacks + surface
+ * lightness only — NO neon glow / halation. The only "halo" is reserved for a
+ * genuine live alert (not present in v0).
+ * ========================================================================== */
+
+.brain-root {
+  /* ── Colors (verbatim from mockup :root) ──────────────────────────────── */
+  --bg: #08090c;
+  --bg-2: #0d0f15;
+  --panel: #0f1217;
+  --panel-2: #14171e;
+  --panel-s: #171b24;
+  --line: rgba(255, 255, 255, 0.07);
+  --line-2: rgba(255, 255, 255, 0.12);
+  --ink: #f4f6fa;
+  --ink-dim: #9aa4ba;
+  --ink-faint: #7e89a1;
+
+  /* Per-system accents */
+  --vav: #e3b061;
+  --caney: #5bbce6;
+  --crm: #b189ee;
+  --caneyrest: #f0915e;
+  --academy: #4fc3a8;
+  --ext: #7c89a3;
+
+  /* Status (double-encoded — never color alone) */
+  --done: #58ce97;
+  --doing: #e3b65e;
+  --needed: #6c7892;
+
+  /* Interchange health */
+  --ok: #58ce97;
+  --warn: #e3b65e;
+  --dark: #6c7892;
+
+  /* ── Shadow stacks + gleam + easings (verbatim) ───────────────────────── */
+  --shadow-color: 222deg 47% 3%;
+  --shadow-low: 0 1px 1px hsl(var(--shadow-color) / 0.5),
+    0 1px 2px -1px hsl(var(--shadow-color) / 0.5);
+  --shadow-med: 0 1px 2px hsl(var(--shadow-color) / 0.4),
+    0 3px 6px -2px hsl(var(--shadow-color) / 0.45),
+    0 8px 16px -5px hsl(var(--shadow-color) / 0.5);
+  --shadow-high: 0 2px 4px hsl(var(--shadow-color) / 0.4),
+    0 10px 20px -5px hsl(var(--shadow-color) / 0.55),
+    0 28px 46px -10px hsl(var(--shadow-color) / 0.62);
+  --gleam: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-back: cubic-bezier(0.34, 1.42, 0.64, 1);
+
+  /* ── Typography (mapped to AGB-CRM's loaded fonts) ────────────────────── */
+  --mono: var(--font-mono), "JetBrains Mono", ui-monospace, monospace;
+  --disp: var(--font-sans), Inter, system-ui, sans-serif;
+  --body: var(--font-sans), Inter, system-ui, sans-serif;
+
+  position: relative;
+  height: 100%;
+  width: 100%;
+  color: var(--ink);
+  font-family: var(--body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-optical-sizing: auto;
+  text-rendering: optimizeLegibility;
+  letter-spacing: -0.006em;
+
+  /* Body background — two radial accent washes over base (verbatim recipe). */
+  background: radial-gradient(
+      1200px 820px at 80% -140px,
+      rgba(91, 188, 230, 0.05),
+      transparent 60%
+    ),
+    radial-gradient(
+      960px 720px at 6% 120%,
+      rgba(177, 137, 238, 0.05),
+      transparent 55%
+    ),
+    var(--bg);
+}
+
+/* ── Function-overlay accent vars (mirror lib/brain/functions.ts FN_COLOR) ── */
+.brain-root {
+  --fn-growth: #e8896b;
+  --fn-sales: #5ed6a6;
+  --fn-ops: #7e8cf0;
+  --fn-cx: #e87fb8;
+  --fn-admin: #4fc9c0;
+  --fn-platform: #94a3c7;
+  --fn-education: #e8c45e;
+}
+
+/* ── Dot-grid canvas (signature recipe; React Flow <Background> overlays) ──
+ * 42px pitch, near-invisible white dots. The actual dots are rendered by
+ * React Flow's <Background variant="dots" gap={42}/>; this rule keeps the base
+ * surface + grab cursor consistent if a plain canvas is used. */
+.brain-root .brain-canvas-surface {
+  position: relative;
+  overflow: hidden;
+  cursor: grab;
+  background-image: radial-gradient(
+    circle at 1px 1px,
+    rgba(255, 255, 255, 0.032) 1px,
+    transparent 0
+  );
+  background-size: 42px 42px;
+}
+.brain-root .brain-canvas-surface:active {
+  cursor: grabbing;
+}
+
+/* ── Hub orb — the signature gleam sphere + conic progress ring (verbatim) ──
+ * --p (0–100) = percent built; --accent = system/function color. The mask
+ * carves a transparent inner disc so only the donut ring shows. */
+.brain-root .hub .orb {
+  width: 104px;
+  height: 104px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  position: relative;
+  background: radial-gradient(
+    circle at 38% 30%,
+    rgba(255, 255, 255, 0.07),
+    var(--bg-2) 64%
+  );
+  border: 1px solid var(--line-2);
+  box-shadow: var(--shadow-med), var(--gleam);
+}
+.brain-root .hub .orb::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: 50%;
+  background: conic-gradient(
+    var(--accent) calc(var(--p) * 1%),
+    rgba(255, 255, 255, 0.1) 0
+  );
+  -webkit-mask: radial-gradient(circle, transparent 48px, #000 49px);
+  mask: radial-gradient(circle, transparent 48px, #000 49px);
+}
+.brain-root .hub.center .orb {
+  width: 120px;
+  height: 120px;
+}
+.brain-root .hub.center .orb::before {
+  -webkit-mask: radial-gradient(circle, transparent 56px, #000 57px);
+  mask: radial-gradient(circle, transparent 56px, #000 57px);
+}
+
+/* ── Glass / backdrop-filter recipes (verbatim per-surface values) ────────
+ * Every raised glass surface also carries --gleam (1px inset top highlight). */
+.brain-root .glass-top {
+  background: rgba(13, 15, 21, 0.55);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+  box-shadow: var(--gleam);
+}
+.brain-root .glass-altitude {
+  background: rgba(13, 15, 21, 0.55);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  backdrop-filter: blur(16px) saturate(160%);
+  box-shadow: var(--shadow-low), var(--gleam);
+}
+.brain-root .glass-back {
+  background: rgba(13, 15, 21, 0.55);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+.brain-root .glass-thread {
+  background: rgba(13, 15, 21, 0.85);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+.brain-root .glass-minimap {
+  background: rgba(13, 15, 21, 0.6);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  backdrop-filter: blur(16px) saturate(160%);
+  box-shadow: var(--shadow-med), var(--gleam);
+}
+.brain-root .glass-detail {
+  background: rgba(15, 18, 23, 0.72);
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
+  backdrop-filter: blur(22px) saturate(180%);
+  box-shadow: var(--gleam);
+}
+.brain-root .glass-cmdk-backdrop {
+  background: rgba(4, 5, 8, 0.5);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+.brain-root .glass-cmdk {
+  background: rgba(15, 18, 23, 0.9);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  backdrop-filter: blur(28px) saturate(180%);
+  box-shadow: var(--shadow-high), var(--gleam);
+}
+.brain-root .glass-search-results {
+  background: rgba(13, 15, 21, 0.92);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+  box-shadow: var(--shadow-high);
+}
+
+/* ── Focus ring (NFR-A11Y-2, verbatim) ───────────────────────────────────
+ * Two-stop ring: a --bg gap then a --caney ring — survives any background. */
+.brain-root :focus-visible {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--caney);
+  border-radius: 9px;
+}
+
+/* ── Motion (keyframes spawn/zoom; NO neon glow) ──────────────────────────
+ * spawn = node entrance; zoom-in/out = drill choreography (FR-NAV-6).
+ * `beat` (liveness pulse) is v2 and intentionally omitted here. */
+@keyframes brain-spawn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+@keyframes brain-zoom-in {
+  from {
+    opacity: 0;
+    transform: scale(1.25);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes brain-zoom-out {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.brain-root .brain-spawn {
+  animation: brain-spawn 0.44s var(--ease) both;
+}
+.brain-root .brain-zoom-in {
+  animation: brain-zoom-in 0.22s var(--ease) both;
+}
+.brain-root .brain-zoom-out {
+  animation: brain-zoom-out 0.22s var(--ease) both;
+}
+
+/* ── Reduced motion (NFR-A11Y-5): disable spawn/zoom → instant cuts ──────── */
+@media (prefers-reduced-motion: reduce) {
+  .brain-root .brain-spawn,
+  .brain-root .brain-zoom-in,
+  .brain-root .brain-zoom-out {
+    animation: none;
+  }
+  .brain-root * {
+    scroll-behavior: auto;
+  }
+}
+
+/* ============================================================================
+ * React Flow dark var overrides — keep the canvas chrome consistent with the
+ * Brain palette regardless of AGB-CRM theme. React Flow runs colorMode="dark".
+ * ========================================================================== */
+.brain-root .react-flow {
+  --xy-background-color-default: var(--bg);
+  --xy-background-pattern-dots-color-default: rgba(255, 255, 255, 0.032);
+  --xy-node-background-color-default: transparent;
+  --xy-node-border-default: none;
+  --xy-node-color-default: var(--ink);
+  --xy-node-boxshadow-hover-default: none;
+  --xy-node-boxshadow-selected-default: none;
+  --xy-edge-stroke-default: var(--ink-faint);
+  --xy-edge-stroke-selected-default: var(--caney);
+  --xy-connectionline-stroke-default: var(--caney);
+  --xy-handle-background-color-default: var(--line-2);
+  --xy-handle-border-color-default: transparent;
+  --xy-minimap-background-color-default: rgba(13, 15, 21, 0.6);
+  --xy-minimap-mask-background-color-default: rgba(8, 9, 12, 0.6);
+  --xy-controls-button-background-color-default: var(--panel-2);
+  --xy-controls-button-background-color-hover-default: var(--panel-s);
+  --xy-controls-button-color-default: var(--ink-dim);
+  --xy-controls-button-color-hover-default: var(--ink);
+  --xy-controls-button-border-color-default: var(--line);
+  --xy-attribution-background-color-default: transparent;
+}
+
+/* Our custom nodes are bare wrappers — strip React Flow's default node chrome. */
+.brain-root .react-flow__node {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  width: auto;
+  font-family: var(--body);
+}
+.brain-root .react-flow__node.selected {
+  box-shadow: none;
+}
+
+/* Hide connection handles — Brain edges are derived, not user-drawn. */
+.brain-root .react-flow__handle {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.brain-root .react-flow__attribution {
+  display: none;
+}
