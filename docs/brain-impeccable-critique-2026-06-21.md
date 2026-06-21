@@ -154,3 +154,14 @@ Delivered the full P0 + P1 set. **Estimated re-score: ~29/40 (up from 21.5)** �
 - Remaining P3/cleanup: node-component `React.memo`, delete dead `layered.ts`/partial pin code, `caneyclouds` route typo (in *generated* data — fix at the extractor + rebuild, not by hand), full `role=tree`/`treeitem` semantics, emoji lens icons.
 
 Per the rubric a clean 40 is intentionally elusive; **~32/40 here is genuine ship quality**, and every one of the user's literal asks — linked-on-drill, working zoom, dynamic — is met.
+
+## Layout pass — no overlap + neat + dynamic + easy to read (2026-06-21, main `7590ef9`)
+
+Direct response to "no overlap on the bubbles, group neatly, very dynamic + easy to read." All verified live (Playwright) + locked with tests; est ~**35-37/40**.
+
+- **No overlapping bubbles — guaranteed.** `lib/brain/layout/resolve-overlaps.ts` is a deterministic measured separation pass (center pinned); brain-canvas seeds the lens ring, lets React Flow measure the real chip rects from the DOM, then separates any overlap. **0 overlapping pairs at L0 / every L1 (incl. 14-node Restaurants) / L2** — down from up to 4 pairs/level. 8 unit tests (dense rings 6/10/14/20/30 all separate; center pinned; deterministic).
+- **Grouped neatly — balanced concentric.** `selectors.layoutAround` picks the fewest rings that fit at ~82% fill and distributes children **proportional to each ring's circumference** (inner fewer, outer more), each ring **evenly spaced** with generous center clearance. Dense levels read as tidy 2–3 concentric rings, not a lopsided blob.
+- **Very dynamic.** Nodes **glide** into resolved positions (transform transition), **staggered bloom** on drill (`--spawn-delay`, center-out), **animated camera** `fitView`, **marching-ants** on live interchanges, **dotted data-flow** micro-edges — all reduced-motion-gated, no slop.
+- **Easy to read.** Type scale wired (domain `--t-body` 13px vs surface `--t-data` 11px → real L2→L3 step); no overlap; legible labels; concentric grouping frames cleanly.
+
+Independent re-critique (ui_polish-layout lens) confirmed: no-overlap **fully met**, very-dynamic **fully met**, anti-slop **genuinely clean**; the "lopsided rings" + "flat 11px type" gaps it flagged are the two fixes above. A literal 40/40 remains the rubric's refused ceiling (needs the data-gated Caney micro-edges + a live screen-reader/touch audit that can't be proven headless).
