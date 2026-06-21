@@ -1,0 +1,524 @@
+{
+  "source": "scip-python (Sourcegraph) — CaneyCloud backend",
+  "extractor": "scripts/brain/extractors/scip-caney-edges.mjs",
+  "regexBaselineEdges": 3,
+  "scipEdges": 85,
+  "routeFiles": 21,
+  "tables": 48,
+  "byDirection": {
+    "reads": 72,
+    "writes": 13
+  },
+  "edges": [
+    {
+      "routeFile": "api/channel/__init__.py",
+      "cls": "Booking",
+      "table": "bookings",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/channel/__init__.py",
+      "cls": "Channel",
+      "table": "channels",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/internal/data_deletion.py",
+      "cls": "Conversation",
+      "table": "conversations",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/internal/data_deletion.py",
+      "cls": "Guest",
+      "table": "guests",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/internal/data_deletion.py",
+      "cls": "Message",
+      "table": "messages",
+      "direction": "writes"
+    },
+    {
+      "routeFile": "api/v1/admin_bookings.py",
+      "cls": "BookingLine",
+      "table": "booking_lines",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/admin_bookings.py",
+      "cls": "BookingRefund",
+      "table": "booking_refunds",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/admin_bookings.py",
+      "cls": "Booking",
+      "table": "bookings",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/admin_bookings.py",
+      "cls": "Guest",
+      "table": "guests",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/admin_bookings.py",
+      "cls": "Invoice",
+      "table": "invoices",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/admin_bookings.py",
+      "cls": "Payment",
+      "table": "payments",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/admin.py",
+      "cls": "Tenant",
+      "table": "tenants",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/admin.py",
+      "cls": "User",
+      "table": "users",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/auth.py",
+      "cls": "OnboardingSession",
+      "table": "onboarding_sessions",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/auth.py",
+      "cls": "OnboardingToken",
+      "table": "onboarding_tokens",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/auth.py",
+      "cls": "Property",
+      "table": "properties",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/auth.py",
+      "cls": "User",
+      "table": "users",
+      "direction": "writes"
+    },
+    {
+      "routeFile": "api/v1/availability.py",
+      "cls": "Availability",
+      "table": "availability",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/bookings.py",
+      "cls": "Booking",
+      "table": "bookings",
+      "direction": "writes"
+    },
+    {
+      "routeFile": "api/v1/bookings.py",
+      "cls": "Guest",
+      "table": "guests",
+      "direction": "writes"
+    },
+    {
+      "routeFile": "api/v1/cancellations.py",
+      "cls": "CancellationException",
+      "table": "cancellation_exceptions",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/channel_reservations.py",
+      "cls": "BookingLine",
+      "table": "booking_lines",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/channel_reservations.py",
+      "cls": "Booking",
+      "table": "bookings",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/channel_reservations.py",
+      "cls": "Channel",
+      "table": "channels",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/channel_reservations.py",
+      "cls": "Guest",
+      "table": "guests",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/channel_reservations.py",
+      "cls": "Property",
+      "table": "properties",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/channel_reservations.py",
+      "cls": "Room",
+      "table": "rooms",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/channels.py",
+      "cls": "BrandedPageRequest",
+      "table": "branded_page_requests",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/channels.py",
+      "cls": "ChannelOutbox",
+      "table": "channel_outbox",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/channels.py",
+      "cls": "ChannelSyncLog",
+      "table": "channel_sync_log",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/channels.py",
+      "cls": "Property",
+      "table": "properties",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/discount_codes.py",
+      "cls": "DiscountCode",
+      "table": "discount_codes",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/experiences.py",
+      "cls": "ExperienceBooking",
+      "table": "experience_bookings",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/experiences.py",
+      "cls": "Experience",
+      "table": "experiences",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/guests.py",
+      "cls": "Guest",
+      "table": "guests",
+      "direction": "writes"
+    },
+    {
+      "routeFile": "api/v1/invoices.py",
+      "cls": "InvoiceLineItem",
+      "table": "invoice_line_items",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/invoices.py",
+      "cls": "Invoice",
+      "table": "invoices",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/notification_settings.py",
+      "cls": "Membership",
+      "table": "memberships",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/notification_settings.py",
+      "cls": "User",
+      "table": "users",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/policies.py",
+      "cls": "PolicyRule",
+      "table": "policy_rules",
+      "direction": "writes"
+    },
+    {
+      "routeFile": "api/v1/policies.py",
+      "cls": "Property",
+      "table": "properties",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/portal.py",
+      "cls": "BookingLine",
+      "table": "booking_lines",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/portal.py",
+      "cls": "Booking",
+      "table": "bookings",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/portal.py",
+      "cls": "FolioCharge",
+      "table": "folio_charges",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/portal.py",
+      "cls": "Folio",
+      "table": "folios",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/portal.py",
+      "cls": "GuestAutoLoginToken",
+      "table": "guest_auto_login_tokens",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/portal.py",
+      "cls": "GuestMagicLink",
+      "table": "guest_magic_links",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/portal.py",
+      "cls": "GuestOtpToken",
+      "table": "guest_otp_tokens",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/portal.py",
+      "cls": "GuestRefreshSession",
+      "table": "guest_refresh_sessions",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/portal.py",
+      "cls": "Guest",
+      "table": "guests",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/portal.py",
+      "cls": "Payment",
+      "table": "payments",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/portal.py",
+      "cls": "Property",
+      "table": "properties",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/portal.py",
+      "cls": "Room",
+      "table": "rooms",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/pricing_grid.py",
+      "cls": "SeasonRange",
+      "table": "season_ranges",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/staff.py",
+      "cls": "AuditEvent",
+      "table": "audit_events",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/staff.py",
+      "cls": "AuthRefreshSession",
+      "table": "auth_refresh_sessions",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/staff.py",
+      "cls": "BillingInvoice",
+      "table": "billing_invoices",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/staff.py",
+      "cls": "Booking",
+      "table": "bookings",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/staff.py",
+      "cls": "ChannelOutbox",
+      "table": "channel_outbox",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/staff.py",
+      "cls": "ChannelSyncLog",
+      "table": "channel_sync_log",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/staff.py",
+      "cls": "Channel",
+      "table": "channels",
+      "direction": "writes"
+    },
+    {
+      "routeFile": "api/v1/staff.py",
+      "cls": "EventOutbox",
+      "table": "event_outbox",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/staff.py",
+      "cls": "InventoryItem",
+      "table": "inventory_items",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/staff.py",
+      "cls": "Membership",
+      "table": "memberships",
+      "direction": "writes"
+    },
+    {
+      "routeFile": "api/v1/staff.py",
+      "cls": "OccupancyClass",
+      "table": "occupancy_classes",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/staff.py",
+      "cls": "OccupancyRate",
+      "table": "occupancy_rates",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/staff.py",
+      "cls": "OnboardingSession",
+      "table": "onboarding_sessions",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/staff.py",
+      "cls": "OnboardingToken",
+      "table": "onboarding_tokens",
+      "direction": "writes"
+    },
+    {
+      "routeFile": "api/v1/staff.py",
+      "cls": "Payment",
+      "table": "payments",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/staff.py",
+      "cls": "PricingRule",
+      "table": "pricing_rules",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/staff.py",
+      "cls": "Property",
+      "table": "properties",
+      "direction": "writes"
+    },
+    {
+      "routeFile": "api/v1/staff.py",
+      "cls": "RatePlan",
+      "table": "rate_plans",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/staff.py",
+      "cls": "ReconciliationQueueEntry",
+      "table": "reconciliation_queue",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/staff.py",
+      "cls": "ReviewDecision",
+      "table": "review_decisions",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/staff.py",
+      "cls": "RoomType",
+      "table": "room_types",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/staff.py",
+      "cls": "Room",
+      "table": "rooms",
+      "direction": "writes"
+    },
+    {
+      "routeFile": "api/v1/staff.py",
+      "cls": "SeasonRange",
+      "table": "season_ranges",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/staff.py",
+      "cls": "Season",
+      "table": "seasons",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/staff.py",
+      "cls": "SubscriptionPlan",
+      "table": "subscription_plans",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/staff.py",
+      "cls": "Subscription",
+      "table": "subscriptions",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/staff.py",
+      "cls": "Tenant",
+      "table": "tenants",
+      "direction": "writes"
+    },
+    {
+      "routeFile": "api/v1/staff.py",
+      "cls": "User",
+      "table": "users",
+      "direction": "writes"
+    },
+    {
+      "routeFile": "api/v1/subscriptions.py",
+      "cls": "SubscriptionPlan",
+      "table": "subscription_plans",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/subscriptions.py",
+      "cls": "Subscription",
+      "table": "subscriptions",
+      "direction": "reads"
+    },
+    {
+      "routeFile": "api/v1/tracking.py",
+      "cls": "OnboardingSession",
+      "table": "onboarding_sessions",
+      "direction": "reads"
+    }
+  ]
+}

@@ -35,6 +35,7 @@ import { EXTERNALS, ARTIFACT_PATH, SNAPSHOT_DIR, REPO_ROOTS } from "./config.mjs
 import { extractOpenApiSurfaces } from "./extractors/openapi-surfaces.mjs";
 import { extractMigrationEntities } from "./extractors/migration-entities.mjs";
 import { extractSurfaceEdges } from "./extractors/surface-edges.mjs";
+import { extractScipCaneyGraph } from "./extractors/scip-caney-edges.mjs";
 import { extractDomainClusters } from "./extractors/domain-cluster.mjs";
 import { extractInterchanges } from "./extractors/interchange-detector.mjs";
 import { extractStateOverlay } from "./extractors/state-overlay.mjs";
@@ -114,14 +115,43 @@ async function main() {
   gb.addNodes(migrations.nodes);
 
   // 3b. Surface→table reads_writes / calls micro-edges (the 40-blocker). Runs
-  //     after surfaces + entities exist so it can resolve their ids. SCAFFOLD:
-  //     emits [] until the resolvers in surface-edges.mjs are filled
-  //     (docs/brain-surface-edges-plan.md), so the artifact is unchanged today.
+  //     after surfaces + entities exist so it can resolve their ids. When
+  //     BRAIN_SCIP=1, Caney is handled by the precise SCIP extractor below, so
+  //     it is excluded from the regex path (the regex Caney path is superseded).
+  const scipOn = process.env.BRAIN_SCIP === "1";
   const surfaceEdges = extractSurfaceEdges({
     surfaceNodes: surfaces.nodes,
     entityNodes: migrations.nodes,
+    excludeSystems: scipOn ? ["caney"] : [],
   });
   gb.addEdges(surfaceEdges.edges);
+
+  // 3c. (gated) SCIP-backed Caney route→table edges + their surface/entity nodes.
+  //     scip-python resolves aliased/late/destructured imports the regex cannot,
+  //     lifting Caney from ~3 to ~85 reads_writes edges. OFF by default so the
+  //     committed artifact stays byte-identical; enable with BRAIN_SCIP=1 + a
+  //     built index (scripts/brain/scip/build-caney-index.mjs).
+  if (scipOn) {
+    const caneyDomainIds = new Set(
+      clusters.nodes.filter((n) => n.system === "caney" && n.level === 2).map((n) => n.id),
+    );
+    const caneyEntityIds = new Set(
+      migrations.nodes.filter((n) => n.system === "caney" && n.kind === "entity").map((n) => n.id),
+    );
+    const scip = extractScipCaneyGraph({
+      existingDomainIds: caneyDomainIds,
+      existingEntityIds: caneyEntityIds,
+    });
+    gb.addNodes(scip.nodes);
+    gb.addEdges(scip.edges);
+    if (scip.stats.available) {
+      console.log(
+        `[brain:build] SCIP caney: +${scip.edges.length} reads_writes · +${scip.nodes.length} nodes (${scip.stats.routeFiles} routes · ${scip.stats.tables} tables)`,
+      );
+    } else {
+      console.warn("[brain:build] BRAIN_SCIP=1 but no index found — skipping (run scripts/brain/scip/build-caney-index.mjs)");
+    }
+  }
 
   // 4. FR-PIPE-4 / FR-XSYS-1 — the 5 LIVE interchange edges.
   const interchanges = extractInterchanges();
