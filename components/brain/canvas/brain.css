@@ -297,6 +297,9 @@
 
 .brain-root .brain-spawn {
   animation: brain-spawn 0.44s var(--ease) both;
+  /* Per-node stagger set on the React Flow node wrapper (brain-canvas) so the
+   * fan blooms outward from the center on drill. Defaults to 0 (no stagger). */
+  animation-delay: var(--spawn-delay, 0s);
 }
 .brain-root .brain-zoom-in {
   animation: brain-zoom-in 0.22s var(--ease) both;

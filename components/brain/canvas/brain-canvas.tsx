@@ -22,7 +22,7 @@
 import "@xyflow/react/dist/style.css";
 import "./brain.css";
 
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, type CSSProperties } from "react";
 import {
   Background,
   BackgroundVariant,
@@ -186,7 +186,7 @@ function CanvasInner() {
     const applyPresetEmphasis =
       view.level === 0 && view.axis === "system" && emphasize.length > 0;
 
-    const rfNodes = centeredNodes.map<Node>((n) => {
+    const rfNodes = centeredNodes.map<Node>((n, i) => {
       let data = n.data as RFNodeData;
       if (
         applyPresetEmphasis &&
@@ -204,6 +204,9 @@ function CanvasInner() {
         selected: view.selection === n.id,
         draggable: false,
         connectable: false,
+        // Staggered spawn: the center (i=0) blooms first, children cascade out —
+        // a dynamic drill reveal. Read by .brain-spawn's animation-delay (brain.css).
+        style: { "--spawn-delay": `${Math.min(i * 0.02, 0.42)}s` } as CSSProperties,
         // L0 function axis renders the function capability set, not BrainNodes.
       };
     });
