@@ -369,12 +369,19 @@ function gatherSourceCaney(file, opId) {
 
 /* ── Extractor ───────────────────────────────────────────────────────────── */
 
-export function extractSurfaceEdges({ surfaceNodes = [], entityNodes = [] } = {}) {
+export function extractSurfaceEdges({
+  surfaceNodes = [],
+  entityNodes = [],
+  excludeSystems = [],
+} = {}) {
   const edges = [];
+  const skip = new Set(excludeSystems);
   const systems = [...new Set(surfaceNodes.map((n) => n.system).filter(Boolean))];
 
   for (const system of systems) {
     if (!ENABLED_SYSTEMS.has(system)) continue;
+    // Caney is superseded by the SCIP extractor when BRAIN_SCIP=1 (build-graph).
+    if (skip.has(system)) continue;
     const repoRoot = REPO_ROOTS[system];
     if (!repoRoot) continue;
 
