@@ -344,7 +344,11 @@
   --xy-attribution-background-color-default: transparent;
 }
 
-/* Our custom nodes are bare wrappers — strip React Flow's default node chrome. */
+/* Our custom nodes are bare wrappers — strip React Flow's default node chrome.
+ * The transform transition makes nodes GLIDE into their resolved (no-overlap)
+ * positions instead of snapping, so the layout visibly settles on every drill —
+ * dynamic + smooth. Nodes aren't draggable, so this only animates layout, never
+ * pan/zoom (the viewport transform is a separate element). */
 .brain-root .react-flow__node {
   background: transparent;
   border: none;
@@ -352,6 +356,12 @@
   padding: 0;
   width: auto;
   font-family: var(--body);
+  transition: transform 0.4s var(--ease);
+}
+@media (prefers-reduced-motion: reduce) {
+  .brain-root .react-flow__node {
+    transition: none;
+  }
 }
 .brain-root .react-flow__node.selected {
   box-shadow: none;

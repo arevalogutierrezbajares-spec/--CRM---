@@ -199,30 +199,68 @@ export function capNodes<T>(nodes: T[], cap = NODE_CAP): T[] {
  * a wider ring, so dense BUILT systems (CRM, restaurants) fan out instead of
  * piling into a hairball.
  */
-function ringRadius(count: number): number {
-  const n = Math.max(1, count);
-  // ~230u of arc per child seeds a ring roomy enough that the measured overlap
-  // pass (brain-canvas) only has to nudge, not rebuild — keeping the fan neat.
-  return Math.min(1100, Math.max(320, Math.round((n * 230) / (2 * Math.PI))));
+/** Rough rendered width of a chip from its label. The pure layout has no DOM,
+ * so this only needs to be close — the measured separation pass in brain-canvas
+ * guarantees the final no-overlap; a good estimate just keeps the seed tidy. */
+function estWidth(node: BrainNode): number {
+  const len = (node.label ?? "").length;
+  return Math.max(100, Math.min(244, Math.round(len * 6.8 + 48)));
 }
 
 /**
- * Place a focused parent at the origin and fan its children on a ring around it
- * (deterministic by sorted id, NFR-LAYOUT-1). This is what makes drill-in read
- * as a hub-and-spoke: the center anchors the spokes synthesized in
- * `visibleEdges`, and the ring guarantees siblings never share coordinates
- * (fixes the all-at-(0,0) surface pile). When the parent is absent the children
- * still ring the origin so nothing stacks.
+ * Seed a focused parent at the origin and its children on CONCENTRIC rings
+ * around it: fill the inner ring, then the next, each ring sized to its nodes'
+ * widths and clearing the center. On dense levels this is far tidier and more
+ * readable than one big sparse ring (more nodes ⇒ another ring, not a thinner
+ * spread), and it sits close enough to non-overlapping that the measured pass
+ * only polishes — keeping the grouping neat. Deterministic (children arrive
+ * sorted by id, NFR-LAYOUT-1); guarantees no two siblings share coordinates.
  */
 function layoutAround(
   center: BrainNode | undefined,
   children: BrainNode[],
 ): BrainNode[] {
-  const ring = ringLayout(
-    children.map((c) => c.id),
-    { radius: ringRadius(children.length), startAngleDeg: -90 },
-  );
-  const placed = children.map((c) => ({ ...c, pos: ring[c.id] ?? c.pos }));
+  if (children.length === 0) {
+    return center ? [{ ...center, pos: { x: 0, y: 0 } }] : [];
+  }
+  const GAP = 42;
+  const RING_STEP = 104;
+  const centerHalf = center ? (center.level <= 1 ? 100 : 58) : 0;
+  const slots = children.map((c) => ({ c, w: estWidth(c) + GAP }));
+
+  const placed: BrainNode[] = [];
+  let i = 0;
+  let ring = 0;
+  let radius = centerHalf + 96 + GAP;
+
+  while (i < slots.length) {
+    const circ = 2 * Math.PI * radius;
+    const ringItems: { c: BrainNode; w: number }[] = [];
+    let used = 0;
+    while (i < slots.length) {
+      if (ringItems.length > 0 && used + slots[i].w > circ) break;
+      used += slots[i].w;
+      ringItems.push(slots[i]);
+      i++;
+    }
+    // Distribute leftover circumference evenly so the ring reads balanced, and
+    // offset alternate rings so inner/outer chips don't line up radially.
+    const slack = Math.max(0, (circ - used) / ringItems.length);
+    const startAngle = -Math.PI / 2 + (ring % 2 ? Math.PI / ringItems.length : 0);
+    let arc = 0;
+    for (const it of ringItems) {
+      const slice = it.w + slack;
+      const a = startAngle + (arc + slice / 2) / radius;
+      placed.push({
+        ...it.c,
+        pos: { x: Math.cos(a) * radius, y: Math.sin(a) * radius },
+      });
+      arc += slice;
+    }
+    radius += RING_STEP + ring * 8;
+    ring += 1;
+  }
+
   if (!center) return placed;
   return [{ ...center, pos: { x: 0, y: 0 } }, ...placed];
 }
