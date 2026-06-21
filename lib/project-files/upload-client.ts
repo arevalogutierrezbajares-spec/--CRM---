@@ -7,10 +7,6 @@
  *   3. ask the server action to verify + record the metadata row
  */
 import { createClient } from "@/lib/supabase/client";
-import {
-  createUploadUrlAction,
-  finalizeFileUploadAction,
-} from "@/app/(app)/lob/actions";
 import { canonicalMime, isAllowedUpload, REJECT_MESSAGE } from "./allowed-types";
 import { maxUploadBytes, tooLargeMessage } from "./limits";
 import { PROJECT_FILES_BUCKET } from "./constants";
@@ -18,6 +14,34 @@ import { PROJECT_FILES_BUCKET } from "./constants";
 export type UploadOutcome =
   | { ok: true; linkId: string }
   | { ok: false; error: string };
+
+/**
+ * Server-action contracts the caller injects. Defined HERE (not imported from
+ * app/) so this reusable client orchestrator stays decoupled from app/ routes —
+ * the app provides implementations that structurally satisfy these (dependency
+ * inversion).
+ */
+export type CreateUploadUrl = (opts: {
+  lobId: string;
+  filename: string;
+  mime: string;
+  sizeBytes: number;
+}) => Promise<{ ok: true; path: string; token: string } | { ok: false; error: string }>;
+
+export type FinalizeUpload = (opts: {
+  lobId: string;
+  storagePath: string;
+  originalFilename: string;
+  mime: string;
+  sizeBytes: number;
+  label?: string;
+  category?: string;
+}) => Promise<{ ok: true; id: string } | { ok: false; error: string }>;
+
+export type UploadActions = {
+  createUploadUrl: CreateUploadUrl;
+  finalizeUpload: FinalizeUpload;
+};
 
 /** Cheap pre-flight so we fail fast before any network round-trip. */
 export function preValidateFile(file: File): { ok: true } | { ok: false; error: string } {
@@ -32,11 +56,13 @@ export async function uploadProjectFile(opts: {
   file: File;
   label?: string;
   category?: string;
+  /** Server actions injected by the app caller (keeps lib/ app-agnostic). */
+  actions: UploadActions;
 }): Promise<UploadOutcome> {
   const pre = preValidateFile(opts.file);
   if (!pre.ok) return pre;
 
-  const signed = await createUploadUrlAction({
+  const signed = await opts.actions.createUploadUrl({
     lobId: opts.lobId,
     filename: opts.file.name,
     mime: opts.file.type,
@@ -60,7 +86,7 @@ export async function uploadProjectFile(opts: {
     return { ok: false, error: uploadError.message || "Upload failed" };
   }
 
-  const finalized = await finalizeFileUploadAction({
+  const finalized = await opts.actions.finalizeUpload({
     lobId: opts.lobId,
     storagePath: signed.path,
     originalFilename: opts.file.name,

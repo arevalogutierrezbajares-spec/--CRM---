@@ -16,6 +16,10 @@ import {
   preValidateFile,
   uploadProjectFile,
 } from "@/lib/project-files/upload-client";
+import {
+  createUploadUrlAction,
+  finalizeFileUploadAction,
+} from "@/app/(app)/lob/actions";
 import { ACCEPT_ATTR } from "@/lib/project-files/allowed-types";
 import { formatBytes } from "@/lib/project-files/limits";
 import type { LinkCategory } from "@/lib/project-links/detect-category";
@@ -102,6 +106,10 @@ export function UploadTray({
           file: it.file,
           label: it.label,
           category: it.category,
+          actions: {
+            createUploadUrl: createUploadUrlAction,
+            finalizeUpload: finalizeFileUploadAction,
+          },
         });
         if (res.ok) {
           patch(it.id, { status: "done" });
