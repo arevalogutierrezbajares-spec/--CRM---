@@ -34,8 +34,8 @@ export function resolveOverlaps(
   nodes: RectNode[],
   opts: ResolveOptions = {},
 ): Record<string, { x: number; y: number }> {
-  const gap = opts.gap ?? 26;
-  const iters = opts.iters ?? 120;
+  const gap = opts.gap ?? 22;
+  const iters = opts.iters ?? 200;
 
   // Work in centers; remember half-extents.
   const c = nodes.map((n) => ({
@@ -47,8 +47,24 @@ export function resolveOverlaps(
     fixed: !!n.fixed,
   }));
 
+  /** Any overlapping pair left? (internal, center-space.) */
+  const anyOverlap = () => {
+    for (let i = 0; i < c.length; i++) {
+      for (let j = i + 1; j < c.length; j++) {
+        const a = c[i];
+        const b = c[j];
+        if (
+          a.hw + b.hw + gap - Math.abs(b.cx - a.cx) > 0 &&
+          a.hh + b.hh + gap - Math.abs(b.cy - a.cy) > 0
+        )
+          return true;
+      }
+    }
+    return false;
+  };
+
   for (let it = 0; it < iters; it++) {
-    let moved = false;
+    let maxMove = 0;
     for (let i = 0; i < c.length; i++) {
       for (let j = i + 1; j < c.length; j++) {
         const a = c[i];
@@ -61,7 +77,6 @@ export function resolveOverlaps(
         const oy = a.hh + b.hh + gap - Math.abs(dy); // y-overlap (incl. gap)
         if (ox <= 0 || oy <= 0) continue; // not overlapping
 
-        moved = true;
         // Separate along the axis of LEAST penetration (smallest shove).
         if (ox < oy) {
           const dir = dx === 0 ? (i % 2 === 0 ? -1 : 1) : Math.sign(dx);
@@ -71,6 +86,7 @@ export function resolveOverlaps(
             a.cx -= (ox / 2) * dir;
             b.cx += (ox / 2) * dir;
           }
+          maxMove = Math.max(maxMove, ox);
         } else {
           const dir = dy === 0 ? (i % 2 === 0 ? -1 : 1) : Math.sign(dy);
           if (a.fixed) b.cy += oy * dir;
@@ -79,10 +95,25 @@ export function resolveOverlaps(
             a.cy -= (oy / 2) * dir;
             b.cy += (oy / 2) * dir;
           }
+          maxMove = Math.max(maxMove, oy);
         }
       }
     }
-    if (!moved) break;
+    // Converged — the largest remaining shove is sub-pixel (early-exit instead
+    // of burning the full iteration cap; the pairwise pass can oscillate forever
+    // at the noise floor otherwise).
+    if (maxMove < 0.6) break;
+  }
+
+  // GUARANTEED no-overlap fallback: if the relaxation didn't fully settle
+  // (pathological coincident seeds), scale the constellation out from the origin
+  // until clear. Terminates — scaling strictly increases every gap.
+  for (let s = 0; s < 30 && anyOverlap(); s++) {
+    for (const n of c) {
+      if (n.fixed) continue;
+      n.cx *= 1.08;
+      n.cy *= 1.08;
+    }
   }
 
   const out: Record<string, { x: number; y: number }> = {};

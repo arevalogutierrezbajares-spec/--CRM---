@@ -58,6 +58,20 @@ describe("resolveOverlaps", () => {
     expect(a).toEqual(b);
   });
 
+  it("guarantees no overlap even for a pathological coincident seed (scale-out fallback)", () => {
+    // 24 chips all stacked at the exact same point — the worst case for the
+    // pairwise relaxation; the fallback must still drive it to zero overlap.
+    const stacked: RectNode[] = Array.from({ length: 24 }, (_, i) => ({
+      id: `s${i}`,
+      x: 0,
+      y: 0,
+      w: 160,
+      h: 56,
+    }));
+    const out = applied(stacked, 22);
+    expect(hasOverlap(out, 0)).toBe(false);
+  });
+
   it("is a no-op when nothing overlaps", () => {
     const spaced: RectNode[] = [
       { id: "a", x: 0, y: 0, w: 100, h: 50 },

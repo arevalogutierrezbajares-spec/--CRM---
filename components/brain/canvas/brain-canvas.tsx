@@ -41,7 +41,6 @@ import { useReducedMotion } from "framer-motion";
 import { resolveOverlaps } from "@/lib/brain/layout/resolve-overlaps";
 
 import { graph as defaultGraph } from "@/lib/brain/data/graph";
-import { loadPins, savePins } from "@/lib/brain/layout/pin";
 import type { BrainGraph } from "@/lib/brain/types";
 import type { VisibleQuery } from "@/lib/brain/selectors";
 import type { LensKey, LensResult, RFEdge, RFNode, RFNodeData } from "@/lib/brain/lenses/types";
@@ -137,17 +136,6 @@ function CanvasInner() {
   const reduceMotion = useReducedMotion();
   const rf = useReactFlow();
   const graphWrapRef = useRef<HTMLDivElement>(null);
-
-  // Load persisted pin positions from localStorage once on mount (client-only).
-  // Uses seed semantics: authored pos already seeded from the graph wins;
-  // persisted positions fill in nodes not yet seeded. Save on unload so
-  // positions survive across sessions.
-  useEffect(() => {
-    loadPins();
-    const flush = () => savePins();
-    window.addEventListener("beforeunload", flush);
-    return () => window.removeEventListener("beforeunload", flush);
-  }, []);
 
   // Re-derive the visible graph through the active lens. Pure + synchronous —
   // memoized so React Flow only re-renders when an input actually changes.
@@ -301,14 +289,14 @@ function CanvasInner() {
             fixed: n.id === centerId,
           };
         }),
-        { gap: 30 },
+        { gap: 22 },
       );
       resolvedSigRef.current = layoutSig;
       setDisplayNodes((cur) =>
         cur.map((n) => (resolved[n.id] ? { ...n, position: resolved[n.id] } : n)),
       );
       requestAnimationFrame(() =>
-        rf.fitView({ padding: 0.18, maxZoom: 1.45, duration: reduceMotion ? 0 : 360 }),
+        rf.fitView({ padding: 0.1, maxZoom: 1.7, duration: reduceMotion ? 0 : 360 }),
       );
     });
     return () => cancelAnimationFrame(raf);
@@ -359,7 +347,7 @@ function CanvasInner() {
   // user who clicked to drill sees no focus flash.
   useEffect(() => {
     const raf = requestAnimationFrame(() => {
-      rf.fitView({ padding: 0.18, maxZoom: 1.45, duration: reduceMotion ? 0 : 460 });
+      rf.fitView({ padding: 0.1, maxZoom: 1.7, duration: reduceMotion ? 0 : 460 });
       const wrap = graphWrapRef.current;
       if (wrap && !wrap.contains(document.activeElement)) {
         wrap
@@ -382,7 +370,7 @@ function CanvasInner() {
     const ro = new ResizeObserver(() => {
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() =>
-        rf.fitView({ padding: 0.18, maxZoom: 1.45, duration: reduceMotion ? 0 : 240 }),
+        rf.fitView({ padding: 0.1, maxZoom: 1.7, duration: reduceMotion ? 0 : 240 }),
       );
     });
     ro.observe(wrap);
@@ -454,7 +442,7 @@ function CanvasInner() {
             edgeTypes={edgeTypes}
             onPaneClick={onPaneClick}
             fitView
-            fitViewOptions={{ padding: 0.18, maxZoom: 1.45 }}
+            fitViewOptions={{ padding: 0.1, maxZoom: 1.7 }}
             minZoom={0.2}
             maxZoom={1.6}
             proOptions={{ hideAttribution: true }}
