@@ -2,21 +2,23 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Ban, CheckCheck, Eye } from "lucide-react";
+import { Ban } from "lucide-react";
 import { toast } from "sonner";
 import { trackPartnerShareAction } from "@/app/(app)/partner-access/actions";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
+/**
+ * Owner-side share control. Views and downloads are tracked automatically when
+ * the recipient opens the link (recordPublicPartnerShareEvent), so this no
+ * longer carries manual "mark viewed/downloaded" toggles — only Revoke, which
+ * is a deliberate owner decision.
+ */
 export function ShareLedgerActions({
   shareId,
-  viewed,
-  downloaded,
   revoked,
 }: {
   shareId: string;
-  viewed: boolean;
-  downloaded: boolean;
   revoked: boolean;
 }) {
   const router = useRouter();
@@ -26,13 +28,7 @@ export function ShareLedgerActions({
     startTransition(async () => {
       const res = await trackPartnerShareAction({ shareId, event });
       if (res.ok) {
-        const label =
-          event === "viewed"
-            ? "Marked viewed"
-            : event === "downloaded"
-              ? "Marked downloaded"
-              : "Share revoked";
-        toast.success(label);
+        toast.success(event === "revoked" ? "Share revoked" : "Updated");
         router.refresh();
       } else {
         toast.error(res.error);
@@ -50,28 +46,6 @@ export function ShareLedgerActions({
 
   return (
     <div className="flex flex-wrap gap-1">
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        className="h-7 px-2"
-        disabled={pending || viewed}
-        onClick={() => track("viewed")}
-      >
-        <Eye className="h-3.5 w-3.5" />
-        Viewed
-      </Button>
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        className="h-7 px-2"
-        disabled={pending || downloaded}
-        onClick={() => track("downloaded")}
-      >
-        <CheckCheck className="h-3.5 w-3.5" />
-        Downloaded
-      </Button>
       <ConfirmDialog
         title="Revoke this share?"
         description="The share will stay in the ledger, but it will no longer count as active access."

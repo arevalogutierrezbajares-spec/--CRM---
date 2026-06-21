@@ -24,8 +24,6 @@ import { listPartnerAccessForContact } from "@/db/queries/partner-access";
 import { listPartnerNextSteps } from "@/db/queries/partner-next-steps";
 import { listPartnerUploads } from "@/db/queries/partner-uploads";
 import { PartnerAccessPanel } from "@/components/partner-access/partner-access-panel";
-import { listPitchFeedbackForContact } from "@/db/queries/pitch-feedback";
-import { PitchFeedbackPanel } from "@/components/pitch-feedback/pitch-feedback-panel";
 import { listTouchesForContact } from "@/db/queries/touches";
 import { listMeetingsForContact } from "@/db/queries/meetings";
 import { safeRead, isDbConfigured } from "@/lib/db-status";
@@ -46,7 +44,7 @@ export default async function ContactDetailPage(props: { params: Params }) {
   );
   const orgContactId = contactRes.data?.primaryOrgId ?? undefined;
 
-  const [touchesRes, warmPathRes, reciprocityRes, meetingsRes, accessRes, pitchFeedbackRes] = await Promise.all([
+  const [touchesRes, warmPathRes, reciprocityRes, meetingsRes, accessRes] = await Promise.all([
     safeRead(() => listTouchesForContact({ contactId: id, workspaceId: user.workspaceId }), []),
     safeRead(
       () => findWarmPath({ workspaceId: user.workspaceId, toContactId: id }),
@@ -72,10 +70,6 @@ export default async function ContactDetailPage(props: { params: Params }) {
         }),
       { rooms: [], shares: [] },
     ),
-    safeRead(() => listPitchFeedbackForContact({ contactId: id, workspaceId: user.workspaceId }), {
-      campaigns: [],
-      invites: [],
-    }),
   ]);
 
   // Build next-step and upload counts per room for the partner panel badges
@@ -278,11 +272,6 @@ export default async function ContactDetailPage(props: { params: Params }) {
               <aside className="space-y-6">
                 <WarmPath path={warmPathRes.data} />
                 <ReciprocityCard data={reciprocityRes.data} />
-                <PitchFeedbackPanel
-                  contactId={contact.id}
-                  contactName={contact.name}
-                  overview={pitchFeedbackRes.data}
-                />
                 <PartnerAccessPanel
                   access={accessRes.data}
                   contact={{

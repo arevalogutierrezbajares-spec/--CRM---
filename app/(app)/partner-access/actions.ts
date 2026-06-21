@@ -21,6 +21,7 @@ import {
   createPartnerRoomForContact,
   createPartnerShare,
   getPartnerRoomBasic,
+  listShareableDocsForContact,
   listShareableDocsForRoom,
   recordPartnerShareTracking,
   regeneratePartnerRoomAccessToken,
@@ -752,6 +753,118 @@ async function _addRoomDocumentsAction(opts: {
   return { ok: true, added, failed };
 }
 
+async function _listShareableDocsForContactAction(opts: {
+  contactId: string;
+}): Promise<
+  { ok: true; docs: ShareableRoomDoc[] } | { ok: false; error: string }
+> {
+  const user = await requireUser();
+  const docs = await listShareableDocsForContact({
+    workspaceId: user.workspaceId,
+    contactId: opts.contactId,
+  });
+  return { ok: true, docs };
+}
+
+/**
+ * One-tap "Share materials" from a contact: create (or reuse) the contact's
+ * ungated, no-login room, attach the picked documents, and hand back a private
+ * link. The room is the lite default — no passcode, no seat limit — so the
+ * recipient taps the link and views on their phone. Every open/view/download is
+ * tracked automatically (recordPublicPartnerShareEvent), so feedback stays
+ * optional while engagement is always captured.
+ */
+async function _quickShareWithContactAction(opts: {
+  contactId: string;
+  partnerKind?: string | null;
+  docs: Array<{ linkId: string; lobId: string }>;
+  allowDownload: boolean;
+  channel: string;
+  message?: string | null;
+  freshLink?: boolean;
+}): Promise<
+  | {
+      ok: true;
+      roomId: string;
+      accessPath: string | null;
+      added: number;
+      existed: boolean;
+    }
+  | { ok: false; error: string }
+> {
+  const user = await requireUser();
+  if (opts.docs.length === 0) {
+    return { ok: false, error: "Pick at least one document" };
+  }
+  if (!CHANNELS.has(opts.channel as PartnerShareChannel)) {
+    return { ok: false, error: "Invalid channel" };
+  }
+  const partnerKind = (
+    opts.partnerKind && PARTNER_KINDS.has(opts.partnerKind as PartnerKind)
+      ? opts.partnerKind
+      : "client"
+  ) as PartnerKind;
+  const permissions: PartnerPermission[] = opts.allowDownload
+    ? ["view", "download"]
+    : ["view"];
+
+  let roomId: string | undefined;
+  let mintedToken: string | null = null;
+  let added = 0;
+  let lastError: string | null = null;
+
+  for (const doc of opts.docs) {
+    const res = await createPartnerShare({
+      workspaceId: user.workspaceId,
+      actorId: user.id,
+      projectId: doc.lobId,
+      projectLinkId: doc.linkId,
+      contactId: opts.contactId,
+      partnerKind,
+      channel: opts.channel as PartnerShareChannel,
+      permissions,
+      message: opts.message ?? null,
+      roomId,
+      preserveExistingShare: true,
+    });
+    if (!res.ok) {
+      lastError = res.error;
+      continue;
+    }
+    // First successful share fixes the room; a token comes back only when the
+    // room (or its link) was freshly created.
+    if (!roomId) {
+      roomId = res.room.id;
+      mintedToken = res.accessToken;
+    }
+    added++;
+  }
+
+  if (!roomId || added === 0) {
+    return { ok: false, error: lastError ?? "Could not share these documents" };
+  }
+
+  const existed = mintedToken === null;
+  let accessPath: string | null = mintedToken ? `/access/${mintedToken}` : null;
+
+  // An existing room's raw token can't be recovered (only the hash is stored),
+  // so a fresh shareable URL is issued only when the user opts in — which
+  // invalidates any previously-sent link for that room.
+  if (existed && opts.freshLink) {
+    const regen = await regeneratePartnerRoomAccessToken({
+      workspaceId: user.workspaceId,
+      actorId: user.id,
+      roomId,
+    });
+    if (regen.ok) accessPath = `/access/${regen.accessToken}`;
+  }
+
+  revalidatePath(`/contacts/${opts.contactId}`);
+  revalidatePath("/partner-access");
+  revalidatePath(`/partner-access/rooms/${roomId}`);
+  return { ok: true, roomId, accessPath, added, existed };
+}
+
 async function _createRoomMessageAction(opts: {
   roomId: string;
   body: string;
@@ -841,6 +954,8 @@ export const createPartnerRoomAction = withActionGuard("createPartnerRoomAction"
 export const setPartnerRoomPasscodeAction = withActionGuard("setPartnerRoomPasscodeAction", _setPartnerRoomPasscodeAction);
 export const updateSharePermissionsAction = withActionGuard("updateSharePermissionsAction", _updateSharePermissionsAction);
 export const listShareableRoomDocsAction = withActionGuard("listShareableRoomDocsAction", _listShareableRoomDocsAction);
+export const listShareableDocsForContactAction = withActionGuard("listShareableDocsForContactAction", _listShareableDocsForContactAction);
+export const quickShareWithContactAction = withActionGuard("quickShareWithContactAction", _quickShareWithContactAction);
 export const addRoomDocumentsAction = withActionGuard("addRoomDocumentsAction", _addRoomDocumentsAction);
 export const createRoomMessageAction = withActionGuard("createRoomMessageAction", _createRoomMessageAction);
 export const deleteRoomMessageAction = withActionGuard("deleteRoomMessageAction", _deleteRoomMessageAction);

@@ -11,9 +11,8 @@ const PUBLIC_PATHS = [
   "/access/", // Partner Access public rooms authenticate by hashed token.
   "/api/access/", // Partner Access API routes (upload sign/finalize, next-step toggle) — auth by token hash.
   "/api/contact-logo/", // Public brand-logo proxy for co-branded rooms (GET streams the image; POST self-guards with requireUser).
-  "/f/", // F&F Pitch Feedback public links authenticate by invite token.
+  "/f/", // Retired F&F Pitch Feedback links — public so old links show a notice.
   "/api/health",
-  "/api/pitch-feedback/respond", // F&F Pitch Feedback public response capture.
   "/api/whatsapp/webhook", // Meta — verifies via WA_VERIFY_TOKEN + HMAC
   "/api/postmark/inbound", // Postmark — verifies via ?secret= query
   "/api/cron/", // Vercel Cron — verifies via Authorization: Bearer CRON_SECRET

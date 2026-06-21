@@ -330,8 +330,6 @@ export default async function PartnerAccessRoomPage(props: { params: Params }) {
                               <td className="py-3">
                                 <ShareLedgerActions
                                   shareId={share.id}
-                                  viewed={Boolean(share.viewedAt)}
-                                  downloaded={Boolean(share.downloadedAt)}
                                   revoked={Boolean(share.revokedAt)}
                                 />
                               </td>
