@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { computeInsights } from "@/lib/brain/analytics";
+import { computeInsights, emphasisOf } from "@/lib/brain/analytics";
 import { graph as realGraph } from "@/lib/brain";
 import type {
   BrainGraph,
@@ -167,5 +167,22 @@ describe("brain analytics: real generated artifact", () => {
 
   it("is deterministic on the real graph too", () => {
     expect(computeInsights(realGraph)).toEqual(computeInsights(realGraph));
+  });
+});
+
+describe("brain analytics: emphasisOf (canvas overlay map)", () => {
+  it("flags the top integration hub", () => {
+    expect(emphasisOf("vav.surface.post-api-holds")?.kind).toBe("hub");
+    expect(emphasisOf("crm.projects")?.kind).toBe("hub");
+  });
+
+  it("flags an unmapped domain as a blind-spot orphan", () => {
+    expect(emphasisOf("caney.accounting")?.kind).toBe("orphan");
+  });
+
+  it("leaves mapped non-hub domains unemphasized", () => {
+    // vav.booking has mapped data-flow (via its child surfaces) but is not itself
+    // a high-degree node — so neither hub nor orphan.
+    expect(emphasisOf("vav.booking")).toBeUndefined();
   });
 });

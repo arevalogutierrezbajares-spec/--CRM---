@@ -17,3 +17,10 @@ export {
   type GapInsight,
   type CommunityInsight,
 } from "./insights";
+
+export {
+  NODE_EMPHASIS,
+  emphasisOf,
+  type NodeEmphasis,
+  type EmphasisEntry,
+} from "./emphasis";
