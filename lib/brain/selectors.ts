@@ -223,42 +223,69 @@ function layoutAround(
   if (children.length === 0) {
     return center ? [{ ...center, pos: { x: 0, y: 0 } }] : [];
   }
-  const GAP = 42;
-  const RING_STEP = 104;
-  const centerHalf = center ? (center.level <= 1 ? 100 : 58) : 0;
+  const GAP = 44;
+  const RING_STEP = 120;
+  // Generous center clearance so wide inner chips never start atop the hub.
+  const centerHalf = center ? (center.level <= 1 ? 130 : 70) : 0;
+  const baseR = centerHalf + 116;
+
   const slots = children.map((c) => ({ c, w: estWidth(c) + GAP }));
+  const totalW = slots.reduce((s, x) => s + x.w, 0);
 
-  const placed: BrainNode[] = [];
-  let i = 0;
-  let ring = 0;
-  let radius = centerHalf + 96 + GAP;
+  // Choose the fewest concentric rings whose combined circumference (at ~82%
+  // fill) holds all the chips — so dense levels become 2–3 tidy rings.
+  const FILL = 0.82;
+  let rings = 1;
+  while (rings < 5) {
+    let cap = 0;
+    for (let k = 0; k < rings; k++) cap += 2 * Math.PI * (baseR + k * RING_STEP) * FILL;
+    if (cap >= totalW) break;
+    rings += 1;
+  }
 
-  while (i < slots.length) {
-    const circ = 2 * Math.PI * radius;
-    const ringItems: { c: BrainNode; w: number }[] = [];
-    let used = 0;
-    while (i < slots.length) {
-      if (ringItems.length > 0 && used + slots[i].w > circ) break;
-      used += slots[i].w;
-      ringItems.push(slots[i]);
-      i++;
+  // Per-ring target width PROPORTIONAL to that ring's circumference, so inner
+  // (smaller) rings hold fewer chips and outer rings more — balanced fill, no
+  // crammed-inner / sparse-outer lopsidedness.
+  const circ: number[] = [];
+  let sumCirc = 0;
+  for (let k = 0; k < rings; k++) {
+    circ[k] = 2 * Math.PI * (baseR + k * RING_STEP);
+    sumCirc += circ[k];
+  }
+
+  const buckets: { c: BrainNode; w: number }[][] = Array.from(
+    { length: rings },
+    () => [],
+  );
+  let k = 0;
+  let used = 0;
+  for (const slot of slots) {
+    const target = (totalW * circ[k]) / sumCirc;
+    if (k < rings - 1 && buckets[k].length > 0 && used + slot.w > target) {
+      k += 1;
+      used = 0;
     }
-    // Distribute leftover circumference evenly so the ring reads balanced, and
-    // offset alternate rings so inner/outer chips don't line up radially.
-    const slack = Math.max(0, (circ - used) / ringItems.length);
-    const startAngle = -Math.PI / 2 + (ring % 2 ? Math.PI / ringItems.length : 0);
-    let arc = 0;
-    for (const it of ringItems) {
-      const slice = it.w + slack;
-      const a = startAngle + (arc + slice / 2) / radius;
+    buckets[k].push(slot);
+    used += slot.w;
+  }
+
+  // Place each ring with EQUAL angular spacing (a clean circle, not a greedy
+  // cumulative arc), alternate rings half-step offset so chips don't line up
+  // radially. The measured pass only has to nudge — the read stays concentric.
+  const placed: BrainNode[] = [];
+  for (let r = 0; r < rings; r++) {
+    const items = buckets[r];
+    if (items.length === 0) continue;
+    const radius = baseR + r * RING_STEP;
+    const step = (2 * Math.PI) / items.length;
+    const offset = -Math.PI / 2 + (r % 2 ? step / 2 : 0);
+    items.forEach((it, idx) => {
+      const a = offset + idx * step;
       placed.push({
         ...it.c,
         pos: { x: Math.cos(a) * radius, y: Math.sin(a) * radius },
       });
-      arc += slice;
-    }
-    radius += RING_STEP + ring * 8;
-    ring += 1;
+    });
   }
 
   if (!center) return placed;
