@@ -13,6 +13,7 @@
  * Lens dimming honors data.dimmed (planned edges recede).
  */
 
+import { memo } from "react";
 import { type EdgeProps } from "@xyflow/react";
 import { SYSTEM_ACCENT, type Health, type System } from "@/lib/brain/types";
 import type { RFEdgeData } from "@/lib/brain/lenses/types";
@@ -23,7 +24,7 @@ const HEALTH_COLOR: Record<Health, string> = {
   dark: "var(--dark)",
 };
 
-export default function SpokeEdge({
+function SpokeEdge({
   id,
   sourceX,
   sourceY,
@@ -85,3 +86,7 @@ export default function SpokeEdge({
     />
   );
 }
+
+// Pure render from props (no context) — memoize so the 10+ spokes on a dense
+// fan don't all re-render when an unrelated node changes.
+export default memo(SpokeEdge);

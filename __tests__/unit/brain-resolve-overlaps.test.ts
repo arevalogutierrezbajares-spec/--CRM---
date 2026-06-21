@@ -36,7 +36,8 @@ function applied(nodes: RectNode[], gap: number): RectNode[] {
 }
 
 describe("resolveOverlaps", () => {
-  for (const n of [6, 10, 14, 20]) {
+  // up to NODE_CAP (30) children + the pinned center = the worst real case.
+  for (const n of [6, 10, 14, 20, 30]) {
     it(`removes all overlap for a dense ring of ${n}`, () => {
       const start = denseRing(n);
       expect(hasOverlap(start)).toBe(true); // sanity: the seed overlaps
