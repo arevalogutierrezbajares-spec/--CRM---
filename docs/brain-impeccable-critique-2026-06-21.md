@@ -110,3 +110,30 @@ Only after steps 1–3 land does the build stop failing your literal asks. Steps
 - **Live probe** (headless Chromium, 1440×900, dev server `AGB_DEV_FAKE_USER=1`): zoom range, pan, drill L0→L1→L2 edge counts, keyboard Tab + focus ring + Enter-to-drill, search, lens switch, design tokens, console errors. Screenshots in `/tmp/brain-shots/` (`01-L0`, `02-pinch-zoom-in`, `03-pinch-zoom-out`, `04-after-drill-L1`, `05-after-drill-L2`).
 - **Code review**: 9 lenses (zoom, node-linking, dynamism, a11y, scale, polish, ux-flow, correctness/security, perf/code) × adversarial verification × completeness critic × synthesis = 73 agents. Each finding carries `file:line` evidence and a confirmed/refuted/adjusted verdict.
 - **Refuted by verification** (kept the critique honest): "nodes not Tab-reachable" (live-disproven), glassmorphism-as-slop, contrast failures (only aria-hidden glyphs), `visibleIds` fully dead (its `.size` is read), liveness-pulse "vaporware" (honestly labeled v2).
+
+---
+
+## Fixes applied — P0 + P1 (2026-06-21, branch `fix/brain-linking-zoom-dynamism`, commit `58f5f82`)
+
+Delivered the full P0 + P1 set. **Estimated re-score: ~29/40 (up from 21.5)** — the predicted P0+P1 ceiling. (A true 40 still needs the P2 path below: L0 density, surface→table micro-edges, full type-scale adoption, `role=tree`, responsive, `ResizeObserver`, dead-code removal.)
+
+**P0 — all six landed & live-verified:**
+- Lens edge mapping → unified all 5 lenses through `lenses/shared.ts::mapEdges` + `selectors.renderedEndpoints` (maps `.domain` on drill, `.system` at L0). The `e.from.system` bug is gone in one place.
+- `visibleEdges` now synthesizes hub→child spokes from `parentId` and **membership-filters** every edge; dev `console.warn` guards against silent drops.
+- Focused hub rendered **at center** at L1 (and the focused domain at L2) with children fanned on a radial ring (reuses the previously-dead `radial.ts`).
+- All 37 L3 surfaces positioned by the ring layout → **no more (0,0) pile**.
+- Density-driven ring radius (grows with child count) → dense systems (CRM 12, restaurants 13) **no longer hairball**.
+- **Focus restored to a node after every drill/up** (was dropping to `body`).
+- *Verified live:* edge counts now **L0 = 6 · L1 = 10 spokes · L2 = 1 spoke** (were 6 / 0 / 0). Keyboard drill restores focus (`inNode: true`).
+
+**P1 — all six landed & live-verified:**
+- Drill is now an **animated camera glide** (`useReactFlow().fitView`, single persistent `<ReactFlow>`, no remount) instead of a teleporting crossfade; reduced-motion → instant.
+- On-screen **`<Controls>`** rendered (themed, was unused) + double-click zoom re-enabled. *Verified:* zoom-in button 0.77 → 0.92.
+- **Marching-ants flow** on live interchange stations; spoke opacity bumped for legibility.
+- Modular **type-scale tokens** + larger on-canvas hub names.
+- Edge/relationship semantics: hub `aria-label` now states domain count.
+- Preset switches **preserve drill position** when the axis matches.
+
+**Bonus:** added the missing `Dialog.Title` to the global command palette → the **2 `DialogContent` console errors on `/brain` are gone (0 console errors)**.
+
+**Regression lock:** `__tests__/unit/brain-edge-membership.test.ts` — 62 cases asserting every emitted edge endpoint is a visible node (lens × level × focus) + drill renders spokes + siblings never share coordinates. Gates green: **tsc 0 · eslint clean · 504 unit tests pass · production build ✓**.
