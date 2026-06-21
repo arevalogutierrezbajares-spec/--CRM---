@@ -52,6 +52,17 @@ const FOUNDERS: Founder[] = [
   },
 ];
 
+/**
+ * The founders as a fixed, ordered directory (Tomás, José, Charles) — photo +
+ * canonical name + role. Used by the top-bar presence bubbles, which always
+ * show all three faces and light up whoever is currently online.
+ */
+export const FOUNDER_DIRECTORY: ReadonlyArray<{
+  name: string;
+  title: string;
+  photoUrl: string;
+}> = FOUNDERS.map((f) => ({ name: f.name, title: f.title, photoUrl: f.photo }));
+
 function normalize(value: string) {
   return value
     .normalize("NFD")
