@@ -9,7 +9,6 @@ import { openGlobalUpload } from "@/components/upload/global-upload-modal";
 import { NAV_GROUPS, NAV_FOOTER, type NavLeaf } from "./nav-groups";
 import { BrandWidget } from "@/components/brand/brand-widget";
 import { ExplorerTree } from "./explorer-tree";
-import { PresenceDots } from "@/components/presence/presence-dots";
 import { FounderPresence } from "@/components/presence/founder-presence";
 import type { WorkspaceDoc } from "@/db/queries/items";
 
@@ -236,7 +235,6 @@ export function Sidebar({
         </nav>
       )}
 
-      {!rail && <PresenceDots />}
 
       <div className="border-t p-2" style={{ borderColor: "var(--border-default)" }}>
         {NAV_FOOTER.map((item) => (
