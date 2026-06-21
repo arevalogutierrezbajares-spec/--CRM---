@@ -87,8 +87,15 @@ export default function SurfaceNode({ data, selected }: NodeProps) {
       <Handle type="target" position={Position.Top} isConnectable={false} />
       <Handle type="source" position={Position.Bottom} isConnectable={false} />
 
-      <div className="chip">
-        {method ? (
+      <div className="chip" data-kind={node.source === "migrations" ? "entity" : "route"}>
+        {node.source === "migrations" ? (
+          // Data store (DB table) — a leading glyph + caney accent makes tables
+          // read distinctly from route surfaces, so the route→table data-flow
+          // story is legible at a glance.
+          <span className="store" aria-hidden="true">
+            ▤
+          </span>
+        ) : method ? (
           <span className="method" aria-hidden="true">
             {method}
           </span>

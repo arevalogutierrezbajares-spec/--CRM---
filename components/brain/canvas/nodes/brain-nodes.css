@@ -213,6 +213,22 @@
   flex: none;
 }
 
+/* Data store (DB table) surfaces read distinctly from route surfaces: a caney
+ * (data-tint) glyph + left accent, matching the dotted caney route→table edges. */
+.brain-root .surface .store {
+  font-size: 13px;
+  line-height: 1;
+  color: var(--caney);
+  flex: none;
+}
+.brain-root .surface .chip[data-kind="entity"] {
+  border-left: 2px solid var(--caney);
+}
+.brain-root .surface .chip[data-kind="entity"] .lang {
+  color: var(--caney);
+  border-color: color-mix(in oklch, var(--caney) 35%, transparent);
+}
+
 /* ── Reduced motion: disable hover lift transforms on chips (#8) ─────────────
  * The spawn/zoom keyframes are already gated in brain.css — this gates the
  * per-chip translateY hover effects so they become instant cuts. */
