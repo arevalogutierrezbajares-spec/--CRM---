@@ -59,9 +59,9 @@ export function Rail() {
 
   return (
     <aside
+      className="brain-rail"
       aria-label="Brain controls"
       style={{
-        width: 204,
         flexShrink: 0,
         height: "100%",
         overflowY: "auto",

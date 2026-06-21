@@ -127,14 +127,13 @@ export function ErrorState({
               letterSpacing: ".03em",
               textTransform: "uppercase",
               color: "#06121a",
-              background: "linear-gradient(180deg,#6fc8ec,var(--caney))",
+              background: "var(--caney)",
               border: "1px solid transparent",
               borderRadius: 9,
               padding: "7px 15px",
               fontWeight: 600,
               cursor: "pointer",
-              boxShadow:
-                "var(--shadow-med), inset 0 1px 0 rgba(255,255,255,.25)",
+              boxShadow: "var(--shadow-med), var(--gleam)",
             }}
           >
             Retry

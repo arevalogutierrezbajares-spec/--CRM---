@@ -23,6 +23,20 @@
   color: var(--ink);
 }
 
+/* Responsive: narrow the panel below 1024px so the canvas keeps usable width
+ * (desktop ≥1024px unchanged). Declared here so it wins the cascade over the
+ * 326px base regardless of stylesheet import order. */
+@media (max-width: 1024px) {
+  .brain-root .brain-detail {
+    width: 280px;
+  }
+}
+@media (max-width: 820px) {
+  .brain-root .brain-detail {
+    width: 248px;
+  }
+}
+
 /* Scroll body. */
 .brain-root .brain-detail .d-scroll {
   flex: 1;

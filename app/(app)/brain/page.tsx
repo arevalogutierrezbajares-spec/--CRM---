@@ -15,12 +15,16 @@ import { BrainCanvasLoader } from "@/components/brain/canvas/brain-canvas-loader
 export default async function BrainPage() {
   const user = await requireUser();
 
+  // Force the whole /brain route dark: the canvas is a self-contained dark token
+  // island, so without this the theme-aware TopBar renders LIGHT in light mode
+  // and seams against the dark canvas below it. `dark` scopes the app's dark
+  // tokens to this subtree regardless of the user's global theme.
   return (
-    <>
+    <div className="dark flex min-h-0 flex-1 flex-col bg-[var(--background)]">
       <TopBar email={user.email} displayName={user.displayName} title="Brain" />
       <main className="relative flex min-h-0 flex-1">
         <BrainCanvasLoader />
       </main>
-    </>
+    </div>
   );
 }

@@ -91,16 +91,19 @@ export function BrainCommandPalette() {
   }, [graph.nodes]);
 
   const q = query.trim().toLowerCase();
-  const matches = useMemo(() => {
-    const filtered = q
-      ? targets.filter(
-          (t) =>
-            t.node.label.toLowerCase().includes(q) ||
-            t.node.id.toLowerCase().includes(q),
-        )
-      : targets.filter((t) => t.kind !== "surface");
-    return filtered.slice(0, 10);
-  }, [targets, q]);
+  const JUMP_LIMIT = 24;
+  const filtered = useMemo(
+    () =>
+      q
+        ? targets.filter(
+            (t) =>
+              t.node.label.toLowerCase().includes(q) ||
+              t.node.id.toLowerCase().includes(q),
+          )
+        : targets.filter((t) => t.kind !== "surface"),
+    [targets, q],
+  );
+  const matches = filtered.slice(0, JUMP_LIMIT);
 
   const jump = useCallback(
     (t: JumpTarget) => {
@@ -241,6 +244,18 @@ export function BrainCommandPalette() {
               {t.node.label}
             </Row>
           ))}
+          {filtered.length > JUMP_LIMIT ? (
+            <div
+              style={{
+                padding: "6px 10px 8px",
+                fontFamily: "var(--mono)",
+                fontSize: 11,
+                color: "var(--ink-faint)",
+              }}
+            >
+              Showing {JUMP_LIMIT} of {filtered.length} — keep typing to narrow.
+            </div>
+          ) : null}
         </Group>
 
         {!q && (

@@ -41,7 +41,7 @@ import { graph as defaultGraph } from "@/lib/brain/data/graph";
 import { loadPins, savePins } from "@/lib/brain/layout/pin";
 import type { BrainGraph } from "@/lib/brain/types";
 import type { VisibleQuery } from "@/lib/brain/selectors";
-import type { LensKey, LensResult, RFEdge, RFNode } from "@/lib/brain/lenses/types";
+import type { LensKey, LensResult, RFEdge, RFNode, RFNodeData } from "@/lib/brain/lenses/types";
 import { navigationLens } from "@/lib/brain/lenses/navigation";
 import { stateLens } from "@/lib/brain/lenses/state";
 import { functionOverlayLens } from "@/lib/brain/lenses/functionOverlay";
@@ -53,7 +53,7 @@ import {
   useBrain,
   type BrainView,
 } from "./graph-provider";
-import type { PresetId } from "@/lib/brain/presets";
+import { getPreset, type PresetId } from "@/lib/brain/presets";
 
 import HubNode from "./nodes/hub-node";
 import DomainNode from "./nodes/domain-node";
@@ -67,6 +67,7 @@ import { Breadcrumb } from "./chrome/breadcrumb";
 import { AltitudePill } from "./chrome/altitude-pill";
 import { BackButton } from "./chrome/back-button";
 import { Minimap } from "./chrome/minimap";
+import { Coachmark } from "./chrome/coachmark";
 import { ExternalsCluster } from "./chrome/externals-cluster";
 import { BrainCommandPalette } from "./chrome/command-palette";
 import { DetailPanel } from "./panel/detail-panel";
@@ -174,17 +175,35 @@ function CanvasInner() {
       }
     }
 
-    const rfNodes = centeredNodes.map<Node>((n) => ({
-      id: n.id,
-      type: n.type,
-      position: n.position,
-      data: n.data as unknown as Record<string, unknown>,
-      // Reflect provider selection so the custom components light up.
-      selected: view.selection === n.id,
-      draggable: false,
-      connectable: false,
-      // L0 function axis renders the function capability set, not BrainNodes.
-    }));
+    // Preset emphasis (uxflow-02): a preset whose `emphasize` set is non-empty
+    // recedes the systems NOT in it at the portfolio level, so the audience's
+    // focus reads (e.g. Investor foregrounds the 3 built products). Layered on
+    // top of the lens's own dimming, never overriding it brighter.
+    const emphasize = getPreset(view.preset).emphasize;
+    const applyPresetEmphasis =
+      view.level === 0 && view.axis === "system" && emphasize.length > 0;
+
+    const rfNodes = centeredNodes.map<Node>((n) => {
+      let data = n.data as RFNodeData;
+      if (
+        applyPresetEmphasis &&
+        data.node.system &&
+        !emphasize.includes(data.node.system)
+      ) {
+        data = { ...data, dimmed: true, emphasis: Math.min(data.emphasis, 0.5) };
+      }
+      return {
+        id: n.id,
+        type: n.type,
+        position: n.position,
+        data: data as unknown as Record<string, unknown>,
+        // Reflect provider selection so the custom components light up.
+        selected: view.selection === n.id,
+        draggable: false,
+        connectable: false,
+        // L0 function axis renders the function capability set, not BrainNodes.
+      };
+    });
 
     const rfEdges = (result.edges as RFEdge[]).map<Edge>((e) => ({
       id: e.id,
@@ -225,6 +244,14 @@ function CanvasInner() {
     view.focusFn ?? ""
   }:${view.focusDomainId ?? ""}`;
 
+  // Plain-language altitude for the screen-reader live region.
+  const altitudeLabel =
+    view.level === 0
+      ? view.axis === "function"
+        ? "Capability map"
+        : "Portfolio"
+      : view.focusDomainId ?? view.focusSystemId ?? `Level ${view.level}`;
+
   // Camera glide + focus management on every altitude change. Replaces the old
   // remount-crossfade that teleported the viewport and dropped keyboard focus to
   // <body>. React Flow tweens the viewport FROM the previous framing INTO the
@@ -247,6 +274,28 @@ function CanvasInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [altitudeKey, reduceMotion]);
 
+  // Re-fit when the canvas itself resizes (the app sidebar collapses, the window
+  // resizes, the detail panel mounts/unmounts). Without this the graph drifts
+  // off-center with no recovery until the next drill (scale-05). Debounced via
+  // rAF so a drag-resize doesn't thrash fitView.
+  useEffect(() => {
+    const wrap = graphWrapRef.current;
+    if (!wrap || typeof ResizeObserver === "undefined") return;
+    let raf = 0;
+    const ro = new ResizeObserver(() => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() =>
+        rf.fitView({ padding: 0.18, maxZoom: 1.45, duration: reduceMotion ? 0 : 240 }),
+      );
+    });
+    ro.observe(wrap);
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reduceMotion]);
+
   // Dev guard: a derived edge whose endpoints aren't in the visible node set is
   // exactly the class of bug that shipped the silent edge-drop (link-06). Surface
   // it loudly in development so it can never regress invisibly again.
@@ -265,7 +314,7 @@ function CanvasInner() {
   return (
     <div
       className="brain-root"
-      role="application"
+      role="region"
       aria-label="The Brain — architecture map"
       style={{
         position: "relative",
@@ -278,13 +327,27 @@ function CanvasInner() {
         overflow: "hidden",
       }}
     >
+      {/* Skip past the ~65 rail/chrome controls straight to the graph. */}
+      <a href="#brain-graph" className="brain-skip">
+        Skip to architecture graph
+      </a>
+
+      {/* Screen-reader announcement of the current altitude + lens + preset. */}
+      <div className="brain-sr-only" role="status" aria-live="polite">
+        {`${altitudeLabel} · ${view.lens} lens · ${view.preset} view`}
+      </div>
+
       <Rail />
 
-      <div
-        aria-label="Architecture graph"
-        style={{ position: "relative", flex: 1, minWidth: 0, minHeight: 0 }}
-      >
-        <div ref={graphWrapRef} style={{ position: "absolute", inset: 0 }}>
+      <div style={{ position: "relative", flex: 1, minWidth: 0, minHeight: 0 }}>
+        <div
+          id="brain-graph"
+          ref={graphWrapRef}
+          tabIndex={-1}
+          role="application"
+          aria-label="Architecture graph — pan with two fingers, zoom with the controls or pinch, click a node to drill in"
+          style={{ position: "absolute", inset: 0, outline: "none" }}
+        >
           <ReactFlow
             colorMode="dark"
             nodes={nodes}
@@ -310,7 +373,7 @@ function CanvasInner() {
                 works). Themed via --xy-controls-* in brain.css. */}
             <Controls
               showInteractive={false}
-              position="bottom-left"
+              position="bottom-right"
               aria-label="Zoom and fit controls"
             />
           </ReactFlow>
@@ -322,6 +385,7 @@ function CanvasInner() {
         <FloatingBreadcrumb />
         <ExternalsCluster />
         <Minimap />
+        <Coachmark />
 
         {isEmpty ? (
           <EmptyState

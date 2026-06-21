@@ -242,7 +242,15 @@ export function visibleNodes(graph: BrainGraph, q: VisibleQuery): BrainNode[] {
     // Portfolio (system axis) → the system hubs; capability map (function axis)
     // → the synthesized function hubs.
     if (q.axis === "function") return capNodes(functionNodes(graph));
-    return capNodes(graph.nodes.filter((n) => n.level === 1));
+    // Lay the hubs on a compact ring around the origin so the portfolio reads as
+    // a tight constellation instead of a sparse scatter in a void (zoom-03): a
+    // tighter frame means pinch-zoom lands on/near content, not empty space.
+    const hubs = capNodes(graph.nodes.filter((n) => n.level === 1));
+    const ring = ringLayout(
+      hubs.map((h) => h.id),
+      { radius: 360, startAngleDeg: -90 },
+    );
+    return hubs.map((h) => ({ ...h, pos: ring[h.id] ?? h.pos }));
   }
 
   if (q.level === 1) {

@@ -128,11 +128,27 @@
   place-items: center;
 }
 
-/* ── Selected state (.sel) — accent border + inset ring, NO glow ──────────── */
+/* ── Selected state (.sel) — accent border + inset ring + a subtle pop, NO
+ * glow. The scale gives selection a perceptible "lift" (motion-04) without
+ * animating layout; gated under reduced-motion below. ──────────────────────── */
 .brain-root .nd.sel .chip,
 .brain-root .hub.sel .orb {
   border-color: var(--accent);
   box-shadow: inset 0 0 0 1px var(--accent), var(--shadow-med);
+}
+.brain-root .nd.sel .chip {
+  transform: scale(1.04);
+}
+.brain-root .surface.sel .chip {
+  transform: scale(1.04);
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent), var(--shadow-med);
+}
+@media (prefers-reduced-motion: reduce) {
+  .brain-root .nd.sel .chip,
+  .brain-root .surface.sel .chip {
+    transform: none;
+  }
 }
 
 /* ── Cluster node (collapsed roadmap) — hatched + dashed (FR-NAV-7) ───────── */

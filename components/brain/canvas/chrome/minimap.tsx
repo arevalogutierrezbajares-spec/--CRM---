@@ -87,20 +87,35 @@ export function Minimap() {
                 actions.drillInto({ nodeId: sys, level: 1, system: sys })
               }
               style={{
+                // 24px transparent hit-area (a11y-05) with an 11px visual dot
+                // centered inside — touch-friendly without crowding the map.
                 position: "absolute",
                 left: `${p.cx * 100}%`,
                 top: `${p.cy * 100}%`,
                 transform: "translate(-50%,-50%)",
-                width: 11,
-                height: 11,
+                width: 24,
+                height: 24,
                 borderRadius: "50%",
-                border: `1.5px solid ${accent}`,
-                background: isHere ? accent : "transparent",
+                border: "none",
+                background: "transparent",
+                display: "grid",
+                placeItems: "center",
                 padding: 0,
                 cursor: "pointer",
-                boxShadow: isHere ? "var(--shadow-low)" : "none",
               }}
-            />
+            >
+              <span
+                aria-hidden="true"
+                style={{
+                  width: 11,
+                  height: 11,
+                  borderRadius: "50%",
+                  border: `1.5px solid ${accent}`,
+                  background: isHere ? accent : "transparent",
+                  boxShadow: isHere ? "var(--shadow-low)" : "none",
+                }}
+              />
+            </button>
           );
         })}
       </div>
