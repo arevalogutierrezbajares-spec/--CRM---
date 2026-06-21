@@ -2,6 +2,7 @@ import { requireUser } from "@/lib/current-user";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Toaster } from "@/components/ui/toaster";
 import { PresenceProvider } from "@/lib/presence/presence-context";
+import { heartbeatAction } from "@/app/(app)/team/actions";
 import { CommandPalette } from "@/components/command/command-palette";
 import { GlobalShortcuts } from "@/components/command/global-shortcuts";
 import { GlobalUploadModal } from "@/components/upload/global-upload-modal";
@@ -37,6 +38,7 @@ export default async function AppLayout({
       workspaceId={user.workspaceId}
       userId={user.id}
       userName={user.displayName}
+      heartbeat={heartbeatAction}
     >
       <MotionProvider>
       <div className="flex min-h-screen">

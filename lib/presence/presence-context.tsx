@@ -17,7 +17,6 @@ import {
 import { usePathname } from "next/navigation";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
-import { heartbeatAction } from "@/app/(app)/team/actions";
 
 export type PresenceUser = {
   userId: string;
@@ -72,11 +71,15 @@ export function PresenceProvider({
   workspaceId,
   userId,
   userName,
+  heartbeat,
   children,
 }: {
   workspaceId: string;
   userId: string;
   userName: string;
+  /** Persists last-seen. Injected by the app shell (a server action) so this
+   * reusable lib stays decoupled from app/ routes. */
+  heartbeat: () => void | Promise<unknown>;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -106,11 +109,11 @@ export function PresenceProvider({
     channel.subscribe((status) => {
       if (status === "SUBSCRIBED") {
         void channel.track({ userId, name: userName, color, label: labelForPath(pathname) });
-        void heartbeatAction();
+        void heartbeat();
       }
     });
 
-    const hb = setInterval(() => void heartbeatAction(), 45_000);
+    const hb = setInterval(() => void heartbeat(), 45_000);
     return () => {
       clearInterval(hb);
       channel.unsubscribe();

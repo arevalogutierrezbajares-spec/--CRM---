@@ -1,39 +1,5 @@
 [
   {
-    "type": "dependency",
-    "from": "lib/presence/presence-context.tsx",
-    "to": "app/(app)/team/actions.ts",
-    "unresolvedTo": "@/app/(app)/team/actions",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "lib-stays-app-agnostic"
-    }
-  },
-  {
-    "type": "dependency",
-    "from": "lib/project-files/upload-client.ts",
-    "to": "app/(app)/lob/actions.ts",
-    "unresolvedTo": "@/app/(app)/lob/actions",
-    "dependencyTypes": [
-      "aliased",
-      "aliased-tsconfig",
-      "aliased-tsconfig-paths",
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "lib-stays-app-agnostic"
-    }
-  },
-  {
     "type": "cycle",
     "from": "components/meetings/present/material-renderer.tsx",
     "to": "components/meetings/present/present-stage.tsx",
