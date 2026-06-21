@@ -1678,6 +1678,63 @@ export async function listShareableDocsForRoom(input: {
 }
 
 /**
+ * Workspace docs/files/links shareable to a contact, with an `alreadyShared`
+ * flag set against any active (non-revoked) share already sent to that contact.
+ * Powers the one-tap "Share materials" picker on the contact page — no room
+ * needs to exist yet.
+ */
+export async function listShareableDocsForContact(input: {
+  workspaceId: string;
+  contactId: string;
+}): Promise<ShareableRoomDoc[]> {
+  const [links, activeShares] = await Promise.all([
+    db
+      .select({
+        id: schema.projectLinks.id,
+        label: schema.projectLinks.label,
+        kind: schema.projectLinks.kind,
+        category: schema.projectLinks.category,
+        lobId: schema.projectLinks.lobId,
+        lobTitle: schema.linesOfBusiness.title,
+        sizeBytes: schema.projectLinks.sizeBytes,
+        mimeType: schema.projectLinks.mimeType,
+        originalFilename: schema.projectLinks.originalFilename,
+      })
+      .from(schema.projectLinks)
+      .innerJoin(
+        schema.linesOfBusiness,
+        eq(schema.linesOfBusiness.id, schema.projectLinks.lobId),
+      )
+      .where(
+        and(
+          eq(schema.projectLinks.workspaceId, input.workspaceId),
+          ne(schema.projectLinks.kind, "note"),
+        ),
+      )
+      .orderBy(asc(schema.linesOfBusiness.title), asc(schema.projectLinks.label)),
+    db
+      .select({ projectLinkId: schema.partnerShares.projectLinkId })
+      .from(schema.partnerShares)
+      .where(
+        and(
+          eq(schema.partnerShares.workspaceId, input.workspaceId),
+          eq(schema.partnerShares.contactId, input.contactId),
+          isNull(schema.partnerShares.revokedAt),
+        ),
+      ),
+  ]);
+
+  const shared = new Set(
+    activeShares.map((s) => s.projectLinkId).filter(Boolean) as string[],
+  );
+
+  return links.map((link) => ({
+    ...link,
+    alreadyShared: shared.has(link.id),
+  }));
+}
+
+/**
  * Set/clear a contact's brand logo. Returns the previously-uploaded object path
  * (if any) so the caller can clean up storage. `logoStoragePath` is set only for
  * uploads; a pasted URL stores logoUrl and clears the path.

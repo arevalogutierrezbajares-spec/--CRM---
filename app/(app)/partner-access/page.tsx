@@ -208,8 +208,6 @@ export default async function PartnerAccessPage() {
                           <td className="py-3">
                             <ShareLedgerActions
                               shareId={share.id}
-                              viewed={Boolean(share.viewedAt)}
-                              downloaded={Boolean(share.downloadedAt)}
                               revoked={Boolean(share.revokedAt)}
                             />
                           </td>

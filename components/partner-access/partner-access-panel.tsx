@@ -5,10 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { ShareLedgerActions } from "@/components/partner-access/share-ledger-actions";
-import {
-  NewRoomDialog,
-  type NewRoomContactOption,
-} from "@/components/partner-access/new-room-dialog";
+import { QuickShareDialog } from "@/components/partner-access/quick-share-dialog";
+import { type NewRoomContactOption } from "@/components/partner-access/new-room-dialog";
 import type { PartnerAccessOverview } from "@/db/queries/partner-access";
 import {
   partnerKindLabel,
@@ -52,30 +50,30 @@ export function PartnerAccessPanel({
         <CardTitle className="flex items-center justify-between gap-2">
           <span className="inline-flex min-w-0 items-center gap-2">
             <DoorOpen className="h-4 w-4 shrink-0" />
-            <span className="truncate">Partner Access</span>
+            <span className="truncate">Share &amp; Track</span>
           </span>
-          <span className="flex shrink-0 items-center gap-1">
-            {newRoomContact && (
-              <NewRoomDialog
-                fixedContact={newRoomContact}
-                triggerVariant="ghost"
-                triggerLabel="New"
-              />
-            )}
-            <Button asChild variant="ghost" size="sm" className="h-7 px-2">
-              <Link href="/partner-access">Open</Link>
-            </Button>
-          </span>
+          <Button asChild variant="ghost" size="sm" className="h-7 px-2">
+            <Link href="/partner-access">Open</Link>
+          </Button>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
+        {newRoomContact && (
+          <QuickShareDialog
+            contactId={newRoomContact.id}
+            contactName={newRoomContact.name}
+            /* Land in the contact's existing room (its kind) so shares don't
+               fragment into a second room; falls back to "client" when none. */
+            partnerKind={access.rooms[0]?.partnerKind ?? null}
+          />
+        )}
         {access.rooms.length === 0 && access.shares.length === 0 ? (
           <div className="rounded-md border border-dashed border-[var(--border)] p-3">
-            <p className="text-sm font-medium">No access shared yet.</p>
+            <p className="text-sm font-medium">Nothing shared yet.</p>
             <p className="mt-1 text-xs text-[var(--muted-foreground)]">
               {contact
-                ? "Create a room to give this contact a private workspace, or share a project document."
-                : "Share a project document to create the first room and ledger entry."}
+                ? "Use “Share materials” above to send documents as a private, no-login link — every open is tracked here."
+                : "Share a project document to create the first ledger entry."}
             </p>
           </div>
         ) : (
@@ -192,8 +190,6 @@ export function PartnerAccessPanel({
                         <div className="ml-5">
                           <ShareLedgerActions
                             shareId={share.id}
-                            viewed={Boolean(share.viewedAt)}
-                            downloaded={Boolean(share.downloadedAt)}
                             revoked={Boolean(share.revokedAt)}
                           />
                         </div>
