@@ -4,7 +4,7 @@ import { useState } from "react";
 import { ExternalLink, FileText, ImageOff } from "lucide-react";
 import { materialType } from "@/lib/materials/material-type";
 import { useDeckFit, DECK_W, DECK_H } from "@/lib/decks/use-deck-fit";
-import type { PresentMaterial } from "./present-stage";
+import type { PresentMaterial } from "./types";
 
 /** Microsoft Office Online embed URL for a publicly-fetchable file URL. */
 function officeEmbedSrc(fileUrl: string): string {
