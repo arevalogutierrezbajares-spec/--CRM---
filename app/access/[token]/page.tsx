@@ -2,6 +2,7 @@ import { cache } from "react";
 import type { Metadata } from "next";
 import { ArrowRight, Lock, MessageSquare } from "lucide-react";
 import { formatRelativeEs } from "@/lib/utils";
+import { SITE_URL } from "@/lib/site-url";
 import { roomHeroVideo } from "@/lib/partner-room-videos";
 import { RoomHeroVideo } from "@/components/partner-access/room-hero-video";
 import {
@@ -44,9 +45,6 @@ type Params = Promise<{ token: string }>;
 const getRoomAccess = cache((token: string) =>
   getPublicPartnerRoomByToken({ token }).catch(() => null),
 );
-
-const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL ?? "https://x.caneycloud.com";
 
 /**
  * Link previews (WhatsApp/iMessage/Slack) show the room's own identity —

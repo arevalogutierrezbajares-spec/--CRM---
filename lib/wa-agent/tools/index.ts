@@ -34,6 +34,15 @@ import { editTask } from "./edit-task";
 import { findMember } from "./find-member";
 import { postToTownHall } from "./post-to-townhall";
 import { fileEnhancement } from "./file-enhancement";
+// Partner rooms — create, fill, polish, and share branded partner microsites
+import { createPartnerRoom } from "./create-partner-room";
+import { partnerRoomOverview } from "./partner-room-overview";
+import { addRoomDocuments } from "./add-room-documents";
+import { addRoomLink } from "./add-room-link";
+import { updatePartnerRoom } from "./update-partner-room";
+import { setRoomBranding } from "./set-room-branding";
+import { addRoomNextStep } from "./add-room-next-step";
+import { getRoomLink } from "./get-room-link";
 
 export const TOOLS: Record<string, ToolEntry> = {
   find_contact: findContact,
@@ -64,6 +73,15 @@ export const TOOLS: Record<string, ToolEntry> = {
   find_member: findMember,
   post_to_townhall: postToTownHall,
   file_enhancement: fileEnhancement,
+  // Partner rooms
+  create_partner_room: createPartnerRoom,
+  partner_room_overview: partnerRoomOverview,
+  add_room_documents: addRoomDocuments,
+  add_room_link: addRoomLink,
+  update_partner_room: updatePartnerRoom,
+  set_room_branding: setRoomBranding,
+  add_room_next_step: addRoomNextStep,
+  get_partner_room_link: getRoomLink,
 };
 
 export const TOOL_NAMES = Object.keys(TOOLS);

@@ -25,8 +25,12 @@ function error(id: JsonRpcId, code: number, message: string) {
 /** Map a wa-agent ToolResult onto an MCP tools/call result. */
 function toToolResult(r: Awaited<ReturnType<typeof executeMcpTool>>) {
   if (r.ok) {
-    const text =
-      r.speak ?? (typeof r.data === "string" ? r.data : JSON.stringify(r.data));
+    // The text block must carry the data too — clients that render only
+    // content[0].text would otherwise lose ids/links that exist solely in
+    // structuredContent (fatal for one-time-visible access links).
+    const dataText =
+      typeof r.data === "string" ? r.data : (JSON.stringify(r.data) ?? "");
+    const text = [r.speak, dataText].filter(Boolean).join("\n") || "Done.";
     const out: Record<string, unknown> = {
       content: [{ type: "text", text }],
       isError: false,
