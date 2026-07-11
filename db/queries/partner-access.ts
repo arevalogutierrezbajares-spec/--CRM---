@@ -1945,6 +1945,33 @@ export async function getPublicPartnerRoomByToken(input: {
   };
 }
 
+/**
+ * Presence ping from an open room tab. Bumps only the viewed timestamps —
+ * no access event (a heartbeat isn't a visit) and no `updatedAt` (which
+ * drives the guest-facing "Actualizado" chip and must reflect real content).
+ */
+export async function touchPartnerRoomPresence(input: {
+  roomId: string;
+  memberId?: string | null;
+}) {
+  const now = new Date();
+  await db
+    .update(schema.partnerRooms)
+    .set({ publicAccessLastViewedAt: now })
+    .where(eq(schema.partnerRooms.id, input.roomId));
+  if (input.memberId) {
+    await db
+      .update(schema.partnerRoomMembers)
+      .set({ lastViewedAt: now })
+      .where(
+        and(
+          eq(schema.partnerRoomMembers.id, input.memberId),
+          eq(schema.partnerRoomMembers.roomId, input.roomId),
+        ),
+      );
+  }
+}
+
 export async function recordPublicPartnerRoomView(input: {
   roomId: string;
   workspaceId: string;

@@ -28,18 +28,25 @@ const ACCENTS = [
   "bg-violet-100 text-violet-900 dark:bg-violet-900/40 dark:text-violet-200",
 ];
 
+// A heartbeat lands every 60s from open tabs; allow a couple of missed beats.
+const ONLINE_WINDOW_MS = 2.5 * 60 * 1000;
+
 /**
  * "La alianza" — one combined card showing both sides of the partnership: the
  * host team (with roles) and the guests in the room. Client-facing → Spanish.
+ * Guests whose presence heartbeat is fresh show "en línea ahora" with the
+ * same green pulse as the hero's "Actualizado" dot.
  */
 export function RoomPeople({
   hosts,
   guests,
   youId,
+  nowMs,
 }: {
   hosts: Host[];
   guests: Guest[];
   youId: string | null;
+  nowMs?: number;
 }) {
   if (hosts.length === 0 && guests.length === 0) return null;
 
@@ -92,26 +99,50 @@ export function RoomPeople({
             Invitados
           </p>
           <ul className="mt-1.5 space-y-2.5">
-            {guests.map((g) => (
-              <li key={g.id} className="flex items-center gap-3">
-                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[var(--secondary)] text-sm font-medium text-[var(--secondary-foreground)]">
-                  {initials(g.displayName)}
-                </span>
-                <div className="min-w-0">
-                  <div className="truncate text-sm">
-                    {g.displayName ?? "Invitado"}
-                    {g.id === youId && (
-                      <span className="ml-1 text-xs text-[var(--muted-foreground)]">(tú)</span>
+            {guests.map((g) => {
+              const online =
+                nowMs !== undefined &&
+                g.lastViewedAt !== null &&
+                nowMs - g.lastViewedAt.getTime() < ONLINE_WINDOW_MS;
+              return (
+                <li key={g.id} className="flex items-center gap-3">
+                  <span className="relative grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[var(--secondary)] text-sm font-medium text-[var(--secondary-foreground)]">
+                    {initials(g.displayName)}
+                    {online && (
+                      <span
+                        className="absolute -bottom-0.5 -right-0.5 flex h-2.5 w-2.5"
+                        aria-hidden
+                      >
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60 motion-reduce:animate-none" />
+                        <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400 ring-2 ring-[var(--card)]" />
+                      </span>
+                    )}
+                  </span>
+                  <div className="min-w-0">
+                    <div className="truncate text-sm">
+                      {g.displayName ?? "Invitado"}
+                      {g.id === youId && (
+                        <span className="ml-1 text-xs text-[var(--muted-foreground)]">(tú)</span>
+                      )}
+                    </div>
+                    {(g.roleLabel || g.lastViewedAt || online) && (
+                      <div
+                        className={`truncate text-xs ${
+                          online
+                            ? "font-medium text-emerald-600 dark:text-emerald-400"
+                            : "text-[var(--muted-foreground)]"
+                        }`}
+                      >
+                        {online
+                          ? "en línea ahora"
+                          : g.roleLabel ??
+                            `activo ${formatRelativeEs(g.lastViewedAt as Date)}`}
+                      </div>
                     )}
                   </div>
-                  {(g.roleLabel || g.lastViewedAt) && (
-                    <div className="truncate text-xs text-[var(--muted-foreground)]">
-                      {g.roleLabel ?? `activo ${formatRelativeEs(g.lastViewedAt as Date)}`}
-                    </div>
-                  )}
-                </div>
-              </li>
-            ))}
+                </li>
+              );
+            })}
           </ul>
         </>
       )}

@@ -22,6 +22,9 @@ import {
 import { formatBytes } from "@/lib/project-files/limits";
 import { formatRelativeEs } from "@/lib/utils";
 import { repoSection, REPO_SECTION_OPTIONS } from "@/lib/partner-access";
+import { useRoomActivity } from "@/components/partner-access/room-activity-context";
+import { MediaLightbox } from "@/components/partner-access/media-lightbox";
+import { PdfThumb } from "@/components/partner-access/pdf-thumb";
 import { PublicUploadForm } from "@/components/partner-access/public-upload-form";
 import {
   SignDocumentModal,
@@ -49,6 +52,7 @@ export type RepoShare = {
   kindSnapshot: string;
   permissions: string[];
   sizeBytes: number | null;
+  mimeType: string | null;
   isHtmlDeck: boolean;
   isLink: boolean;
   urlSnapshot: string | null;
@@ -100,6 +104,24 @@ const SECTION_ICONS: Record<string, LucideIcon> = {
   informes: BarChart3,
 };
 
+// Thumbnails only for PDFs we can reasonably fetch client-side.
+const PDF_THUMB_MAX_BYTES = 15 * 1024 * 1024;
+
+function isPdf(mime: string | null) {
+  return mime === "application/pdf";
+}
+
+// Color-coded entry icons so the repository scans like a data room.
+const ICON_TINT = {
+  note: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+  link: "bg-sky-500/10 text-sky-600 dark:text-sky-400",
+  image: "bg-violet-500/10 text-violet-600 dark:text-violet-400",
+  video: "bg-rose-500/10 text-rose-600 dark:text-rose-400",
+  pdf: "bg-red-500/10 text-red-600 dark:text-red-400",
+  deck: "bg-[var(--primary)]/10 text-[var(--primary)]",
+  file: "bg-[var(--secondary)] text-[var(--muted-foreground)]",
+} as const;
+
 type Entry =
   | { type: "item"; item: RepoItem }
   | { type: "share"; share: RepoShare };
@@ -129,6 +151,7 @@ export function PublicRepository({
   const [signing, setSigning] = useState<{ key: string; sig: RepoSignature; title: string } | null>(
     null,
   );
+  const activity = useRoomActivity();
 
   function signatureFor(key: string): RepoSignature | null {
     const base = signaturesByTarget[key];
@@ -294,6 +317,8 @@ export function PublicRepository({
           onClose={() => setSigning(null)}
           onSigned={(result) => {
             setSignedNow((prev) => ({ ...prev, [signing.key]: result }));
+            // Hero "firmas pendientes" chip tracks the signature live.
+            activity?.signatureSigned();
             setSigning(null);
           }}
         />
@@ -384,20 +409,35 @@ function ItemRow({
   onComment: (body: string) => Promise<RepoComment | null>;
 }) {
   const mk = mediaKind(item.mimeType);
+  const [zoomed, setZoomed] = useState(false);
+  const tint =
+    item.kind === "note"
+      ? ICON_TINT.note
+      : item.kind === "link"
+        ? ICON_TINT.link
+        : mk === "image"
+          ? ICON_TINT.image
+          : mk === "video"
+            ? ICON_TINT.video
+            : isPdf(item.mimeType)
+              ? ICON_TINT.pdf
+              : ICON_TINT.file;
   return (
     <li className="p-4 transition-colors hover:bg-[var(--secondary)]/25">
       <div className="flex items-start gap-3">
-        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-[var(--secondary)]">
+        <span
+          className={`grid h-8 w-8 shrink-0 place-items-center rounded-md ${tint}`}
+        >
           {item.kind === "note" ? (
-            <StickyNote className="h-4 w-4 text-[var(--muted-foreground)]" />
+            <StickyNote className="h-4 w-4" />
           ) : item.kind === "link" ? (
-            <LinkIcon className="h-4 w-4 text-[var(--muted-foreground)]" />
+            <LinkIcon className="h-4 w-4" />
           ) : mk === "image" ? (
-            <ImageIcon className="h-4 w-4 text-[var(--muted-foreground)]" />
+            <ImageIcon className="h-4 w-4" />
           ) : mk === "video" ? (
-            <Film className="h-4 w-4 text-[var(--muted-foreground)]" />
+            <Film className="h-4 w-4" />
           ) : (
-            <FileText className="h-4 w-4 text-[var(--muted-foreground)]" />
+            <FileText className="h-4 w-4" />
           )}
         </span>
         <div className="min-w-0 flex-1">
@@ -443,13 +483,36 @@ function ItemRow({
           <SignatureBlock token={token} signature={signature} onSign={onSign} />
 
           {item.kind === "file" && mk === "image" && (
-            /* eslint-disable-next-line @next/next/no-img-element */
-            <img
-              src={`/access/${token}/item/${item.id}`}
-              alt={item.title}
-              className="mt-2 max-h-72 rounded-lg border border-[var(--border)] object-contain"
-            />
+            <>
+              <button
+                type="button"
+                onClick={() => setZoomed(true)}
+                aria-label={`Ampliar ${item.title}`}
+                className="mt-2 block cursor-zoom-in"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={`/access/${token}/item/${item.id}`}
+                  alt={item.title}
+                  className="max-h-72 rounded-lg border border-[var(--border)] object-contain transition hover:opacity-90"
+                />
+              </button>
+              <MediaLightbox
+                src={`/access/${token}/item/${item.id}`}
+                alt={item.title}
+                open={zoomed}
+                onClose={() => setZoomed(false)}
+              />
+            </>
           )}
+          {item.kind === "file" &&
+            isPdf(item.mimeType) &&
+            (item.sizeBytes ?? 0) <= PDF_THUMB_MAX_BYTES && (
+              <PdfThumb
+                src={`/access/${token}/item/${item.id}`}
+                title={item.title}
+              />
+            )}
           {item.kind === "file" && mk === "video" && (
             <video
               controls
@@ -486,14 +549,25 @@ function ShareRow({
   ownerLabel: string;
   onComment: (body: string) => Promise<RepoComment | null>;
 }) {
+  const tint = share.isLink
+    ? ICON_TINT.link
+    : share.isHtmlDeck
+      ? ICON_TINT.deck
+      : isPdf(share.mimeType)
+        ? ICON_TINT.pdf
+        : ICON_TINT.file;
   return (
     <li className="p-4 transition-colors hover:bg-[var(--secondary)]/25">
       <div className="flex items-start gap-3">
-        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-[var(--secondary)]">
+        <span
+          className={`grid h-8 w-8 shrink-0 place-items-center rounded-md ${tint}`}
+        >
           {share.isLink ? (
-            <LinkIcon className="h-4 w-4 text-[var(--muted-foreground)]" />
+            <LinkIcon className="h-4 w-4" />
+          ) : share.isHtmlDeck ? (
+            <Clapperboard className="h-4 w-4" />
           ) : (
-            <FileText className="h-4 w-4 text-[var(--muted-foreground)]" />
+            <FileText className="h-4 w-4" />
           )}
         </span>
         <div className="min-w-0 flex-1">
@@ -546,6 +620,14 @@ function ShareRow({
               {share.description}
             </p>
           )}
+          {share.kindSnapshot === "file" &&
+            isPdf(share.mimeType) &&
+            (share.sizeBytes ?? 0) <= PDF_THUMB_MAX_BYTES && (
+              <PdfThumb
+                src={`/access/${token}/view/${share.id}`}
+                title={share.title}
+              />
+            )}
           <SignatureBlock token={token} signature={signature} onSign={onSign} />
           <PartnerCommentThread
             comments={comments}

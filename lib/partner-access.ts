@@ -50,6 +50,10 @@ export function partnerKindLabel(value: string | null | undefined) {
   );
 }
 
+// Shared between the sign-in intro and the room footer echo — one source so
+// the two surfaces can never drift apart.
+export const BOLIVAR_QUOTE = "Dios concede la victoria a la perseverancia";
+
 export function partnerRoomStatusLabel(value: string | null | undefined) {
   return (
     PARTNER_ROOM_STATUS_OPTIONS.find((option) => option.value === value)

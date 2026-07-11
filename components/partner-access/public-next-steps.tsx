@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { CalendarClock, Check, CheckSquare, Users } from "lucide-react";
 import { formatRelativeEs } from "@/lib/utils";
+import { useRoomActivity } from "@/components/partner-access/room-activity-context";
 import type { PartnerNextStep } from "@/db/queries/partner-next-steps";
 
 const ASSIGNEE_LABEL: Record<string, string> = {
@@ -10,6 +12,8 @@ const ASSIGNEE_LABEL: Record<string, string> = {
   owner: "El equipo",
   both: "Ambos",
 };
+
+type CompletionOverride = Pick<PartnerNextStep, "completedAt" | "completedBy">;
 
 export function PublicNextSteps({
   token,
@@ -20,35 +24,67 @@ export function PublicNextSteps({
   initialSteps: PartnerNextStep[];
   nowMs: number;
 }) {
-  const [steps, setSteps] = useState(initialSteps);
+  // Display derives from the server snapshot + local completion overrides
+  // (never seed-then-drift): a router.refresh with new/edited steps flows
+  // straight through, while optimistic toggles stay instant.
+  const [overrides, setOverrides] = useState<Record<string, CompletionOverride>>(
+    {},
+  );
   const [pending, setPending] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
+  const [celebrate, setCelebrate] = useState(false);
+  const activity = useRoomActivity();
+  const prevOpenRef = useRef<number | null>(null);
+
+  const steps = initialSteps.map((s) =>
+    overrides[s.id] ? { ...s, ...overrides[s.id] } : s,
+  );
+  const openCount = steps.filter((s) => !s.completedAt).length;
 
   async function handleToggle(step: PartnerNextStep) {
     if (pending.has(step.id)) return;
+    const completing = !step.completedAt;
     setPending((prev) => new Set(prev).add(step.id));
     setError(null);
+    prevOpenRef.current = openCount;
+
+    // Optimistic flip; rolled back if the server disagrees.
+    const optimistic: CompletionOverride = completing
+      ? { completedAt: new Date(), completedBy: "partner" }
+      : { completedAt: null, completedBy: null };
+    setOverrides((prev) => ({ ...prev, [step.id]: optimistic }));
+    const nextOpen = openCount + (completing ? -1 : 1);
+    activity?.setOpenSteps(nextOpen);
+    if (completing && nextOpen === 0) setCelebrate(true);
+
     try {
       const res = await fetch(`/api/access/${token}/next-steps/${step.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ complete: !step.completedAt }),
+        body: JSON.stringify({ complete: completing }),
       });
       if (res.ok) {
         const updated = (await res.json()) as PartnerNextStep;
-        setSteps((prev) =>
-          prev.map((s) =>
-            s.id === step.id
-              ? { ...s, completedAt: updated.completedAt, completedBy: updated.completedBy }
-              : s,
-          ),
-        );
+        setOverrides((prev) => ({
+          ...prev,
+          [step.id]: {
+            completedAt: updated.completedAt,
+            completedBy: updated.completedBy,
+          },
+        }));
       } else {
-        const data = (await res.json().catch(() => ({}))) as { error?: string };
-        setError(data.error ?? "No se pudo guardar el cambio. Intenta de nuevo.");
+        throw new Error("save-failed");
       }
     } catch {
-      setError("Sin conexión. Revisa tu internet e intenta de nuevo.");
+      // Roll back the flip.
+      setOverrides((prev) => {
+        const next = { ...prev };
+        delete next[step.id];
+        return next;
+      });
+      activity?.setOpenSteps(openCount);
+      setCelebrate(false);
+      setError("No se pudo guardar el cambio. Intenta de nuevo.");
     } finally {
       setPending((prev) => {
         const n = new Set(prev);
@@ -70,7 +106,7 @@ export function PublicNextSteps({
   }
 
   // Open items first, sorted by due date (timeline); dated before undated;
-  // completed sink to the bottom.
+  // completed sink to the bottom (layout animation makes the move visible).
   const ordered = [...steps].sort((a, b) => {
     const aDone = a.completedAt ? 1 : 0;
     const bDone = b.completedAt ? 1 : 0;
@@ -80,19 +116,24 @@ export function PublicNextSteps({
     return aDue - bDue;
   });
 
-  const openCount = steps.filter((s) => !s.completedAt).length;
-
   return (
     <div>
       {/* Header lives here (client) so the pending badge tracks toggles. */}
       <Header openCount={openCount} />
-      <p className="mb-2 mt-3 text-xs text-[var(--muted-foreground)]">
-        {openCount > 0 ? "Marca lo que ya completaste." : "Todo al día ✓"}
-      </p>
-      {error && <p className="mb-2 text-xs text-red-600 dark:text-red-400">{error}</p>}
+      <div className="mb-2 mt-3 text-xs text-[var(--muted-foreground)]">
+        {openCount > 0 ? (
+          "Marca lo que ya completaste."
+        ) : (
+          <AllDone celebrate={celebrate} />
+        )}
+      </div>
+      {error && (
+        <p className="mb-2 text-xs text-red-600 dark:text-red-400">{error}</p>
+      )}
       <ul className="max-h-[360px] space-y-2 overflow-y-auto pr-1">
         {ordered.map((step) => {
-          const interactive = step.assignedTo === "partner" || step.assignedTo === "both";
+          const interactive =
+            step.assignedTo === "partner" || step.assignedTo === "both";
           const overdue =
             !step.completedAt && step.dueAt && new Date(step.dueAt).getTime() < nowMs;
           return (
@@ -111,16 +152,72 @@ export function PublicNextSteps({
   );
 }
 
+/** The moment the last step closes: a spring-in check + gold burst. */
+function AllDone({ celebrate }: { celebrate: boolean }) {
+  return (
+    <span className="relative inline-flex items-center gap-1.5 font-medium text-emerald-600 dark:text-emerald-400">
+      <motion.span
+        initial={celebrate ? { scale: 0, rotate: -45 } : false}
+        animate={{ scale: 1, rotate: 0 }}
+        transition={{ type: "spring", stiffness: 420, damping: 16 }}
+        className="grid h-4 w-4 place-items-center rounded-full bg-emerald-500 text-white"
+      >
+        <Check className="h-3 w-3" />
+      </motion.span>
+      ¡Todo al día!
+      {celebrate && (
+        <span aria-hidden className="pointer-events-none absolute -left-1 top-1/2">
+          {Array.from({ length: 8 }, (_, i) => {
+            const angle = (i / 8) * Math.PI * 2;
+            return (
+              <motion.span
+                key={i}
+                initial={{ x: 0, y: 0, opacity: 1, scale: 1 }}
+                animate={{
+                  x: Math.cos(angle) * 26,
+                  y: Math.sin(angle) * 26,
+                  opacity: 0,
+                  scale: 0.4,
+                }}
+                transition={{ duration: 0.7, ease: "easeOut", delay: 0.1 }}
+                className="absolute h-1.5 w-1.5 rounded-full bg-amber-400"
+              />
+            );
+          })}
+        </span>
+      )}
+    </span>
+  );
+}
+
 function Header({ openCount }: { openCount: number }) {
   return (
     <div className="flex items-center gap-2">
       <CheckSquare className="h-4 w-4 text-[var(--muted-foreground)]" />
       <h2 className="text-base font-semibold">Próximos pasos</h2>
-      {openCount > 0 && (
-        <span className="ml-auto rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-          {openCount} pendiente{openCount === 1 ? "" : "s"}
-        </span>
-      )}
+      <AnimatePresence>
+        {openCount > 0 && (
+          <motion.span
+            exit={{ opacity: 0, scale: 0.8 }}
+            transition={{ duration: 0.2 }}
+            className="ml-auto overflow-hidden rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+          >
+            <AnimatePresence initial={false} mode="popLayout">
+              <motion.span
+                key={openCount}
+                initial={{ y: 8, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: -8, opacity: 0 }}
+                transition={{ duration: 0.18 }}
+                className="inline-block tabular-nums"
+              >
+                {openCount}
+              </motion.span>
+            </AnimatePresence>{" "}
+            pendiente{openCount === 1 ? "" : "s"}
+          </motion.span>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -139,38 +236,71 @@ function StepItem({
   onToggle?: (step: PartnerNextStep) => void;
 }) {
   const done = Boolean(step.completedAt);
+  const checkFace = (
+    <AnimatePresence initial={false}>
+      {done && (
+        <motion.span
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          exit={{ scale: 0 }}
+          transition={{ type: "spring", stiffness: 500, damping: 18 }}
+          className="grid place-items-center"
+        >
+          <Check className="h-3 w-3" />
+        </motion.span>
+      )}
+    </AnimatePresence>
+  );
   return (
-    <li
-      className={`flex items-start gap-2.5 rounded-lg border p-3 ${
-        overdue ? "border-red-300 bg-red-50/50 dark:border-red-900/50 dark:bg-red-950/20" : "border-[var(--border)]"
+    <motion.li
+      layout
+      transition={{ layout: { type: "spring", stiffness: 380, damping: 32 } }}
+      className={`flex items-start gap-2.5 rounded-lg border p-3 transition-colors duration-300 ${
+        overdue
+          ? "border-red-300 bg-red-50/50 dark:border-red-900/50 dark:bg-red-950/20"
+          : "border-[var(--border)]"
       }`}
     >
       {interactive ? (
-        <button
+        <motion.button
           type="button"
           disabled={loading}
           onClick={() => onToggle?.(step)}
+          whileTap={{ scale: 0.8 }}
           aria-label={done ? "Marcar como pendiente" : "Marcar como hecho"}
-          className={`relative mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-colors after:absolute after:-inset-3 after:content-[''] ${
+          className={`relative mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-colors duration-300 after:absolute after:-inset-3 after:content-[''] ${
             done
               ? "border-green-500 bg-green-500 text-white"
               : "border-[var(--border)] hover:border-[var(--foreground)]"
           } disabled:opacity-50`}
         >
-          {done && <Check className="h-3 w-3" />}
-        </button>
+          {checkFace}
+        </motion.button>
       ) : (
         <div
-          className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${
+          className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-colors duration-300 ${
             done ? "border-green-500 bg-green-500 text-white" : "border-[var(--border)]"
           }`}
         >
-          {done && <Check className="h-3 w-3" />}
+          {checkFace}
         </div>
       )}
       <div className="min-w-0 flex-1">
-        <p className={`text-sm leading-5 ${done ? "text-[var(--muted-foreground)] line-through" : ""}`}>
+        {/* Strike-through draws itself across the text on completion. */}
+        <p
+          className={`relative w-fit text-sm leading-5 transition-colors duration-300 ${
+            done ? "text-[var(--muted-foreground)]" : ""
+          }`}
+        >
           {step.text}
+          <motion.span
+            aria-hidden
+            initial={false}
+            animate={{ scaleX: done ? 1 : 0 }}
+            transition={{ duration: 0.35, ease: "easeOut" }}
+            style={{ originX: 0 }}
+            className="absolute left-0 top-1/2 h-px w-full bg-current"
+          />
         </p>
         <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs">
           <span className="inline-flex items-center gap-1 rounded bg-[var(--secondary)] px-1.5 py-0.5 text-[10px] text-[var(--secondary-foreground)]">
@@ -180,7 +310,9 @@ function StepItem({
           {step.dueAt && !done && (
             <span
               className={`inline-flex items-center gap-1 ${
-                overdue ? "font-medium text-red-600 dark:text-red-400" : "text-[var(--muted-foreground)]"
+                overdue
+                  ? "font-medium text-red-600 dark:text-red-400"
+                  : "text-[var(--muted-foreground)]"
               }`}
             >
               <CalendarClock className="h-3 w-3" />
@@ -196,6 +328,6 @@ function StepItem({
           )}
         </div>
       </div>
-    </li>
+    </motion.li>
   );
 }

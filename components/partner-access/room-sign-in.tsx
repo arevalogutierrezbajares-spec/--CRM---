@@ -11,12 +11,16 @@ type ClaimableMember = {
   roleLabel: string | null;
 };
 
-const BOLIVAR_QUOTE = "Dios concede la victoria a la perseverancia";
+import { BOLIVAR_QUOTE } from "@/lib/partner-access";
+
+// Alma Llanera (harp) — 6s sting, faded in/out.
 const SIGN_IN_AUDIO = "/partner-room/sign-in.mp3";
+const INTRO_HOLD_MS = 6500;
 
 /**
  * Branded, animated sign-in for a managed partner room. Sequence:
- *   intro (Bolívar quote + 5s sting) → PIN (if set) → identity (if seat-managed).
+ *   intro (Bolívar quote, word-by-word, + Alma Llanera sting; tap to continue,
+ *   auto-advances after 6.5s) → PIN (if set) → identity (if seat-managed).
  * The intro plays once; steps advance locally and only refresh into the room at
  * the end, so the ambiance isn't replayed.
  */
@@ -42,29 +46,43 @@ export function RoomSignIn({
   const [playing, setPlaying] = useState(false);
   const [step, setStep] = useState<"intro" | "pin" | "identity" | "done">("intro");
 
-  // Attempt the sting once, hold the intro, then advance + stop the audio so it
-  // never outlives the screen (WCAG 1.4.2 — audio doesn't exceed the moment).
+  // Attempt the sting once, hold the intro (tap advances early, the timer is
+  // the fallback), then stop the audio so it never outlives the screen
+  // (WCAG 1.4.2 — audio doesn't exceed the moment).
   useEffect(() => {
     if (step !== "intro") return;
     const el = audioRef.current;
     el?.play().then(() => setPlaying(true)).catch(() => setPlaying(false));
-    const id = setTimeout(() => {
-      const a = audioRef.current;
-      if (a) {
-        a.pause();
-        a.currentTime = 0;
-      }
-      setPlaying(false);
-      setStep(needsPin ? "pin" : needsIdentity ? "identity" : "done");
-    }, 2800);
+    const id = setTimeout(() => advanceIntro(), INTRO_HOLD_MS);
     return () => clearTimeout(id);
-  }, [step, needsPin, needsIdentity]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
+
+  function advanceIntro() {
+    const a = audioRef.current;
+    if (a) {
+      a.pause();
+      a.currentTime = 0;
+    }
+    setPlaying(false);
+    setStep((current) =>
+      current === "intro"
+        ? needsPin
+          ? "pin"
+          : needsIdentity
+            ? "identity"
+            : "done"
+        : current,
+    );
+  }
 
   useEffect(() => {
     if (step === "done") router.refresh();
   }, [step, router]);
 
-  function toggleSound() {
+  function toggleSound(e: React.MouseEvent) {
+    // Don't let the sound control double as "continue".
+    e.stopPropagation();
     const el = audioRef.current;
     if (!el) return;
     if (playing) {
@@ -81,7 +99,12 @@ export function RoomSignIn({
   }
 
   return (
-    <main className="relative grid min-h-dvh place-items-center overflow-hidden bg-neutral-950 px-5 text-white">
+    <main
+      onClick={step === "intro" ? advanceIntro : undefined}
+      className={`relative grid min-h-dvh place-items-center overflow-hidden bg-neutral-950 px-5 text-white ${
+        step === "intro" ? "cursor-pointer" : ""
+      }`}
+    >
       <audio
         ref={audioRef}
         src={SIGN_IN_AUDIO}
@@ -121,21 +144,54 @@ export function RoomSignIn({
               transition={{ duration: 0.7, ease: "easeOut" }}
               className="text-center"
             >
+              {/* The quote reveals word by word so it can be savored, not
+                  skimmed; a tap anywhere continues immediately. */}
               <motion.blockquote
-                initial={{ opacity: 0, scale: 0.98 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.2, duration: 1.1, ease: "easeOut" }}
+                initial="hidden"
+                animate="visible"
+                variants={{
+                  visible: {
+                    transition: { staggerChildren: 0.22, delayChildren: 0.35 },
+                  },
+                }}
                 className="font-serif text-2xl italic leading-relaxed text-white/90 sm:text-3xl"
               >
-                &ldquo;{BOLIVAR_QUOTE}&rdquo;
+                <span aria-hidden>&ldquo;</span>
+                {BOLIVAR_QUOTE.split(" ").map((word, i, words) => (
+                  <motion.span
+                    key={i}
+                    variants={{
+                      hidden: { opacity: 0, y: 10, filter: "blur(6px)" },
+                      visible: {
+                        opacity: 1,
+                        y: 0,
+                        filter: "blur(0px)",
+                        transition: { duration: 0.55, ease: "easeOut" },
+                      },
+                    }}
+                    className="inline-block"
+                  >
+                    {word}
+                    {i < words.length - 1 ? " " : ""}
+                  </motion.span>
+                ))}
+                <span aria-hidden>&rdquo;</span>
               </motion.blockquote>
               <motion.p
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                transition={{ delay: 1, duration: 0.8 }}
+                transition={{ delay: 2, duration: 0.8 }}
                 className="mt-4 text-xs uppercase tracking-[0.3em] text-[#D4A855]"
               >
                 Simón Bolívar
+              </motion.p>
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: [0, 0.7, 0.4, 0.7] }}
+                transition={{ delay: 3.2, duration: 2.4, repeat: Infinity }}
+                className="mt-8 text-[11px] uppercase tracking-[0.25em] text-white/50"
+              >
+                Toca para continuar
               </motion.p>
             </motion.div>
           )}

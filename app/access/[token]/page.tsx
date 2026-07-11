@@ -1,6 +1,10 @@
 import { cache } from "react";
 import type { Metadata } from "next";
 import { ArrowRight, Lock, MessageSquare } from "lucide-react";
+import { RoomActivityProvider } from "@/components/partner-access/room-activity-context";
+import { HeroActionChips } from "@/components/partner-access/hero-action-chips";
+import { Reveal } from "@/components/partner-access/reveal";
+import { RoomPulse } from "@/components/partner-access/room-pulse";
 import { formatRelativeEs } from "@/lib/utils";
 import { SITE_URL } from "@/lib/site-url";
 import { roomHeroVideo } from "@/lib/partner-room-videos";
@@ -20,7 +24,7 @@ import { listPartnerRoomMessages } from "@/db/queries/partner-messages";
 import { getDemoLinkById } from "@/db/queries/demo-links";
 import { DemoAccessCard } from "@/components/demo-access/demo-access-card";
 import { listRoomItems, listRoomComments } from "@/db/queries/partner-repository";
-import { partnerKindLabel } from "@/lib/partner-access";
+import { BOLIVAR_QUOTE, partnerKindLabel } from "@/lib/partner-access";
 import {
   getPartnerMemberIdFromCookies,
   isPartnerRoomUnlocked,
@@ -259,6 +263,7 @@ export default async function PublicAccessRoomPage({
       kindSnapshot: share.kindSnapshot,
       permissions: share.permissions,
       sizeBytes: share.sizeBytes,
+      mimeType: share.mimeType,
       isHtmlDeck,
       isLink: share.kindSnapshot === "link" && Boolean(share.urlSnapshot),
       urlSnapshot: share.urlSnapshot,
@@ -293,7 +298,14 @@ export default async function PublicAccessRoomPage({
 
   return (
     <main lang="es" className="min-h-screen bg-[var(--bg-page)]">
+      <RoomActivityProvider
+        initialOpenSteps={openSteps.length}
+        initialPendingSignatures={pendingSignatures}
+      >
+      {/* Presence heartbeat + periodic server-snapshot refresh while visible. */}
+      <RoomPulse token={token} />
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-5 py-5 md:px-8 md:py-8">
+        <Reveal>
         <header
           className={`relative overflow-hidden rounded-2xl border p-6 md:p-9 ${
             heroVideo
@@ -353,38 +365,13 @@ export default async function PublicAccessRoomPage({
             </div>
 
             <div className="flex shrink-0 flex-wrap items-center gap-2">
-              {openSteps.length > 0 && (
-                <a
-                  href="#pasos"
-                  className={`inline-flex items-center gap-2 rounded-full border px-3.5 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 ${
-                    heroVideo
-                      ? "border-white/25 bg-white/10 text-white backdrop-blur hover:bg-white/20 focus-visible:ring-white/80"
-                      : "border-[var(--border)] bg-[var(--background)]/60 backdrop-blur hover:bg-[var(--secondary)] focus-visible:ring-[var(--ring)]"
-                  }`}
-                >
-                  <span className="grid h-5 w-5 place-items-center rounded-full bg-amber-400/90 text-[11px] font-semibold tabular-nums text-amber-950">
-                    {openSteps.length}
-                  </span>
-                  {openSteps.length === 1 ? "paso para ti" : "pasos para ti"}
-                  <ArrowRight className="h-3.5 w-3.5" />
-                </a>
-              )}
-              {pendingSignatures > 0 && (
-                <a
-                  href="#repositorio"
-                  className={`inline-flex items-center gap-2 rounded-full border px-3.5 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 ${
-                    heroVideo
-                      ? "border-white/25 bg-white/10 text-white backdrop-blur hover:bg-white/20 focus-visible:ring-white/80"
-                      : "border-[var(--border)] bg-[var(--background)]/60 backdrop-blur hover:bg-[var(--secondary)] focus-visible:ring-[var(--ring)]"
-                  }`}
-                >
-                  <span className="grid h-5 w-5 place-items-center rounded-full bg-amber-400/90 text-[11px] font-semibold tabular-nums text-amber-950">
-                    {pendingSignatures}
-                  </span>
-                  {pendingSignatures === 1 ? "firma pendiente" : "firmas pendientes"}
-                  <ArrowRight className="h-3.5 w-3.5" />
-                </a>
-              )}
+              {/* Live chips — they track step toggles and signatures on the
+                  page without a reload (RoomActivityProvider). */}
+              <HeroActionChips
+                initialOpenSteps={openSteps.length}
+                initialPendingSignatures={pendingSignatures}
+                onVideo={Boolean(heroVideo)}
+              />
               <span
                 className={`inline-flex items-center gap-2 rounded-full border px-3.5 py-2 text-sm transition-colors ${
                   heroVideo
@@ -411,8 +398,10 @@ export default async function PublicAccessRoomPage({
             </div>
           </div>
         </header>
+        </Reveal>
 
         {/* Messages get top billing: the latest exchange, one tap from replying. */}
+        <Reveal delay={0.12}>
         <a
           href="#mensajes"
           className="group flex items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--card)] px-4 py-3 transition-colors hover:border-[var(--primary)]/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
@@ -449,11 +438,12 @@ export default async function PublicAccessRoomPage({
             <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
           </span>
         </a>
+        </Reveal>
 
         {/* The alliance leads on mobile (warmth + who's here), then folds into
             the desktop sidebar. */}
         {(access.team.length > 0 || participants.length > 0) && (
-          <div className="lg:hidden">
+          <Reveal delay={0.2} className="lg:hidden">
             <RoomPeople
               hosts={access.team.map((t) => {
                 const founder = founderProfileFor(t.displayName, t.email);
@@ -466,13 +456,15 @@ export default async function PublicAccessRoomPage({
               })}
               guests={participants}
               youId={member?.id ?? null}
+              nowMs={nowMs}
             />
-          </div>
+          </Reveal>
         )}
 
         <section className="grid gap-4 lg:grid-cols-[1fr_320px]">
           <div className="space-y-4 lg:order-1">
             {demoLink && (
+              <Reveal delay={0.2} inView>
               <div id="demo" className="scroll-mt-6">
                 <DemoAccessCard
                   label={demoLink.label}
@@ -484,7 +476,9 @@ export default async function PublicAccessRoomPage({
                   variant="room"
                 />
               </div>
+              </Reveal>
             )}
+            <Reveal delay={0.24} inView>
             <div id="repositorio" className="scroll-mt-6">
             <PublicRepository
               token={token}
@@ -502,8 +496,10 @@ export default async function PublicAccessRoomPage({
               ownerLabel="El equipo"
             />
             </div>
+            </Reveal>
 
             {/* Messages section */}
+            <Reveal inView>
             <div
               id="mensajes"
               className="scroll-mt-6 rounded-xl border border-[var(--border)] bg-[var(--card)]"
@@ -529,15 +525,18 @@ export default async function PublicAccessRoomPage({
                     authorName: teamName(m.authorKind, m.authorName),
                     createdAt: m.createdAt.toISOString(),
                   }))}
+                  lastSeenAtIso={member?.lastViewedAt?.toISOString() ?? null}
+                  nowMs={nowMs}
                 />
               </div>
             </div>
+            </Reveal>
           </div>
 
           {/* On mobile the aside leads (team + next steps first); on desktop it
               returns to the right column. */}
           <aside className="space-y-4 lg:order-2">
-            <div className="hidden lg:block">
+            <Reveal delay={0.28} className="hidden lg:block">
               <RoomPeople
                 hosts={access.team.map((t) => {
                   const founder = founderProfileFor(t.displayName, t.email);
@@ -550,9 +549,11 @@ export default async function PublicAccessRoomPage({
                 })}
                 guests={participants}
                 youId={member?.id ?? null}
+                nowMs={nowMs}
               />
-            </div>
+            </Reveal>
 
+            <Reveal delay={0.34}>
             <div
               id="pasos"
               className="scroll-mt-6 rounded-xl border border-[var(--border)] bg-[var(--card)] p-4"
@@ -561,10 +562,15 @@ export default async function PublicAccessRoomPage({
                   pending count stays in sync as the partner checks steps. */}
               <PublicNextSteps token={token} initialSteps={nextSteps} nowMs={nowMs} />
             </div>
+            </Reveal>
           </aside>
         </section>
 
-        <footer className="mt-2 flex flex-col items-center gap-1 border-t border-[var(--border)] pt-5 text-center text-xs text-[var(--muted-foreground)]">
+        <footer className="mt-2 flex flex-col items-center gap-2 border-t border-[var(--border)] pt-5 text-center text-xs text-[var(--muted-foreground)]">
+          {/* The sign-in's Bolívar quote echoes here as the room's signature. */}
+          <p className="font-serif text-[13px] italic text-[#B8913F]">
+            «{BOLIVAR_QUOTE}» — Simón Bolívar
+          </p>
           <span className="inline-flex items-center gap-1.5">
             <Lock className="h-3 w-3" />
             Privado y confidencial — compartido solo contigo.
@@ -572,6 +578,7 @@ export default async function PublicAccessRoomPage({
           <span>Esta sala es privada. Por favor, no reenvíes el enlace.</span>
         </footer>
       </div>
+      </RoomActivityProvider>
     </main>
   );
 }
