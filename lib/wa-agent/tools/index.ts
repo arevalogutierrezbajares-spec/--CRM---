@@ -43,6 +43,8 @@ import { updatePartnerRoom } from "./update-partner-room";
 import { setRoomBranding } from "./set-room-branding";
 import { addRoomNextStep } from "./add-room-next-step";
 import { getRoomLink } from "./get-room-link";
+import { listDemos } from "./list-demos";
+import { featureRoomDemo } from "./feature-room-demo";
 
 export const TOOLS: Record<string, ToolEntry> = {
   find_contact: findContact,
@@ -82,6 +84,8 @@ export const TOOLS: Record<string, ToolEntry> = {
   set_room_branding: setRoomBranding,
   add_room_next_step: addRoomNextStep,
   get_partner_room_link: getRoomLink,
+  list_demos: listDemos,
+  feature_room_demo: featureRoomDemo,
 };
 
 export const TOOL_NAMES = Object.keys(TOOLS);

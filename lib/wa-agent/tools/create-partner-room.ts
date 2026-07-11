@@ -2,9 +2,14 @@ import {
   PARTNER_KIND_OPTIONS,
   type PartnerKind,
 } from "@/lib/partner-access";
-import { createPartnerRoomForContact } from "@/db/queries/partner-access";
+import { createPartnerRoomForContact, setRoomDemoLink } from "@/db/queries/partner-access";
 import { safeStr, type ToolEntry } from "./_types";
-import { partnerAccessUrl, resolveContactRef, roomAdminUrl } from "./_partner-room";
+import {
+  partnerAccessUrl,
+  resolveContactRef,
+  resolveDemoRef,
+  roomAdminUrl,
+} from "./_partner-room";
 
 const KIND_VALUES = PARTNER_KIND_OPTIONS.map((o) => o.value);
 const KINDS = new Set<string>(KIND_VALUES);
@@ -17,7 +22,9 @@ export const createPartnerRoom: ToolEntry = {
       "the contact's existing room of the same kind. New rooms come back with a shareable " +
       "guest link — save it, since only its hash is stored. After creating, the usual crisp " +
       "setup is: add documents (add_room_documents), a welcome message + summary " +
-      "(update_partner_room), next steps (add_room_next_step), then send the guest link.",
+      "(update_partner_room), next steps (add_room_next_step), then send the guest link. " +
+      "Optionally feature a product demo (demo param) so the partner gets a one-tap " +
+      '"Demo access" card in the room — use list_demos to see what is available.',
     input_schema: {
       type: "object",
       properties: {
@@ -34,6 +41,12 @@ export const createPartnerRoom: ToolEntry = {
         name: {
           type: "string",
           description: 'Optional room name; defaults to "<Contact> Room"',
+        },
+        demo: {
+          type: "string",
+          description:
+            "Optional demo to feature in the room — an exact demo id or a label fragment " +
+            '(e.g. "CaneyCloud"). Renders as a "Demo access" card. Use list_demos to browse.',
         },
       },
     },
@@ -60,7 +73,33 @@ export const createPartnerRoom: ToolEntry = {
     });
     if (!res.ok) return res;
 
+    // Optionally feature a demo. The room is the primary artifact, so a demo
+    // that fails to resolve never fails room creation — it comes back as a note
+    // the user can act on with feature_room_demo.
+    let featuredDemo: { id: string; label: string } | null = null;
+    let demoNote: string | null = null;
+    const rawDemo = safeStr(input.demo, 120);
+    if (rawDemo) {
+      const resolved = await resolveDemoRef(ctx.workspaceId, rawDemo);
+      if (!resolved.ok) {
+        demoNote = `Room created, but the demo was not attached: ${resolved.error}`;
+      } else {
+        const updated = await setRoomDemoLink({
+          workspaceId: ctx.workspaceId,
+          roomId: res.room.id,
+          demoLinkId: resolved.demo.id,
+        });
+        if (updated) featuredDemo = { id: resolved.demo.id, label: resolved.demo.label };
+        else demoNote = "Room created, but attaching the demo failed — retry with feature_room_demo.";
+      }
+    }
+
     const guestUrl = res.accessToken ? partnerAccessUrl(res.accessToken) : null;
+    const demoSpeak = featuredDemo
+      ? ` Featuring the "${featuredDemo.label}" demo.`
+      : demoNote
+        ? ` (${demoNote})`
+        : "";
     return {
       ok: true,
       data: {
@@ -71,13 +110,15 @@ export const createPartnerRoom: ToolEntry = {
         existed: res.existed,
         guestUrl,
         adminUrl: roomAdminUrl(res.room.id),
+        featuredDemo,
+        demoNote,
         note: res.existed
           ? "Room already existed — its guest link is not re-displayable; use get_partner_room_link with fresh=true if a new link is needed."
           : "Save the guestUrl now — only its hash is stored, so it cannot be shown again without regenerating.",
       },
       speak: res.existed
-        ? `Reusing ${contact.name}'s existing ${partnerKind} room "${res.room.name}".`
-        : `Created room "${res.room.name}" for ${contact.name}. Guest link (save it — it cannot be re-shown): ${guestUrl}`,
+        ? `Reusing ${contact.name}'s existing ${partnerKind} room "${res.room.name}".${demoSpeak}`
+        : `Created room "${res.room.name}" for ${contact.name}. Guest link (save it — it cannot be re-shown): ${guestUrl}${demoSpeak}`,
     };
   },
 };

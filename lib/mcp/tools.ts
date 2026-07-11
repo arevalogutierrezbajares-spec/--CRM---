@@ -47,6 +47,9 @@ export const MCP_TOOL_NAMES = [
   "set_room_branding",
   "add_room_next_step",
   "get_partner_room_link",
+  // Demos — feature a product demo as a "Demo access" card in a room
+  "list_demos",
+  "feature_room_demo",
 ] as const;
 
 const ALLOWED = new Set<string>(MCP_TOOL_NAMES);

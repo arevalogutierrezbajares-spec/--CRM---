@@ -11,6 +11,8 @@ const PARTNER_ROOM_TOOLS = [
   "set_room_branding",
   "add_room_next_step",
   "get_partner_room_link",
+  "list_demos",
+  "feature_room_demo",
 ] as const;
 
 describe("partner room MCP tools", () => {
@@ -37,7 +39,10 @@ describe("partner room MCP tools", () => {
   });
 
   it("room-scoped tools accept room_id and contact fallbacks", () => {
-    const roomScoped = PARTNER_ROOM_TOOLS.filter((n) => n !== "create_partner_room");
+    // create_partner_room resolves a contact (not a room); list_demos is
+    // workspace-scoped, not room-scoped — neither takes a room_id.
+    const NOT_ROOM_SCOPED = new Set(["create_partner_room", "list_demos"]);
+    const roomScoped = PARTNER_ROOM_TOOLS.filter((n) => !NOT_ROOM_SCOPED.has(n));
     for (const name of roomScoped) {
       const props = TOOLS[name].definition.input_schema.properties as Record<
         string,

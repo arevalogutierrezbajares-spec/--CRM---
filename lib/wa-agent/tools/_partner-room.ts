@@ -3,9 +3,59 @@ import { db, schema } from "@/db";
 import { SITE_URL } from "@/lib/site-url";
 import { safeStr } from "./_types";
 
-const { contacts, partnerRooms } = schema;
+const { contacts, partnerRooms, demoLinks } = schema;
 
 export { SITE_URL };
+
+export type DemoLinkRow = typeof schema.demoLinks.$inferSelect;
+
+/**
+ * Resolve a demo link (Platform Management → Demo links) from an exact id or a
+ * label fragment, scoped to the workspace. Ambiguity comes back as an error
+ * listing the candidates so the agent asks instead of guessing. A demo can be
+ * featured on a partner room, where it renders as a "Demo access" card.
+ */
+export async function resolveDemoRef(
+  workspaceId: string,
+  ref: string,
+): Promise<{ ok: true; demo: DemoLinkRow } | { ok: false; error: string }> {
+  const query = safeStr(ref, 120);
+  if (!query) return { ok: false, error: "Provide a demo id or label" };
+
+  // Exact id first (demo ids are UUIDs), then fall back to a label match.
+  const [byId] = await db
+    .select()
+    .from(demoLinks)
+    .where(and(eq(demoLinks.id, query), eq(demoLinks.workspaceId, workspaceId)))
+    .limit(1);
+  if (byId) return { ok: true, demo: byId };
+
+  const rows = await db
+    .select()
+    .from(demoLinks)
+    .where(
+      and(
+        eq(demoLinks.workspaceId, workspaceId),
+        ilike(demoLinks.label, `%${query}%`),
+      ),
+    )
+    .orderBy(demoLinks.label)
+    .limit(5);
+  if (rows.length === 0) {
+    return {
+      ok: false,
+      error: `No demo matching "${query}". Use list_demos to see available demos, or add one in Platform Management → Demo links.`,
+    };
+  }
+  if (rows.length > 1) {
+    const list = rows.map((r) => `"${r.label}" [${r.id}]`).join("; ");
+    return {
+      ok: false,
+      error: `Multiple demos match "${query}": ${list} — pass the exact demo id.`,
+    };
+  }
+  return { ok: true, demo: rows[0] };
+}
 
 /** Public guest-facing link for a freshly minted access token. */
 export const partnerAccessUrl = (token: string) => `${SITE_URL}/access/${token}`;
