@@ -7,9 +7,12 @@ import {
   createDemoLink,
   createDemoLinks,
   deleteDemoLink,
+  shareDemoLink,
+  unshareDemoLink,
   updateDemoLink,
 } from "@/db/queries/demo-links";
 import { CANEY_DEMO_SEEDS } from "@/lib/platforms/demo-seeds";
+import { SITE_URL } from "@/lib/site-url";
 
 type Result<T = unknown> = ({ ok: true } & T) | { ok: false; error: string };
 
@@ -105,6 +108,28 @@ export async function deleteDemoLinkAction(input: { id: string }): Promise<Resul
     workspaceId: user.workspaceId,
   });
   if (!deleted) return { ok: false, error: "Demo link not found" };
+  revalidatePath("/platforms");
+  return { ok: true };
+}
+
+/** Mint (or regenerate) a public share link for a demo. Returns the full URL. */
+export async function shareDemoLinkAction(input: {
+  id: string;
+}): Promise<Result<{ url: string }>> {
+  const user = await requireUser();
+  const res = await shareDemoLink({ id: input.id, workspaceId: user.workspaceId });
+  if (!res) return { ok: false, error: "Demo link not found" };
+  revalidatePath("/platforms");
+  return { ok: true, url: `${SITE_URL}/demo/${res.token}` };
+}
+
+/** Revoke a demo's public share link. */
+export async function unshareDemoLinkAction(input: {
+  id: string;
+}): Promise<Result> {
+  const user = await requireUser();
+  const ok = await unshareDemoLink({ id: input.id, workspaceId: user.workspaceId });
+  if (!ok) return { ok: false, error: "Demo link not found" };
   revalidatePath("/platforms");
   return { ok: true };
 }

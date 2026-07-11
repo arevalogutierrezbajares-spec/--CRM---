@@ -17,6 +17,8 @@ import { listPartnerNextStepsByRoom } from "@/db/queries/partner-next-steps";
 import { listSignatureRequestsByRoom } from "@/db/queries/partner-signatures";
 import { listPartnerUploadsByRoom } from "@/db/queries/partner-uploads";
 import { listPartnerRoomMessages } from "@/db/queries/partner-messages";
+import { getDemoLinkById } from "@/db/queries/demo-links";
+import { DemoAccessCard } from "@/components/demo-access/demo-access-card";
 import { listRoomItems, listRoomComments } from "@/db/queries/partner-repository";
 import { partnerKindLabel } from "@/lib/partner-access";
 import {
@@ -164,6 +166,14 @@ export default async function PublicAccessRoomPage({
     listClaimedRoomMembers({ roomId: access.room.id }).catch(() => []),
     listSignatureRequestsByRoom({ roomId: access.room.id }).catch(() => []),
   ]);
+
+  // Featured product demo, if the room has one attached.
+  const demoLink = access.room.demoLinkId
+    ? await getDemoLinkById({
+        id: access.room.demoLinkId,
+        workspaceId: access.room.workspaceId,
+      }).catch(() => null)
+    : null;
 
   // Signature state per repository entry; voided requests stay invisible.
   const signaturesByTarget: Record<
@@ -462,6 +472,19 @@ export default async function PublicAccessRoomPage({
 
         <section className="grid gap-4 lg:grid-cols-[1fr_320px]">
           <div className="space-y-4 lg:order-1">
+            {demoLink && (
+              <div id="demo" className="scroll-mt-6">
+                <DemoAccessCard
+                  label={demoLink.label}
+                  description={demoLink.description}
+                  url={demoLink.url}
+                  username={demoLink.username}
+                  password={demoLink.password}
+                  accessNotes={demoLink.accessNotes}
+                  variant="room"
+                />
+              </div>
+            )}
             <div id="repositorio" className="scroll-mt-6">
             <PublicRepository
               token={token}

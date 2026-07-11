@@ -9,6 +9,7 @@ const PUBLIC_PATHS = [
   "/auth/callback",
   "/auth/handoff", // implicit-flow magic-link → server-side session establishment
   "/access/", // Partner Access public rooms authenticate by hashed token.
+  "/demo/", // Public product-demo access pages authenticate by share token.
   "/api/access/", // Partner Access API routes (upload sign/finalize, next-step toggle) — auth by token hash.
   "/api/contact-logo/", // Public brand-logo proxy for co-branded rooms (GET streams the image; POST self-guards with requireUser).
   "/f/", // Retired F&F Pitch Feedback links — public so old links show a notice.

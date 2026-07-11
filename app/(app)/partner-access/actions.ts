@@ -29,6 +29,7 @@ import {
   removeRoomTeamMember,
   setPartnerShareRoomSection,
   setRoomBrandLobIds,
+  setRoomDemoLink,
   setRoomHeroVideo,
   updateContactLogo,
   setPartnerRoomPasscode,
@@ -478,6 +479,21 @@ async function _setRoomHeroVideoAction(opts: {
     workspaceId: user.workspaceId,
     roomId: opts.roomId,
     heroVideoKey: opts.heroVideoKey,
+  });
+  if (!row) return { ok: false, error: "Room not found" };
+  revalidatePath(`/partner-access/rooms/${opts.roomId}`);
+  return { ok: true };
+}
+
+async function _setRoomDemoLinkAction(opts: {
+  roomId: string;
+  demoLinkId: string | null;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const user = await requireUser();
+  const row = await setRoomDemoLink({
+    workspaceId: user.workspaceId,
+    roomId: opts.roomId,
+    demoLinkId: opts.demoLinkId,
   });
   if (!row) return { ok: false, error: "Room not found" };
   revalidatePath(`/partner-access/rooms/${opts.roomId}`);
@@ -944,6 +960,7 @@ export const addRoomLinkAction = withActionGuard("addRoomLinkAction", _addRoomLi
 export const updateRoomItemAction = withActionGuard("updateRoomItemAction", _updateRoomItemAction);
 export const setShareRoomSectionAction = withActionGuard("setShareRoomSectionAction", _setShareRoomSectionAction);
 export const setRoomHeroVideoAction = withActionGuard("setRoomHeroVideoAction", _setRoomHeroVideoAction);
+export const setRoomDemoLinkAction = withActionGuard("setRoomDemoLinkAction", _setRoomDemoLinkAction);
 export const deleteRoomItemAction = withActionGuard("deleteRoomItemAction", _deleteRoomItemAction);
 export const addRoomCommentAction = withActionGuard("addRoomCommentAction", _addRoomCommentAction);
 export const deleteRoomCommentAction = withActionGuard("deleteRoomCommentAction", _deleteRoomCommentAction);

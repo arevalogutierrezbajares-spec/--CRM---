@@ -12,6 +12,7 @@ import {
   FolderOpen,
   Image as ImageIcon,
   MessageSquare,
+  MonitorPlay,
   PenLine,
   UsersRound,
 } from "lucide-react";
@@ -25,6 +26,7 @@ import { AddDocsDialog } from "@/components/partner-access/add-docs-dialog";
 import { ClientLogoControl } from "@/components/partner-access/client-logo-control";
 import { HeroVideoPicker } from "@/components/partner-access/hero-video-picker";
 import { RoomGuestsManager } from "@/components/partner-access/room-guests-manager";
+import { RoomDemoPicker } from "@/components/partner-access/room-demo-picker";
 import { RepositoryManager } from "@/components/partner-access/repository-manager";
 import { listRoomItems, listRoomComments } from "@/db/queries/partner-repository";
 import { listSignatureRequestsByRoom } from "@/db/queries/partner-signatures";
@@ -44,6 +46,8 @@ import {
   listLogoBrands,
 } from "@/db/queries/partner-access";
 import { listWorkspaceEmailMembers } from "@/db/queries/email";
+import { listShareableDemoLinks } from "@/db/queries/demo-links";
+import { PLATFORMS } from "@/lib/platforms/config";
 import { RoomTeamManager } from "@/components/partner-access/room-team-manager";
 import { listPartnerNextSteps } from "@/db/queries/partner-next-steps";
 import { listPartnerUploads } from "@/db/queries/partner-uploads";
@@ -152,6 +156,18 @@ export default async function PartnerAccessRoomPage(props: { params: Params }) {
     [],
   );
   const brandLogos = brandLogosRes.data;
+
+  const demoOptionsRes = await safeRead(
+    () => listShareableDemoLinks(user.workspaceId),
+    [],
+  );
+  const platformName = (id: string) =>
+    PLATFORMS.find((p) => p.id === id)?.name ?? id;
+  const demoOptions = demoOptionsRes.data.map((d) => ({
+    id: d.id,
+    label: d.label,
+    platformName: platformName(d.platformId),
+  }));
 
   const commentsByTarget: Record<
     string,
@@ -644,6 +660,22 @@ export default async function PartnerAccessRoomPage(props: { params: Params }) {
                     />
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <MonitorPlay className="h-4 w-4" />
+                  Demo access
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <RoomDemoPicker
+                  roomId={room.id}
+                  selectedDemoLinkId={room.demoLinkId ?? null}
+                  options={demoOptions}
+                />
               </CardContent>
             </Card>
 

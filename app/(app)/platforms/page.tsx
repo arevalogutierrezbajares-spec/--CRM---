@@ -18,6 +18,7 @@ import {
 } from "@/db/queries/vault";
 import { listDemoLinks, type DemoLinkRow } from "@/db/queries/demo-links";
 import { safeRead } from "@/lib/db-status";
+import { SITE_URL } from "@/lib/site-url";
 
 // Status pings must run fresh on every visit, never from the build cache.
 export const dynamic = "force-dynamic";
@@ -76,7 +77,7 @@ export default async function PlatformsPage() {
           />
         ))}
 
-        <DemoLinksSection items={demoLinksRes.data ?? []} />
+        <DemoLinksSection items={demoLinksRes.data ?? []} siteUrl={SITE_URL} />
 
         <VaultSection
           configured={vaultConfigured}

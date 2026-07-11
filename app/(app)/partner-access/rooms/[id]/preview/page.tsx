@@ -32,6 +32,8 @@ import { repoSection, REPO_SECTION_OPTIONS } from "@/lib/partner-access";
 import { roomHeroVideo } from "@/lib/partner-room-videos";
 import { RoomHeroVideo } from "@/components/partner-access/room-hero-video";
 import { getPartnerAccessRoom } from "@/db/queries/partner-access";
+import { getDemoLinkById } from "@/db/queries/demo-links";
+import { DemoAccessCard } from "@/components/demo-access/demo-access-card";
 import { listPartnerNextStepsByRoom } from "@/db/queries/partner-next-steps";
 import { listPartnerUploadsByRoom } from "@/db/queries/partner-uploads";
 import { listPartnerRoomMessages } from "@/db/queries/partner-messages";
@@ -69,6 +71,11 @@ export default async function PartnerRoomPreviewPage({ params }: { params: Param
   if (!detail) notFound();
 
   const { room } = detail;
+  const demoLink = room.demoLinkId
+    ? await getDemoLinkById({ id: room.demoLinkId, workspaceId: user.workspaceId }).catch(
+        () => null,
+      )
+    : null;
   const shares = detail.shares.filter((s) => !s.revokedAt);
   const openSteps = nextSteps.filter((s) => !s.completedAt);
   const heroVideo = roomHeroVideo(room.heroVideoKey);
@@ -210,6 +217,17 @@ export default async function PartnerRoomPreviewPage({ params }: { params: Param
 
         <section className="grid gap-4 lg:grid-cols-[1fr_320px]">
           <div className="space-y-4">
+            {demoLink && (
+              <DemoAccessCard
+                label={demoLink.label}
+                description={demoLink.description}
+                url={demoLink.url}
+                username={demoLink.username}
+                password={demoLink.password}
+                accessNotes={demoLink.accessNotes}
+                variant="room"
+              />
+            )}
             {/* Shared materials */}
             <div className="rounded-xl border border-[var(--border)] bg-[var(--card)]">
               <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] px-4 py-3">
