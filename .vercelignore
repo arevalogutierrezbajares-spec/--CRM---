@@ -1,0 +1,12 @@
+# Non-web assets — not needed for the Next.js build. Keeps the deploy
+# upload small (native helper apps + generated artifacts were ~400MB).
+macos-helper
+windows-helper
+outputs
+_tasks
+.build
+**/.build
+*.pdf
+*.pptx
+docs
+scripts/brain
