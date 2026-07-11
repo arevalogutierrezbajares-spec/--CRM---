@@ -14,9 +14,12 @@ import {
   Copy,
   ExternalLink,
   KeyRound,
+  Link2,
+  Link2Off,
   MonitorPlay,
   Pencil,
   Plus,
+  Share2,
   Sparkles,
   Trash2,
 } from "lucide-react";
@@ -25,6 +28,8 @@ import {
   createDemoLinkAction,
   deleteDemoLinkAction,
   seedCaneyDemoLinksAction,
+  shareDemoLinkAction,
+  unshareDemoLinkAction,
   updateDemoLinkAction,
   type DemoLinkInput,
 } from "@/app/(app)/platforms/demo-links-actions";
@@ -73,12 +78,48 @@ const EMPTY_FORM: DemoLinkInput = {
   accessNotes: "",
 };
 
-export function DemoLinksSection({ items }: { items: DemoLinkRow[] }) {
+export function DemoLinksSection({
+  items,
+  siteUrl,
+}: {
+  items: DemoLinkRow[];
+  siteUrl: string;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<DemoLinkInput>(EMPTY_FORM);
+
+  function shareUrlFor(row: DemoLinkRow) {
+    return row.publicAccessToken
+      ? `${siteUrl}/demo/${row.publicAccessToken}`
+      : null;
+  }
+
+  function share(id: string) {
+    startTransition(async () => {
+      const res = await shareDemoLinkAction({ id });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      await copyText(res.url, "Demo access link");
+      router.refresh();
+    });
+  }
+
+  function unshare(id: string) {
+    startTransition(async () => {
+      const res = await unshareDemoLinkAction({ id });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success("Sharing turned off");
+      router.refresh();
+    });
+  }
 
   function openCreate() {
     setEditingId(null);
@@ -157,9 +198,10 @@ export function DemoLinksSection({ items }: { items: DemoLinkRow[] }) {
             <MonitorPlay className="h-4 w-4" /> Demo links
           </h2>
           <p className="text-[12px] text-text-secondary">
-            Shareable product demos — each entry carries the link, the demo
-            account it needs, or both. Send the link; the guided tour starts
-            on load.
+            Product demos — each carries the deep link, the demo account, or
+            both. Hit <Link2 className="inline h-3 w-3" /> to publish a branded
+            access page (copy-ready credentials + launch button) you can send
+            anyone, or feature it inside a partner room.
           </p>
         </div>
         <div className="flex gap-2">
@@ -234,6 +276,30 @@ export function DemoLinksSection({ items }: { items: DemoLinkRow[] }) {
                           {row.accessNotes}
                         </p>
                       )}
+                      {shareUrlFor(row) && (
+                        <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                          <Badge variant="success" className="gap-1">
+                            <Share2 className="h-3 w-3" /> shared
+                          </Badge>
+                          <button
+                            type="button"
+                            onClick={() => copyText(shareUrlFor(row)!, "Demo access link")}
+                            className="inline-flex items-center gap-1 rounded border px-1.5 py-0.5 font-mono text-[11px] text-text-secondary hover:text-text-primary"
+                            title="Copy the recipient's access-page link"
+                          >
+                            /demo/… <Copy className="h-3 w-3" />
+                          </button>
+                          <a
+                            href={shareUrlFor(row)!}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[11px] text-text-secondary hover:text-text-primary"
+                            title="Open the access page"
+                          >
+                            preview <ExternalLink className="h-3 w-3" />
+                          </a>
+                        </div>
+                      )}
                     </div>
                     <div className="flex shrink-0 items-center gap-1">
                       {row.url && (
@@ -256,6 +322,27 @@ export function DemoLinksSection({ items }: { items: DemoLinkRow[] }) {
                             <Copy className="h-3.5 w-3.5" />
                           </Button>
                         </>
+                      )}
+                      {row.publicAccessToken ? (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => unshare(row.id)}
+                          disabled={pending}
+                          title="Turn off sharing (the access link stops working)"
+                        >
+                          <Link2Off className="h-3.5 w-3.5" />
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => share(row.id)}
+                          disabled={pending}
+                          title="Create a shareable access page & copy the link"
+                        >
+                          <Link2 className="h-3.5 w-3.5" />
+                        </Button>
                       )}
                       <Button
                         size="sm"

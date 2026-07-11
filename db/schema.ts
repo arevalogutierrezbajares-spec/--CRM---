@@ -891,6 +891,12 @@ export const partnerRooms = pgTable("partner_rooms", {
   brandLobIds: jsonb("brand_lob_ids").$type<string[]>(),
   // Preset background video for the room hero (lib/partner-room-videos). Null = none.
   heroVideoKey: text("hero_video_key"),
+  // Optional featured product demo. Rendered as a "Demo access" card inside the
+  // room. Cleared (not cascaded) if the demo link is deleted. Defined lazily so
+  // the forward reference to demoLinks (declared later in this file) resolves.
+  demoLinkId: uuid("demo_link_id").references((): AnyPgColumn => demoLinks.id, {
+    onDelete: "set null",
+  }),
   createdBy: uuid("created_by")
     .notNull()
     .references(() => users.id),
@@ -3641,6 +3647,20 @@ export const demoLinks = pgTable("demo_links", {
   /** How to get in / what the viewer should know ("login first", TTL, etc.). */
   accessNotes: text("access_notes"),
   sortOrder: integer("sort_order").notNull().default(0),
+  // Public sharing: a raw, unguessable token that makes this demo reachable at
+  // /demo/<token> as a branded access page. Stored raw (not hashed) so the link
+  // can be re-copied anytime — the page only exposes demo creds already plaintext
+  // here. Null = not shared. See migration 20260710120000 for the rationale.
+  publicAccessToken: text("public_access_token"),
+  publicAccessTokenCreatedAt: timestamp("public_access_token_created_at", {
+    withTimezone: true,
+  }),
+  publicAccessLastViewedAt: timestamp("public_access_last_viewed_at", {
+    withTimezone: true,
+  }),
+  publicViewCount: integer("public_view_count").notNull().default(0),
+  // Preset background video for the public demo page hero (lib/partner-room-videos).
+  heroVideoKey: text("hero_video_key"),
   createdBy: uuid("created_by").references(() => users.id),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()

@@ -41,6 +41,7 @@ import { extractInterchanges } from "./extractors/interchange-detector.mjs";
 import { extractStateOverlay } from "./extractors/state-overlay.mjs";
 import { extractHostMount } from "./extractors/host-mount.mjs";
 import { extractManifestSource } from "./extractors/manifest-source.mjs";
+import { extractDocsRef } from "./extractors/docs-ref.mjs";
 
 /** Resolve a short commit SHA for a repo root; null if not a git repo. */
 function gitShaFor(root) {
@@ -176,6 +177,26 @@ async function main() {
     if (n.source === "manifest") continue; // never promote fog-of-war
     const next = overlay.stateOverrides[n.id];
     if (next) n.state = next;
+  }
+
+  // 8. B4 — docs→node join: populate `summary` + `docs_ref` on any node whose
+  //    id matches a docs/brain/*.md front-matter `brain_node:` in the caney
+  //    repo. No-op unless BRAIN_ROOT_CANEY points at the clone that carries the
+  //    docs (--TOURISM--), NOT the stale tour-pms-main default. Applies to
+  //    nodes emitted by earlier extractors; never adds nodes of its own.
+  const docs = extractDocsRef();
+  let docsApplied = 0;
+  for (const n of gb.nodes()) {
+    const ref = docs.docRefs[n.id];
+    if (!ref) continue;
+    n.docs_ref = ref.docs_ref;
+    if (ref.summary) n.summary = ref.summary;
+    docsApplied++;
+  }
+  if (docs.stats.matched) {
+    console.log(
+      `[brain:build] docs-ref: matched ${docs.stats.matched} doc(s) → applied to ${docsApplied} node(s)`,
+    );
   }
 
   // Per-system commit SHAs (academy stays null — no code yet).

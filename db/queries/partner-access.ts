@@ -721,6 +721,26 @@ export async function setRoomHeroVideo(input: {
   return updated ?? null;
 }
 
+/** Attach (or clear, with null) a featured product demo on a room. The demo
+ *  link must belong to the same workspace — enforced by the FK + this scope. */
+export async function setRoomDemoLink(input: {
+  workspaceId: string;
+  roomId: string;
+  demoLinkId: string | null;
+}) {
+  const [updated] = await db
+    .update(schema.partnerRooms)
+    .set({ demoLinkId: input.demoLinkId, updatedAt: new Date() })
+    .where(
+      and(
+        eq(schema.partnerRooms.workspaceId, input.workspaceId),
+        eq(schema.partnerRooms.id, input.roomId),
+      ),
+    )
+    .returning({ id: schema.partnerRooms.id });
+  return updated ?? null;
+}
+
 export async function setPartnerShareRoomSection(input: {
   workspaceId: string;
   shareId: string;
