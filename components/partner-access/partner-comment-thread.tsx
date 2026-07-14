@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { MessageSquare, Send, Trash2 } from "lucide-react";
-import { formatRelativeEs } from "@/lib/utils";
+import { useRoomI18n } from "@/components/partner-access/room-i18n";
 
 export type RepoComment = {
   id: string;
@@ -22,13 +22,15 @@ export function PartnerCommentThread({
   comments,
   onSubmit,
   onDelete,
-  ownerLabel = "El equipo",
+  ownerLabel,
 }: {
   comments: RepoComment[];
   onSubmit: (body: string) => Promise<RepoComment | null>;
   onDelete?: (id: string) => Promise<void>;
   ownerLabel?: string;
 }) {
+  const { t, rel } = useRoomI18n();
+  const owner = ownerLabel ?? t.common.team;
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState<RepoComment[]>([]);
   const [draft, setDraft] = useState("");
@@ -50,10 +52,10 @@ export function PartnerCommentThread({
         setDraft("");
       } else {
         // The draft stays in the box so nothing the guest typed is lost.
-        setError("No se pudo enviar el comentario. Intenta de nuevo.");
+        setError(t.comments.sendError);
       }
     } catch {
-      setError("No se pudo enviar el comentario. Intenta de nuevo.");
+      setError(t.comments.sendError);
     } finally {
       setBusy(false);
     }
@@ -68,9 +70,7 @@ export function PartnerCommentThread({
         className="relative inline-flex items-center gap-1.5 rounded-md py-1 text-xs text-[var(--muted-foreground)] transition after:absolute after:-inset-2 after:content-[''] hover:text-[var(--foreground)]"
       >
         <MessageSquare className="h-3.5 w-3.5" />
-        {merged.length > 0
-          ? `${merged.length} comentario${merged.length === 1 ? "" : "s"}`
-          : "Comentar"}
+        {merged.length > 0 ? t.comments.count(merged.length) : t.comments.commentCta}
       </button>
 
       {open && (
@@ -79,14 +79,14 @@ export function PartnerCommentThread({
             <div key={c.id} className="group text-sm">
               <div className="flex items-center gap-2 text-[11px] text-[var(--muted-foreground)]">
                 <span className="font-medium text-[var(--foreground)]">
-                  {c.authorName ?? (c.authorKind === "owner" ? ownerLabel : "Invitado")}
+                  {c.authorName ?? (c.authorKind === "owner" ? owner : t.comments.guestFallback)}
                 </span>
-                {formatRelativeEs(c.createdAt)}
+                {rel(c.createdAt)}
                 {onDelete && (
                   <button
                     type="button"
                     onClick={() => void onDelete(c.id)}
-                    aria-label="Eliminar comentario"
+                    aria-label={t.comments.deleteAria}
                     className="opacity-0 transition group-hover:opacity-70 hover:!opacity-100"
                   >
                     <Trash2 className="h-3 w-3" />
@@ -109,15 +109,15 @@ export function PartnerCommentThread({
                 }
               }}
               rows={1}
-              placeholder="Escribe un comentario…"
-              aria-label="Escribe un comentario"
+              placeholder={t.comments.placeholder}
+              aria-label={t.comments.inputAria}
               className="min-h-[36px] flex-1 resize-none rounded-md border border-[var(--border)] bg-[var(--background)] px-2.5 py-1.5 text-base outline-none focus:ring-2 focus:ring-[var(--ring)] sm:text-sm"
             />
             <button
               type="button"
               onClick={send}
               disabled={busy || !draft.trim()}
-              aria-label="Enviar comentario"
+              aria-label={t.comments.sendAria}
               className="grid h-11 w-11 shrink-0 place-items-center rounded-md bg-[var(--primary)] text-[var(--primary-foreground)] transition hover:opacity-90 disabled:opacity-50"
             >
               <Send className="h-3.5 w-3.5" />

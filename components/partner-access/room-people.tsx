@@ -1,4 +1,6 @@
-import { formatRelativeEs } from "@/lib/utils";
+"use client";
+
+import { useRoomI18n } from "@/components/partner-access/room-i18n";
 
 type Host = {
   id: string;
@@ -48,19 +50,20 @@ export function RoomPeople({
   youId: string | null;
   nowMs?: number;
 }) {
+  const { t, rel } = useRoomI18n();
   if (hosts.length === 0 && guests.length === 0) return null;
 
   return (
     <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
-      <h2 className="text-base font-semibold">La alianza</h2>
+      <h2 className="text-base font-semibold">{t.people.title}</h2>
       <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">
-        Las personas trabajando juntas en este espacio.
+        {t.people.subtitle}
       </p>
 
       {hosts.length > 0 && (
         <>
           <p className="mt-3 text-[11px] font-medium uppercase tracking-wide text-[var(--muted-foreground)]">
-            Nuestro equipo
+            {t.people.team}
           </p>
           <ul className="mt-1.5 space-y-2.5">
             {hosts.map((m, i) => (
@@ -69,7 +72,7 @@ export function RoomPeople({
                   /* eslint-disable-next-line @next/next/no-img-element */
                   <img
                     src={m.photoUrl}
-                    alt={m.displayName ?? "Foto del equipo"}
+                    alt={m.displayName ?? t.people.teamPhotoAlt}
                     className="h-10 w-10 shrink-0 rounded-full object-cover ring-1 ring-[var(--border)]"
                   />
                 ) : (
@@ -81,7 +84,7 @@ export function RoomPeople({
                 )}
                 <div className="min-w-0">
                   <div className="truncate text-sm font-medium">
-                    {m.displayName ?? "Tu contacto"}
+                    {m.displayName ?? t.people.contactFallback}
                   </div>
                   {m.title && (
                     <div className="truncate text-xs text-[var(--muted-foreground)]">{m.title}</div>
@@ -96,7 +99,7 @@ export function RoomPeople({
       {guests.length > 0 && (
         <>
           <p className="mt-4 text-[11px] font-medium uppercase tracking-wide text-[var(--muted-foreground)]">
-            Invitados
+            {t.people.guests}
           </p>
           <ul className="mt-1.5 space-y-2.5">
             {guests.map((g) => {
@@ -120,9 +123,11 @@ export function RoomPeople({
                   </span>
                   <div className="min-w-0">
                     <div className="truncate text-sm">
-                      {g.displayName ?? "Invitado"}
+                      {g.displayName ?? t.people.guestFallback}
                       {g.id === youId && (
-                        <span className="ml-1 text-xs text-[var(--muted-foreground)]">(tú)</span>
+                        <span className="ml-1 text-xs text-[var(--muted-foreground)]">
+                          {t.people.youParen}
+                        </span>
                       )}
                     </div>
                     {(g.roleLabel || g.lastViewedAt || online) && (
@@ -134,9 +139,9 @@ export function RoomPeople({
                         }`}
                       >
                         {online
-                          ? "en línea ahora"
+                          ? t.people.onlineNow
                           : g.roleLabel ??
-                            `activo ${formatRelativeEs(g.lastViewedAt as Date)}`}
+                            t.people.activeAgo(rel(g.lastViewedAt as Date))}
                       </div>
                     )}
                   </div>

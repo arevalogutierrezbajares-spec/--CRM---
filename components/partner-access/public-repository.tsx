@@ -20,8 +20,9 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { formatBytes } from "@/lib/project-files/limits";
-import { formatRelativeEs } from "@/lib/utils";
 import { repoSection, REPO_SECTION_OPTIONS } from "@/lib/partner-access";
+import { roomIntlLocale } from "@/lib/partner-room-i18n";
+import { useRoomI18n } from "@/components/partner-access/room-i18n";
 import { useRoomActivity } from "@/components/partner-access/room-activity-context";
 import { MediaLightbox } from "@/components/partner-access/media-lightbox";
 import { PdfThumb } from "@/components/partner-access/pdf-thumb";
@@ -85,16 +86,6 @@ function mediaKind(mime: string | null): "image" | "video" | "none" {
   return "none";
 }
 
-const KIND_LABEL: Record<string, string> = {
-  file: "Documento",
-  link: "Enlace",
-  doc: "Documento",
-  note: "Nota",
-};
-function kindLabel(kind: string) {
-  return KIND_LABEL[kind] ?? "Documento";
-}
-
 const SECTION_ICONS: Record<string, LucideIcon> = {
   documentos: FileText,
   contratos: FileSignature,
@@ -151,6 +142,7 @@ export function PublicRepository({
   const [signing, setSigning] = useState<{ key: string; sig: RepoSignature; title: string } | null>(
     null,
   );
+  const { t, rel } = useRoomI18n();
   const activity = useRoomActivity();
 
   function signatureFor(key: string): RepoSignature | null {
@@ -197,10 +189,9 @@ export function PublicRepository({
     <div className="rounded-xl border border-[var(--border)] bg-[var(--card)]">
       <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] px-4 py-3">
         <div>
-          <h2 className="text-base font-semibold">Repositorio</h2>
+          <h2 className="text-base font-semibold">{t.repo.title}</h2>
           <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">
-            Todo lo compartido contigo, organizado por sección — y un buzón para
-            enviarnos lo tuyo.
+            {t.repo.subtitle}
           </p>
         </div>
         <span className="rounded-full bg-[var(--secondary)] px-2 py-0.5 text-xs tabular-nums text-[var(--secondary-foreground)]">
@@ -211,18 +202,18 @@ export function PublicRepository({
       {total === 0 ? (
         <div className="px-4 pt-4">
           <p className="rounded-lg border border-dashed border-[var(--border)] p-5 text-sm text-[var(--muted-foreground)]">
-            Aún no hay nada aquí. Los nuevos documentos y enlaces aparecerán en este espacio.
+            {t.repo.empty}
           </p>
         </div>
       ) : (
         sections.map((section) => {
           const Icon = SECTION_ICONS[section.value] ?? FileText;
           return (
-            <section key={section.value} aria-label={section.label}>
+            <section key={section.value} aria-label={t.repo.section[section.value]}>
               <div className="flex items-center gap-2 border-b border-[var(--border)] bg-[var(--secondary)]/40 px-4 py-2">
                 <Icon className="h-3.5 w-3.5 text-[var(--primary)]" />
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--muted-foreground)]">
-                  {section.label}
+                  {t.repo.section[section.value]}
                 </h3>
                 <span className="text-[11px] tabular-nums text-[var(--muted-foreground)]">
                   {section.entries.length}
@@ -265,7 +256,7 @@ export function PublicRepository({
       )}
 
       {/* Send-files inbox — same repository, opposite direction. */}
-      <section aria-label="Enviar archivos">
+      <section aria-label={t.repo.uploadSection}>
         <div
           className={`flex items-center gap-2 bg-[var(--secondary)]/40 px-4 py-2 ${
             total === 0 ? "mt-4 border-t border-[var(--border)]" : ""
@@ -273,7 +264,7 @@ export function PublicRepository({
         >
           <Upload className="h-3.5 w-3.5 text-[var(--primary)]" />
           <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--muted-foreground)]">
-            Enviar archivos
+            {t.repo.uploadSection}
           </h3>
           {uploads.length > 0 && (
             <span className="text-[11px] tabular-nums text-[var(--muted-foreground)]">
@@ -283,13 +274,13 @@ export function PublicRepository({
         </div>
         <div className="border-t border-[var(--border)] p-4">
           <p className="mb-3 text-xs text-[var(--muted-foreground)]">
-            Envía documentos al equipo — contratos, firmas, recursos.
+            {t.repo.uploadHint}
           </p>
           <PublicUploadForm token={token} />
           {uploads.length > 0 && (
             <div className="mt-4 border-t border-[var(--border)] pt-4">
               <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted-foreground)]">
-                Enviados anteriormente
+                {t.repo.previouslySent}
               </p>
               <ul className="mt-2 space-y-1.5">
                 {uploads.map((u) => (
@@ -297,7 +288,7 @@ export function PublicRepository({
                     <FileText className="h-3.5 w-3.5 shrink-0 text-[var(--muted-foreground)]" />
                     <span className="truncate">{u.label || u.originalFilename}</span>
                     <span className="ml-auto shrink-0 text-xs text-[var(--muted-foreground)]">
-                      {formatRelativeEs(u.createdAt)}
+                      {rel(u.createdAt)}
                     </span>
                   </li>
                 ))}
@@ -341,10 +332,11 @@ function SignatureBlock({
   signature: RepoSignature | null;
   onSign: (sig: RepoSignature) => void;
 }) {
+  const { t, locale } = useRoomI18n();
   if (!signature) return null;
   if (signature.status === "signed") {
     const when = signature.signedAt
-      ? new Date(signature.signedAt).toLocaleString("es-VE", {
+      ? new Date(signature.signedAt).toLocaleString(roomIntlLocale(locale), {
           day: "numeric",
           month: "short",
           year: "numeric",
@@ -356,8 +348,7 @@ function SignatureBlock({
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">
           <CheckCircle2 className="h-3.5 w-3.5" />
-          Firmado{signature.signerName ? ` por ${signature.signerName}` : ""}
-          {when ? ` · ${when}` : ""}
+          {t.repo.signedBy(signature.signerName, when)}
         </span>
         {signature.hasSignedPdf && (
           <a
@@ -367,7 +358,7 @@ function SignatureBlock({
             className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-3 py-2 text-xs hover:bg-[var(--secondary)] sm:px-2 sm:py-1"
           >
             <Download className="h-3.5 w-3.5" />
-            Documento firmado
+            {t.repo.signedDocDownload}
           </a>
         )}
       </div>
@@ -377,7 +368,7 @@ function SignatureBlock({
     <div className="mt-2 flex flex-wrap items-center gap-2">
       <span className="inline-flex items-center gap-1.5 rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
         <FileSignature className="h-3.5 w-3.5" />
-        Firma requerida
+        {t.repo.signatureRequired}
       </span>
       <button
         type="button"
@@ -385,7 +376,7 @@ function SignatureBlock({
         className="inline-flex items-center gap-1.5 rounded-md bg-[var(--primary)] px-3 py-2 text-xs font-medium text-[var(--primary-foreground)] hover:opacity-90"
       >
         <PenLine className="h-3.5 w-3.5" />
-        Firmar ahora
+        {t.repo.signNow}
       </button>
     </div>
   );
@@ -408,6 +399,7 @@ function ItemRow({
   ownerLabel: string;
   onComment: (body: string) => Promise<RepoComment | null>;
 }) {
+  const { t } = useRoomI18n();
   const mk = mediaKind(item.mimeType);
   const [zoomed, setZoomed] = useState(false);
   const tint =
@@ -451,7 +443,7 @@ function ItemRow({
                 className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-3 py-2 text-xs hover:bg-[var(--secondary)] sm:px-2 sm:py-1"
               >
                 <ArrowUpRight className="h-3.5 w-3.5" />
-                Abrir
+                {t.repo.open}
               </a>
             ) : item.kind === "file" && mk === "none" ? (
               <a
@@ -461,7 +453,7 @@ function ItemRow({
                 className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-3 py-2 text-xs hover:bg-[var(--secondary)] sm:px-2 sm:py-1"
               >
                 <Download className="h-3.5 w-3.5" />
-                Abrir
+                {t.repo.open}
               </a>
             ) : null}
           </div>
@@ -487,7 +479,7 @@ function ItemRow({
               <button
                 type="button"
                 onClick={() => setZoomed(true)}
-                aria-label={`Ampliar ${item.title}`}
+                aria-label={t.repo.zoomAria(item.title)}
                 className="mt-2 block cursor-zoom-in"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -549,6 +541,7 @@ function ShareRow({
   ownerLabel: string;
   onComment: (body: string) => Promise<RepoComment | null>;
 }) {
+  const { t } = useRoomI18n();
   const tint = share.isLink
     ? ICON_TINT.link
     : share.isHtmlDeck
@@ -575,7 +568,9 @@ function ShareRow({
             <div className="min-w-0">
               <h4 className="text-sm font-medium">{share.title}</h4>
               <p className="text-xs text-[var(--muted-foreground)]">
-                {share.projectTitle ?? "Proyecto"} · {kindLabel(share.kindSnapshot)}
+                {share.projectTitle ?? t.repo.projectFallback} ·{" "}
+                {t.repo.kind[share.kindSnapshot as keyof typeof t.repo.kind] ??
+                  t.repo.kind.default}
                 {share.sizeBytes ? ` · ${formatBytes(share.sizeBytes)}` : ""}
               </p>
             </div>
@@ -588,7 +583,7 @@ function ShareRow({
                   className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-3 py-2 text-xs hover:bg-[var(--secondary)] sm:px-2 sm:py-1"
                 >
                   <ArrowUpRight className="h-3.5 w-3.5" />
-                  Abrir
+                  {t.repo.open}
                 </a>
               )}
               {share.isHtmlDeck && (
@@ -599,7 +594,7 @@ function ShareRow({
                   className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-3 py-2 text-xs hover:bg-[var(--secondary)] sm:px-2 sm:py-1"
                 >
                   <ArrowUpRight className="h-3.5 w-3.5" />
-                  Ver presentación
+                  {t.repo.viewDeck}
                 </a>
               )}
               {share.canDownload && (
@@ -610,7 +605,7 @@ function ShareRow({
                   className="inline-flex items-center gap-1 rounded-md bg-[var(--primary)] px-3 py-2 text-xs text-[var(--primary-foreground)] hover:opacity-90 sm:px-2 sm:py-1"
                 >
                   <Download className="h-3.5 w-3.5" />
-                  Descargar
+                  {t.repo.download}
                 </a>
               )}
             </div>

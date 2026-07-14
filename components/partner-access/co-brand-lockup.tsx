@@ -1,5 +1,8 @@
+"use client";
+
 import { Plus } from "lucide-react";
 import type { BrandLogo } from "@/db/queries/partner-access";
+import { useRoomDict } from "@/components/partner-access/room-i18n";
 
 /**
  * Co-branded lockup for a partner room — circular logo badges. The client's mark
@@ -17,6 +20,7 @@ export function CoBrandLockup({
   clientName: string | null;
   size?: number;
 }) {
+  const t = useRoomDict();
   const hasMine = brandLogos.length > 0;
   const hasClient = Boolean(clientLogoUrl);
   if (!hasMine && !hasClient) return null;
@@ -26,7 +30,7 @@ export function CoBrandLockup({
       {hasClient && (
         <LogoCircle
           src={clientLogoUrl as string}
-          label={clientName ? `${clientName} logo` : "Logo del cliente"}
+          label={t.cobrand.clientLogoAlt(clientName)}
           size={size}
           ring
           fill
@@ -48,7 +52,7 @@ export function CoBrandLockup({
             <LogoCircle
               key={logo.lobId}
               src={logo.logoUrl}
-              label={`${logo.title} logo`}
+              label={t.cobrand.brandLogoAlt(logo.title)}
               size={hasClient ? size - 8 : size}
             />
           ))}

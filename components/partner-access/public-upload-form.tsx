@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { PROJECT_FILES_BUCKET } from "@/lib/project-files/constants";
 import { formatBytes } from "@/lib/project-files/limits";
 import { PARTNER_UPLOAD_EXTS } from "@/lib/project-files/sniff";
+import { useRoomDict } from "@/components/partner-access/room-i18n";
 
 type UploadState = "idle" | "uploading" | "done" | "error";
 
@@ -14,6 +15,7 @@ const MAX_BYTES = 25 * 1024 * 1024;
 const ALLOWED_EXTS: readonly string[] = PARTNER_UPLOAD_EXTS;
 
 export function PublicUploadForm({ token }: { token: string }) {
+  const t = useRoomDict();
   const [state, setState] = useState<UploadState>("idle");
   const [error, setError] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -27,12 +29,12 @@ export function PublicUploadForm({ token }: { token: string }) {
     const f = e.target.files?.[0];
     if (!f) return;
     if (f.size > MAX_BYTES) {
-      setError(`El archivo es muy grande. Máximo ${formatBytes(MAX_BYTES)}.`);
+      setError(t.upload.tooLarge(formatBytes(MAX_BYTES)));
       return;
     }
     const ext = "." + f.name.split(".").pop()?.toLowerCase();
     if (!ALLOWED_EXTS.includes(ext)) {
-      setError(`Tipo de archivo no permitido. Aceptamos: ${ALLOWED_EXTS.join(", ")}`);
+      setError(t.upload.typeNotAllowed(ALLOWED_EXTS.join(", ")));
       return;
     }
     setError(null);
@@ -59,7 +61,7 @@ export function PublicUploadForm({ token }: { token: string }) {
       });
       if (!signRes.ok) {
         const { error: msg } = await signRes.json() as { error?: string };
-        throw new Error(msg || "No se pudo preparar la carga");
+        throw new Error(msg || t.upload.signFailed);
       }
       const { path, token: uploadToken, bucket } = await signRes.json() as { path: string; token: string; bucket: string };
       setProgress(30);
@@ -95,7 +97,7 @@ export function PublicUploadForm({ token }: { token: string }) {
           body: JSON.stringify({ action: "abort", storagePath: path }),
         }).catch(() => {});
         const { error: msg } = (await finalRes.json().catch(() => ({}))) as { error?: string };
-        throw new Error(msg || "No se pudo guardar el archivo. Intenta de nuevo.");
+        throw new Error(msg || t.upload.finalizeFailed);
       }
       setProgress(100);
 
@@ -107,7 +109,7 @@ export function PublicUploadForm({ token }: { token: string }) {
       if (inputRef.current) inputRef.current.value = "";
     } catch (err) {
       setState("error");
-      setError(err instanceof Error ? err.message : "La carga falló");
+      setError(err instanceof Error ? err.message : t.upload.genericFailed);
     }
   }
 
@@ -118,7 +120,7 @@ export function PublicUploadForm({ token }: { token: string }) {
           {done.map((d, i) => (
             <li key={i} className="flex items-center gap-2 text-sm text-green-600">
               <CheckCircle className="h-4 w-4 shrink-0" />
-              <span className="truncate">{d.filename} enviado</span>
+              <span className="truncate">{t.upload.sentSuffix(d.filename)}</span>
             </li>
           ))}
         </ul>
@@ -130,10 +132,10 @@ export function PublicUploadForm({ token }: { token: string }) {
       >
         <Upload className="mx-auto h-8 w-8 text-[var(--muted-foreground)]" />
         <p className="mt-2 text-sm font-medium">
-          {file ? file.name : "Haz clic para elegir un archivo"}
+          {file ? file.name : t.upload.choosePrompt}
         </p>
         <p className="mt-1 text-xs text-[var(--muted-foreground)]">
-          PDF, Word, Excel, imágenes, ZIP — máx. 25 MB
+          {t.upload.acceptHint}
         </p>
         <input
           ref={inputRef}
@@ -158,13 +160,13 @@ export function PublicUploadForm({ token }: { token: string }) {
 
           <input
             type="text"
-            placeholder="Etiqueta (opcional) p. ej. NDA firmado"
+            placeholder={t.upload.labelPlaceholder}
             value={label}
             onChange={(e) => setLabel(e.target.value)}
             className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-base sm:text-sm placeholder:text-[var(--muted-foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
           />
           <textarea
-            placeholder="Nota para el equipo (opcional)"
+            placeholder={t.upload.notePlaceholder}
             value={note}
             onChange={(e) => setNote(e.target.value)}
             rows={2}
@@ -190,7 +192,7 @@ export function PublicUploadForm({ token }: { token: string }) {
           onClick={handleUpload}
           className="w-full rounded-md bg-[var(--foreground)] px-4 py-2 text-sm font-medium text-[var(--background)] hover:opacity-90 disabled:opacity-50"
         >
-          Enviar archivo
+          {t.upload.submit}
         </button>
       )}
     </div>

@@ -50,9 +50,10 @@ export function partnerKindLabel(value: string | null | undefined) {
   );
 }
 
-// Shared between the sign-in intro and the room footer echo — one source so
-// the two surfaces can never drift apart.
-export const BOLIVAR_QUOTE = "Dios concede la victoria a la perseverancia";
+// The outward-facing partner label ("Aliado"/"Partner") and the Bolívar quote
+// are now locale-driven — see `partner.publicLabel` and `footer.bolivarQuote`
+// in lib/partner-room-i18n.ts. Kept here previously as constants; removed so no
+// guest surface can bypass i18n by importing a hardcoded string.
 
 export function partnerRoomStatusLabel(value: string | null | undefined) {
   return (

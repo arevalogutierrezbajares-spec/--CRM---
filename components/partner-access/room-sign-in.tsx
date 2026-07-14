@@ -11,7 +11,7 @@ type ClaimableMember = {
   roleLabel: string | null;
 };
 
-import { BOLIVAR_QUOTE } from "@/lib/partner-access";
+import { useRoomDict } from "./room-i18n";
 
 // Alma Llanera (harp) — 6s sting, faded in/out.
 const SIGN_IN_AUDIO = "/partner-room/sign-in.mp3";
@@ -39,6 +39,7 @@ export function RoomSignIn({
   claimableMembers: ClaimableMember[];
   seatsLeft: number | null;
 }) {
+  const t = useRoomDict();
   const router = useRouter();
   const audioRef = useRef<HTMLAudioElement>(null);
   // `playing` reflects whether sound is ACTUALLY audible (browsers block
@@ -126,7 +127,7 @@ export function RoomSignIn({
         <button
           type="button"
           onClick={toggleSound}
-          aria-label={playing ? "Silenciar" : "Reproducir sonido"}
+          aria-label={playing ? t.signin.mute : t.signin.unmute}
           className="absolute right-4 top-4 grid h-11 w-11 place-items-center rounded-full bg-white/10 text-white/70 transition hover:bg-white/20"
         >
           {playing ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
@@ -157,7 +158,7 @@ export function RoomSignIn({
                 className="font-serif text-2xl italic leading-relaxed text-white/90 sm:text-3xl"
               >
                 <span aria-hidden>&ldquo;</span>
-                {BOLIVAR_QUOTE.split(" ").map((word, i, words) => (
+                {t.footer.bolivarQuote.split(" ").map((word, i, words) => (
                   <motion.span
                     key={i}
                     variants={{
@@ -183,7 +184,7 @@ export function RoomSignIn({
                 transition={{ delay: 2, duration: 0.8 }}
                 className="mt-4 text-xs uppercase tracking-[0.3em] text-[#D4A855]"
               >
-                Simón Bolívar
+                {t.signin.bolivarAttribution}
               </motion.p>
               <motion.p
                 initial={{ opacity: 0 }}
@@ -191,7 +192,7 @@ export function RoomSignIn({
                 transition={{ delay: 3.2, duration: 2.4, repeat: Infinity }}
                 className="mt-8 text-[11px] uppercase tracking-[0.25em] text-white/50"
               >
-                Toca para continuar
+                {t.signin.tapToContinue}
               </motion.p>
             </motion.div>
           )}
@@ -233,7 +234,7 @@ export function RoomSignIn({
               animate={{ opacity: 1 }}
               className="text-center text-sm text-white/60"
             >
-              Abriendo la sala…
+              {t.signin.opening}
             </motion.div>
           )}
         </AnimatePresence>
@@ -259,6 +260,7 @@ function PinStep({
   roomName: string;
   onUnlocked: () => void;
 }) {
+  const t = useRoomDict();
   const inputRef = useRef<HTMLInputElement>(null);
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -304,11 +306,11 @@ function PinStep({
         setLocked(true);
         setRetryAt(data.retryAt ? new Date(data.retryAt).getTime() : Date.now() + 60_000);
       }
-      setError(data.error ?? "Ese código no coincide.");
+      setError(data.error ?? t.signin.pinMismatch);
       setCode("");
       inputRef.current?.focus();
     } catch {
-      setError("Algo salió mal. Inténtalo de nuevo.");
+      setError(t.signin.genericError);
     } finally {
       setChecking(false);
     }
@@ -321,7 +323,7 @@ function PinStep({
           <Lock className="h-5 w-5 text-white/70" />
         </div>
         <h1 className="mt-4 text-lg font-semibold">{roomName}</h1>
-        <p className="mt-1 text-sm text-white/70">Ingresa tu código de 4 dígitos.</p>
+        <p className="mt-1 text-sm text-white/70">{t.signin.pinPrompt}</p>
       </div>
       <form
         className="mt-5 text-center"
@@ -345,7 +347,7 @@ function PinStep({
           maxLength={4}
           disabled={checking || locked || ok}
           placeholder="••••"
-          aria-label="Código de acceso de 4 dígitos"
+          aria-label={t.signin.pinAria}
           aria-invalid={Boolean(error)}
           aria-describedby={error ? "pin-error" : undefined}
           className="w-40 rounded-lg border border-white/15 bg-white/5 px-4 py-3 text-center font-mono text-2xl tracking-[0.5em] text-white outline-none focus:ring-2 focus:ring-[#D4A855]/60 disabled:opacity-50"
@@ -356,7 +358,7 @@ function PinStep({
           </p>
         )}
         {(checking || ok) && (
-          <p className="mt-3 text-sm text-white/70">{ok ? "Listo…" : "Verificando…"}</p>
+          <p className="mt-3 text-sm text-white/70">{ok ? t.signin.ready : t.signin.checking}</p>
         )}
       </form>
     </Card>
@@ -376,6 +378,7 @@ function IdentityStep({
   seatsLeft: number | null;
   onDone: () => void;
 }) {
+  const t = useRoomDict();
   const [memberId, setMemberId] = useState<string>("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -405,9 +408,9 @@ function IdentityStep({
         return;
       }
       const data = (await res.json().catch(() => ({}))) as { error?: string };
-      setError(data.error ?? "No pudimos registrarte.");
+      setError(data.error ?? t.signin.identityError);
     } catch {
-      setError("No pudimos registrarte. Inténtalo de nuevo.");
+      setError(t.signin.identityErrorRetry);
     } finally {
       setSaving(false);
     }
@@ -418,9 +421,9 @@ function IdentityStep({
       <div className="text-center">
         <h1 className="text-lg font-semibold">{roomName}</h1>
         <p className="mt-1 text-sm text-white/70">
-          Confirma quién eres para entrar.
+          {t.signin.identityPrompt}
           {seatsLeft !== null && seatsLeft <= 3 && seatsLeft > 0 && (
-            <span className="text-white/40"> {seatsLeft} {seatsLeft === 1 ? "cupo disponible" : "cupos disponibles"}.</span>
+            <span className="text-white/40">{t.signin.seatsLeft(seatsLeft)}</span>
           )}
         </p>
       </div>
@@ -432,11 +435,11 @@ function IdentityStep({
               setMemberId(e.target.value);
               setError(null);
             }}
-            aria-label="Elige tu nombre"
+            aria-label={t.signin.nameSelectAria}
             className="w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2.5 text-base text-white outline-none focus:ring-2 focus:ring-[#D4A855]/60 sm:text-sm"
           >
             <option value="" className="bg-neutral-900">
-              No estoy en la lista…
+              {t.signin.notInList}
             </option>
             {claimableMembers.map((m) => (
               <option key={m.id} value={m.id} className="bg-neutral-900">
@@ -452,8 +455,8 @@ function IdentityStep({
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Tu nombre"
-            aria-label="Tu nombre"
+            placeholder={t.signin.namePlaceholder}
+            aria-label={t.signin.namePlaceholder}
             className="w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2.5 text-base text-white placeholder-white/30 outline-none focus:ring-2 focus:ring-[#D4A855]/60 sm:text-sm"
           />
         )}
@@ -463,8 +466,8 @@ function IdentityStep({
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          placeholder="nombre@empresa.com"
-          aria-label="Tu correo"
+          placeholder={t.signin.emailPlaceholder}
+          aria-label={t.signin.emailAria}
           className="w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2.5 text-base text-white placeholder-white/30 outline-none focus:ring-2 focus:ring-[#D4A855]/60 sm:text-sm"
         />
 
@@ -479,7 +482,7 @@ function IdentityStep({
           disabled={saving || !email.trim() || !effectiveName.trim()}
           className="w-full rounded-lg bg-[#D4A855] px-3 py-2.5 text-sm font-semibold text-neutral-950 transition hover:bg-[#e0bb6f] disabled:opacity-50"
         >
-          {saving ? "Entrando…" : "Entrar a la sala"}
+          {saving ? t.signin.entering : t.signin.enter}
         </button>
       </form>
     </Card>

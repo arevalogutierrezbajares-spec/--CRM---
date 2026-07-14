@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { resolvePartnerRoomByToken } from "@/db/queries/partner-access";
 import { getSignatureRequest } from "@/db/queries/partner-signatures";
 import { isPartnerRoomUnlocked } from "@/lib/partner-room-gate.server";
+import { getRoomDict } from "@/lib/partner-room-i18n";
 import {
   fetchSignatureTargetBytes,
   isPdfBytes,
@@ -18,18 +19,19 @@ type Params = Promise<{ token: string; requestId: string }>;
 export async function GET(req: NextRequest, props: { params: Params }) {
   const { token, requestId } = await props.params;
   const room = await resolvePartnerRoomByToken(token).catch(() => null);
+  const t = getRoomDict(room?.locale).api;
   if (!room) {
-    return NextResponse.json({ error: "Sala no encontrada" }, { status: 404 });
+    return NextResponse.json({ error: t.roomNotFound }, { status: 404 });
   }
   if (!(await isPartnerRoomUnlocked(room))) {
-    return NextResponse.json({ error: "La sala está bloqueada" }, { status: 401 });
+    return NextResponse.json({ error: t.roomLocked }, { status: 401 });
   }
 
   const request = await getSignatureRequest({ roomId: room.id, requestId }).catch(
     () => null,
   );
   if (!request || request.status !== "pending") {
-    return NextResponse.json({ error: "Solicitud no disponible" }, { status: 404 });
+    return NextResponse.json({ error: t.signUnavailable }, { status: 404 });
   }
 
   const bytes = await fetchSignatureTargetBytes({
@@ -40,7 +42,7 @@ export async function GET(req: NextRequest, props: { params: Params }) {
   });
   if (!bytes) {
     return NextResponse.json(
-      { error: "No se pudo cargar el documento" },
+      { error: t.docLoadFailed },
       { status: 404 },
     );
   }

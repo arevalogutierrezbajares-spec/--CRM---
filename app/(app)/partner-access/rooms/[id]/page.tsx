@@ -46,7 +46,8 @@ import {
   listLogoBrands,
 } from "@/db/queries/partner-access";
 import { listWorkspaceEmailMembers } from "@/db/queries/email";
-import { listShareableDemoLinks } from "@/db/queries/demo-links";
+import { listShareableDemoLinks, getDemoLinkById } from "@/db/queries/demo-links";
+import { SITE_URL } from "@/lib/site-url";
 import { PLATFORMS } from "@/lib/platforms/config";
 import { RoomTeamManager } from "@/components/partner-access/room-team-manager";
 import { listPartnerNextSteps } from "@/db/queries/partner-next-steps";
@@ -168,6 +169,28 @@ export default async function PartnerAccessRoomPage(props: { params: Params }) {
     label: d.label,
     platformName: platformName(d.platformId),
   }));
+
+  // Full details of the demo currently featured on this room, so the editor can
+  // show + copy the actual account (URL / username / password) without a trip to
+  // Platform Management.
+  const featuredDemoRes = room.demoLinkId
+    ? await safeRead(
+        () => getDemoLinkById({ id: room.demoLinkId!, workspaceId: user.workspaceId }),
+        null,
+      )
+    : { data: null };
+  const featuredDemo = featuredDemoRes.data
+    ? {
+        id: featuredDemoRes.data.id,
+        label: featuredDemoRes.data.label,
+        url: featuredDemoRes.data.url,
+        username: featuredDemoRes.data.username,
+        password: featuredDemoRes.data.password,
+        shareUrl: featuredDemoRes.data.publicAccessToken
+          ? `${SITE_URL}/demo/${featuredDemoRes.data.publicAccessToken}`
+          : null,
+      }
+    : null;
 
   const commentsByTarget: Record<
     string,
@@ -626,6 +649,7 @@ export default async function PartnerAccessRoomPage(props: { params: Params }) {
                     id: room.id,
                     name: room.name,
                     partnerKind: room.partnerKind as PartnerKind,
+                    language: room.locale,
                     summary: room.summary,
                     welcomeMessage: room.welcomeMessage,
                     expiresAt: room.expiresAt?.toISOString() ?? null,
@@ -675,6 +699,7 @@ export default async function PartnerAccessRoomPage(props: { params: Params }) {
                   roomId={room.id}
                   selectedDemoLinkId={room.demoLinkId ?? null}
                   options={demoOptions}
+                  selectedDemo={featuredDemo}
                 />
               </CardContent>
             </Card>

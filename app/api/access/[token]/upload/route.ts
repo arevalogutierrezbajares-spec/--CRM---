@@ -13,6 +13,7 @@ import {
   createPartnerUpload,
 } from "@/db/queries/partner-uploads";
 import { resolvePartnerRoomByToken } from "@/db/queries/partner-access";
+import { getRoomDict } from "@/lib/partner-room-i18n";
 import { isPartnerRoomUnlocked } from "@/lib/partner-room-gate.server";
 
 const MAX_BYTES = 25 * 1024 * 1024;
@@ -50,18 +51,19 @@ type Params = Promise<{ token: string }>;
 export async function POST(req: NextRequest, props: { params: Params }) {
   const { token } = await props.params;
   const room = await resolvePartnerRoomByToken(token).catch(() => null);
+  const t = getRoomDict(room?.locale).api;
   if (!room) {
-    return NextResponse.json({ error: "Room not found or access expired" }, { status: 404 });
+    return NextResponse.json({ error: t.roomNotFound }, { status: 404 });
   }
   if (!(await isPartnerRoomUnlocked(room))) {
-    return NextResponse.json({ error: "Room is locked" }, { status: 401 });
+    return NextResponse.json({ error: t.roomLocked }, { status: 401 });
   }
 
   let body: unknown;
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    return NextResponse.json({ error: t.invalidRequest }, { status: 400 });
   }
 
   const actionField = (body as Record<string, unknown>)?.action;
@@ -70,12 +72,12 @@ export async function POST(req: NextRequest, props: { params: Params }) {
   if (actionField === "sign") {
     const parsed = SignBody.safeParse(body);
     if (!parsed.success) {
-      return NextResponse.json({ error: "Invalid input" }, { status: 400 });
+      return NextResponse.json({ error: t.invalidRequest }, { status: 400 });
     }
     const { filename } = parsed.data;
     // Server-side allow-list — the client list is advisory only.
     if (!isAllowedPartnerUpload(filename)) {
-      return NextResponse.json({ error: "File type not allowed" }, { status: 400 });
+      return NextResponse.json({ error: t.fileTypeNotAllowed }, { status: 400 });
     }
     const recent = await countRecentPartnerUploads({
       roomId: room.id,
@@ -83,7 +85,7 @@ export async function POST(req: NextRequest, props: { params: Params }) {
     }).catch(() => 0);
     if (recent >= RATE_MAX_IN_WINDOW) {
       return NextResponse.json(
-        { error: "Too many uploads at once. Wait a moment and try again." },
+        { error: t.uploadBurst },
         { status: 429 },
       );
     }
@@ -99,24 +101,24 @@ export async function POST(req: NextRequest, props: { params: Params }) {
   if (actionField === "finalize") {
     const parsed = FinalizeBody.safeParse(body);
     if (!parsed.success) {
-      return NextResponse.json({ error: "Invalid input" }, { status: 400 });
+      return NextResponse.json({ error: t.invalidRequest }, { status: 400 });
     }
     // The storagePath is client-supplied; only accept one under this room's
     // own upload prefix so a visitor can't register a row pointing at another
     // workspace's private objects.
     if (!parsed.data.storagePath.startsWith(requiredPrefix)) {
-      return NextResponse.json({ error: "Invalid upload path" }, { status: 400 });
+      return NextResponse.json({ error: t.invalidUploadPath }, { status: 400 });
     }
     if (!isAllowedPartnerUpload(parsed.data.originalFilename)) {
       await removeObjects([parsed.data.storagePath]).catch(() => ({ failed: [] }));
-      return NextResponse.json({ error: "File type not allowed" }, { status: 400 });
+      return NextResponse.json({ error: t.fileTypeNotAllowed }, { status: 400 });
     }
     // Magic-byte check on the stored object — defeats renamed executables
     // uploaded by bypassing the client.
     const head = await sniffHeadBytes(parsed.data.storagePath);
     if (!head) {
       return NextResponse.json(
-        { error: "Upload not found in storage — try again" },
+        { error: t.uploadNotFound },
         { status: 400 },
       );
     }
@@ -141,11 +143,11 @@ export async function POST(req: NextRequest, props: { params: Params }) {
   if (actionField === "abort") {
     const parsed = AbortBody.safeParse(body);
     if (!parsed.success || !parsed.data.storagePath.startsWith(requiredPrefix)) {
-      return NextResponse.json({ error: "Invalid input" }, { status: 400 });
+      return NextResponse.json({ error: t.invalidRequest }, { status: 400 });
     }
     await removeObjects([parsed.data.storagePath]).catch(() => ({ failed: [] }));
     return NextResponse.json({ ok: true });
   }
 
-  return NextResponse.json({ error: "Unknown action" }, { status: 400 });
+  return NextResponse.json({ error: t.unknownAction }, { status: 400 });
 }

@@ -10,6 +10,7 @@
 
 import { useState } from "react";
 import { Check, Copy, ExternalLink, KeyRound, User } from "lucide-react";
+import { useRoomDict } from "@/components/partner-access/room-i18n";
 
 export type DemoAccessCardProps = {
   label: string;
@@ -31,6 +32,7 @@ export function DemoAccessCard({
   accessNotes,
   variant = "page",
 }: DemoAccessCardProps) {
+  const t = useRoomDict();
   const hasCreds = Boolean(username || password);
   const big = variant === "page";
 
@@ -57,15 +59,15 @@ export function DemoAccessCard({
       {hasCreds && (
         <div className="mt-5 space-y-2">
           <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-[var(--muted-foreground)]">
-            Tu cuenta de demostración
+            {t.demo.credsHeading}
           </p>
           {username && (
-            <CredRow icon={<User className="h-3.5 w-3.5" />} label="Usuario" value={username} />
+            <CredRow icon={<User className="h-3.5 w-3.5" />} label={t.demo.username} value={username} />
           )}
           {password && (
             <CredRow
               icon={<KeyRound className="h-3.5 w-3.5" />}
-              label="Contraseña"
+              label={t.demo.password}
               value={password}
               secret
             />
@@ -84,7 +86,7 @@ export function DemoAccessCard({
               "linear-gradient(135deg, var(--primary), color-mix(in oklab, var(--primary) 78%, #000))",
           }}
         >
-          Abrir el demo
+          {t.demo.openCta}
           <ExternalLink className="h-4 w-4" />
         </a>
       )}
@@ -109,6 +111,7 @@ function CredRow({
   value: string;
   secret?: boolean;
 }) {
+  const t = useRoomDict();
   const [copied, setCopied] = useState(false);
   const [revealed, setRevealed] = useState(!secret);
 
@@ -137,7 +140,7 @@ function CredRow({
           type="button"
           onClick={secret && !revealed ? () => setRevealed(true) : copy}
           className="block max-w-full truncate text-left font-mono text-sm text-[var(--foreground)] hover:text-[var(--primary)]"
-          title={revealed ? "Copiar" : "Mostrar"}
+          title={revealed ? t.demo.copy : t.demo.reveal}
         >
           {revealed ? value : "••••••••"}
         </button>
@@ -146,15 +149,15 @@ function CredRow({
         type="button"
         onClick={copy}
         className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[var(--border)] px-2 py-1 text-[11px] font-medium text-[var(--muted-foreground)] transition-colors hover:bg-[var(--secondary)] hover:text-[var(--foreground)]"
-        aria-label={`Copiar ${label.toLowerCase()}`}
+        aria-label={t.demo.copyAria(label.toLowerCase())}
       >
         {copied ? (
           <>
-            <Check className="h-3 w-3 text-emerald-500" /> Copiado
+            <Check className="h-3 w-3 text-emerald-500" /> {t.demo.copied}
           </>
         ) : (
           <>
-            <Copy className="h-3 w-3" /> Copiar
+            <Copy className="h-3 w-3" /> {t.demo.copy}
           </>
         )}
       </button>

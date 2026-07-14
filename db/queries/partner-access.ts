@@ -11,6 +11,7 @@ import {
   PARTNER_PASSCODE_LOCK_MINUTES,
   PARTNER_PASSCODE_MAX_ATTEMPTS,
 } from "@/lib/partner-room-gate.server";
+import type { RoomLocale } from "@/lib/partner-room-i18n";
 import type {
   PartnerKind,
   PartnerPermission,
@@ -401,6 +402,7 @@ export async function updatePartnerRoomDetails(input: {
   roomId: string;
   name: string;
   partnerKind: PartnerKind;
+  locale?: RoomLocale;
   summary?: string | null;
   welcomeMessage?: string | null;
   expiresAt?: Date | null;
@@ -415,6 +417,7 @@ export async function updatePartnerRoomDetails(input: {
       .set({
         name,
         partnerKind: input.partnerKind,
+        ...(input.locale ? { locale: input.locale } : {}),
         summary: input.summary?.trim() || null,
         welcomeMessage: input.welcomeMessage?.trim() || null,
         expiresAt: input.expiresAt ?? null,
@@ -1073,6 +1076,7 @@ export async function createPartnerRoomForContact(input: {
   actorId: string;
   contactId: string;
   partnerKind: PartnerKind;
+  locale?: RoomLocale;
   name?: string | null;
 }) {
   const [contact] = await db
@@ -1121,6 +1125,7 @@ export async function createPartnerRoomForContact(input: {
         primaryContactId: input.contactId,
         name: input.name?.trim() || `${contact.name} Room`,
         partnerKind: input.partnerKind,
+        locale: input.locale ?? "es",
         status: "active",
         publicAccessTokenHash: hashPartnerAccessToken(accessToken),
         publicAccessTokenCreatedAt: now,

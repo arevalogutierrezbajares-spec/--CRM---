@@ -20,11 +20,13 @@ import {
   PARTNER_KIND_OPTIONS,
   type PartnerKind,
 } from "@/lib/partner-access";
+import { LanguageSelect } from "@/components/partner-access/language-select";
 
 export type RoomDetailsFormValue = {
   id: string;
   name: string;
   partnerKind: PartnerKind;
+  language: string;
   summary: string | null;
   welcomeMessage: string | null;
   expiresAt: string | null;
@@ -40,6 +42,7 @@ export function RoomDetailsForm({ room }: { room: RoomDetailsFormValue }) {
   const [pending, startTransition] = useTransition();
   const [name, setName] = useState(room.name);
   const [partnerKind, setPartnerKind] = useState<PartnerKind>(room.partnerKind);
+  const [language, setLanguage] = useState(room.language);
   const [summary, setSummary] = useState(room.summary ?? "");
   const [welcomeMessage, setWelcomeMessage] = useState(
     room.welcomeMessage ?? "",
@@ -53,6 +56,7 @@ export function RoomDetailsForm({ room }: { room: RoomDetailsFormValue }) {
         roomId: room.id,
         name,
         partnerKind,
+        language,
         summary,
         welcomeMessage,
         expiresAt: expiresAt || null,
@@ -100,6 +104,14 @@ export function RoomDetailsForm({ room }: { room: RoomDetailsFormValue }) {
             </SelectContent>
           </Select>
         </div>
+
+        <LanguageSelect
+          id="partner-room-language"
+          value={language}
+          onChange={setLanguage}
+          label="Room language"
+          disabled={pending}
+        />
 
         <div className="space-y-2">
           <Label htmlFor="partner-room-expires">Room expires</Label>

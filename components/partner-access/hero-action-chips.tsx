@@ -3,6 +3,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
 import { useRoomActivity } from "@/components/partner-access/room-activity-context";
+import { useRoomDict } from "@/components/partner-access/room-i18n";
 
 /**
  * The hero's action chips, live-wired to the room activity context: checking a
@@ -18,6 +19,7 @@ export function HeroActionChips({
   initialPendingSignatures: number;
   onVideo: boolean;
 }) {
+  const t = useRoomDict();
   const activity = useRoomActivity();
   const openSteps = activity?.openSteps ?? initialOpenSteps;
   const pendingSignatures =
@@ -40,7 +42,7 @@ export function HeroActionChips({
           transition={{ duration: 0.25 }}
         >
           <ChipCount value={openSteps} />
-          {openSteps === 1 ? "paso para ti" : "pasos para ti"}
+          {t.chips.steps(openSteps)}
           <ArrowRight className="h-3.5 w-3.5" />
         </motion.a>
       )}
@@ -53,7 +55,7 @@ export function HeroActionChips({
           transition={{ duration: 0.25 }}
         >
           <ChipCount value={pendingSignatures} />
-          {pendingSignatures === 1 ? "firma pendiente" : "firmas pendientes"}
+          {t.chips.signatures(pendingSignatures)}
           <ArrowRight className="h-3.5 w-3.5" />
         </motion.a>
       )}
