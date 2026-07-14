@@ -74,7 +74,7 @@ export function PartnerCommentThread({
       </button>
 
       {open && (
-        <div className="mt-2 space-y-2 border-l-2 border-[var(--border)] pl-3">
+        <div className="mt-2 space-y-2 border-s-2 border-[var(--border)] ps-3">
           {merged.map((c) => (
             <div key={c.id} className="group text-sm">
               <div className="flex items-center gap-2 text-[11px] text-[var(--muted-foreground)]">

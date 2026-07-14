@@ -48,7 +48,7 @@ export function RoomPresentations({
             {t.decks.subtitle}
           </p>
         </div>
-        <span className="ml-auto rounded-full bg-[var(--secondary)] px-2 py-0.5 text-xs tabular-nums text-[var(--secondary-foreground)]">
+        <span className="ms-auto rounded-full bg-[var(--secondary)] px-2 py-0.5 text-xs tabular-nums text-[var(--secondary-foreground)]">
           {decks.length}
         </span>
       </div>

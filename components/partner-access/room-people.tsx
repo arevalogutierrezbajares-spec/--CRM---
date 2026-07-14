@@ -113,7 +113,7 @@ export function RoomPeople({
                     {initials(g.displayName)}
                     {online && (
                       <span
-                        className="absolute -bottom-0.5 -right-0.5 flex h-2.5 w-2.5"
+                        className="absolute -bottom-0.5 -end-0.5 flex h-2.5 w-2.5"
                         aria-hidden
                       >
                         <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60 motion-reduce:animate-none" />
@@ -125,7 +125,7 @@ export function RoomPeople({
                     <div className="truncate text-sm">
                       {g.displayName ?? t.people.guestFallback}
                       {g.id === youId && (
-                        <span className="ml-1 text-xs text-[var(--muted-foreground)]">
+                        <span className="ms-1 text-xs text-[var(--muted-foreground)]">
                           {t.people.youParen}
                         </span>
                       )}

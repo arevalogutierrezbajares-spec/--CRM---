@@ -125,7 +125,7 @@ export function PublicNextSteps({
       {error && (
         <p className="mb-2 text-xs text-red-600 dark:text-red-400">{error}</p>
       )}
-      <ul className="max-h-[360px] space-y-2 overflow-y-auto pr-1">
+      <ul className="max-h-[360px] space-y-2 overflow-y-auto pe-1">
         {ordered.map((step) => {
           const interactive =
             step.assignedTo === "partner" || step.assignedTo === "both";
@@ -162,7 +162,7 @@ function AllDone({ celebrate }: { celebrate: boolean }) {
       </motion.span>
       {t.nextSteps.allDone}
       {celebrate && (
-        <span aria-hidden className="pointer-events-none absolute -left-1 top-1/2">
+        <span aria-hidden className="pointer-events-none absolute -start-1 top-1/2">
           {Array.from({ length: 8 }, (_, i) => {
             const angle = (i / 8) * Math.PI * 2;
             return (
@@ -197,7 +197,7 @@ function Header({ openCount }: { openCount: number }) {
           <motion.span
             exit={{ opacity: 0, scale: 0.8 }}
             transition={{ duration: 0.2 }}
-            className="ml-auto overflow-hidden rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+            className="ms-auto overflow-hidden rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
           >
             <AnimatePresence initial={false} mode="popLayout">
               <motion.span
@@ -296,7 +296,7 @@ function StepItem({
             animate={{ scaleX: done ? 1 : 0 }}
             transition={{ duration: 0.35, ease: "easeOut" }}
             style={{ originX: 0 }}
-            className="absolute left-0 top-1/2 h-px w-full bg-current"
+            className="absolute start-0 top-1/2 h-px w-full bg-current"
           />
         </p>
         <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs">

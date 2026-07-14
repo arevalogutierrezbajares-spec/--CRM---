@@ -9,11 +9,13 @@ import {
   getRoomDict,
   resolveRoomLocale,
   formatRoomRelative,
+  roomDir,
 } from "@/lib/partner-room-i18n";
 import { RoomI18nProvider } from "@/components/partner-access/room-i18n";
 import { SITE_URL } from "@/lib/site-url";
 import { roomHeroVideo } from "@/lib/partner-room-videos";
 import { RoomHeroVideo } from "@/components/partner-access/room-hero-video";
+import { translateForRoom } from "@/lib/partner-room-translate.server";
 import {
   countClaimedSeats,
   getPartnerRoomMember,
@@ -141,14 +143,16 @@ export default async function PublicAccessRoomPage({
         : null;
     return (
       <RoomI18nProvider locale={access.room.locale}>
-        <RoomSignIn
-          token={token}
-          roomName={access.room.name}
-          needsPin={needsPin}
-          needsIdentity={needsIdentity}
-          claimableMembers={claimable}
-          seatsLeft={seatsLeft}
-        />
+        <div lang={access.room.locale} dir={roomDir(access.room.locale)}>
+          <RoomSignIn
+            token={token}
+            roomName={access.room.name}
+            needsPin={needsPin}
+            needsIdentity={needsIdentity}
+            claimableMembers={claimable}
+            seatsLeft={seatsLeft}
+          />
+        </div>
       </RoomI18nProvider>
     );
   }
@@ -160,6 +164,16 @@ export default async function PublicAccessRoomPage({
     memberId: member?.id ?? null,
     memberEmail: member?.email ?? null,
   }).catch(() => {});
+
+  // Room language + a translate helper. Operator-authored content (labels,
+  // steps, demo, welcome) is written in es/en; for pt/ru/ar guests it's
+  // machine-translated and cached (no-op + instant for es/en). Null/empty
+  // passes through unchanged so "no description" stays absent, not "".
+  const locale = resolveRoomLocale(access.room.locale);
+  const tr = (s: string | null | undefined): Promise<string> =>
+    translateForRoom(s, locale, { workspaceId: access.room.workspaceId });
+  const trNull = async (s: string | null | undefined): Promise<string | null> =>
+    (s ?? "").trim() ? await tr(s) : (s ?? null);
 
   const [
     nextSteps,
@@ -254,7 +268,7 @@ export default async function PublicAccessRoomPage({
     });
   }
 
-  const repoShares: RepoShareView[] = shares.map((share) => {
+  const repoShares: RepoShareView[] = await Promise.all(shares.map(async (share) => {
     const isHtmlDeck =
       share.kindSnapshot === "file" &&
       Boolean(share.storagePath) &&
@@ -265,8 +279,8 @@ export default async function PublicAccessRoomPage({
       ).key === "html";
     return {
       id: share.id,
-      title: share.liveLabel ?? share.labelSnapshot,
-      description: share.description,
+      title: await tr(share.liveLabel ?? share.labelSnapshot),
+      description: await trNull(share.description),
       projectTitle: share.projectTitle,
       kindSnapshot: share.kindSnapshot,
       permissions: share.permissions,
@@ -281,7 +295,7 @@ export default async function PublicAccessRoomPage({
         share.permissions.includes("download"),
       section: share.roomSection,
     };
-  });
+  }));
 
   // HTML decks get their own prominent "Presentaciones" surface; everything
   // else stays in the repository list.
@@ -295,16 +309,18 @@ export default async function PublicAccessRoomPage({
     }));
   const nonDeckShares = repoShares.filter((s) => !s.isHtmlDeck);
 
-  const repoItemViews: RepoItemView[] = repoItems.map((item) => ({
-    id: item.id,
-    title: item.title,
-    description: item.description,
-    kind: item.kind,
-    url: item.url,
-    mimeType: item.mimeType,
-    sizeBytes: item.sizeBytes,
-    category: item.category,
-  }));
+  const repoItemViews: RepoItemView[] = await Promise.all(
+    repoItems.map(async (item) => ({
+      id: item.id,
+      title: await tr(item.title),
+      description: await trNull(item.description),
+      kind: item.kind,
+      url: item.url,
+      mimeType: item.mimeType,
+      sizeBytes: item.sizeBytes,
+      category: item.category,
+    })),
+  );
 
   // Greet the signed-in guest by their own name; fall back to the contact's
   // first word only when nobody has claimed a seat (org names can read oddly,
@@ -318,11 +334,28 @@ export default async function PublicAccessRoomPage({
 
   // Room language → dictionary. Server-rendered strings read `t` directly;
   // client components read the same dict from RoomI18nProvider context.
-  const locale = resolveRoomLocale(access.room.locale);
+  // (`locale` is defined above so translation is available while shaping data.)
   const dict = getRoomDict(locale);
 
+  // Operator-authored welcome copy, machine-translated for pt/ru/ar guests.
+  const welcomeText = await tr(access.room.welcomeMessage);
+
+  // Next-step text and the featured demo's copy get the same treatment. Counts
+  // (openSteps) use the untranslated list — only the displayed text is localized.
+  const localizedNextSteps = await Promise.all(
+    nextSteps.map(async (s) => ({ ...s, text: await tr(s.text) })),
+  );
+  const demoView = demoLink
+    ? {
+        ...demoLink,
+        label: await tr(demoLink.label),
+        description: await trNull(demoLink.description),
+        accessNotes: await trNull(demoLink.accessNotes),
+      }
+    : null;
+
   return (
-    <main lang={locale} className="min-h-screen bg-[var(--bg-page)]">
+    <main lang={locale} dir={roomDir(locale)} className="min-h-screen bg-[var(--bg-page)]">
       <RoomI18nProvider locale={locale}>
       <RoomActivityProvider
         initialOpenSteps={openSteps.length}
@@ -377,7 +410,7 @@ export default async function PublicAccessRoomPage({
                   heroVideo ? "text-white/85" : "text-[var(--muted-foreground)]"
                 }`}
               >
-                {access.room.welcomeMessage ?? dict.hero.welcomeFallback}
+                {welcomeText || dict.hero.welcomeFallback}
               </p>
             </div>
 
@@ -485,16 +518,16 @@ export default async function PublicAccessRoomPage({
                 <RoomPresentations token={token} decks={roomDecks} />
               </Reveal>
             )}
-            {demoLink && (
+            {demoView && (
               <Reveal delay={0.2} inView>
               <div id="demo" className="scroll-mt-6">
                 <DemoAccessCard
-                  label={demoLink.label}
-                  description={demoLink.description}
-                  url={demoLink.url}
-                  username={demoLink.username}
-                  password={demoLink.password}
-                  accessNotes={demoLink.accessNotes}
+                  label={demoView.label}
+                  description={demoView.description}
+                  url={demoView.url}
+                  username={demoView.username}
+                  password={demoView.password}
+                  accessNotes={demoView.accessNotes}
                   variant="room"
                 />
               </div>
@@ -582,7 +615,7 @@ export default async function PublicAccessRoomPage({
             >
               {/* Header + badge render inside the client component so the
                   pending count stays in sync as the partner checks steps. */}
-              <PublicNextSteps token={token} initialSteps={nextSteps} nowMs={nowMs} />
+              <PublicNextSteps token={token} initialSteps={localizedNextSteps} nowMs={nowMs} />
             </div>
             </Reveal>
           </aside>
