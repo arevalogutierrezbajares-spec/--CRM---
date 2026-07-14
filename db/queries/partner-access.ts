@@ -1178,12 +1178,14 @@ export async function setPartnerRoomPasscode(input: {
   const passcodeHash = input.passcode
     ? hashPartnerRoomPasscode(existing.id, input.passcode)
     : null;
+  const passcodeEnc = input.passcode ? encryptRoomToken(input.passcode) : null;
 
   const room = await db.transaction(async (tx) => {
     const [updated] = await tx
       .update(schema.partnerRooms)
       .set({
         passcodeHash,
+        passcodeEnc,
         passcodeFailedCount: 0,
         passcodeLockedUntil: null,
         updatedAt: now,
