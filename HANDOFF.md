@@ -1,43 +1,28 @@
 # AGB CRM — Handoff
 
-> **Latest: 2026-05-27 (late) — invite-only login live, WA bot working E2E,
-> token diet shipped.**
+> **Latest: 2026-07-14 — Portfolio note: CaneyCloud TikTok Commerce Link (ship-dark).**
 >
-> **Login (X . JEAV . TIGR):** deployed at https://agb-crm.vercel.app/login.
-> Caney landing, invisible hotspot on the book, pixel-shatter reveal,
-> platform-native form (warm card, Inter, near-black primary). Sign-in is
-> **invite-only** — only emails in the `users` table can request a magic
-> link. Custom domain `x.vamosavenezuela.com` attached, waiting on DNS A
-> record + Supabase callback URL allowlist (see Wave E in `_tasks/_BOARD.md`).
+> **Cross-repo (not AGB code):** In `--TOURISM--` / CaneyCloud PMS, TG built **TikTok
+> Commerce Link** (#1 bio→landing→WA→pay + #2 video→room library) end-to-end,
+> **ship-dark** (fleet OFF by default). Funnel: TikTok bio `/t/{slug}` → guest
+> landing → WhatsApp HMAC handoff → concierge quote/hold → guest **Ya pagué**
+> (`payment_declared`, no auto-confirm) → operator verifies. Owner UI:
+> `/channels/tiktok` (activate, videos, live preview, pilot funnel). Admin kill
+> switch: `/admin/flags` → `tiktok_commerce` / env `FF_TIKTOK_COMMERCE`. Property
+> gate: `settings.tiktok_commerce.enabled`. Public deny = 404. Doc of record in
+> tourism repo: `docs/TIKTOK-COMMERCE-LINK.md`. Overlord ledger:
+> `005- WIKI/operation-overlord/HANDOFF-LOG.md` entry `2026-07-14 19:35 | TG-GROK`.
+> **Status:** implemented locally, uncommitted on tourism `main` — needs feature
+> branch + PR + formal Overlord task before merge. **Portfolio positioning:**
+> social commerce is a CaneyCloud PMS wedge; VAV stays marketplace; RUTA stays
+> air/lux only. When CRM-tracking posada pilots or creator/TikTok partners for
+> this channel, tag against CaneyCloud not VAV listings.
 >
-> **WA bot:** End-to-end working on real phone numbers. Outbound failures now
-> surface to `wa_activity` as `direction='error'` (no more silent breakage
-> when the access token expires). Persona set so Tomas is always "Tomas" or
-> "TG", no nickname jumble. "Focus / priorities / what's next" now lands on
-> `todo_query` and returns real prioritized data.
->
-> **WA agent perf:** Input-token diet halved per-message cost. Dynamic tool
-> gating (only the intent's allowedTools shipped to Claude, not all 20) +
-> Haiku 4.5 routing for routine intents (recap/todos/lookups/reminders/briefs) +
-> mention pre-resolver carrying org/rel across turns. Result on 18-scenario
-> bench: -57% total tokens, -64% Sonnet-only tokens, 17/18 intent accuracy,
-> single-tool-call multi-turn flows, cleaner replies. Sonnet rate limit
-> (30K/min) is no longer a practical concern at expected traffic.
->
-> **Also 2026-05-27 — Wave A/B/C shipped — 20-tool WA agent + media pipeline.**
-> WA agent now has 20 tools (was 14). New tools: `add_channel`, `draft_message`,
-> `send_message` (confirmation-gated), `log_meeting`, `meeting_brief`,
-> `assign_contact`. `log_touch` enhanced with `follow_up_in`. Media pipeline
-> written (`lib/wa-agent/media/`) — voice transcription (Whisper), Supabase
-> Storage, WA media download, vCard parsing, link extraction. Intent classifier
-> + workflows expanded for all new intents (EN + ES). 197 unit tests + 23/23
-> E2E smoke passing. Committed `9e65a06`.
->
-> **Previous (2026-05-27):** production-ready v1 + shared-workspace refactor.
-> All data ownership moved from per-user (`owner_id`) to per-workspace
-> (`workspace_id`). WhatsApp agent routes by sender phone → user → workspace.
-> `/workspace` invite flow. 119 tests. `next build` green, `tsc --noEmit`
-> clean, Supabase live with 20 tables + workspace RLS.
+> **Previous (AGB product — 2026-05-27 late):** invite-only login live, WA bot
+> working E2E, token diet shipped. Login at https://agb-crm.vercel.app/login
+> (invite-only magic link). WA agent 20 tools, Haiku routing for routine
+> intents, ~-57% tokens on bench. Wave A/B/C media pipeline written. Shared
+> workspace refactor (`workspace_id`). See sections below for full AGB status.
 
 ---
 
