@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ArrowLeft, ExternalLink } from "lucide-react";
 import { useDeckFit, DECK_W, DECK_H } from "@/lib/decks/use-deck-fit";
+import { useRoomDict } from "@/components/partner-access/room-i18n";
 
 /**
  * Full-screen client-facing HTML deck viewer. Decks are built for a fixed
@@ -21,6 +22,7 @@ export function ClientDeckViewer({
 }) {
   const { ref: wrapRef, scale, rotate } = useDeckFit();
   const [loaded, setLoaded] = useState(false);
+  const t = useRoomDict();
 
   return (
     <main className="fixed inset-0 flex flex-col bg-black text-white">
@@ -29,7 +31,7 @@ export function ClientDeckViewer({
           href={backHref}
           className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm text-white/70 transition-colors hover:text-white"
         >
-          <ArrowLeft className="h-4 w-4" /> Volver
+          <ArrowLeft className="h-4 w-4" /> {t.deckViewer.back}
         </a>
         <div className="truncate text-sm font-medium text-white/80">{title}</div>
         <a
@@ -38,7 +40,7 @@ export function ClientDeckViewer({
           rel="noopener noreferrer"
           className="inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs text-white/50 transition-colors hover:text-white"
         >
-          <ExternalLink className="h-3.5 w-3.5" /> Open
+          <ExternalLink className="h-3.5 w-3.5" /> {t.deckViewer.open}
         </a>
       </div>
       <div ref={wrapRef} className="relative min-h-0 flex-1 overflow-hidden">

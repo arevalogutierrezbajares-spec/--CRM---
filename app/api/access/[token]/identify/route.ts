@@ -11,6 +11,7 @@ import {
   partnerMemberCookieName,
   partnerMemberCookieValue,
 } from "@/lib/partner-room-gate.server";
+import { getRoomDict } from "@/lib/partner-room-i18n";
 
 const Body = z.object({
   email: z.string().trim().toLowerCase().email().max(255),
@@ -23,26 +24,24 @@ type Params = Promise<{ token: string }>;
 export async function POST(req: NextRequest, props: { params: Params }) {
   const { token } = await props.params;
   const room = await resolvePartnerRoomByToken(token).catch(() => null);
+  const t = getRoomDict(room?.locale).api;
   if (!room) {
-    return NextResponse.json(
-      { error: "Sala no encontrada o acceso expirado" },
-      { status: 404 },
-    );
+    return NextResponse.json({ error: t.roomNotFound }, { status: 404 });
   }
   // PIN must be cleared before a seat can be claimed.
   if (!(await isPartnerRoomUnlocked(room))) {
-    return NextResponse.json({ error: "La sala está bloqueada" }, { status: 401 });
+    return NextResponse.json({ error: t.roomLocked }, { status: 401 });
   }
 
   let json: unknown;
   try {
     json = await req.json();
   } catch {
-    return NextResponse.json({ error: "Solicitud inválida" }, { status: 400 });
+    return NextResponse.json({ error: t.invalidRequest }, { status: 400 });
   }
   const parsed = Body.safeParse(json);
   if (!parsed.success) {
-    return NextResponse.json({ error: "Ingresa un correo válido" }, { status: 400 });
+    return NextResponse.json({ error: t.validEmail }, { status: 400 });
   }
 
   // Soft flood guard: a visitor can't mass-create member rows in a room
@@ -51,10 +50,7 @@ export async function POST(req: NextRequest, props: { params: Params }) {
     () => 0,
   );
   if (recent >= 10) {
-    return NextResponse.json(
-      { error: "Demasiados registros a la vez. Espera un momento." },
-      { status: 429 },
-    );
+    return NextResponse.json({ error: t.signInBurst }, { status: 429 });
   }
 
   const result = await claimPartnerRoomSeat({
@@ -68,16 +64,13 @@ export async function POST(req: NextRequest, props: { params: Params }) {
   }).catch(() => null);
 
   if (!result) {
-    return NextResponse.json({ error: "No pudimos registrarte" }, { status: 500 });
+    return NextResponse.json({ error: t.signInFailed }, { status: 500 });
   }
   if (!result.ok) {
     if (result.error === "seat_full") {
-      return NextResponse.json(
-        { error: "La sala está llena. Pide al anfitrión que agregue un cupo." },
-        { status: 403 },
-      );
+      return NextResponse.json({ error: t.seatFull }, { status: 403 });
     }
-    return NextResponse.json({ error: "Por favor ingresa tu nombre" }, { status: 400 });
+    return NextResponse.json({ error: t.nameRequired }, { status: 400 });
   }
 
   const res = NextResponse.json({

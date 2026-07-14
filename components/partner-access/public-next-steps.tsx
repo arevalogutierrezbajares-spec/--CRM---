@@ -3,15 +3,9 @@
 import { useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { CalendarClock, Check, CheckSquare, Users } from "lucide-react";
-import { formatRelativeEs } from "@/lib/utils";
 import { useRoomActivity } from "@/components/partner-access/room-activity-context";
+import { useRoomDict, useRoomI18n } from "@/components/partner-access/room-i18n";
 import type { PartnerNextStep } from "@/db/queries/partner-next-steps";
-
-const ASSIGNEE_LABEL: Record<string, string> = {
-  partner: "Para ti",
-  owner: "El equipo",
-  both: "Ambos",
-};
 
 type CompletionOverride = Pick<PartnerNextStep, "completedAt" | "completedBy">;
 
@@ -24,6 +18,7 @@ export function PublicNextSteps({
   initialSteps: PartnerNextStep[];
   nowMs: number;
 }) {
+  const t = useRoomDict();
   // Display derives from the server snapshot + local completion overrides
   // (never seed-then-drift): a router.refresh with new/edited steps flows
   // straight through, while optimistic toggles stay instant.
@@ -84,7 +79,7 @@ export function PublicNextSteps({
       });
       activity?.setOpenSteps(openCount);
       setCelebrate(false);
-      setError("No se pudo guardar el cambio. Intenta de nuevo.");
+      setError(t.nextSteps.saveError);
     } finally {
       setPending((prev) => {
         const n = new Set(prev);
@@ -99,7 +94,7 @@ export function PublicNextSteps({
       <>
         <Header openCount={0} />
         <p className="mt-3 text-sm text-[var(--muted-foreground)]">
-          Aún no hay próximos pasos. Aquí verás lo que sigue.
+          {t.nextSteps.empty}
         </p>
       </>
     );
@@ -122,7 +117,7 @@ export function PublicNextSteps({
       <Header openCount={openCount} />
       <div className="mb-2 mt-3 text-xs text-[var(--muted-foreground)]">
         {openCount > 0 ? (
-          "Marca lo que ya completaste."
+          t.nextSteps.markHint
         ) : (
           <AllDone celebrate={celebrate} />
         )}
@@ -154,6 +149,7 @@ export function PublicNextSteps({
 
 /** The moment the last step closes: a spring-in check + gold burst. */
 function AllDone({ celebrate }: { celebrate: boolean }) {
+  const t = useRoomDict();
   return (
     <span className="relative inline-flex items-center gap-1.5 font-medium text-emerald-600 dark:text-emerald-400">
       <motion.span
@@ -164,7 +160,7 @@ function AllDone({ celebrate }: { celebrate: boolean }) {
       >
         <Check className="h-3 w-3" />
       </motion.span>
-      ¡Todo al día!
+      {t.nextSteps.allDone}
       {celebrate && (
         <span aria-hidden className="pointer-events-none absolute -left-1 top-1/2">
           {Array.from({ length: 8 }, (_, i) => {
@@ -191,10 +187,11 @@ function AllDone({ celebrate }: { celebrate: boolean }) {
 }
 
 function Header({ openCount }: { openCount: number }) {
+  const t = useRoomDict();
   return (
     <div className="flex items-center gap-2">
       <CheckSquare className="h-4 w-4 text-[var(--muted-foreground)]" />
-      <h2 className="text-base font-semibold">Próximos pasos</h2>
+      <h2 className="text-base font-semibold">{t.nextSteps.title}</h2>
       <AnimatePresence>
         {openCount > 0 && (
           <motion.span
@@ -211,10 +208,9 @@ function Header({ openCount }: { openCount: number }) {
                 transition={{ duration: 0.18 }}
                 className="inline-block tabular-nums"
               >
-                {openCount}
+                {t.nextSteps.pendingBadge(openCount)}
               </motion.span>
-            </AnimatePresence>{" "}
-            pendiente{openCount === 1 ? "" : "s"}
+            </AnimatePresence>
           </motion.span>
         )}
       </AnimatePresence>
@@ -235,6 +231,7 @@ function StepItem({
   loading?: boolean;
   onToggle?: (step: PartnerNextStep) => void;
 }) {
+  const { t, rel } = useRoomI18n();
   const done = Boolean(step.completedAt);
   const checkFace = (
     <AnimatePresence initial={false}>
@@ -267,7 +264,7 @@ function StepItem({
           disabled={loading}
           onClick={() => onToggle?.(step)}
           whileTap={{ scale: 0.8 }}
-          aria-label={done ? "Marcar como pendiente" : "Marcar como hecho"}
+          aria-label={done ? t.nextSteps.markPending : t.nextSteps.markDone}
           className={`relative mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-colors duration-300 after:absolute after:-inset-3 after:content-[''] ${
             done
               ? "border-green-500 bg-green-500 text-white"
@@ -305,7 +302,9 @@ function StepItem({
         <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs">
           <span className="inline-flex items-center gap-1 rounded bg-[var(--secondary)] px-1.5 py-0.5 text-[10px] text-[var(--secondary-foreground)]">
             <Users className="h-3 w-3" />
-            {ASSIGNEE_LABEL[step.assignedTo] ?? "Para ti"}
+            {t.nextSteps.assignee[
+              step.assignedTo as keyof typeof t.nextSteps.assignee
+            ] ?? t.nextSteps.assignee.default}
           </span>
           {step.dueAt && !done && (
             <span
@@ -316,14 +315,14 @@ function StepItem({
               }`}
             >
               <CalendarClock className="h-3 w-3" />
-              {overdue ? "Vencido " : "Para "}
-              {formatRelativeEs(step.dueAt)}
+              {overdue ? t.nextSteps.overdue : t.nextSteps.due}{" "}
+              {rel(step.dueAt)}
             </span>
           )}
           {done && (
             <span className="inline-flex items-center gap-1 text-green-600 dark:text-green-400">
               <Check className="h-3 w-3" />
-              Hecho
+              {t.nextSteps.done}
             </span>
           )}
         </div>

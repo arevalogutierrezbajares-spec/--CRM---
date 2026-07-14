@@ -2,6 +2,7 @@ import {
   PARTNER_KIND_OPTIONS,
   type PartnerKind,
 } from "@/lib/partner-access";
+import { ROOM_LOCALE_OPTIONS, resolveRoomLocale } from "@/lib/partner-room-i18n";
 import { createPartnerRoomForContact, setRoomDemoLink } from "@/db/queries/partner-access";
 import { safeStr, type ToolEntry } from "./_types";
 import {
@@ -13,6 +14,7 @@ import {
 
 const KIND_VALUES = PARTNER_KIND_OPTIONS.map((o) => o.value);
 const KINDS = new Set<string>(KIND_VALUES);
+const LOCALE_VALUES = ROOM_LOCALE_OPTIONS.map((o) => o.value);
 
 export const createPartnerRoom: ToolEntry = {
   definition: {
@@ -37,6 +39,12 @@ export const createPartnerRoom: ToolEntry = {
           type: "string",
           enum: KIND_VALUES,
           description: "Relationship type for the room; defaults to client",
+        },
+        language: {
+          type: "string",
+          enum: LOCALE_VALUES,
+          description:
+            "Guest-facing language the room renders in (es = Spanish, en = English); defaults to es",
         },
         name: {
           type: "string",
@@ -69,6 +77,7 @@ export const createPartnerRoom: ToolEntry = {
       actorId: ctx.userId,
       contactId: contact.id,
       partnerKind,
+      locale: resolveRoomLocale(safeStr(input.language, 8)),
       name: safeStr(input.name, 200) || null,
     });
     if (!res.ok) return res;
@@ -106,6 +115,7 @@ export const createPartnerRoom: ToolEntry = {
         roomId: res.room.id,
         roomName: res.room.name,
         partnerKind: res.room.partnerKind,
+        language: res.room.locale,
         status: res.room.status,
         existed: res.existed,
         guestUrl,

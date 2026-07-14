@@ -209,6 +209,10 @@ export const partnerRoomStatus = pgEnum("partner_room_status", [
   "revoked",
 ]);
 
+// Language a partner room renders in for the guest. Extensible: add a value here
+// + a dictionary in lib/partner-access/i18n.ts + an entry in ROOM_LOCALE_OPTIONS.
+export const roomLocale = pgEnum("room_locale", ["es", "en"]);
+
 export const partnerShareChannel = pgEnum("partner_share_channel", [
   "email",
   "whatsapp",
@@ -873,6 +877,8 @@ export const partnerRooms = pgTable("partner_rooms", {
   name: text("name").notNull(),
   partnerKind: partnerKind("partner_kind").notNull().default("strategic"),
   status: partnerRoomStatus("status").notNull().default("draft"),
+  // Guest-facing language for the room (es | en). Drives the i18n dictionary.
+  locale: roomLocale("locale").notNull().default("es"),
   summary: text("summary"),
   welcomeMessage: text("welcome_message"),
   publicAccessTokenHash: text("public_access_token_hash").unique(),

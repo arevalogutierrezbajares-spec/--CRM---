@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRoomDict } from "@/components/partner-access/room-i18n";
 
 // Minimal pdf.js surface (mirrors sign-document-modal — keep in sync).
 type PdfViewport = { width: number; height: number };
@@ -27,6 +28,7 @@ const THUMB_WIDTH = 360;
  * are untouched.
  */
 export function PdfThumb({ src, title }: { src: string; title: string }) {
+  const t = useRoomDict();
   const holderRef = useRef<HTMLAnchorElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [state, setState] = useState<"idle" | "loading" | "ready" | "failed">(
@@ -102,7 +104,7 @@ export function PdfThumb({ src, title }: { src: string; title: string }) {
       href={src}
       target="_blank"
       rel="noopener noreferrer"
-      aria-label={`Abrir ${title}`}
+      aria-label={t.pdf.openAria(title)}
       className="group mt-2 block w-fit max-w-full"
     >
       {state !== "ready" && (

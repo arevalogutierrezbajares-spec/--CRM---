@@ -25,6 +25,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PARTNER_KIND_OPTIONS } from "@/lib/partner-access";
+import { LanguageSelect } from "@/components/partner-access/language-select";
 
 export type NewRoomContactOption = {
   id: string;
@@ -51,6 +52,7 @@ export function NewRoomDialog({
   const [open, setOpen] = useState(false);
   const [contactId, setContactId] = useState(fixedContact?.id ?? "");
   const [partnerKind, setPartnerKind] = useState("client");
+  const [language, setLanguage] = useState("es");
   const [name, setName] = useState("");
   const [accessUrl, setAccessUrl] = useState<string | null>(null);
   const [roomId, setRoomId] = useState<string | null>(null);
@@ -68,6 +70,7 @@ export function NewRoomDialog({
       const res = await createPartnerRoomAction({
         contactId: selectedContact.id,
         partnerKind,
+        language,
         name: name.trim() || null,
       });
       if (!res.ok) {
@@ -200,20 +203,28 @@ export function NewRoomDialog({
                     </div>
                   ))}
 
-                <div className="space-y-1.5">
-                  <Label htmlFor="new-room-kind">Relationship</Label>
-                  <Select value={partnerKind} onValueChange={setPartnerKind}>
-                    <SelectTrigger id="new-room-kind">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {PARTNER_KIND_OPTIONS.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="new-room-kind">Relationship</Label>
+                    <Select value={partnerKind} onValueChange={setPartnerKind}>
+                      <SelectTrigger id="new-room-kind">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PARTNER_KIND_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <LanguageSelect
+                    id="new-room-language"
+                    value={language}
+                    onChange={setLanguage}
+                  />
                 </div>
 
                 <div className="space-y-1.5">

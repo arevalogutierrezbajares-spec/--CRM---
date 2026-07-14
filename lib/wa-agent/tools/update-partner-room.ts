@@ -11,13 +11,16 @@ import {
   type PartnerRoomStatus,
 } from "@/lib/partner-access";
 import { isValidPartnerPasscode } from "@/lib/partner-room-gate.server";
+import { ROOM_LOCALE_OPTIONS, resolveRoomLocale } from "@/lib/partner-room-i18n";
 import { safeStr, type ToolEntry } from "./_types";
 import { ROOM_REF_PROPS, parseDayEnd, resolveRoomRef } from "./_partner-room";
 
 const KIND_VALUES = PARTNER_KIND_OPTIONS.map((o) => o.value);
 const STATUS_VALUES = PARTNER_ROOM_STATUS_OPTIONS.map((o) => o.value);
+const LOCALE_VALUES = ROOM_LOCALE_OPTIONS.map((o) => o.value);
 const KINDS = new Set<string>(KIND_VALUES);
 const STATUSES = new Set<string>(STATUS_VALUES);
+const LOCALES = new Set<string>(LOCALE_VALUES);
 
 const SUMMARY_MAX = 1000;
 const WELCOME_MAX = 4000;
@@ -39,6 +42,11 @@ export const updatePartnerRoom: ToolEntry = {
         ...ROOM_REF_PROPS,
         name: { type: "string", description: "New room name" },
         partner_kind: { type: "string", enum: KIND_VALUES },
+        language: {
+          type: "string",
+          enum: LOCALE_VALUES,
+          description: "Guest-facing language the room renders in (es = Spanish, en = English)",
+        },
         summary: {
           type: "string",
           description: `Short description under the room title (max ${SUMMARY_MAX} chars); "clear" or empty removes it`,
@@ -82,6 +90,10 @@ export const updatePartnerRoom: ToolEntry = {
     const rawKind = safeStr(input.partner_kind, 40);
     if (rawKind && !KINDS.has(rawKind)) {
       return { ok: false, error: `Invalid partner_kind: ${rawKind}. Options: ${KIND_VALUES.join(", ")}` };
+    }
+    const rawLocale = safeStr(input.language, 8);
+    if (rawLocale && !LOCALES.has(rawLocale)) {
+      return { ok: false, error: `Invalid language: ${rawLocale}. Options: ${LOCALE_VALUES.join(", ")}` };
     }
 
     const isClear = (v: string) => v.toLowerCase() === "clear";
@@ -139,7 +151,7 @@ export const updatePartnerRoom: ToolEntry = {
     // ── Apply.
     const changed: string[] = [];
 
-    if (name || rawKind || hasSummary || hasWelcome || rawExpires) {
+    if (name || rawKind || rawLocale || hasSummary || hasWelcome || rawExpires) {
       const summaryIn = hasSummary ? safeStr(input.summary, SUMMARY_MAX) : "";
       const welcomeIn = hasWelcome ? safeStr(input.welcome_message, WELCOME_MAX) : "";
       const res = await updatePartnerRoomDetails({
@@ -148,6 +160,7 @@ export const updatePartnerRoom: ToolEntry = {
         roomId: room.id,
         name: name || room.name,
         partnerKind: (rawKind || room.partnerKind) as PartnerKind,
+        locale: rawLocale ? resolveRoomLocale(rawLocale) : undefined,
         summary: hasSummary ? (isClear(summaryIn) ? null : summaryIn || null) : room.summary,
         welcomeMessage: hasWelcome
           ? isClear(welcomeIn)
@@ -160,6 +173,7 @@ export const updatePartnerRoom: ToolEntry = {
       room = res.room;
       if (name) changed.push("name");
       if (rawKind) changed.push("partner_kind");
+      if (rawLocale) changed.push("language");
       if (hasSummary) changed.push("summary");
       if (hasWelcome) changed.push("welcome_message");
       if (rawExpires) changed.push("expires_at");

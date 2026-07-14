@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertCircle, Send } from "lucide-react";
-import { formatRelativeEs } from "@/lib/utils";
+import { roomIntlLocale, type RoomDict } from "@/lib/partner-room-i18n";
+import { useRoomI18n } from "@/components/partner-access/room-i18n";
 import {
   MentionTextarea,
   renderWithMentions,
@@ -43,6 +44,7 @@ export function PublicRoomMessages({
   lastSeenAtIso?: string | null;
   nowMs?: number;
 }) {
+  const { t, locale, rel } = useRoomI18n();
   const [pending, setPending] = useState<LocalMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -81,13 +83,13 @@ export function PublicRoomMessages({
         setPending((prev) =>
           prev.map((m) => (m.id === tempId ? { ...m, status: "failed" } : m)),
         );
-        setError(data.error ?? "No se pudo enviar. Inténtalo de nuevo.");
+        setError(data.error ?? t.messages.sendFailed);
       }
     } catch {
       setPending((prev) =>
         prev.map((m) => (m.id === tempId ? { ...m, status: "failed" } : m)),
       );
-      setError("No se pudo enviar. Revisa tu conexión e inténtalo de nuevo.");
+      setError(t.messages.sendFailedNetwork);
     }
   }
 
@@ -138,7 +140,7 @@ export function PublicRoomMessages({
     <div className="space-y-3">
       {messages.length === 0 ? (
         <p className="text-sm text-[var(--muted-foreground)]">
-          Aún no hay mensajes. Aquí van tus preguntas o notas para el equipo.
+          {t.messages.empty}
         </p>
       ) : (
         <ul ref={listRef} className="max-h-[28rem] space-y-2 overflow-y-auto pr-1">
@@ -148,6 +150,8 @@ export function PublicRoomMessages({
               message.createdAt,
               i > 0 ? messages[i - 1].createdAt : null,
               nowMs,
+              t,
+              locale,
             );
             return (
               <li key={message.id}>
@@ -164,7 +168,7 @@ export function PublicRoomMessages({
                   <div className="my-3 flex items-center gap-3">
                     <span className="h-px flex-1 bg-amber-400/60" />
                     <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">
-                      Nuevos desde tu última visita
+                      {t.messages.unreadDivider}
                     </span>
                     <span className="h-px flex-1 bg-amber-400/60" />
                   </div>
@@ -192,14 +196,14 @@ export function PublicRoomMessages({
                       }`}
                     >
                       {mine
-                        ? message.authorName ?? "Tú"
+                        ? message.authorName ?? t.common.you
                         : message.authorName ?? ownerLabel}{" "}
                       ·{" "}
                       {message.status === "sending"
-                        ? "enviando…"
+                        ? t.messages.sending
                         : message.status === "failed"
-                          ? "no enviado"
-                          : formatRelativeEs(message.createdAt)}
+                          ? t.messages.notSent
+                          : rel(message.createdAt)}
                     </div>
                     <p className="mt-0.5 whitespace-pre-wrap break-words text-sm">
                       {renderWithMentions(message.body)}
@@ -211,7 +215,7 @@ export function PublicRoomMessages({
                         className="mt-1 inline-flex items-center gap-1 text-xs font-medium underline underline-offset-2"
                       >
                         <AlertCircle className="h-3 w-3" />
-                        Reintentar
+                        {t.messages.retry}
                       </button>
                     )}
                   </div>
@@ -234,14 +238,14 @@ export function PublicRoomMessages({
           onChange={setDraft}
           onSubmit={send}
           candidates={mentionCandidates}
-          placeholder="Escribe un mensaje… @ para mencionar"
-          ariaLabel="Mensaje para el equipo"
+          placeholder={t.messages.placeholder}
+          ariaLabel={t.messages.inputAria}
           className="min-h-[44px] w-full resize-none rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-base outline-none focus:ring-2 focus:ring-[var(--ring)] sm:text-sm"
         />
         <button
           type="submit"
           disabled={!draft.trim()}
-          aria-label="Enviar mensaje"
+          aria-label={t.messages.sendAria}
           className="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-md bg-[var(--primary)] text-[var(--primary-foreground)] transition hover:opacity-90 disabled:opacity-50"
         >
           <Send className="h-4 w-4" />
@@ -264,11 +268,13 @@ export function PublicRoomMessages({
   );
 }
 
-/** "Hoy" / "Ayer" / short date — only when the calendar day changes. */
+/** "Today" / "Yesterday" / short date — only when the calendar day changes. */
 function dayLabelFor(
   createdAt: string,
   prevCreatedAt: string | null,
-  nowMs?: number,
+  nowMs: number | undefined,
+  t: RoomDict,
+  locale: string,
 ) {
   const day = new Date(createdAt);
   if (prevCreatedAt) {
@@ -277,9 +283,12 @@ function dayLabelFor(
   }
   if (nowMs !== undefined) {
     const now = new Date(nowMs);
-    if (day.toDateString() === now.toDateString()) return "Hoy";
+    if (day.toDateString() === now.toDateString()) return t.date.today;
     const yesterday = new Date(nowMs - 24 * 60 * 60 * 1000);
-    if (day.toDateString() === yesterday.toDateString()) return "Ayer";
+    if (day.toDateString() === yesterday.toDateString()) return t.date.yesterday;
   }
-  return day.toLocaleDateString("es-VE", { day: "numeric", month: "short" });
+  return day.toLocaleDateString(roomIntlLocale(locale), {
+    day: "numeric",
+    month: "short",
+  });
 }

@@ -5,7 +5,12 @@ import { RoomActivityProvider } from "@/components/partner-access/room-activity-
 import { HeroActionChips } from "@/components/partner-access/hero-action-chips";
 import { Reveal } from "@/components/partner-access/reveal";
 import { RoomPulse } from "@/components/partner-access/room-pulse";
-import { formatRelativeEs } from "@/lib/utils";
+import {
+  getRoomDict,
+  resolveRoomLocale,
+  formatRoomRelative,
+} from "@/lib/partner-room-i18n";
+import { RoomI18nProvider } from "@/components/partner-access/room-i18n";
 import { SITE_URL } from "@/lib/site-url";
 import { roomHeroVideo } from "@/lib/partner-room-videos";
 import { RoomHeroVideo } from "@/components/partner-access/room-hero-video";
@@ -24,7 +29,6 @@ import { listPartnerRoomMessages } from "@/db/queries/partner-messages";
 import { getDemoLinkById } from "@/db/queries/demo-links";
 import { DemoAccessCard } from "@/components/demo-access/demo-access-card";
 import { listRoomItems, listRoomComments } from "@/db/queries/partner-repository";
-import { BOLIVAR_QUOTE, partnerKindLabel } from "@/lib/partner-access";
 import {
   getPartnerMemberIdFromCookies,
   isPartnerRoomUnlocked,
@@ -35,6 +39,9 @@ import { PublicRoomMessages } from "@/components/partner-access/public-room-mess
 import { RoomSignIn } from "@/components/partner-access/room-sign-in";
 import { CoBrandLockup } from "@/components/partner-access/co-brand-lockup";
 import { RoomPeople } from "@/components/partner-access/room-people";
+import { RoomPresentations, type RoomDeck } from "@/components/partner-access/room-presentations";
+import { HeroAurora } from "@/components/partner-access/hero-aurora";
+import { LiveGreeting } from "@/components/partner-access/live-greeting";
 import { founderProfileFor } from "@/lib/founder-photos";
 import {
   PublicRepository,
@@ -68,13 +75,12 @@ export async function generateMetadata({
   const robots = { index: false, follow: false };
 
   if (!access) {
-    return { title: "Sala privada", robots };
+    return { title: getRoomDict("es").meta.privateRoomTitle, robots };
   }
 
+  const t = getRoomDict(access.room.locale);
   const title = access.room.name;
-  const description =
-    access.room.welcomeMessage ??
-    "Documentos, novedades y una línea directa con el equipo — todo en tu sala privada.";
+  const description = access.room.welcomeMessage ?? t.meta.description;
   const heroVideo = roomHeroVideo(access.room.heroVideoKey);
 
   return {
@@ -85,7 +91,7 @@ export async function generateMetadata({
       title,
       description,
       type: "website",
-      siteName: "Sala privada",
+      siteName: t.meta.ogSiteName,
       ...(heroVideo
         ? { images: [{ url: `${SITE_URL}${heroVideo.poster}`, width: 1280, height: 720 }] }
         : {}),
@@ -134,14 +140,16 @@ export default async function PublicAccessRoomPage({
         ? Math.max(0, access.room.seatLimit - claimed)
         : null;
     return (
-      <RoomSignIn
-        token={token}
-        roomName={access.room.name}
-        needsPin={needsPin}
-        needsIdentity={needsIdentity}
-        claimableMembers={claimable}
-        seatsLeft={seatsLeft}
-      />
+      <RoomI18nProvider locale={access.room.locale}>
+        <RoomSignIn
+          token={token}
+          roomName={access.room.name}
+          needsPin={needsPin}
+          needsIdentity={needsIdentity}
+          claimableMembers={claimable}
+          seatsLeft={seatsLeft}
+        />
+      </RoomI18nProvider>
     );
   }
 
@@ -275,6 +283,18 @@ export default async function PublicAccessRoomPage({
     };
   });
 
+  // HTML decks get their own prominent "Presentaciones" surface; everything
+  // else stays in the repository list.
+  const roomDecks: RoomDeck[] = repoShares
+    .filter((s) => s.isHtmlDeck)
+    .map((s) => ({
+      id: s.id,
+      title: s.title,
+      description: s.description,
+      projectTitle: s.projectTitle,
+    }));
+  const nonDeckShares = repoShares.filter((s) => !s.isHtmlDeck);
+
   const repoItemViews: RepoItemView[] = repoItems.map((item) => ({
     id: item.id,
     title: item.title,
@@ -296,8 +316,14 @@ export default async function PublicAccessRoomPage({
   const heroVideo = roomHeroVideo(access.room.heroVideoKey);
   const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
 
+  // Room language → dictionary. Server-rendered strings read `t` directly;
+  // client components read the same dict from RoomI18nProvider context.
+  const locale = resolveRoomLocale(access.room.locale);
+  const dict = getRoomDict(locale);
+
   return (
-    <main lang="es" className="min-h-screen bg-[var(--bg-page)]">
+    <main lang={locale} className="min-h-screen bg-[var(--bg-page)]">
+      <RoomI18nProvider locale={locale}>
       <RoomActivityProvider
         initialOpenSteps={openSteps.length}
         initialPendingSignatures={pendingSignatures}
@@ -320,14 +346,7 @@ export default async function PublicAccessRoomPage({
               poster={heroVideo.poster}
             />
           ) : (
-            <div
-              aria-hidden
-              className="pointer-events-none absolute inset-0"
-              style={{
-                background:
-                  "radial-gradient(120% 80% at 0% 0%, color-mix(in oklab, var(--primary) 12%, transparent), transparent 60%), radial-gradient(120% 80% at 100% 0%, color-mix(in oklab, var(--primary) 8%, transparent), transparent 55%)",
-              }}
-            />
+            <HeroAurora />
           )}
           <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-3xl">
@@ -343,24 +362,22 @@ export default async function PublicAccessRoomPage({
                 }`}
               >
                 <Lock className="h-3 w-3" />
-                Sala privada · {partnerKindLabel(access.room.partnerKind)}
+                {dict.hero.eyebrow} · {dict.partner.publicLabel}
               </p>
-              <h1
+              <LiveGreeting
+                firstName={firstName}
+                subline={dict.hero.subline}
+                sublineOnVideo={Boolean(heroVideo)}
                 className={`mt-2 text-3xl font-semibold tracking-tight md:text-4xl ${
                   heroVideo ? "text-white" : ""
                 }`}
-              >
-                {firstName
-                  ? `Te damos la bienvenida, ${firstName}`
-                  : "Te damos la bienvenida"}
-              </h1>
+              />
               <p
                 className={`mt-3 max-w-2xl text-base leading-7 ${
                   heroVideo ? "text-white/85" : "text-[var(--muted-foreground)]"
                 }`}
               >
-                {access.room.welcomeMessage ??
-                  `Todo lo que estamos trabajando juntos vive aquí — documentos, novedades y una línea directa con el equipo. Estás en tu casa.`}
+                {access.room.welcomeMessage ?? dict.hero.welcomeFallback}
               </p>
             </div>
 
@@ -393,7 +410,7 @@ export default async function PublicAccessRoomPage({
                     }`}
                   />
                 </span>
-                Actualizado {formatRelativeEs(lastUpdated)}
+                {dict.hero.updated(formatRoomRelative(lastUpdated, locale))}
               </span>
             </div>
           </div>
@@ -412,12 +429,12 @@ export default async function PublicAccessRoomPage({
           {lastMessage ? (
             <span className="min-w-0 flex-1">
               <span className="block text-xs text-[var(--muted-foreground)]">
-                Último mensaje ·{" "}
+                {dict.messagesCta.lastMessagePrefix} ·{" "}
                 {lastMessage.authorKind === "partner"
-                  ? lastMessage.authorName ?? "Tú"
+                  ? lastMessage.authorName ?? dict.common.you
                   : teamName(lastMessage.authorKind, lastMessage.authorName) ??
-                    "El equipo"}{" "}
-                · {formatRelativeEs(lastMessage.createdAt)}
+                    dict.common.team}{" "}
+                · {formatRoomRelative(lastMessage.createdAt, locale)}
               </span>
               <span title={lastMessage.body} className="block truncate text-sm">
                 {lastMessage.body}
@@ -426,15 +443,15 @@ export default async function PublicAccessRoomPage({
           ) : (
             <span className="min-w-0 flex-1">
               <span className="block text-sm font-medium">
-                ¿Preguntas o ideas? Escríbenos.
+                {dict.messagesCta.emptyTitle}
               </span>
               <span className="block text-xs text-[var(--muted-foreground)]">
-                El equipo responde aquí mismo, en tu sala.
+                {dict.messagesCta.emptySub}
               </span>
             </span>
           )}
           <span className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-[var(--primary)]">
-            {lastMessage ? "Responder" : "Escribir"}
+            {lastMessage ? dict.messagesCta.reply : dict.messagesCta.write}
             <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
           </span>
         </a>
@@ -463,6 +480,11 @@ export default async function PublicAccessRoomPage({
 
         <section className="grid gap-4 lg:grid-cols-[1fr_320px]">
           <div className="space-y-4 lg:order-1">
+            {roomDecks.length > 0 && (
+              <Reveal delay={0.16} inView>
+                <RoomPresentations token={token} decks={roomDecks} />
+              </Reveal>
+            )}
             {demoLink && (
               <Reveal delay={0.2} inView>
               <div id="demo" className="scroll-mt-6">
@@ -482,7 +504,7 @@ export default async function PublicAccessRoomPage({
             <div id="repositorio" className="scroll-mt-6">
             <PublicRepository
               token={token}
-              shares={repoShares}
+              shares={nonDeckShares}
               items={repoItemViews}
               uploads={partnerUploads.map((u) => ({
                 id: u.id,
@@ -493,7 +515,7 @@ export default async function PublicAccessRoomPage({
               commentsByTarget={commentsByTarget}
               signaturesByTarget={signaturesByTarget}
               defaultSignerName={member?.displayName ?? ""}
-              ownerLabel="El equipo"
+              ownerLabel={dict.common.team}
             />
             </div>
             </Reveal>
@@ -507,16 +529,16 @@ export default async function PublicAccessRoomPage({
               <div className="flex items-center gap-2 border-b border-[var(--border)] px-4 py-3">
                 <MessageSquare className="h-4 w-4 text-[var(--muted-foreground)]" />
                 <div>
-                  <h2 className="text-base font-semibold">Mensajes</h2>
+                  <h2 className="text-base font-semibold">{dict.messages.title}</h2>
                   <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">
-                    Preguntas, notas y novedades entre tú y el equipo.
+                    {dict.messages.subtitle}
                   </p>
                 </div>
               </div>
               <div className="p-4">
                 <PublicRoomMessages
                   token={token}
-                  ownerLabel="El equipo"
+                  ownerLabel={dict.common.team}
                   mentionCandidates={mentionCandidates}
                   initialMessages={messages.map((m) => ({
                     id: m.id,
@@ -569,21 +591,25 @@ export default async function PublicAccessRoomPage({
         <footer className="mt-2 flex flex-col items-center gap-2 border-t border-[var(--border)] pt-5 text-center text-xs text-[var(--muted-foreground)]">
           {/* The sign-in's Bolívar quote echoes here as the room's signature. */}
           <p className="font-serif text-[13px] italic text-[#B8913F]">
-            «{BOLIVAR_QUOTE}» — Simón Bolívar
+            «{dict.footer.bolivarQuote}» — {dict.footer.bolivarAttribution}
           </p>
           <span className="inline-flex items-center gap-1.5">
             <Lock className="h-3 w-3" />
-            Privado y confidencial — compartido solo contigo.
+            {dict.footer.confidential}
           </span>
-          <span>Esta sala es privada. Por favor, no reenvíes el enlace.</span>
+          <span>{dict.footer.noForward}</span>
         </footer>
       </div>
       </RoomActivityProvider>
+      </RoomI18nProvider>
     </main>
   );
 }
 
 function UnavailableRoom() {
+  // No room resolved → no locale to key off. Default to Spanish (the room's
+  // default language); the dead-link page is locale-agnostic by nature.
+  const dict = getRoomDict("es");
   return (
     <main lang="es" className="min-h-screen bg-[var(--bg-page)]">
       <div className="mx-auto grid min-h-screen w-full max-w-2xl place-items-center px-5 py-10">
@@ -591,10 +617,9 @@ function UnavailableRoom() {
           <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--secondary)]">
             <Lock className="h-5 w-5 text-[var(--muted-foreground)]" />
           </div>
-          <h1 className="mt-4 text-xl font-semibold">Acceso no disponible</h1>
+          <h1 className="mt-4 text-xl font-semibold">{dict.unavailable.title}</h1>
           <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[var(--muted-foreground)]">
-            Esta sala pudo haber expirado, estar en pausa o haber sido reemplazada
-            por un nuevo enlace. Pide a quien te lo compartió el enlace más reciente.
+            {dict.unavailable.body}
           </p>
         </div>
       </div>

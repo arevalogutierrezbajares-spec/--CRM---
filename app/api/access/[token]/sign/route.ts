@@ -14,6 +14,7 @@ import {
   getPartnerMemberIdFromCookies,
   isPartnerRoomUnlocked,
 } from "@/lib/partner-room-gate.server";
+import { getRoomDict } from "@/lib/partner-room-i18n";
 import { decodeSignatureDataUrl } from "@/lib/signatures/signature-image";
 import { sha256Hex, stampSignedPdf } from "@/lib/signatures/stamp.server";
 import {
@@ -50,28 +51,23 @@ type Params = Promise<{ token: string }>;
 export async function POST(req: NextRequest, props: { params: Params }) {
   const { token } = await props.params;
   const room = await resolvePartnerRoomByToken(token).catch(() => null);
+  const t = getRoomDict(room?.locale).api;
   if (!room) {
-    return NextResponse.json(
-      { error: "Sala no encontrada o acceso expirado" },
-      { status: 404 },
-    );
+    return NextResponse.json({ error: t.roomNotFound }, { status: 404 });
   }
   if (!(await isPartnerRoomUnlocked(room))) {
-    return NextResponse.json({ error: "La sala está bloqueada" }, { status: 401 });
+    return NextResponse.json({ error: t.roomLocked }, { status: 401 });
   }
 
   let json: unknown;
   try {
     json = await req.json();
   } catch {
-    return NextResponse.json({ error: "Solicitud inválida" }, { status: 400 });
+    return NextResponse.json({ error: t.invalidRequest }, { status: 400 });
   }
   const parsed = Body.safeParse(json);
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: parsed.error.issues[0]?.message ?? "Solicitud inválida" },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: t.invalidRequest }, { status: 400 });
   }
 
   const recent = await countRecentSignatures({
@@ -79,10 +75,7 @@ export async function POST(req: NextRequest, props: { params: Params }) {
     seconds: RATE_WINDOW_SECONDS,
   }).catch(() => 0);
   if (recent >= RATE_MAX_IN_WINDOW) {
-    return NextResponse.json(
-      { error: "Demasiados intentos. Espera un momento." },
-      { status: 429 },
-    );
+    return NextResponse.json({ error: t.signBurst }, { status: 429 });
   }
 
   const request = await getSignatureRequest({
@@ -90,18 +83,12 @@ export async function POST(req: NextRequest, props: { params: Params }) {
     requestId: parsed.data.requestId,
   });
   if (!request || request.status !== "pending") {
-    return NextResponse.json(
-      { error: "Esta solicitud de firma ya no está disponible." },
-      { status: 404 },
-    );
+    return NextResponse.json({ error: t.signUnavailable }, { status: 404 });
   }
 
   const signaturePng = decodeSignatureDataUrl(parsed.data.signatureDataUrl);
   if (!signaturePng) {
-    return NextResponse.json(
-      { error: "La firma no es válida. Dibuja tu firma e intenta de nuevo." },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: t.signInvalid }, { status: 400 });
   }
 
   const memberId = await getPartnerMemberIdFromCookies(room.id);
@@ -129,10 +116,7 @@ export async function POST(req: NextRequest, props: { params: Params }) {
   const signatureImagePath = `${basePath}-firma.png`;
   const sigUpload = await uploadBytes(signatureImagePath, signaturePng, "image/png");
   if (!sigUpload.ok) {
-    return NextResponse.json(
-      { error: "No se pudo guardar la firma. Intenta de nuevo." },
-      { status: 503 },
-    );
+    return NextResponse.json({ error: t.signSaveFailed }, { status: 503 });
   }
 
   // Commit the signature record FIRST — it (hash + server timestamp + image)

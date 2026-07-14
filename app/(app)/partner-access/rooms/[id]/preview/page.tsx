@@ -42,8 +42,13 @@ import { resolveRoomBrandLogos } from "@/db/queries/partner-access";
 import { CoBrandLockup } from "@/components/partner-access/co-brand-lockup";
 import { RoomPeople } from "@/components/partner-access/room-people";
 import { founderProfileFor } from "@/lib/founder-photos";
-import { partnerKindLabel } from "@/lib/partner-access";
-import { formatRelative, formatRelativeEs } from "@/lib/utils";
+import {
+  getRoomDict,
+  resolveRoomLocale,
+  formatRoomRelative,
+} from "@/lib/partner-room-i18n";
+import { RoomI18nProvider } from "@/components/partner-access/room-i18n";
+import { formatRelative } from "@/lib/utils";
 
 const SECTION_ICONS: Record<string, LucideIcon> = {
   documentos: FileText,
@@ -103,8 +108,13 @@ export default async function PartnerRoomPreviewPage({ params }: { params: Param
     shares,
   });
 
+  // Preview mirrors the guest room in its actual language.
+  const locale = resolveRoomLocale(room.locale);
+  const dict = getRoomDict(locale);
+
   return (
-    <main className="min-h-screen bg-[var(--bg-page)]">
+    <RoomI18nProvider locale={locale}>
+    <main lang={locale} className="min-h-screen bg-[var(--bg-page)]">
       {/* Admin banner */}
       <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-5 py-2.5 dark:border-amber-900 dark:bg-amber-950/40">
         <div className="flex items-center gap-2 text-sm text-amber-800 dark:text-amber-300">
@@ -148,14 +158,14 @@ export default async function PartnerRoomPreviewPage({ params }: { params: Param
                 clientName={detail.contact.name}
               />
               <div className="mt-4 flex flex-wrap items-center gap-2">
-                <Badge variant="outline">{partnerKindLabel(room.partnerKind)}</Badge>
+                <Badge variant="outline">{dict.partner.publicLabel}</Badge>
                 <span
                   className={`inline-flex items-center gap-1.5 text-xs ${
                     heroVideo ? "text-white/80" : "text-[var(--muted-foreground)]"
                   }`}
                 >
                   <Lock className="h-3.5 w-3.5" />
-                  Sala privada
+                  {dict.hero.eyebrow}
                 </span>
               </div>
               <h1
@@ -185,7 +195,7 @@ export default async function PartnerRoomPreviewPage({ params }: { params: Param
                   <span className="grid h-5 w-5 place-items-center rounded-full bg-amber-400/90 text-[11px] font-semibold tabular-nums text-amber-950">
                     {openSteps.length}
                   </span>
-                  {openSteps.length === 1 ? "paso para ti" : "pasos para ti"}
+                  {dict.chips.steps(openSteps.length)}
                 </span>
               )}
               <span
@@ -209,7 +219,7 @@ export default async function PartnerRoomPreviewPage({ params }: { params: Param
                     }`}
                   />
                 </span>
-                Actualizado {formatRelativeEs(lastUpdated)}
+                {dict.hero.updated(formatRoomRelative(lastUpdated, locale))}
               </span>
             </div>
           </div>
@@ -232,7 +242,7 @@ export default async function PartnerRoomPreviewPage({ params }: { params: Param
             <div className="rounded-xl border border-[var(--border)] bg-[var(--card)]">
               <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] px-4 py-3">
                 <div>
-                  <h2 className="text-base font-semibold">Repositorio</h2>
+                  <h2 className="text-base font-semibold">{dict.repo.title}</h2>
                   <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">
                     Only the items explicitly shared for this room are visible —
                     grouped by section, as the partner sees them.
@@ -250,11 +260,11 @@ export default async function PartnerRoomPreviewPage({ params }: { params: Param
                 repoSections.map((section) => {
                   const Icon = SECTION_ICONS[section.value] ?? FileText;
                   return (
-                    <section key={section.value} aria-label={section.label}>
+                    <section key={section.value} aria-label={dict.repo.section[section.value]}>
                       <div className="flex items-center gap-2 border-b border-[var(--border)] bg-[var(--secondary)]/40 px-4 py-2">
                         <Icon className="h-3.5 w-3.5 text-[var(--primary)]" />
                         <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--muted-foreground)]">
-                          {section.label}
+                          {dict.repo.section[section.value]}
                         </h3>
                         <span className="text-[11px] tabular-nums text-[var(--muted-foreground)]">
                           {section.items.length + section.shares.length}
@@ -396,7 +406,7 @@ export default async function PartnerRoomPreviewPage({ params }: { params: Param
                           <li key={u.id} className="flex items-center gap-2 text-sm">
                             <FileText className="h-3.5 w-3.5 shrink-0 text-[var(--muted-foreground)]" />
                             <span className="truncate">{u.label || u.originalFilename}</span>
-                            <span className="ml-auto shrink-0 text-xs text-[var(--muted-foreground)]">{formatRelativeEs(u.createdAt)}</span>
+                            <span className="ml-auto shrink-0 text-xs text-[var(--muted-foreground)]">{formatRoomRelative(u.createdAt, locale)}</span>
                           </li>
                         ))}
                       </ul>
@@ -411,16 +421,16 @@ export default async function PartnerRoomPreviewPage({ params }: { params: Param
               <div className="flex items-center gap-2 border-b border-[var(--border)] px-4 py-3">
                 <MessageSquare className="h-4 w-4 text-[var(--muted-foreground)]" />
                 <div>
-                  <h2 className="text-base font-semibold">Mensajes</h2>
+                  <h2 className="text-base font-semibold">{dict.messages.title}</h2>
                   <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">
-                    Preguntas, notas y novedades entre tú y el equipo.
+                    {dict.messages.subtitle}
                   </p>
                 </div>
               </div>
               <div className="p-4">
                 {messages.length === 0 ? (
                   <p className="text-sm text-[var(--muted-foreground)]">
-                    Aún no hay mensajes.
+                    {dict.messages.empty}
                   </p>
                 ) : (
                   <ul className="max-h-80 space-y-2 overflow-y-auto pr-1">
@@ -446,7 +456,7 @@ export default async function PartnerRoomPreviewPage({ params }: { params: Param
                               }`}
                             >
                               {message.authorName ?? (fromPartner ? "Partner" : "El equipo")} ·{" "}
-                              {formatRelativeEs(message.createdAt)}
+                              {formatRoomRelative(message.createdAt, locale)}
                             </div>
                             <p className="mt-0.5 whitespace-pre-wrap break-words text-sm">
                               {message.body}
@@ -490,15 +500,15 @@ export default async function PartnerRoomPreviewPage({ params }: { params: Param
             <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
               <div className="flex items-center gap-2">
                 <CheckSquare className="h-4 w-4 text-[var(--muted-foreground)]" />
-                <h2 className="text-base font-semibold">Próximos pasos</h2>
+                <h2 className="text-base font-semibold">{dict.nextSteps.title}</h2>
                 {openSteps.length > 0 && (
                   <span className="ml-auto rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-                    {openSteps.length} pendiente{openSteps.length === 1 ? "" : "s"}
+                    {dict.nextSteps.pendingBadge(openSteps.length)}
                   </span>
                 )}
               </div>
               {nextSteps.length === 0 ? (
-                <p className="mt-3 text-sm text-[var(--muted-foreground)]">Aún no hay próximos pasos.</p>
+                <p className="mt-3 text-sm text-[var(--muted-foreground)]">{dict.nextSteps.empty}</p>
               ) : (
                 <ul className="mt-3 space-y-2">
                   {nextSteps.map((step) => (
@@ -521,6 +531,7 @@ export default async function PartnerRoomPreviewPage({ params }: { params: Param
         </section>
       </div>
     </main>
+    </RoomI18nProvider>
   );
 }
 

@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { getPublicPartnerShareByToken } from "@/db/queries/partner-access";
 import { ClientDeckViewer } from "@/components/access/client-deck-viewer";
 import { isPartnerRoomUnlocked } from "@/lib/partner-room-gate.server";
+import { getRoomDict, resolveRoomLocale } from "@/lib/partner-room-i18n";
+import { RoomI18nProvider } from "@/components/partner-access/room-i18n";
 
 export const dynamic = "force-dynamic";
 
@@ -22,22 +24,27 @@ export default async function ClientDeckPage({ params }: { params: Params }) {
     redirect(`/access/${token}`);
   }
 
+  const locale = resolveRoomLocale(row?.room?.locale);
+  const dict = getRoomDict(locale);
+
   if (!row || row.share.kindSnapshot !== "file" || !row.storagePath) {
     return (
       <main className="flex min-h-dvh flex-col items-center justify-center gap-3 bg-black px-6 text-center text-white">
-        <p className="text-lg font-medium">Esta presentación no está disponible.</p>
+        <p className="text-lg font-medium">{dict.deckPage.unavailable}</p>
         <a href={`/access/${token}`} className="text-sm text-white/60 underline">
-          Volver a tu sala
+          {dict.deckPage.backToRoom}
         </a>
       </main>
     );
   }
 
   return (
-    <ClientDeckViewer
-      src={`/access/${token}/view/${shareId}`}
-      title={row.share.labelSnapshot ?? "Presentación"}
-      backHref={`/access/${token}`}
-    />
+    <RoomI18nProvider locale={locale}>
+      <ClientDeckViewer
+        src={`/access/${token}/view/${shareId}`}
+        title={row.share.labelSnapshot ?? dict.deckPage.deckFallback}
+        backHref={`/access/${token}`}
+      />
+    </RoomI18nProvider>
   );
 }

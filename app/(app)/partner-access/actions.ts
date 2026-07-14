@@ -14,6 +14,7 @@ import {
   type PartnerRoomStatus,
   type PartnerShareChannel,
 } from "@/lib/partner-access";
+import { resolveRoomLocale } from "@/lib/partner-room-i18n";
 import { roomHeroVideo } from "@/lib/partner-room-videos";
 import {
   addExpectedGuest,
@@ -165,6 +166,7 @@ async function _updatePartnerRoomDetailsAction(opts: {
   roomId: string;
   name: string;
   partnerKind: string;
+  language?: string | null;
   summary?: string | null;
   welcomeMessage?: string | null;
   expiresAt?: string | null;
@@ -181,6 +183,7 @@ async function _updatePartnerRoomDetailsAction(opts: {
     roomId: opts.roomId,
     name: opts.name,
     partnerKind: opts.partnerKind as PartnerKind,
+    locale: opts.language ? resolveRoomLocale(opts.language) : undefined,
     summary: opts.summary,
     welcomeMessage: opts.welcomeMessage,
     expiresAt: parseExpiresAt(opts.expiresAt),
@@ -620,6 +623,7 @@ async function _removeRoomTeamMemberAction(opts: {
 async function _createPartnerRoomAction(opts: {
   contactId: string;
   partnerKind: string;
+  language?: string | null;
   name?: string | null;
 }): Promise<
   | { ok: true; roomId: string; accessPath: string | null; existed: boolean }
@@ -635,6 +639,7 @@ async function _createPartnerRoomAction(opts: {
     actorId: user.id,
     contactId: opts.contactId,
     partnerKind: opts.partnerKind as PartnerKind,
+    locale: resolveRoomLocale(opts.language),
     name: opts.name,
   });
 

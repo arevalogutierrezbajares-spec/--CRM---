@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { completePartnerNextStep, uncompletePartnerNextStep } from "@/db/queries/partner-next-steps";
 import { resolvePartnerRoomByToken } from "@/db/queries/partner-access";
 import { isPartnerRoomUnlocked } from "@/lib/partner-room-gate.server";
+import { getRoomDict } from "@/lib/partner-room-i18n";
 import { db, schema } from "@/db";
 import { and, eq } from "drizzle-orm";
 
@@ -10,11 +11,12 @@ type Params = Promise<{ token: string; stepId: string }>;
 export async function PATCH(req: NextRequest, props: { params: Params }) {
   const { token, stepId } = await props.params;
   const room = await resolvePartnerRoomByToken(token).catch(() => null);
+  const t = getRoomDict(room?.locale).api;
   if (!room) {
-    return NextResponse.json({ error: "Room not found or access expired" }, { status: 404 });
+    return NextResponse.json({ error: t.roomNotFound }, { status: 404 });
   }
   if (!(await isPartnerRoomUnlocked(room))) {
-    return NextResponse.json({ error: "Room is locked" }, { status: 401 });
+    return NextResponse.json({ error: t.roomLocked }, { status: 401 });
   }
 
   // Verify step belongs to this room and is assigned to partner
@@ -29,10 +31,10 @@ export async function PATCH(req: NextRequest, props: { params: Params }) {
     )
     .limit(1);
 
-  if (!step) return NextResponse.json({ error: "Step not found" }, { status: 404 });
+  if (!step) return NextResponse.json({ error: t.stepNotFound }, { status: 404 });
   // Visitors may only toggle steps assigned to them — never owner-only steps.
   if (step.assignedTo !== "partner" && step.assignedTo !== "both") {
-    return NextResponse.json({ error: "Step not found" }, { status: 404 });
+    return NextResponse.json({ error: t.stepNotFound }, { status: 404 });
   }
 
   let body: { complete?: boolean } = {};

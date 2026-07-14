@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Eraser, Loader2, PenLine, X } from "lucide-react";
+import { useRoomDict } from "./room-i18n";
 
 export type SignatureResult = {
   requestId: string;
@@ -72,6 +73,7 @@ export function SignDocumentModal({
   onClose: () => void;
   onSigned: (result: SignatureResult) => void;
 }) {
+  const t = useRoomDict();
   const [mode, setMode] = useState<Mode>("loading");
   const [step, setStep] = useState<DocStep>("read");
   const [pdf, setPdf] = useState<PdfDocProxy | null>(null);
@@ -142,15 +144,15 @@ export function SignDocumentModal({
     if (busy) return;
     setError(null);
     if (!sig) {
-      setError("Dibuja tu firma para continuar.");
+      setError(t.sign.drawFirst);
       return;
     }
     if (name.trim().length < 3) {
-      setError("Escribe tu nombre completo.");
+      setError(t.sign.nameRequired);
       return;
     }
     if (!consent) {
-      setError("Confirma que aceptas firmar electrónicamente.");
+      setError(t.sign.consentRequired);
       return;
     }
     setBusy(true);
@@ -173,7 +175,7 @@ export function SignDocumentModal({
         hasSignedPdf?: boolean;
       };
       if (!res.ok) {
-        setError(data.error ?? "No se pudo registrar la firma. Intenta de nuevo.");
+        setError(data.error ?? t.sign.registerFailed);
         return;
       }
       onSigned({
@@ -183,7 +185,7 @@ export function SignDocumentModal({
         hasSignedPdf: Boolean(data.hasSignedPdf),
       });
     } catch {
-      setError("Sin conexión. Revisa tu internet e intenta de nuevo.");
+      setError(t.sign.networkError);
     } finally {
       setBusy(false);
     }
@@ -200,14 +202,14 @@ export function SignDocumentModal({
     <div
       role="dialog"
       aria-modal="true"
-      aria-label={`Firmar ${documentTitle}`}
+      aria-label={t.sign.dialogAria(documentTitle)}
       className="fixed inset-0 z-50 flex flex-col bg-[var(--background)]"
     >
       <header className="flex items-center justify-between gap-3 border-b border-[var(--border)] px-4 py-2.5">
         <div className="min-w-0">
           <p className="inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-[var(--primary)]">
             <PenLine className="h-3 w-3" />
-            Firma electrónica
+            {t.sign.eyebrow}
           </p>
           <h2 className="truncate text-sm font-semibold leading-snug">
             {documentTitle}
@@ -216,7 +218,7 @@ export function SignDocumentModal({
         <button
           type="button"
           onClick={onClose}
-          aria-label="Cerrar"
+          aria-label={t.common.close}
           className="grid h-10 w-10 shrink-0 place-items-center rounded-md text-[var(--muted-foreground)] hover:bg-[var(--secondary)]"
         >
           <X className="h-4 w-4" />
@@ -227,7 +229,7 @@ export function SignDocumentModal({
         <div className="grid flex-1 place-items-center">
           <div className="flex flex-col items-center gap-2 text-sm text-[var(--muted-foreground)]">
             <Loader2 className="h-5 w-5 animate-spin" />
-            Cargando documento…
+            {t.sign.loadingDoc}
           </div>
         </div>
       )}
@@ -255,14 +257,14 @@ export function SignDocumentModal({
               ))}
             {pdf.numPages > MAX_RENDERED_PAGES && (
               <p className="py-2 text-center text-xs text-[var(--muted-foreground)]">
-                Mostrando las primeras {MAX_RENDERED_PAGES} páginas.
+                {t.sign.pageLimit(MAX_RENDERED_PAGES)}
               </p>
             )}
           </div>
 
           {step === "place" && !placement && (
             <div className="pointer-events-none sticky bottom-36 z-10 mx-auto w-fit rounded-full bg-[var(--foreground)] px-4 py-2 text-xs font-medium text-[var(--background)] shadow-lg">
-              Toca el documento donde va tu firma
+              {t.sign.tapToPlace}
             </div>
           )}
         </div>
@@ -281,7 +283,7 @@ export function SignDocumentModal({
             className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-[var(--primary)] px-4 py-3 text-sm font-medium text-[var(--primary-foreground)] hover:opacity-90"
           >
             <PenLine className="h-4 w-4" />
-            Firmar este documento
+            {t.sign.signThisDoc}
           </button>
         </div>
       )}
@@ -301,7 +303,7 @@ export function SignDocumentModal({
         <div className="border-t border-[var(--border)] bg-[var(--card)] px-4 py-3 pb-[max(env(safe-area-inset-bottom),12px)]">
           <label className="flex items-center gap-3">
             <span className="text-xs font-medium uppercase tracking-wide text-[var(--muted-foreground)]">
-              Tamaño
+              {t.sign.size}
             </span>
             <input
               type="range"
@@ -324,7 +326,7 @@ export function SignDocumentModal({
               onClick={() => setStep("draw")}
               className="inline-flex flex-1 items-center justify-center rounded-md border border-[var(--border)] px-4 py-3 text-sm hover:bg-[var(--secondary)]"
             >
-              Dibujar de nuevo
+              {t.sign.drawAgain}
             </button>
             <button
               type="button"
@@ -332,11 +334,11 @@ export function SignDocumentModal({
               onClick={() => setStep("confirm")}
               className="inline-flex flex-1 items-center justify-center rounded-md bg-[var(--primary)] px-4 py-3 text-sm font-medium text-[var(--primary-foreground)] hover:opacity-90 disabled:opacity-50"
             >
-              Confirmar posición
+              {t.sign.confirmPosition}
             </button>
           </div>
           <p className="mt-2 text-center text-[11px] text-[var(--muted-foreground)]">
-            Arrastra la firma para ajustar dónde queda.
+            {t.sign.dragHint}
           </p>
         </div>
       )}
@@ -361,7 +363,7 @@ export function SignDocumentModal({
               disabled={busy}
               className="inline-flex items-center justify-center rounded-md border border-[var(--border)] px-4 py-3 text-sm hover:bg-[var(--secondary)] disabled:opacity-50"
             >
-              Atrás
+              {t.common.back}
             </button>
             <button
               type="button"
@@ -370,11 +372,11 @@ export function SignDocumentModal({
               className="inline-flex flex-1 items-center justify-center gap-2 rounded-md bg-[var(--primary)] px-4 py-3 text-sm font-medium text-[var(--primary-foreground)] hover:opacity-90 disabled:opacity-50"
             >
               {busy && <Loader2 className="h-4 w-4 animate-spin" />}
-              {busy ? "Registrando firma…" : "Firmar documento"}
+              {busy ? t.sign.registering : t.sign.signDoc}
             </button>
           </div>
           <p className="mt-2 text-center text-[11px] text-[var(--muted-foreground)]">
-            La fecha y hora de la firma las registra el servidor.
+            {t.sign.serverTimestamp}
           </p>
         </div>
       )}
@@ -411,7 +413,7 @@ export function SignDocumentModal({
               className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-md bg-[var(--primary)] px-4 py-3 text-sm font-medium text-[var(--primary-foreground)] hover:opacity-90 disabled:opacity-50"
             >
               {busy && <Loader2 className="h-4 w-4 animate-spin" />}
-              {busy ? "Registrando firma…" : "Firmar documento"}
+              {busy ? t.sign.registering : t.sign.signDoc}
             </button>
             <p className="mt-2 text-center text-[11px] text-[var(--muted-foreground)]">
               La fecha y hora de la firma las registra el servidor.
@@ -441,6 +443,7 @@ function PdfPageView({
   placement: Placement | null;
   onPlace: (p: Placement) => void;
 }) {
+  const t = useRoomDict();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const drag = useRef<{
@@ -557,7 +560,7 @@ function PdfPageView({
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={sig.dataUrl}
-            alt="Tu firma"
+            alt={t.sign.signatureAlt}
             draggable={false}
             className="w-full"
           />
@@ -575,6 +578,7 @@ function SignaturePadSheet({
   onCancel: () => void;
   onDone: (sig: { dataUrl: string; aspect: number }) => void;
 }) {
+  const t = useRoomDict();
   const [drawn, setDrawn] = useState<{ dataUrl: string; aspect: number } | null>(
     null,
   );
@@ -587,7 +591,7 @@ function SignaturePadSheet({
           onClick={onCancel}
           className="inline-flex items-center justify-center rounded-md border border-[var(--border)] px-4 py-3 text-sm hover:bg-[var(--secondary)]"
         >
-          Cancelar
+          {t.common.cancel}
         </button>
         <button
           type="button"
@@ -595,7 +599,7 @@ function SignaturePadSheet({
           onClick={() => drawn && onDone(drawn)}
           className="inline-flex flex-1 items-center justify-center rounded-md bg-[var(--primary)] px-4 py-3 text-sm font-medium text-[var(--primary-foreground)] hover:opacity-90 disabled:opacity-50"
         >
-          Continuar
+          {t.common.continue}
         </button>
       </div>
     </div>
@@ -614,6 +618,7 @@ function PadCanvas({
   onChange: (sig: { dataUrl: string; aspect: number } | null) => void;
   heightClass: string;
 }) {
+  const t = useRoomDict();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
 
@@ -680,7 +685,7 @@ function PadCanvas({
     <div>
       <div className="flex items-center justify-between">
         <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted-foreground)]">
-          Dibuja tu firma
+          {t.sign.drawLabel}
         </p>
         <button
           type="button"
@@ -688,7 +693,7 @@ function PadCanvas({
           className="relative inline-flex items-center gap-1 py-1 text-xs text-[var(--muted-foreground)] after:absolute after:-inset-2 after:content-[''] hover:text-[var(--foreground)]"
         >
           <Eraser className="h-3.5 w-3.5" />
-          Borrar
+          {t.sign.clear}
         </button>
       </div>
       <canvas
@@ -714,17 +719,18 @@ function NameConsentFields({
   consent: boolean;
   onConsent: (v: boolean) => void;
 }) {
+  const t = useRoomDict();
   return (
     <>
       <label className="block">
         <span className="text-xs font-medium uppercase tracking-wide text-[var(--muted-foreground)]">
-          Tu nombre completo
+          {t.sign.fullNameLabel}
         </span>
         <input
           type="text"
           value={name}
           onChange={(e) => onName(e.target.value)}
-          placeholder="Nombre y apellido"
+          placeholder={t.sign.fullNamePlaceholder}
           className="mt-1.5 w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2.5 text-base outline-none focus:ring-2 focus:ring-[var(--ring)] sm:text-sm"
         />
       </label>
@@ -736,9 +742,7 @@ function NameConsentFields({
           className="mt-0.5 h-5 w-5 shrink-0 accent-[var(--primary)]"
         />
         <span className="text-sm leading-5 text-[var(--muted-foreground)]">
-          Acepto firmar este documento electrónicamente. Entiendo que mi firma,
-          nombre, y la fecha y hora del servidor quedarán registrados como
-          constancia de mi consentimiento.
+          {t.sign.consentText}
         </span>
       </label>
     </>
