@@ -129,7 +129,7 @@ export function MentionTextarea({
                   e.preventDefault();
                   pick(name);
                 }}
-                className={`block w-full px-3 py-1.5 text-left text-sm ${
+                className={`block w-full px-3 py-1.5 text-start text-sm ${
                   i === active ? "bg-[var(--secondary)]" : "hover:bg-[var(--secondary)]"
                 }`}
               >

@@ -211,7 +211,7 @@ export const partnerRoomStatus = pgEnum("partner_room_status", [
 
 // Language a partner room renders in for the guest. Extensible: add a value here
 // + a dictionary in lib/partner-room-i18n.ts + an entry in ROOM_LOCALE_OPTIONS.
-export const roomLocale = pgEnum("room_locale", ["es", "en"]);
+export const roomLocale = pgEnum("room_locale", ["es", "en", "pt", "ru", "ar"]);
 
 export const partnerShareChannel = pgEnum("partner_share_channel", [
   "email",
@@ -1112,6 +1112,37 @@ export const partnerRoomItems = pgTable("partner_room_items", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// Content-addressed translation cache for operator-authored room content
+// (welcome message, next steps, doc labels, chat). Keyed by a hash of the
+// source text + target locale, so the same text is translated once and reused.
+// UI chrome is NOT here — that lives in typed dictionaries (partner-room-i18n).
+export const partnerRoomTranslations = pgTable(
+  "partner_room_translations",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    // sha256 (hex) of the normalized source text.
+    sourceHash: text("source_hash").notNull(),
+    targetLocale: roomLocale("target_locale").notNull(),
+    // Best-effort source language tag (es | en), for auditing.
+    sourceLang: text("source_lang"),
+    sourceText: text("source_text").notNull(),
+    translatedText: text("translated_text").notNull(),
+    // Optional owning workspace, for scoped cleanup; null = shared/global.
+    workspaceId: uuid("workspace_id").references(() => workspaces.id, {
+      onDelete: "cascade",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    hashLocaleUniq: uniqueIndex("partner_room_translations_hash_locale_uniq").on(
+      t.sourceHash,
+      t.targetLocale,
+    ),
+  }),
+);
 
 export const partnerItemComments = pgTable("partner_item_comments", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),

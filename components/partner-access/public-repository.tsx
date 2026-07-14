@@ -287,7 +287,7 @@ export function PublicRepository({
                   <li key={u.id} className="flex items-center gap-2 text-sm">
                     <FileText className="h-3.5 w-3.5 shrink-0 text-[var(--muted-foreground)]" />
                     <span className="truncate">{u.label || u.originalFilename}</span>
-                    <span className="ml-auto shrink-0 text-xs text-[var(--muted-foreground)]">
+                    <span className="ms-auto shrink-0 text-xs text-[var(--muted-foreground)]">
                       {rel(u.createdAt)}
                     </span>
                   </li>
@@ -442,7 +442,7 @@ function ItemRow({
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-3 py-2 text-xs hover:bg-[var(--secondary)] sm:px-2 sm:py-1"
               >
-                <ArrowUpRight className="h-3.5 w-3.5" />
+                <ArrowUpRight className="h-3.5 w-3.5 rtl:-scale-x-100" />
                 {t.repo.open}
               </a>
             ) : item.kind === "file" && mk === "none" ? (
@@ -582,7 +582,7 @@ function ShareRow({
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-3 py-2 text-xs hover:bg-[var(--secondary)] sm:px-2 sm:py-1"
                 >
-                  <ArrowUpRight className="h-3.5 w-3.5" />
+                  <ArrowUpRight className="h-3.5 w-3.5 rtl:-scale-x-100" />
                   {t.repo.open}
                 </a>
               )}
@@ -593,7 +593,7 @@ function ShareRow({
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-3 py-2 text-xs hover:bg-[var(--secondary)] sm:px-2 sm:py-1"
                 >
-                  <ArrowUpRight className="h-3.5 w-3.5" />
+                  <ArrowUpRight className="h-3.5 w-3.5 rtl:-scale-x-100" />
                   {t.repo.viewDeck}
                 </a>
               )}

@@ -143,7 +143,7 @@ export function PublicRoomMessages({
           {t.messages.empty}
         </p>
       ) : (
-        <ul ref={listRef} className="max-h-[28rem] space-y-2 overflow-y-auto pr-1">
+        <ul ref={listRef} className="max-h-[28rem] space-y-2 overflow-y-auto pe-1">
           {messages.map((message, i) => {
             const mine = message.authorKind === "partner";
             const dayLabel = dayLabelFor(

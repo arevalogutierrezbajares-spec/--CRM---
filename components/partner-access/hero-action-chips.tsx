@@ -43,7 +43,7 @@ export function HeroActionChips({
         >
           <ChipCount value={openSteps} />
           {t.chips.steps(openSteps)}
-          <ArrowRight className="h-3.5 w-3.5" />
+          <ArrowRight className="h-3.5 w-3.5 rtl:-scale-x-100" />
         </motion.a>
       )}
       {pendingSignatures > 0 && (
@@ -56,7 +56,7 @@ export function HeroActionChips({
         >
           <ChipCount value={pendingSignatures} />
           {t.chips.signatures(pendingSignatures)}
-          <ArrowRight className="h-3.5 w-3.5" />
+          <ArrowRight className="h-3.5 w-3.5 rtl:-scale-x-100" />
         </motion.a>
       )}
     </AnimatePresence>

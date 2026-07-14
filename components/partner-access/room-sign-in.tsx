@@ -128,7 +128,7 @@ export function RoomSignIn({
           type="button"
           onClick={toggleSound}
           aria-label={playing ? t.signin.mute : t.signin.unmute}
-          className="absolute right-4 top-4 grid h-11 w-11 place-items-center rounded-full bg-white/10 text-white/70 transition hover:bg-white/20"
+          className="absolute end-4 top-4 grid h-11 w-11 place-items-center rounded-full bg-white/10 text-white/70 transition hover:bg-white/20"
         >
           {playing ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
         </button>
