@@ -9,6 +9,10 @@ const PUBLIC_PATHS = [
   "/auth/callback",
   "/auth/handoff", // implicit-flow magic-link → server-side session establishment
   "/access/", // Partner Access public rooms authenticate by hashed token.
+  "/room/", // Vanity guest links — next.config rewrites /room/<slug>/<token> to
+  //            /access/<token>. Middleware runs BEFORE that rewrite and sees the
+  //            original /room path, so it must be public here too, or the rewrite
+  //            never happens and the guest 307s to /login.
   "/demo/", // Public product-demo access pages authenticate by share token.
   "/api/access/", // Partner Access API routes (upload sign/finalize, next-step toggle) — auth by token hash.
   "/api/contact-logo/", // Public brand-logo proxy for co-branded rooms (GET streams the image; POST self-guards with requireUser).
