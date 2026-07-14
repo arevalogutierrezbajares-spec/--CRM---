@@ -1,4 +1,5 @@
 import { regeneratePartnerRoomAccessToken } from "@/db/queries/partner-access";
+import { decryptRoomToken } from "@/lib/partner-access-token.server";
 import type { ToolEntry } from "./_types";
 import { ROOM_REF_PROPS, partnerAccessUrl, resolveRoomRef } from "./_partner-room";
 
@@ -6,11 +7,11 @@ export const getRoomLink: ToolEntry = {
   definition: {
     name: "get_partner_room_link",
     description:
-      "Get the shareable guest link for a partner room. Tokens are stored hashed, so an " +
-      "already-issued link can never be re-displayed: if the room has one and fresh is not " +
-      "set, this reports that instead of returning a URL. Pass fresh=true to mint a new " +
-      "link — that INVALIDATES any previously sent link, so confirm with the user first. " +
-      "If the room has never issued a link, one is minted automatically.",
+      "Get the shareable guest link for a partner room. The link is stored encrypted, so an " +
+      "already-issued link is returned as-is (no rotation needed). Pass fresh=true only to " +
+      "mint a NEW link — that INVALIDATES the previous one, so confirm with the user first. " +
+      "If the room has never issued a link, one is minted automatically. (Rooms created before " +
+      "encrypted storage have no recoverable link — regenerate once with fresh=true.)",
     input_schema: {
       type: "object",
       properties: {
@@ -35,6 +36,25 @@ export const getRoomLink: ToolEntry = {
     const expired = Boolean(room.expiresAt && room.expiresAt.getTime() < ctx.now.getTime());
 
     if (hasToken && input.fresh !== true) {
+      const token = decryptRoomToken(room.publicAccessTokenEnc);
+      if (token) {
+        const guestUrl = partnerAccessUrl(token);
+        return {
+          ok: true,
+          data: {
+            roomId: room.id,
+            roomName: room.name,
+            guestUrl,
+            linkIssuedAt: room.publicAccessTokenCreatedAt,
+            lastViewedAt: room.publicAccessLastViewedAt,
+            status: room.status,
+            passcodeSet: Boolean(room.passcodeHash),
+            expired,
+          },
+          speak: `Guest link for "${room.name}": ${guestUrl}`,
+        };
+      }
+      // Minted before encrypted storage (or key rotated): plaintext is gone.
       return {
         ok: true,
         data: {
@@ -46,10 +66,9 @@ export const getRoomLink: ToolEntry = {
           status: room.status,
           expired,
           note:
-            "A guest link was already issued and only its hash is stored, so it cannot be shown again. " +
-            "If the user still has it (e.g. in WhatsApp history) they can reuse it; otherwise call " +
-            "get_partner_room_link with fresh=true to mint a new one — after confirming, since that " +
-            "invalidates the old link.",
+            "This room's link was issued before recoverable storage, so it can't be shown again. " +
+            "If the user still has it they can reuse it; otherwise call get_partner_room_link with " +
+            "fresh=true to mint a new (copyable) one — after confirming, since that invalidates the old link.",
         },
       };
     }

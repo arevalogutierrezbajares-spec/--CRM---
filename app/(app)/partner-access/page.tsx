@@ -14,6 +14,8 @@ import {
   partnerShareChannelLabel,
 } from "@/lib/partner-access";
 import { listPartnerAccessDashboard } from "@/db/queries/partner-access";
+import { partnerRoomGuestUrl } from "@/lib/partner-room-link.server";
+import { CopyGuestLink } from "@/components/partner-access/copy-guest-link";
 import { listContacts } from "@/db/queries/contacts";
 import { NewRoomDialog } from "@/components/partner-access/new-room-dialog";
 
@@ -114,8 +116,14 @@ export default async function PartnerAccessPage() {
                             <ChevronRight className="h-4 w-4 text-[var(--muted-foreground)]" />
                           </div>
                         </div>
-                        <div className="mt-2 text-xs text-[var(--muted-foreground)]">
-                          Last activity {formatRelative(room.lastActivityAt ?? room.updatedAt)}
+                        <div className="mt-2 flex items-center justify-between gap-2 text-xs text-[var(--muted-foreground)]">
+                          <span>
+                            Last activity{" "}
+                            {formatRelative(room.lastActivityAt ?? room.updatedAt)}
+                          </span>
+                          <CopyGuestLink
+                            url={partnerRoomGuestUrl(room.publicAccessTokenEnc)}
+                          />
                         </div>
                       </Link>
                     </li>

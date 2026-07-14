@@ -153,7 +153,8 @@ export function ShareLinkModal({
             <div className="rounded-md border border-[var(--border)] bg-[var(--secondary)] p-3">
               <div className="text-sm font-medium">Access room created</div>
               <p className="mt-1 text-xs text-[var(--muted-foreground)]">
-                This link is shown once. Copy it before closing.
+                Share it with your partner — you can copy it again anytime from
+                the room.
               </p>
               <div className="mt-2 flex gap-2">
                 <Input value={accessUrl} readOnly className="font-mono text-xs" />

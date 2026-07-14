@@ -140,8 +140,8 @@ export function NewRoomDialog({
                     </Button>
                   </div>
                   <p className="text-xs text-[var(--muted-foreground)]">
-                    Copy it now — the full link isn&rsquo;t shown again. You can
-                    always issue a fresh one from the room.
+                    Share this with your partner. You can view and copy it again
+                    anytime from the room&rsquo;s page.
                   </p>
                 </div>
               )}

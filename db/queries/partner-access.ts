@@ -3,6 +3,7 @@ import { db, schema } from "@/db";
 import { pgErrorCode } from "@/lib/server-action-guard";
 import {
   createPartnerAccessToken,
+  encryptRoomToken,
   hashPartnerAccessToken,
 } from "@/lib/partner-access-token.server";
 import {
@@ -549,6 +550,7 @@ export async function regeneratePartnerRoomAccessToken(input: {
       .set({
         status: existing.status === "draft" ? "active" : existing.status,
         publicAccessTokenHash: hashPartnerAccessToken(accessToken),
+        publicAccessTokenEnc: encryptRoomToken(accessToken),
         publicAccessTokenCreatedAt: now,
         lastActivityAt: now,
         updatedAt: now,
@@ -944,6 +946,7 @@ export async function createPartnerShare(input: CreatePartnerShareInput) {
           partnerKind: input.partnerKind,
           status: "active",
           publicAccessTokenHash: hashPartnerAccessToken(accessToken),
+          publicAccessTokenEnc: encryptRoomToken(accessToken),
           publicAccessTokenCreatedAt: now,
           createdBy: input.actorId,
           lastActivityAt: now,
@@ -955,6 +958,7 @@ export async function createPartnerShare(input: CreatePartnerShareInput) {
         .update(schema.partnerRooms)
         .set({
           publicAccessTokenHash: hashPartnerAccessToken(accessToken),
+          publicAccessTokenEnc: encryptRoomToken(accessToken),
           publicAccessTokenCreatedAt: now,
           updatedAt: now,
         })
@@ -1128,6 +1132,7 @@ export async function createPartnerRoomForContact(input: {
         locale: input.locale ?? "es",
         status: "active",
         publicAccessTokenHash: hashPartnerAccessToken(accessToken),
+        publicAccessTokenEnc: encryptRoomToken(accessToken),
         publicAccessTokenCreatedAt: now,
         createdBy: input.actorId,
         lastActivityAt: now,
