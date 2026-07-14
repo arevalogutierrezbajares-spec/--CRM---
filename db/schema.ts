@@ -894,6 +894,9 @@ export const partnerRooms = pgTable("partner_rooms", {
     withTimezone: true,
   }),
   passcodeHash: text("passcode_hash"),
+  // The 4-digit code, encrypted (display-only), so an operator can re-view/share
+  // it. passcodeHash still gates entry. Null when no code, or set before this col.
+  passcodeEnc: text("passcode_enc"),
   passcodeFailedCount: integer("passcode_failed_count").notNull().default(0),
   passcodeLockedUntil: timestamp("passcode_locked_until", { withTimezone: true }),
   // Max distinct guests who may claim a seat (enter email at the gate). Null = unlimited.

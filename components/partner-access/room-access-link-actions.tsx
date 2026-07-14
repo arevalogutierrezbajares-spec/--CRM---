@@ -16,6 +16,7 @@ export function RoomAccessLinkActions({
   status,
   hasAccessToken,
   guestUrl,
+  passcode,
   tokenCreatedAt,
   lastViewedAt,
 }: {
@@ -24,6 +25,8 @@ export function RoomAccessLinkActions({
   hasAccessToken: boolean;
   /** Decrypted, re-copyable guest link — null for rooms minted before storage. */
   guestUrl: string | null;
+  /** Decrypted 4-digit access code, if the room is code-protected. */
+  passcode: string | null;
   tokenCreatedAt: string | null;
   lastViewedAt: string | null;
 }) {
@@ -31,8 +34,20 @@ export function RoomAccessLinkActions({
   const [pending, startTransition] = useTransition();
   // Freshly-minted link shows immediately; otherwise the persisted one is used.
   const [justMinted, setJustMinted] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<"link" | "both" | null>(null);
   const shownUrl = justMinted ?? guestUrl;
+
+  function flash(which: "link" | "both") {
+    setCopied(which);
+    setTimeout(() => setCopied(null), 1200);
+  }
+  async function copyBoth() {
+    if (!shownUrl) return;
+    const msg = passcode ? `${shownUrl}\n\nAccess code: ${passcode}` : shownUrl;
+    await navigator.clipboard.writeText(msg);
+    flash("both");
+    toast.success(passcode ? "Link + code copied" : "Guest link copied");
+  }
 
   function regenerate() {
     startTransition(async () => {
@@ -47,12 +62,11 @@ export function RoomAccessLinkActions({
     });
   }
 
-  async function copy() {
+  async function copyLink() {
     if (!shownUrl) return;
     await navigator.clipboard.writeText(shownUrl);
-    setCopied(true);
+    flash("link");
     toast.success("Guest link copied");
-    setTimeout(() => setCopied(false), 1200);
   }
 
   return (
@@ -82,8 +96,8 @@ export function RoomAccessLinkActions({
           </div>
           <div className="flex gap-2">
             <Input value={shownUrl} readOnly className="font-mono text-xs" />
-            <Button type="button" variant="outline" size="sm" onClick={copy}>
-              {copied ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
+            <Button type="button" variant="outline" size="sm" onClick={copyLink}>
+              {copied === "link" ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
               Copy
             </Button>
             <Button
@@ -96,6 +110,33 @@ export function RoomAccessLinkActions({
               Open
             </Button>
           </div>
+
+          {passcode && (
+            <div className="mt-2 flex items-center justify-between gap-2 rounded-md bg-[var(--secondary)] px-3 py-2">
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-[11px] uppercase tracking-wide text-[var(--muted-foreground)]">
+                  Access code
+                </span>
+                <span className="font-mono text-base font-semibold tracking-[0.3em]">
+                  {passcode}
+                </span>
+              </div>
+            </div>
+          )}
+
+          <Button
+            type="button"
+            size="sm"
+            className="mt-2 w-full"
+            onClick={copyBoth}
+          >
+            {copied === "both" ? (
+              <Check className="h-4 w-4" />
+            ) : (
+              <Copy className="h-4 w-4" />
+            )}
+            {passcode ? "Copy link + code" : "Copy link"}
+          </Button>
           <p className="mt-2 text-[11px] text-[var(--muted-foreground)]">
             Share this with your partner — it stays here, copy it anytime. Only you
             (signed in) can see it.

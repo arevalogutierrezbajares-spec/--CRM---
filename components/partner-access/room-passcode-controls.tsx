@@ -16,15 +16,22 @@ import { Input } from "@/components/ui/input";
 export function RoomPasscodeControls({
   roomId,
   hasPasscode,
+  lockedUntil,
+  failedCount = 0,
 }: {
   roomId: string;
   hasPasscode: boolean;
+  lockedUntil?: string | null;
+  failedCount?: number;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [editing, setEditing] = useState(false);
   const [code, setCode] = useState("");
   const [justSet, setJustSet] = useState<string | null>(null);
+  const isLocked = Boolean(
+    lockedUntil && new Date(lockedUntil).getTime() > new Date().getTime(),
+  );
 
   function save() {
     if (!/^\d{4}$/.test(code)) {
@@ -93,15 +100,33 @@ export function RoomPasscodeControls({
 
       <p className="text-xs text-[var(--muted-foreground)]">
         {hasPasscode
-          ? "Visitors must enter the 4-digit code once per browser."
+          ? "Visitors enter the code once per browser. It shows in the Guest link box above — copy it anytime."
           : "Add a 4-digit code so a forwarded link isn't enough to get in."}
       </p>
+
+      {hasPasscode && isLocked && (
+        <p className="rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
+          Locked after too many wrong attempts — retries pause until{" "}
+          {new Date(lockedUntil!).toLocaleString("en-US", {
+            hour: "numeric",
+            minute: "2-digit",
+            month: "short",
+            day: "numeric",
+          })}
+          .
+        </p>
+      )}
+      {hasPasscode && !isLocked && failedCount > 0 && (
+        <p className="text-xs text-[var(--muted-foreground)]">
+          {failedCount} failed attempt{failedCount === 1 ? "" : "s"} on record.
+        </p>
+      )}
 
       {justSet && (
         <div className="rounded-md border border-[var(--border)] bg-[var(--secondary)] p-2 text-xs">
           Code set to{" "}
           <span className="font-mono font-semibold tracking-widest">{justSet}</span>
-          . Share it with your contact — it won&rsquo;t be shown again.
+          . It&rsquo;s saved — copy it anytime from the Guest link box above.
         </div>
       )}
 

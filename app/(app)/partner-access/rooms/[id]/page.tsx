@@ -33,6 +33,7 @@ import { listSignatureRequestsByRoom } from "@/db/queries/partner-signatures";
 import { RoomSignaturesManager } from "@/components/partner-access/room-signatures-manager";
 import { RoomAccessLinkActions } from "@/components/partner-access/room-access-link-actions";
 import { partnerRoomGuestUrl } from "@/lib/partner-room-link.server";
+import { decryptRoomToken } from "@/lib/partner-access-token.server";
 import { RoomDetailsForm } from "@/components/partner-access/room-details-form";
 import { RoomMessagesManager } from "@/components/partner-access/room-messages-manager";
 import { RoomPasscodeControls } from "@/components/partner-access/room-passcode-controls";
@@ -269,7 +270,14 @@ export default async function PartnerAccessRoomPage(props: { params: Params }) {
           <Summary label="Active shares" value={activeShares.length} />
           <Summary label="Viewed" value={viewedShares.length} />
           <Summary label="Downloaded" value={downloadedShares.length} />
-          <Summary label="Members" value={detail.members.length} />
+          <Summary
+            label="Seats"
+            value={
+              room.seatLimit
+                ? `${detail.members.length} / ${room.seatLimit}`
+                : `${detail.members.length} · ∞`
+            }
+          />
           <Summary label="Last activity" value={formatRelative(room.lastActivityAt ?? room.updatedAt)} />
         </div>
 
@@ -594,6 +602,7 @@ export default async function PartnerAccessRoomPage(props: { params: Params }) {
                   status={room.status as PartnerRoomStatus}
                   hasAccessToken={Boolean(room.publicAccessTokenHash)}
                   guestUrl={partnerRoomGuestUrl(room.publicAccessTokenEnc)}
+                  passcode={decryptRoomToken(room.passcodeEnc)}
                   tokenCreatedAt={
                     room.publicAccessTokenCreatedAt?.toISOString() ?? null
                   }
@@ -605,6 +614,8 @@ export default async function PartnerAccessRoomPage(props: { params: Params }) {
                   <RoomPasscodeControls
                     roomId={room.id}
                     hasPasscode={Boolean(room.passcodeHash)}
+                    lockedUntil={room.passcodeLockedUntil?.toISOString() ?? null}
+                    failedCount={room.passcodeFailedCount}
                   />
                 </div>
               </CardContent>
@@ -615,11 +626,11 @@ export default async function PartnerAccessRoomPage(props: { params: Params }) {
                 <CardTitle className="flex items-center gap-2">
                   <UsersRound className="h-4 w-4" />
                   Guests &amp; seats
-                  {detail.members.length > 0 && (
-                    <Badge variant="secondary" className="ml-auto">
-                      {detail.members.length}
-                    </Badge>
-                  )}
+                  <Badge variant="secondary" className="ml-auto">
+                    {room.seatLimit
+                      ? `${detail.members.length} / ${room.seatLimit} seats`
+                      : `${detail.members.length} · unlimited`}
+                  </Badge>
                 </CardTitle>
               </CardHeader>
               <CardContent>
