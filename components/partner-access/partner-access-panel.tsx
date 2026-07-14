@@ -140,7 +140,7 @@ export function PartnerAccessPanel({
                               <Eye className="h-2.5 w-2.5" />Preview
                             </Link>
                             <CopyGuestLink
-                              url={partnerRoomGuestUrl(room.publicAccessTokenEnc)}
+                              url={partnerRoomGuestUrl(room.publicAccessTokenEnc, room.name)}
                             />
                           </div>
                         </div>

@@ -15,6 +15,7 @@ import {
   type PartnerShareChannel,
 } from "@/lib/partner-access";
 import { resolveRoomLocale } from "@/lib/partner-room-i18n";
+import { partnerRoomGuestPath } from "@/lib/partner-room-slug";
 import { roomHeroVideo } from "@/lib/partner-room-videos";
 import {
   addExpectedGuest,
@@ -137,7 +138,9 @@ async function _shareProjectLinkAction(opts: {
     ok: true,
     id: res.share.id,
     roomId: res.room.id,
-    accessPath: res.accessToken ? `/access/${res.accessToken}` : null,
+    accessPath: res.accessToken
+      ? partnerRoomGuestPath(res.accessToken, res.room.name)
+      : null,
   };
 }
 
@@ -234,7 +237,7 @@ async function _regeneratePartnerRoomAccessLinkAction(opts: {
   return {
     ok: true,
     id: res.room.id,
-    accessPath: `/access/${res.accessToken}`,
+    accessPath: partnerRoomGuestPath(res.accessToken, res.room.name),
   };
 }
 
@@ -649,7 +652,9 @@ async function _createPartnerRoomAction(opts: {
   return {
     ok: true,
     roomId: res.room.id,
-    accessPath: res.accessToken ? `/access/${res.accessToken}` : null,
+    accessPath: res.accessToken
+      ? partnerRoomGuestPath(res.accessToken, res.room.name)
+      : null,
     existed: res.existed,
   };
 }
@@ -831,6 +836,7 @@ async function _quickShareWithContactAction(opts: {
 
   let roomId: string | undefined;
   let mintedToken: string | null = null;
+  let roomName: string | null = null;
   let added = 0;
   let lastError: string | null = null;
 
@@ -857,6 +863,7 @@ async function _quickShareWithContactAction(opts: {
     if (!roomId) {
       roomId = res.room.id;
       mintedToken = res.accessToken;
+      roomName = res.room.name;
     }
     added++;
   }
@@ -866,7 +873,9 @@ async function _quickShareWithContactAction(opts: {
   }
 
   const existed = mintedToken === null;
-  let accessPath: string | null = mintedToken ? `/access/${mintedToken}` : null;
+  let accessPath: string | null = mintedToken
+    ? partnerRoomGuestPath(mintedToken, roomName)
+    : null;
 
   // An existing room's raw token can't be recovered (only the hash is stored),
   // so a fresh shareable URL is issued only when the user opts in — which
@@ -877,7 +886,8 @@ async function _quickShareWithContactAction(opts: {
       actorId: user.id,
       roomId,
     });
-    if (regen.ok) accessPath = `/access/${regen.accessToken}`;
+    if (regen.ok)
+      accessPath = partnerRoomGuestPath(regen.accessToken, regen.room.name);
   }
 
   revalidatePath(`/contacts/${opts.contactId}`);

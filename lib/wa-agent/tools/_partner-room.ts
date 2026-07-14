@@ -1,6 +1,7 @@
 import { and, desc, eq, ilike, ne, or } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { SITE_URL } from "@/lib/site-url";
+import { partnerRoomGuestPath } from "@/lib/partner-room-slug";
 import { safeStr } from "./_types";
 
 const { contacts, partnerRooms, demoLinks } = schema;
@@ -57,8 +58,12 @@ export async function resolveDemoRef(
   return { ok: true, demo: rows[0] };
 }
 
-/** Public guest-facing link for a freshly minted access token. */
-export const partnerAccessUrl = (token: string) => `${SITE_URL}/access/${token}`;
+/**
+ * Public guest-facing link for an access token. Pass the room `name` for the
+ * pretty `/room/<slug>/<token>` form; omit it to fall back to `/access/<token>`.
+ */
+export const partnerAccessUrl = (token: string, name?: string | null) =>
+  `${SITE_URL}${partnerRoomGuestPath(token, name)}`;
 
 /** Internal admin page for a room (requires CRM login). */
 export const roomAdminUrl = (roomId: string) =>

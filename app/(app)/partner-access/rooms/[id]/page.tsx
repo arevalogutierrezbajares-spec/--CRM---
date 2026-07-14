@@ -601,7 +601,7 @@ export default async function PartnerAccessRoomPage(props: { params: Params }) {
                   roomId={room.id}
                   status={room.status as PartnerRoomStatus}
                   hasAccessToken={Boolean(room.publicAccessTokenHash)}
-                  guestUrl={partnerRoomGuestUrl(room.publicAccessTokenEnc)}
+                  guestUrl={partnerRoomGuestUrl(room.publicAccessTokenEnc, room.name)}
                   passcode={decryptRoomToken(room.passcodeEnc)}
                   tokenCreatedAt={
                     room.publicAccessTokenCreatedAt?.toISOString() ?? null
