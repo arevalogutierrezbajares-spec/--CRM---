@@ -15,7 +15,11 @@ import { RoomI18nProvider } from "@/components/partner-access/room-i18n";
 import { SITE_URL } from "@/lib/site-url";
 import { roomHeroVideo } from "@/lib/partner-room-videos";
 import { RoomHeroVideo } from "@/components/partner-access/room-hero-video";
-import { translateForRoom } from "@/lib/partner-room-translate.server";
+import {
+  translateForRoom,
+  localizeForRoom,
+} from "@/lib/partner-room-translate.server";
+import { TranslatedText } from "@/components/partner-access/translated-text";
 import {
   countClaimedSeats,
   getPartnerRoomMember,
@@ -261,7 +265,8 @@ export default async function PublicAccessRoomPage({
     const key = `${c.targetKind}:${c.targetId}`;
     (commentsByTarget[key] ??= []).push({
       id: c.id,
-      body: c.body,
+      // Team comments are authored in es/en; translate for pt/ru/ar guests.
+      body: c.authorKind !== "partner" ? await tr(c.body) : c.body,
       authorKind: c.authorKind,
       authorName: teamName(c.authorKind, c.authorName),
       createdAt: c.createdAt.toISOString(),
@@ -330,7 +335,19 @@ export default async function PublicAccessRoomPage({
     access.contact.name?.trim().split(/\s+/)[0] ??
     null;
   const heroVideo = roomHeroVideo(access.room.heroVideoKey);
-  const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
+
+  // Team-authored messages are written in es/en; translate them for pt/ru/ar
+  // guests. The guest's own messages (authorKind "partner") are left untouched.
+  const localizedMessages = await Promise.all(
+    messages.map(async (m) => ({
+      ...m,
+      body: m.authorKind !== "partner" ? await tr(m.body) : m.body,
+    })),
+  );
+  const lastMessage =
+    localizedMessages.length > 0
+      ? localizedMessages[localizedMessages.length - 1]
+      : null;
 
   // Room language → dictionary. Server-rendered strings read `t` directly;
   // client components read the same dict from RoomI18nProvider context.
@@ -338,7 +355,10 @@ export default async function PublicAccessRoomPage({
   const dict = getRoomDict(locale);
 
   // Operator-authored welcome copy, machine-translated for pt/ru/ar guests.
-  const welcomeText = await tr(access.room.welcomeMessage);
+  // localize* returns { display, original } so the hero can offer "show original".
+  const welcome = await localizeForRoom(access.room.welcomeMessage, locale, {
+    workspaceId: access.room.workspaceId,
+  });
 
   // Next-step text and the featured demo's copy get the same treatment. Counts
   // (openSteps) use the untranslated list — only the displayed text is localized.
@@ -410,7 +430,10 @@ export default async function PublicAccessRoomPage({
                   heroVideo ? "text-white/85" : "text-[var(--muted-foreground)]"
                 }`}
               >
-                {welcomeText || dict.hero.welcomeFallback}
+                <TranslatedText
+                  display={welcome.display || dict.hero.welcomeFallback}
+                  original={welcome.original}
+                />
               </p>
             </div>
 
@@ -573,7 +596,7 @@ export default async function PublicAccessRoomPage({
                   token={token}
                   ownerLabel={dict.common.team}
                   mentionCandidates={mentionCandidates}
-                  initialMessages={messages.map((m) => ({
+                  initialMessages={localizedMessages.map((m) => ({
                     id: m.id,
                     body: m.body,
                     authorKind: m.authorKind,
