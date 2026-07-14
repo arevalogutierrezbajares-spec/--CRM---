@@ -210,7 +210,7 @@ export const partnerRoomStatus = pgEnum("partner_room_status", [
 ]);
 
 // Language a partner room renders in for the guest. Extensible: add a value here
-// + a dictionary in lib/partner-access/i18n.ts + an entry in ROOM_LOCALE_OPTIONS.
+// + a dictionary in lib/partner-room-i18n.ts + an entry in ROOM_LOCALE_OPTIONS.
 export const roomLocale = pgEnum("room_locale", ["es", "en"]);
 
 export const partnerShareChannel = pgEnum("partner_share_channel", [

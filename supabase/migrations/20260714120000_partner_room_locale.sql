@@ -1,5 +1,5 @@
 -- Per-room guest-facing language for partner rooms.
--- Extensible: add a value to the enum + a dictionary in lib/partner-access/i18n.ts.
+-- Extensible: add a value to the enum + a dictionary in lib/partner-room-i18n.ts.
 
 DO $$
 BEGIN

@@ -11,7 +11,6 @@ type ClaimableMember = {
   roleLabel: string | null;
 };
 
-import { BOLIVAR_QUOTE } from "@/lib/partner-access";
 import { useRoomDict } from "./room-i18n";
 
 // Alma Llanera (harp) — 6s sting, faded in/out.
@@ -159,7 +158,7 @@ export function RoomSignIn({
                 className="font-serif text-2xl italic leading-relaxed text-white/90 sm:text-3xl"
               >
                 <span aria-hidden>&ldquo;</span>
-                {BOLIVAR_QUOTE.split(" ").map((word, i, words) => (
+                {t.footer.bolivarQuote.split(" ").map((word, i, words) => (
                   <motion.span
                     key={i}
                     variants={{

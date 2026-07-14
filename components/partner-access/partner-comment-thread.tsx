@@ -55,7 +55,7 @@ export function PartnerCommentThread({
         setError(t.comments.sendError);
       }
     } catch {
-      setError("No se pudo enviar el comentario. Intenta de nuevo.");
+      setError(t.comments.sendError);
     } finally {
       setBusy(false);
     }

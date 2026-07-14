@@ -416,7 +416,7 @@ export function SignDocumentModal({
               {busy ? t.sign.registering : t.sign.signDoc}
             </button>
             <p className="mt-2 text-center text-[11px] text-[var(--muted-foreground)]">
-              La fecha y hora de la firma las registra el servidor.
+              {t.sign.serverTimestamp}
             </p>
           </div>
         </div>
