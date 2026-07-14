@@ -3,6 +3,7 @@ import {
   type PartnerKind,
 } from "@/lib/partner-access";
 import { ROOM_LOCALE_OPTIONS, resolveRoomLocale } from "@/lib/partner-room-i18n";
+import { decryptRoomToken } from "@/lib/partner-access-token.server";
 import { createPartnerRoomForContact, setRoomDemoLink } from "@/db/queries/partner-access";
 import { safeStr, type ToolEntry } from "./_types";
 import {
@@ -22,7 +23,7 @@ export const createPartnerRoom: ToolEntry = {
     description:
       "Create a partner room (branded document-sharing microsite) for a contact, or reuse " +
       "the contact's existing room of the same kind. New rooms come back with a shareable " +
-      "guest link — save it, since only its hash is stored. After creating, the usual crisp " +
+      "guest link (stored encrypted, so it's retrievable later from the CRM or get_partner_room_link). After creating, the usual crisp " +
       "setup is: add documents (add_room_documents), a welcome message + summary " +
       "(update_partner_room), next steps (add_room_next_step), then send the guest link. " +
       "Optionally feature a product demo (demo param) so the partner gets a one-tap " +
@@ -103,7 +104,14 @@ export const createPartnerRoom: ToolEntry = {
       }
     }
 
-    const guestUrl = res.accessToken ? partnerAccessUrl(res.accessToken) : null;
+    // Fresh room → the just-minted plaintext; reused room → decrypt its stored
+    // token so the link is still returned (no rotation needed).
+    const guestUrl = res.accessToken
+      ? partnerAccessUrl(res.accessToken)
+      : (() => {
+          const t = decryptRoomToken(res.room.publicAccessTokenEnc);
+          return t ? partnerAccessUrl(t) : null;
+        })();
     const demoSpeak = featuredDemo
       ? ` Featuring the "${featuredDemo.label}" demo.`
       : demoNote
@@ -123,12 +131,12 @@ export const createPartnerRoom: ToolEntry = {
         featuredDemo,
         demoNote,
         note: res.existed
-          ? "Room already existed — its guest link is not re-displayable; use get_partner_room_link with fresh=true if a new link is needed."
-          : "Save the guestUrl now — only its hash is stored, so it cannot be shown again without regenerating.",
+          ? "Reused the contact's existing room; guestUrl is its current link (unchanged). Use get_partner_room_link with fresh=true only to rotate it."
+          : "guestUrl is the shareable link. It's stored encrypted, so you can retrieve it again anytime from the room in the CRM or via get_partner_room_link.",
       },
       speak: res.existed
-        ? `Reusing ${contact.name}'s existing ${partnerKind} room "${res.room.name}".${demoSpeak}`
-        : `Created room "${res.room.name}" for ${contact.name}. Guest link (save it — it cannot be re-shown): ${guestUrl}${demoSpeak}`,
+        ? `Reusing ${contact.name}'s existing ${partnerKind} room "${res.room.name}". Link: ${guestUrl ?? "(regenerate to view)"}.${demoSpeak}`
+        : `Created room "${res.room.name}" for ${contact.name}. Guest link: ${guestUrl}${demoSpeak}`,
     };
   },
 };

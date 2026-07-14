@@ -32,6 +32,7 @@ import { listRoomItems, listRoomComments } from "@/db/queries/partner-repository
 import { listSignatureRequestsByRoom } from "@/db/queries/partner-signatures";
 import { RoomSignaturesManager } from "@/components/partner-access/room-signatures-manager";
 import { RoomAccessLinkActions } from "@/components/partner-access/room-access-link-actions";
+import { partnerRoomGuestUrl } from "@/lib/partner-room-link.server";
 import { RoomDetailsForm } from "@/components/partner-access/room-details-form";
 import { RoomMessagesManager } from "@/components/partner-access/room-messages-manager";
 import { RoomPasscodeControls } from "@/components/partner-access/room-passcode-controls";
@@ -592,6 +593,7 @@ export default async function PartnerAccessRoomPage(props: { params: Params }) {
                   roomId={room.id}
                   status={room.status as PartnerRoomStatus}
                   hasAccessToken={Boolean(room.publicAccessTokenHash)}
+                  guestUrl={partnerRoomGuestUrl(room.publicAccessTokenEnc)}
                   tokenCreatedAt={
                     room.publicAccessTokenCreatedAt?.toISOString() ?? null
                   }

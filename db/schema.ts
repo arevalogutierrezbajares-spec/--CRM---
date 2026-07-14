@@ -882,6 +882,11 @@ export const partnerRooms = pgTable("partner_rooms", {
   summary: text("summary"),
   welcomeMessage: text("welcome_message"),
   publicAccessTokenHash: text("public_access_token_hash").unique(),
+  // The guest token, AES-256-GCM encrypted (lib/partner-access-token.server),
+  // so an operator can re-view/copy the link after creation. The hash above
+  // still gates /access; this is display-only. Null for rooms minted before
+  // this column existed (their plaintext is gone — regenerate to populate).
+  publicAccessTokenEnc: text("public_access_token_enc"),
   publicAccessTokenCreatedAt: timestamp("public_access_token_created_at", {
     withTimezone: true,
   }),

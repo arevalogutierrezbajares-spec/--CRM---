@@ -7,6 +7,8 @@ import { Separator } from "@/components/ui/separator";
 import { ShareLedgerActions } from "@/components/partner-access/share-ledger-actions";
 import { QuickShareDialog } from "@/components/partner-access/quick-share-dialog";
 import { type NewRoomContactOption } from "@/components/partner-access/new-room-dialog";
+import { CopyGuestLink } from "@/components/partner-access/copy-guest-link";
+import { partnerRoomGuestUrl } from "@/lib/partner-room-link.server";
 import type { PartnerAccessOverview } from "@/db/queries/partner-access";
 import {
   partnerKindLabel,
@@ -137,6 +139,9 @@ export function PartnerAccessPanel({
                             >
                               <Eye className="h-2.5 w-2.5" />Preview
                             </Link>
+                            <CopyGuestLink
+                              url={partnerRoomGuestUrl(room.publicAccessTokenEnc)}
+                            />
                           </div>
                         </div>
                       </li>
