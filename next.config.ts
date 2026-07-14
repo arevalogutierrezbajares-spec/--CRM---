@@ -17,6 +17,15 @@ const nextConfig: NextConfig = {
         source: "/.well-known/oauth-authorization-server",
         destination: "/api/mcp/well-known/oauth-authorization-server",
       },
+      {
+        // Vanity guest link. The <slug> is cosmetic (built from the room name)
+        // and never parsed — the <token> alone resolves the room. A rewrite
+        // (not a redirect) keeps the pretty URL in the address bar while the
+        // existing /access/[token] route and its whole subtree serve it
+        // unchanged. Old /access/<token> links stay valid forever.
+        source: "/room/:slug/:token",
+        destination: "/access/:token",
+      },
     ];
   },
   // The call-recording module moved under Meetings (every recording is now a

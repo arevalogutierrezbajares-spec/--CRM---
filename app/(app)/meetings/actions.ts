@@ -24,6 +24,7 @@ import {
   regeneratePartnerRoomAccessToken,
 } from "@/db/queries/partner-access";
 import { createRoomItem } from "@/db/queries/partner-repository";
+import { partnerRoomGuestPath } from "@/lib/partner-room-slug";
 import { claudeChat, isAnthropicConfigured } from "@/lib/anthropic";
 import { modelForWorkload } from "@/lib/anthropic-budget";
 
@@ -668,6 +669,7 @@ export async function shareMeetingMaterialsAction(
 
   let roomId: string | null = null;
   let accessToken: string | null = null;
+  let roomName: string | null = null;
   let shared = 0;
   let lastError: string | null = null;
 
@@ -690,6 +692,7 @@ export async function shareMeetingMaterialsAction(
       continue;
     }
     roomId = res.room.id;
+    roomName = res.room.name;
     if (res.accessToken) accessToken = res.accessToken;
     shared++;
   }
@@ -711,5 +714,9 @@ export async function shareMeetingMaterialsAction(
   }
 
   revalidatePath(`/meetings/${meetingId}`);
-  return { ok: true, url: `/access/${accessToken}`, count: shared };
+  return {
+    ok: true,
+    url: partnerRoomGuestPath(accessToken, roomName),
+    count: shared,
+  };
 }

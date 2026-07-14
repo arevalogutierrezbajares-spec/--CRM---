@@ -38,7 +38,7 @@ export const getRoomLink: ToolEntry = {
     if (hasToken && input.fresh !== true) {
       const token = decryptRoomToken(room.publicAccessTokenEnc);
       if (token) {
-        const guestUrl = partnerAccessUrl(token);
+        const guestUrl = partnerAccessUrl(token, room.name);
         return {
           ok: true,
           data: {
@@ -89,7 +89,7 @@ export const getRoomLink: ToolEntry = {
       warnings.push("The room's expiry date has passed — update expires_at or the link won't open.");
     }
 
-    const guestUrl = partnerAccessUrl(res.accessToken);
+    const guestUrl = partnerAccessUrl(res.accessToken, res.room.name);
     return {
       ok: true,
       data: {

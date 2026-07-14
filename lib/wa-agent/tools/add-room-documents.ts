@@ -154,7 +154,7 @@ export const addRoomDocuments: ToolEntry = {
     if (added === 0) {
       return { ok: false, error: lastError ?? "Could not add documents" };
     }
-    const guestUrl = mintedToken ? partnerAccessUrl(mintedToken) : null;
+    const guestUrl = mintedToken ? partnerAccessUrl(mintedToken, room.name) : null;
     return {
       ok: true,
       data: {

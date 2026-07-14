@@ -107,10 +107,10 @@ export const createPartnerRoom: ToolEntry = {
     // Fresh room → the just-minted plaintext; reused room → decrypt its stored
     // token so the link is still returned (no rotation needed).
     const guestUrl = res.accessToken
-      ? partnerAccessUrl(res.accessToken)
+      ? partnerAccessUrl(res.accessToken, res.room.name)
       : (() => {
           const t = decryptRoomToken(res.room.publicAccessTokenEnc);
-          return t ? partnerAccessUrl(t) : null;
+          return t ? partnerAccessUrl(t, res.room.name) : null;
         })();
     const demoSpeak = featuredDemo
       ? ` Featuring the "${featuredDemo.label}" demo.`

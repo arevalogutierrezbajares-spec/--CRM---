@@ -122,7 +122,7 @@ export default async function PartnerAccessPage() {
                             {formatRelative(room.lastActivityAt ?? room.updatedAt)}
                           </span>
                           <CopyGuestLink
-                            url={partnerRoomGuestUrl(room.publicAccessTokenEnc)}
+                            url={partnerRoomGuestUrl(room.publicAccessTokenEnc, room.name)}
                           />
                         </div>
                       </Link>
