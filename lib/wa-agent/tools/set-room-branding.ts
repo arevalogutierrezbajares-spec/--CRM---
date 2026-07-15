@@ -6,6 +6,12 @@ import {
   type BrandLogo,
 } from "@/db/queries/partner-access";
 import { ROOM_HERO_VIDEOS, roomHeroVideo } from "@/lib/partner-room-videos";
+import { ROOM_HERO_PHOTO_SETS, roomHeroPhotoSet } from "@/lib/partner-room-photos";
+import { HERO_IMAGE_THEMES, heroImageTheme } from "@/lib/partner-room-hero-images";
+import {
+  generateRoomHeroImage,
+  removeRoomHeroImage,
+} from "@/lib/partner-room-hero.server";
 import { removeObjects } from "@/lib/project-files/storage";
 import { safeStr, type ToolEntry } from "./_types";
 import {
@@ -15,7 +21,12 @@ import {
   roomWriteBlocked,
 } from "./_partner-room";
 
-const HERO_KEYS = [...ROOM_HERO_VIDEOS.map((v) => v.key), "none"];
+const HERO_KEYS = [
+  ...ROOM_HERO_VIDEOS.map((v) => v.key),
+  ...ROOM_HERO_PHOTO_SETS.map((s) => s.key),
+  "none",
+];
+const HERO_IMAGE_KEYS = [...HERO_IMAGE_THEMES.map((t) => t.key), "auto", "none"];
 const MAX_BRAND_LOGOS = 12; // matches the app's cap — the lockup row overflows past this
 const LOGO_URL_MAX = 2048;
 
@@ -24,11 +35,12 @@ export const setRoomBranding: ToolEntry = {
     name: "set_room_branding",
     description:
       "Set a partner room's visual branding: the client's logo (shown in the co-brand " +
-      "lockup), the hero background video (Venezuela footage presets), and which project " +
-      "brand logos appear. Only the fields provided change; every field is validated " +
-      "before anything is written. After setting, re-run partner_room_overview and " +
-      "confirm the returned image/video URLs with the user so the room is verified crisp " +
-      "before sharing.",
+      "lockup), the hero background video (Venezuela footage presets), a Grok-generated " +
+      "hero image (South American nature themes; slow — ~10-30s), and which project " +
+      "brand logos appear. A set hero video takes precedence over the generated image. " +
+      "Only the fields provided change; every field is validated before anything is " +
+      "written. After setting, re-run partner_room_overview and confirm the returned " +
+      "image/video URLs with the user so the room is verified crisp before sharing.",
     input_schema: {
       type: "object",
       properties: {
@@ -41,7 +53,17 @@ export const setRoomBranding: ToolEntry = {
         hero_video: {
           type: "string",
           enum: HERO_KEYS,
-          description: 'Hero background video preset; "none" removes the video',
+          description:
+            "Hero background preset — a Venezuela footage video loop or an archive " +
+            'photo set (living-film slideshow, e.g. "expedicion-canaima"); "none" removes it',
+        },
+        hero_image: {
+          type: "string",
+          enum: HERO_IMAGE_KEYS,
+          description:
+            "Generate a hero background image with Grok — a South American nature theme " +
+            'key, "auto" for the room\'s own deterministic pick, or "none" to remove the ' +
+            "current image",
         },
         brand_projects: {
           type: "array",
@@ -86,10 +108,21 @@ export const setRoomBranding: ToolEntry = {
       ? rawHero.toLowerCase() === "none" || rawHero.toLowerCase() === "clear"
       : false;
     const heroPreset = roomHeroVideo(rawHero);
-    if (rawHero && !clearHero && !heroPreset) {
+    const heroPhotoPreset = roomHeroPhotoSet(rawHero);
+    if (rawHero && !clearHero && !heroPreset && !heroPhotoPreset) {
       return {
         ok: false,
-        error: `Unknown hero video "${rawHero}". Options: ${HERO_KEYS.join(", ")}`,
+        error: `Unknown hero background "${rawHero}". Options: ${HERO_KEYS.join(", ")}`,
+      };
+    }
+
+    const rawHeroImage = safeStr(input.hero_image, 40)?.toLowerCase();
+    const clearHeroImage = rawHeroImage === "none" || rawHeroImage === "clear";
+    const heroImageAuto = rawHeroImage === "auto";
+    if (rawHeroImage && !clearHeroImage && !heroImageAuto && !heroImageTheme(rawHeroImage)) {
+      return {
+        ok: false,
+        error: `Unknown hero image theme "${rawHeroImage}". Options: ${HERO_IMAGE_KEYS.join(", ")}`,
       };
     }
 
@@ -162,8 +195,41 @@ export const setRoomBranding: ToolEntry = {
         heroVideoKey: clearHero ? null : rawHero,
       });
       if (!row) return { ok: false, error: "Room not found" };
-      changed.push(clearHero ? "hero video (removed)" : `hero video (${heroPreset?.label})`);
-      if (!clearHero && heroPreset) confirm.heroVideoPoster = absUrl(heroPreset.poster);
+      if (clearHero) {
+        changed.push("hero background (removed)");
+      } else if (heroPreset) {
+        changed.push(`hero video (${heroPreset.label})`);
+        confirm.heroVideoPoster = absUrl(heroPreset.poster);
+      } else if (heroPhotoPreset) {
+        changed.push(`hero photo set (${heroPhotoPreset.label})`);
+        confirm.heroPhotoPoster = absUrl(heroPhotoPreset.images[0].src);
+      }
+    }
+
+    if (rawHeroImage) {
+      if (clearHeroImage) {
+        const res = await removeRoomHeroImage({
+          workspaceId: ctx.workspaceId,
+          roomId: room.id,
+        });
+        if (!res.ok) return { ok: false, error: res.error };
+        changed.push("hero image (removed)");
+      } else {
+        const res = await generateRoomHeroImage({
+          workspaceId: ctx.workspaceId,
+          roomId: room.id,
+          themeKey: heroImageAuto ? null : rawHeroImage,
+        });
+        if (!res.ok) return { ok: false, error: res.error };
+        changed.push(`hero image (${res.themeLabel}, Grok-generated)`);
+        confirm.heroImageUrl = absUrl(res.url);
+        // The guest hero shows the video/photo preset when both are set.
+        const presetStillSet = rawHero ? !clearHero : Boolean(room.heroVideoKey);
+        if (presetStillSet) {
+          confirm.note =
+            "A hero video/photo preset is also set and takes precedence — remove it (hero_video: none) to show the generated image.";
+        }
+      }
     }
 
     if (brandPicks !== undefined) {
@@ -187,7 +253,8 @@ export const setRoomBranding: ToolEntry = {
     if (changed.length === 0) {
       return {
         ok: false,
-        error: "No branding fields to set — provide client_logo_url, hero_video, or brand_projects",
+        error:
+          "No branding fields to set — provide client_logo_url, hero_video, hero_image, or brand_projects",
       };
     }
     return {

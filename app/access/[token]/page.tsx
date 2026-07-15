@@ -15,6 +15,10 @@ import { RoomI18nProvider } from "@/components/partner-access/room-i18n";
 import { SITE_URL } from "@/lib/site-url";
 import { roomHeroVideo } from "@/lib/partner-room-videos";
 import { RoomHeroVideo } from "@/components/partner-access/room-hero-video";
+import { roomHeroImageUrl } from "@/lib/partner-room-hero-images";
+import { RoomHeroGallery } from "@/components/partner-access/room-hero-gallery";
+import { roomHeroPhotoSet } from "@/lib/partner-room-photos";
+import { RoomHeroArchive } from "@/components/partner-access/room-hero-archive";
 import {
   translateForRoom,
   localizeForRoom,
@@ -88,6 +92,20 @@ export async function generateMetadata({
   const title = access.room.name;
   const description = access.room.welcomeMessage ?? t.meta.description;
   const heroVideo = roomHeroVideo(access.room.heroVideoKey);
+  const heroPhotos = roomHeroPhotoSet(access.room.heroVideoKey);
+  const heroImage = roomHeroImageUrl(access.room);
+  // Same precedence as the hero itself: video poster, else archive photo,
+  // else generated image — and every room without hero media falls back to
+  // the branded AGB card, so shared links always carry the AGB identity.
+  const brandCard =
+    access.room.locale === "es" ? "/og/agb-room.png" : "/og/agb-room-en.png";
+  const ogImage = heroVideo
+    ? { url: `${SITE_URL}${heroVideo.poster}`, width: 1280, height: 720 }
+    : heroPhotos
+      ? { url: `${SITE_URL}${heroPhotos.images[0].src}`, width: 1852, height: 1462 }
+      : heroImage
+        ? { url: `${SITE_URL}${heroImage}`, width: 2048, height: 1024 }
+        : { url: `${SITE_URL}${brandCard}`, width: 1200, height: 630 };
 
   return {
     title,
@@ -98,12 +116,10 @@ export async function generateMetadata({
       description,
       type: "website",
       siteName: t.meta.ogSiteName,
-      ...(heroVideo
-        ? { images: [{ url: `${SITE_URL}${heroVideo.poster}`, width: 1280, height: 720 }] }
-        : {}),
+      images: [ogImage],
     },
     twitter: {
-      card: heroVideo ? "summary_large_image" : "summary",
+      card: "summary_large_image",
       title,
       description,
     },
@@ -335,6 +351,11 @@ export default async function PublicAccessRoomPage({
     access.contact.name?.trim().split(/\s+/)[0] ??
     null;
   const heroVideo = roomHeroVideo(access.room.heroVideoKey);
+  const heroPhotos = roomHeroPhotoSet(access.room.heroVideoKey);
+  const heroImage = roomHeroImageUrl(access.room);
+  // Full-bleed media behind the hero (preset video/photo set wins over a
+  // generated image); when present, hero text goes white-on-gradient.
+  const onHeroMedia = Boolean(heroVideo || heroPhotos || heroImage);
 
   // Team-authored messages are written in es/en; translate them for pt/ru/ar
   // guests. The guest's own messages (authorKind "partner") are left untouched.
@@ -387,7 +408,7 @@ export default async function PublicAccessRoomPage({
         <Reveal>
         <header
           className={`relative overflow-hidden rounded-2xl border p-6 md:p-9 ${
-            heroVideo
+            onHeroMedia
               ? "flex min-h-[280px] flex-col justify-end border-black/20 md:min-h-[340px]"
               : "border-[var(--border)] bg-[var(--card)]"
           }`}
@@ -398,6 +419,10 @@ export default async function PublicAccessRoomPage({
               webm={heroVideo.webm}
               poster={heroVideo.poster}
             />
+          ) : heroPhotos ? (
+            <RoomHeroArchive images={heroPhotos.images} caption={heroPhotos.caption} />
+          ) : heroImage ? (
+            <RoomHeroGallery images={[heroImage]} />
           ) : (
             <HeroAurora />
           )}
@@ -411,7 +436,7 @@ export default async function PublicAccessRoomPage({
               />
               <p
                 className={`mt-5 inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.2em] ${
-                  heroVideo ? "text-white/80" : "text-[var(--primary)]"
+                  onHeroMedia ? "text-white/80" : "text-[var(--primary)]"
                 }`}
               >
                 <Lock className="h-3 w-3" />
@@ -420,14 +445,14 @@ export default async function PublicAccessRoomPage({
               <LiveGreeting
                 firstName={firstName}
                 subline={dict.hero.subline}
-                sublineOnVideo={Boolean(heroVideo)}
+                sublineOnVideo={onHeroMedia}
                 className={`mt-2 text-3xl font-semibold tracking-tight md:text-4xl ${
-                  heroVideo ? "text-white" : ""
+                  onHeroMedia ? "text-white" : ""
                 }`}
               />
               <p
                 className={`mt-3 max-w-2xl text-base leading-7 ${
-                  heroVideo ? "text-white/85" : "text-[var(--muted-foreground)]"
+                  onHeroMedia ? "text-white/85" : "text-[var(--muted-foreground)]"
                 }`}
               >
                 <TranslatedText
@@ -443,11 +468,11 @@ export default async function PublicAccessRoomPage({
               <HeroActionChips
                 initialOpenSteps={openSteps.length}
                 initialPendingSignatures={pendingSignatures}
-                onVideo={Boolean(heroVideo)}
+                onVideo={onHeroMedia}
               />
               <span
                 className={`inline-flex items-center gap-2 rounded-full border px-3.5 py-2 text-sm transition-colors ${
-                  heroVideo
+                  onHeroMedia
                     ? "border-white/25 bg-white/10 text-white backdrop-blur"
                     : "border-[var(--border)] bg-[var(--background)]/60 backdrop-blur"
                 }`}
@@ -460,7 +485,7 @@ export default async function PublicAccessRoomPage({
                     className={`relative inline-flex h-2 w-2 rounded-full ${
                       isFreshUpdate
                         ? "bg-emerald-400"
-                        : heroVideo
+                        : onHeroMedia
                           ? "bg-white/40"
                           : "bg-[var(--muted-foreground)]/40"
                     }`}

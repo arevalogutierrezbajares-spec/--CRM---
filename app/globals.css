@@ -215,6 +215,33 @@
   }
 }
 
+/* Partner-room hero — slow Ken Burns drift for photo backgrounds. Two
+   variants so consecutive slides move in different directions. Base scale
+   stays >1 so the pan never exposes the image edge. */
+@keyframes hero-kenburns-a {
+  from { transform: scale(1.06) translate(0%, 0%); }
+  to   { transform: scale(1.16) translate(-1.6%, -2%); }
+}
+@keyframes hero-kenburns-b {
+  from { transform: scale(1.16) translate(1.6%, -1.2%); }
+  to   { transform: scale(1.06) translate(0%, 1%); }
+}
+
+/* Archive-film hero treatment (RoomHeroArchive). Grain jitters in discrete
+   steps like real film; the light leak sweeps rarely and softly. */
+@keyframes hero-grain {
+  0%, 100% { transform: translate(0, 0); }
+  20%      { transform: translate(-2%, 3%); }
+  40%      { transform: translate(3%, -2%); }
+  60%      { transform: translate(-3%, -3%); }
+  80%      { transform: translate(2%, 2%); }
+}
+@keyframes hero-light-leak {
+  0%, 72%  { transform: translateX(-130%) rotate(12deg); opacity: 0; }
+  80%      { opacity: 0.5; }
+  88%, 100% { transform: translateX(230%) rotate(12deg); opacity: 0; }
+}
+
 @layer utilities {
   .text-label {
     font-size: 11px;

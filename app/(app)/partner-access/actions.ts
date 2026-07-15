@@ -17,6 +17,11 @@ import {
 import { resolveRoomLocale } from "@/lib/partner-room-i18n";
 import { partnerRoomGuestPath } from "@/lib/partner-room-slug";
 import { roomHeroVideo } from "@/lib/partner-room-videos";
+import { roomHeroPhotoSet } from "@/lib/partner-room-photos";
+import {
+  generateRoomHeroImage,
+  removeRoomHeroImage,
+} from "@/lib/partner-room-hero.server";
 import {
   addExpectedGuest,
   addRoomTeamMember,
@@ -173,6 +178,12 @@ async function _updatePartnerRoomDetailsAction(opts: {
   summary?: string | null;
   welcomeMessage?: string | null;
   expiresAt?: string | null;
+  caneyTenantId?: string | null;
+  caneyPropertyId?: string | null;
+  vavPmsPropertyId?: string | null;
+  vavListingId?: string | null;
+  caneyOnboardingStatus?: string | null;
+  integrationNotes?: string | null;
 }): Promise<PartnerRoomActionResult> {
   const user = await requireUser();
 
@@ -190,6 +201,12 @@ async function _updatePartnerRoomDetailsAction(opts: {
     summary: opts.summary,
     welcomeMessage: opts.welcomeMessage,
     expiresAt: parseExpiresAt(opts.expiresAt),
+    caneyTenantId: opts.caneyTenantId,
+    caneyPropertyId: opts.caneyPropertyId,
+    vavPmsPropertyId: opts.vavPmsPropertyId,
+    vavListingId: opts.vavListingId,
+    caneyOnboardingStatus: opts.caneyOnboardingStatus,
+    integrationNotes: opts.integrationNotes,
   });
 
   if (!res.ok) return res;
@@ -478,8 +495,12 @@ async function _setRoomHeroVideoAction(opts: {
   heroVideoKey: string | null;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const user = await requireUser();
-  if (opts.heroVideoKey !== null && !roomHeroVideo(opts.heroVideoKey)) {
-    return { ok: false, error: "Unknown video" };
+  if (
+    opts.heroVideoKey !== null &&
+    !roomHeroVideo(opts.heroVideoKey) &&
+    !roomHeroPhotoSet(opts.heroVideoKey)
+  ) {
+    return { ok: false, error: "Unknown hero background" };
   }
   const row = await setRoomHeroVideo({
     workspaceId: user.workspaceId,
@@ -489,6 +510,35 @@ async function _setRoomHeroVideoAction(opts: {
   if (!row) return { ok: false, error: "Room not found" };
   revalidatePath(`/partner-access/rooms/${opts.roomId}`);
   return { ok: true };
+}
+
+async function _generateRoomHeroImageAction(opts: {
+  roomId: string;
+  themeKey?: string | null;
+}): Promise<
+  | { ok: true; themeKey: string; themeLabel: string; url: string }
+  | { ok: false; error: string }
+> {
+  const user = await requireUser();
+  const res = await generateRoomHeroImage({
+    workspaceId: user.workspaceId,
+    roomId: opts.roomId,
+    themeKey: opts.themeKey ?? null,
+  });
+  if (res.ok) revalidatePath(`/partner-access/rooms/${opts.roomId}`);
+  return res;
+}
+
+async function _removeRoomHeroImageAction(opts: {
+  roomId: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const user = await requireUser();
+  const res = await removeRoomHeroImage({
+    workspaceId: user.workspaceId,
+    roomId: opts.roomId,
+  });
+  if (res.ok) revalidatePath(`/partner-access/rooms/${opts.roomId}`);
+  return res;
 }
 
 async function _setRoomDemoLinkAction(opts: {
@@ -975,6 +1025,8 @@ export const addRoomLinkAction = withActionGuard("addRoomLinkAction", _addRoomLi
 export const updateRoomItemAction = withActionGuard("updateRoomItemAction", _updateRoomItemAction);
 export const setShareRoomSectionAction = withActionGuard("setShareRoomSectionAction", _setShareRoomSectionAction);
 export const setRoomHeroVideoAction = withActionGuard("setRoomHeroVideoAction", _setRoomHeroVideoAction);
+export const generateRoomHeroImageAction = withActionGuard("generateRoomHeroImageAction", _generateRoomHeroImageAction);
+export const removeRoomHeroImageAction = withActionGuard("removeRoomHeroImageAction", _removeRoomHeroImageAction);
 export const setRoomDemoLinkAction = withActionGuard("setRoomDemoLinkAction", _setRoomDemoLinkAction);
 export const deleteRoomItemAction = withActionGuard("deleteRoomItemAction", _deleteRoomItemAction);
 export const addRoomCommentAction = withActionGuard("addRoomCommentAction", _addRoomCommentAction);

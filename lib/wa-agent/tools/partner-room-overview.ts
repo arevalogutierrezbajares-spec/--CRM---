@@ -6,6 +6,12 @@ import {
 import { listPartnerNextStepsByRoom } from "@/db/queries/partner-next-steps";
 import { listRoomItems } from "@/db/queries/partner-repository";
 import { ROOM_HERO_VIDEOS, roomHeroVideo } from "@/lib/partner-room-videos";
+import { ROOM_HERO_PHOTO_SETS, roomHeroPhotoSet } from "@/lib/partner-room-photos";
+import {
+  HERO_IMAGE_THEMES,
+  heroImageTheme,
+  roomHeroImageUrl,
+} from "@/lib/partner-room-hero-images";
 import type { ToolEntry } from "./_types";
 import { ROOM_REF_PROPS, absUrl, resolveRoomRef, roomAdminUrl } from "./_partner-room";
 
@@ -55,6 +61,9 @@ export const partnerRoomOverview: ToolEntry = {
     );
     const availableDocs = shareable.filter((d) => !d.alreadyShared).slice(0, 40);
     const heroVideo = roomHeroVideo(room.heroVideoKey);
+    const heroPhotos = roomHeroPhotoSet(room.heroVideoKey);
+    const heroImageUrl = roomHeroImageUrl(room);
+    const heroImageThemeInfo = heroImageTheme(room.heroImageTheme);
     const brandLogos = await resolveRoomBrandLogos({
       workspaceId: ctx.workspaceId,
       brandLobIds: room.brandLobIds,
@@ -103,9 +112,14 @@ export const partnerRoomOverview: ToolEntry = {
         fix: "set_room_branding (brand_projects) — or auto-derived once documents are shared",
       },
       {
-        item: "Hero background video (optional)",
-        done: Boolean(heroVideo),
+        item: "Hero background video or photo set (optional)",
+        done: Boolean(heroVideo || heroPhotos),
         fix: "set_room_branding (hero_video)",
+      },
+      {
+        item: "Hero background image (optional, Grok-generated)",
+        done: Boolean(heroImageUrl),
+        fix: "set_room_branding (hero_image)",
       },
       {
         item: "Passcode protection (optional)",
@@ -141,7 +155,27 @@ export const partnerRoomOverview: ToolEntry = {
           heroVideo: heroVideo
             ? { key: heroVideo.key, label: heroVideo.label, posterUrl: absUrl(heroVideo.poster) }
             : null,
-          heroVideoOptions: ROOM_HERO_VIDEOS.map((v) => v.key),
+          heroPhotoSet: heroPhotos
+            ? {
+                key: heroPhotos.key,
+                label: heroPhotos.label,
+                posterUrl: absUrl(heroPhotos.images[0].src),
+              }
+            : null,
+          heroVideoOptions: [
+            ...ROOM_HERO_VIDEOS.map((v) => v.key),
+            ...ROOM_HERO_PHOTO_SETS.map((s) => s.key),
+          ],
+          heroImage: heroImageUrl
+            ? {
+                theme: room.heroImageTheme,
+                label: heroImageThemeInfo?.label ?? room.heroImageTheme,
+                imageUrl: absUrl(heroImageUrl),
+                // The guest hero prefers a video/photo preset when both are set.
+                visibleToGuests: !heroVideo && !heroPhotos,
+              }
+            : null,
+          heroImageOptions: [...HERO_IMAGE_THEMES.map((t) => t.key), "auto"],
         },
         sharedDocuments: liveShares.map((s) => ({
           shareId: s.id,

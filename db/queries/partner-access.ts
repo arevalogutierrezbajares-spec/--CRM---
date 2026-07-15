@@ -407,9 +407,23 @@ export async function updatePartnerRoomDetails(input: {
   summary?: string | null;
   welcomeMessage?: string | null;
   expiresAt?: Date | null;
+  /** When provided, updates platform-linkage columns (null clears). */
+  caneyTenantId?: string | null;
+  caneyPropertyId?: string | null;
+  vavPmsPropertyId?: string | null;
+  vavListingId?: string | null;
+  caneyOnboardingStatus?: string | null;
+  integrationNotes?: string | null;
 }) {
   const name = input.name.trim();
   if (!name) return { ok: false as const, error: "Room name is required" };
+
+  const trimOrNull = (v: string | null | undefined) => {
+    if (v === undefined) return undefined;
+    if (v === null) return null;
+    const t = v.trim();
+    return t.length ? t : null;
+  };
 
   const now = new Date();
   const room = await db.transaction(async (tx) => {
@@ -422,6 +436,24 @@ export async function updatePartnerRoomDetails(input: {
         summary: input.summary?.trim() || null,
         welcomeMessage: input.welcomeMessage?.trim() || null,
         expiresAt: input.expiresAt ?? null,
+        ...(input.caneyTenantId !== undefined
+          ? { caneyTenantId: trimOrNull(input.caneyTenantId) }
+          : {}),
+        ...(input.caneyPropertyId !== undefined
+          ? { caneyPropertyId: trimOrNull(input.caneyPropertyId) }
+          : {}),
+        ...(input.vavPmsPropertyId !== undefined
+          ? { vavPmsPropertyId: trimOrNull(input.vavPmsPropertyId) }
+          : {}),
+        ...(input.vavListingId !== undefined
+          ? { vavListingId: trimOrNull(input.vavListingId) }
+          : {}),
+        ...(input.caneyOnboardingStatus !== undefined
+          ? { caneyOnboardingStatus: trimOrNull(input.caneyOnboardingStatus) }
+          : {}),
+        ...(input.integrationNotes !== undefined
+          ? { integrationNotes: trimOrNull(input.integrationNotes) }
+          : {}),
         updatedAt: now,
       })
       .where(
@@ -443,6 +475,9 @@ export async function updatePartnerRoomDetails(input: {
       metadata: {
         partnerKind: input.partnerKind,
         expiresAt: input.expiresAt?.toISOString() ?? null,
+        caneyPropertyId: updated.caneyPropertyId,
+        vavPmsPropertyId: updated.vavPmsPropertyId,
+        caneyOnboardingStatus: updated.caneyOnboardingStatus,
       },
     });
 
@@ -724,6 +759,58 @@ export async function setRoomHeroVideo(input: {
     )
     .returning({ id: schema.partnerRooms.id });
   return updated ?? null;
+}
+
+/** Set (or clear, with nulls) a room's generated hero image. Returns the
+ *  previous storage path so callers can delete the replaced object. */
+export async function setRoomHeroImage(input: {
+  workspaceId: string;
+  roomId: string;
+  heroImageStoragePath: string | null;
+  heroImageTheme: string | null;
+  heroImagePrompt: string | null;
+}) {
+  const [previous] = await db
+    .select({ path: schema.partnerRooms.heroImageStoragePath })
+    .from(schema.partnerRooms)
+    .where(
+      and(
+        eq(schema.partnerRooms.workspaceId, input.workspaceId),
+        eq(schema.partnerRooms.id, input.roomId),
+      ),
+    )
+    .limit(1);
+  const [updated] = await db
+    .update(schema.partnerRooms)
+    .set({
+      heroImageStoragePath: input.heroImageStoragePath,
+      heroImageTheme: input.heroImageTheme,
+      heroImagePrompt: input.heroImagePrompt,
+      heroImageGeneratedAt: input.heroImageStoragePath ? new Date() : null,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(schema.partnerRooms.workspaceId, input.workspaceId),
+        eq(schema.partnerRooms.id, input.roomId),
+      ),
+    )
+    .returning({
+      id: schema.partnerRooms.id,
+      heroImageGeneratedAt: schema.partnerRooms.heroImageGeneratedAt,
+    });
+  if (!updated) return null;
+  return { ...updated, previousPath: previous?.path ?? null };
+}
+
+/** Public proxy lookup for /api/room-hero — path only, no room details. */
+export async function getRoomHeroImagePath(roomId: string): Promise<string | null> {
+  const [row] = await db
+    .select({ path: schema.partnerRooms.heroImageStoragePath })
+    .from(schema.partnerRooms)
+    .where(eq(schema.partnerRooms.id, roomId))
+    .limit(1);
+  return row?.path ?? null;
 }
 
 /** Attach (or clear, with null) a featured product demo on a room. The demo

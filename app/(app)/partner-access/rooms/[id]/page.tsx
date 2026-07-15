@@ -25,6 +25,8 @@ import { SectionLabel } from "@/components/dashboard/shared/section-label";
 import { AddDocsDialog } from "@/components/partner-access/add-docs-dialog";
 import { ClientLogoControl } from "@/components/partner-access/client-logo-control";
 import { HeroVideoPicker } from "@/components/partner-access/hero-video-picker";
+import { HeroImageGenerator } from "@/components/partner-access/hero-image-generator";
+import { roomHeroImageUrl } from "@/lib/partner-room-hero-images";
 import { RoomGuestsManager } from "@/components/partner-access/room-guests-manager";
 import { RoomDemoPicker } from "@/components/partner-access/room-demo-picker";
 import { RepositoryManager } from "@/components/partner-access/repository-manager";
@@ -35,6 +37,7 @@ import { RoomAccessLinkActions } from "@/components/partner-access/room-access-l
 import { partnerRoomGuestUrl } from "@/lib/partner-room-link.server";
 import { decryptRoomToken } from "@/lib/partner-access-token.server";
 import { RoomDetailsForm } from "@/components/partner-access/room-details-form";
+import { PlatformLinkageForm } from "@/components/partner-access/platform-linkage-form";
 import { RoomMessagesManager } from "@/components/partner-access/room-messages-manager";
 import { RoomPasscodeControls } from "@/components/partner-access/room-passcode-controls";
 import { RoomStatusActions } from "@/components/partner-access/room-status-actions";
@@ -42,6 +45,10 @@ import { ShareLedgerActions } from "@/components/partner-access/share-ledger-act
 import { SharePermissionsEditor } from "@/components/partner-access/share-permissions-editor";
 import { PartnerNextStepsManager } from "@/components/partner-access/partner-next-steps-manager";
 import { PartnerUploadsPanel } from "@/components/partner-access/partner-uploads-panel";
+import {
+  deriveLinkageChips,
+  type ChipTone,
+} from "@/lib/partner-access/platform-linkage";
 import {
   getPartnerAccessRoom,
   resolveRoomBrandLogos,
@@ -73,6 +80,13 @@ function statusVariant(status: string) {
   if (status === "paused" || status === "draft") return "warning";
   if (status === "revoked") return "danger";
   return "outline";
+}
+
+function chipVariant(tone: ChipTone) {
+  if (tone === "success") return "success" as const;
+  if (tone === "warning") return "warning" as const;
+  if (tone === "danger") return "danger" as const;
+  return "outline" as const;
 }
 
 function shareStatus(share: {
@@ -148,6 +162,13 @@ export default async function PartnerAccessRoomPage(props: { params: Params }) {
   }
 
   const { room } = detail;
+  const linkageChips = deriveLinkageChips({
+    caneyTenantId: room.caneyTenantId ?? null,
+    caneyPropertyId: room.caneyPropertyId ?? null,
+    vavPmsPropertyId: room.vavPmsPropertyId ?? null,
+    vavListingId: room.vavListingId ?? null,
+    caneyOnboardingStatus: room.caneyOnboardingStatus ?? null,
+  });
   const activeShares = detail.shares.filter((share) => !share.revokedAt);
   const brandLogosRes = await safeRead(
     () =>
@@ -231,6 +252,15 @@ export default async function PartnerAccessRoomPage(props: { params: Params }) {
                 {partnerRoomStatusLabel(room.status)}
               </Badge>
               <Badge variant="outline">{partnerKindLabel(room.partnerKind)}</Badge>
+              {linkageChips.map((chip) => (
+                <Badge
+                  key={chip.id}
+                  variant={chipVariant(chip.tone)}
+                  title={chip.detail}
+                >
+                  {chip.label}: {chip.detail}
+                </Badge>
+              ))}
             </div>
             <h1 className="mt-2 truncate text-2xl font-semibold tracking-tight">
               {room.name}
@@ -674,6 +704,38 @@ export default async function PartnerAccessRoomPage(props: { params: Params }) {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
+                  <DoorOpen className="h-4 w-4" />
+                  Platform linkage
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <p className="text-xs text-[var(--muted-foreground)]">
+                  Hard links to CaneyCloud PMS and VAV so this room is auditable
+                  against live inventory (packages, stay pattern, channel).
+                </p>
+                <PlatformLinkageForm
+                  room={{
+                    id: room.id,
+                    name: room.name,
+                    partnerKind: room.partnerKind as PartnerKind,
+                    language: room.locale,
+                    summary: room.summary,
+                    welcomeMessage: room.welcomeMessage,
+                    expiresAt: room.expiresAt?.toISOString() ?? null,
+                    caneyTenantId: room.caneyTenantId ?? null,
+                    caneyPropertyId: room.caneyPropertyId ?? null,
+                    vavPmsPropertyId: room.vavPmsPropertyId ?? null,
+                    vavListingId: room.vavListingId ?? null,
+                    caneyOnboardingStatus: room.caneyOnboardingStatus ?? null,
+                    integrationNotes: room.integrationNotes ?? null,
+                  }}
+                />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
                   <ImageIcon className="h-4 w-4" />
                   Co-branding
                 </CardTitle>
@@ -694,6 +756,17 @@ export default async function PartnerAccessRoomPage(props: { params: Params }) {
                     <HeroVideoPicker
                       roomId={room.id}
                       heroVideoKey={room.heroVideoKey ?? null}
+                    />
+                  </div>
+                </div>
+                <div className="mt-5 border-t border-[var(--border)] pt-4">
+                  <p className="text-sm font-medium">Generated hero image</p>
+                  <div className="mt-2">
+                    <HeroImageGenerator
+                      roomId={room.id}
+                      heroImageTheme={room.heroImageTheme ?? null}
+                      heroImageUrl={roomHeroImageUrl(room)}
+                      hasHeroVideo={Boolean(room.heroVideoKey)}
                     />
                   </div>
                 </div>

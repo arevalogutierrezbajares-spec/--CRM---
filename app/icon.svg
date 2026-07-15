@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <!-- AGB pillars mark (public/logos/crm.svg) on the brand ink tile, so the
+       favicon reads on both light and dark browser chrome. -->
+  <rect width="200" height="200" rx="42" fill="#161513"/>
+  <g transform="translate(22 22) scale(0.78)" fill="none" stroke="#F0EEE8" stroke-width="13" stroke-linejoin="miter">
+    <path d="M62 44 L84 44 L44 166 L8 166 Z"/>
+    <path d="M89 44 L111 44 L111 166 L89 166 Z"/>
+    <path d="M116 44 L138 44 L192 166 L156 166 Z"/>
+  </g>
+</svg>

@@ -31,6 +31,10 @@ import { requireUser } from "@/lib/current-user";
 import { repoSection, REPO_SECTION_OPTIONS } from "@/lib/partner-access";
 import { roomHeroVideo } from "@/lib/partner-room-videos";
 import { RoomHeroVideo } from "@/components/partner-access/room-hero-video";
+import { RoomHeroGallery } from "@/components/partner-access/room-hero-gallery";
+import { roomHeroImageUrl } from "@/lib/partner-room-hero-images";
+import { RoomHeroArchive } from "@/components/partner-access/room-hero-archive";
+import { roomHeroPhotoSet } from "@/lib/partner-room-photos";
 import { getPartnerAccessRoom } from "@/db/queries/partner-access";
 import { getDemoLinkById } from "@/db/queries/demo-links";
 import { DemoAccessCard } from "@/components/demo-access/demo-access-card";
@@ -84,6 +88,9 @@ export default async function PartnerRoomPreviewPage({ params }: { params: Param
   const shares = detail.shares.filter((s) => !s.revokedAt);
   const openSteps = nextSteps.filter((s) => !s.completedAt);
   const heroVideo = roomHeroVideo(room.heroVideoKey);
+  const heroPhotos = roomHeroPhotoSet(room.heroVideoKey);
+  const heroImage = roomHeroImageUrl(room);
+  const onHeroMedia = Boolean(heroVideo || heroPhotos || heroImage);
   const repoSections = REPO_SECTION_OPTIONS.map((option) => ({
     ...option,
     items: items.filter((it) => repoSection(it.category) === option.value),
@@ -138,18 +145,22 @@ export default async function PartnerRoomPreviewPage({ params }: { params: Param
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-5 py-5 md:px-8 md:py-8">
         <header
           className={`relative overflow-hidden rounded-xl border p-5 md:p-7 ${
-            heroVideo
+            onHeroMedia
               ? "border-black/20 lg:min-h-[300px] lg:flex lg:flex-col lg:justify-end"
               : "border-[var(--border)] bg-[var(--card)]"
           }`}
         >
-          {heroVideo && (
+          {heroVideo ? (
             <RoomHeroVideo
               mp4={heroVideo.mp4}
               webm={heroVideo.webm}
               poster={heroVideo.poster}
             />
-          )}
+          ) : heroPhotos ? (
+            <RoomHeroArchive images={heroPhotos.images} caption={heroPhotos.caption} />
+          ) : heroImage ? (
+            <RoomHeroGallery images={[heroImage]} />
+          ) : null}
           <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-3xl">
               <CoBrandLockup
@@ -161,7 +172,7 @@ export default async function PartnerRoomPreviewPage({ params }: { params: Param
                 <Badge variant="outline">{dict.partner.publicLabel}</Badge>
                 <span
                   className={`inline-flex items-center gap-1.5 text-xs ${
-                    heroVideo ? "text-white/80" : "text-[var(--muted-foreground)]"
+                    onHeroMedia ? "text-white/80" : "text-[var(--muted-foreground)]"
                   }`}
                 >
                   <Lock className="h-3.5 w-3.5" />
@@ -170,14 +181,14 @@ export default async function PartnerRoomPreviewPage({ params }: { params: Param
               </div>
               <h1
                 className={`mt-4 text-3xl font-semibold tracking-tight md:text-4xl ${
-                  heroVideo ? "text-white" : ""
+                  onHeroMedia ? "text-white" : ""
                 }`}
               >
                 {room.name}
               </h1>
               <p
                 className={`mt-3 max-w-2xl text-sm leading-6 ${
-                  heroVideo ? "text-white/85" : "text-[var(--muted-foreground)]"
+                  onHeroMedia ? "text-white/85" : "text-[var(--muted-foreground)]"
                 }`}
               >
                 {room.welcomeMessage ?? "A curated view of the project materials, context, and next steps shared with you."}
@@ -187,7 +198,7 @@ export default async function PartnerRoomPreviewPage({ params }: { params: Param
               {openSteps.length > 0 && (
                 <span
                   className={`inline-flex items-center gap-2 rounded-full border px-3.5 py-2 text-sm font-medium ${
-                    heroVideo
+                    onHeroMedia
                       ? "border-white/25 bg-white/10 text-white backdrop-blur"
                       : "border-[var(--border)] bg-[var(--background)]/60 backdrop-blur"
                   }`}
@@ -200,7 +211,7 @@ export default async function PartnerRoomPreviewPage({ params }: { params: Param
               )}
               <span
                 className={`inline-flex items-center gap-2 rounded-full border px-3.5 py-2 text-sm ${
-                  heroVideo
+                  onHeroMedia
                     ? "border-white/25 bg-white/10 text-white backdrop-blur"
                     : "border-[var(--border)] bg-[var(--background)]/60 backdrop-blur"
                 }`}
@@ -213,7 +224,7 @@ export default async function PartnerRoomPreviewPage({ params }: { params: Param
                     className={`relative inline-flex h-2 w-2 rounded-full ${
                       isFreshUpdate
                         ? "bg-emerald-400"
-                        : heroVideo
+                        : onHeroMedia
                           ? "bg-white/40"
                           : "bg-[var(--muted-foreground)]/40"
                     }`}

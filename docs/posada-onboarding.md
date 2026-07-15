@@ -110,8 +110,13 @@ Unit tests: `npx vitest run __tests__/unit/posada-intake-contract.test.ts`.
 - **Works and degrades gracefully today.** Until the PMS side is live the wizard
   shows the honest "Onboarding no está habilitado en el PMS…" message instead of
   breaking.
+- **Live API (2026-07-14):** `POST /api/v1/onboarding/sessions/{id}/intake` is
+  **not mounted** on Cloud Run (404). Staff property-onboarding + workbook
+  import remain the real path for complex posadas (e.g. Ucaima packages).
 - **For real submissions to succeed** the PMS needs: the onboarding pipeline
   deployed, `FF_ONBOARDING=1`, and `ONBOARDING_IMPORT_SECRET` set.
+- **Platform linkage** (partner rooms → Caney/VAV ids) lives on each partner
+  room page — see `docs/checklists/INTEGRATION-CLOSE-LOOP-CRM-CC-VAV.md`.
 - **No sidebar nav entry yet** — reachable directly at `/posada-onboarding`
   (add a nav link when you want it surfaced).
 

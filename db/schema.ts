@@ -905,12 +905,32 @@ export const partnerRooms = pgTable("partner_rooms", {
   brandLobIds: jsonb("brand_lob_ids").$type<string[]>(),
   // Preset background video for the room hero (lib/partner-room-videos). Null = none.
   heroVideoKey: text("hero_video_key"),
+  // Generated hero image (xAI Grok, lib/partner-room-hero-images). Storage path
+  // into agb-project-files; served via /api/room-hero/[roomId]. A set video
+  // takes precedence over the image in the guest hero.
+  heroImageStoragePath: text("hero_image_storage_path"),
+  heroImageTheme: text("hero_image_theme"),
+  heroImagePrompt: text("hero_image_prompt"),
+  heroImageGeneratedAt: timestamp("hero_image_generated_at", { withTimezone: true }),
   // Optional featured product demo. Rendered as a "Demo access" card inside the
   // room. Cleared (not cascaded) if the demo link is deleted. Defined lazily so
   // the forward reference to demoLinks (declared later in this file) resolves.
   demoLinkId: uuid("demo_link_id").references((): AnyPgColumn => demoLinks.id, {
     onDelete: "set null",
   }),
+  // ── Platform linkage (CaneyCloud PMS + VAV marketplace) ──────────────────
+  // Free-text UUID strings so we can store ids without a live FK across DBs.
+  caneyTenantId: text("caney_tenant_id"),
+  caneyPropertyId: text("caney_property_id"),
+  /** VAV pms_properties.pms_property_id — should match caneyPropertyId when linked. */
+  vavPmsPropertyId: text("vav_pms_property_id"),
+  vavListingId: text("vav_listing_id"),
+  /**
+   * Ops readiness vocabulary (app-enforced):
+   * not_started | configured | awaiting_channel | live | blocked
+   */
+  caneyOnboardingStatus: text("caney_onboarding_status"),
+  integrationNotes: text("integration_notes"),
   createdBy: uuid("created_by")
     .notNull()
     .references(() => users.id),

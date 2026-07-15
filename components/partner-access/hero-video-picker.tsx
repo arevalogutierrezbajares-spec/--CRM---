@@ -6,10 +6,12 @@ import { Check, VideoOff } from "lucide-react";
 import { toast } from "sonner";
 import { setRoomHeroVideoAction } from "@/app/(app)/partner-access/actions";
 import { ROOM_HERO_VIDEOS } from "@/lib/partner-room-videos";
+import { ROOM_HERO_PHOTO_SETS } from "@/lib/partner-room-photos";
 
 /**
- * Pick the ambient background video for the room hero — one of the preset
- * loops, or none. Thumbnails are the poster frames; click to apply.
+ * Pick the ambient background for the room hero — a preset video loop, an
+ * archive photo set (living-film treatment), or none. Thumbnails are the
+ * poster frames; click to apply. One choice per room (shared preset key).
  */
 export function HeroVideoPicker({
   roomId,
@@ -29,7 +31,7 @@ export function HeroVideoPicker({
     startTransition(async () => {
       const res = await setRoomHeroVideoAction({ roomId, heroVideoKey: key });
       if (res.ok) {
-        toast.success(key ? "Background video updated" : "Background video removed");
+        toast.success(key ? "Hero background updated" : "Hero background removed");
         router.refresh();
       } else {
         setSelected(previous);
@@ -81,6 +83,41 @@ export function HeroVideoPicker({
               />
               <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-1.5 pb-1 pt-3 text-left text-[10px] font-medium text-white">
                 {video.label}
+              </span>
+              {active && (
+                <span className="absolute right-1 top-1 grid h-4 w-4 place-items-center rounded-full bg-[var(--primary)] text-[var(--primary-foreground)]">
+                  <Check className="h-3 w-3" />
+                </span>
+              )}
+            </button>
+          );
+        })}
+        {ROOM_HERO_PHOTO_SETS.map((set) => {
+          const active = selected === set.key;
+          return (
+            <button
+              key={set.key}
+              type="button"
+              onClick={() => apply(set.key)}
+              disabled={pending}
+              aria-pressed={active}
+              className={`group relative aspect-video overflow-hidden rounded-lg border transition-colors ${
+                active
+                  ? "border-[var(--primary)] ring-1 ring-[var(--primary)]"
+                  : "border-[var(--border)] hover:border-[var(--border-emphasis,var(--border))]"
+              }`}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={set.images[0].src}
+                alt={set.label}
+                className="h-full w-full object-cover sepia-[.3] transition-transform group-hover:scale-105"
+              />
+              <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-1.5 pb-1 pt-3 text-left text-[10px] font-medium text-white">
+                {set.label}
+              </span>
+              <span className="absolute left-1 top-1 rounded bg-black/60 px-1 py-px text-[9px] font-medium uppercase tracking-wide text-white/90">
+                Film
               </span>
               {active && (
                 <span className="absolute right-1 top-1 grid h-4 w-4 place-items-center rounded-full bg-[var(--primary)] text-[var(--primary-foreground)]">
