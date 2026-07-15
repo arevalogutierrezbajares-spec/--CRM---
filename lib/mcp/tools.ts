@@ -28,6 +28,7 @@ export const MCP_TOOL_NAMES = [
   "list_reminders",
   // Write / upload
   "create_contact",
+  "add_channel",
   "log_touch",
   "log_meeting",
   "add_action_item",
@@ -47,6 +48,8 @@ export const MCP_TOOL_NAMES = [
   "set_room_branding",
   "add_room_next_step",
   "get_partner_room_link",
+  "upload_room_file",
+  "upload_room_logo",
   // Demos — feature a product demo as a "Demo access" card in a room
   "list_demos",
   "feature_room_demo",

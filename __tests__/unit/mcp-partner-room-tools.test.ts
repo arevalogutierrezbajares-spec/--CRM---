@@ -11,6 +11,8 @@ const PARTNER_ROOM_TOOLS = [
   "set_room_branding",
   "add_room_next_step",
   "get_partner_room_link",
+  "upload_room_file",
+  "upload_room_logo",
   "list_demos",
   "feature_room_demo",
 ] as const;
@@ -35,6 +37,19 @@ describe("partner room MCP tools", () => {
       const schema = def.inputSchema as { type: string; properties: unknown };
       expect(schema.type).toBe("object");
       expect(schema.properties).toBeDefined();
+    }
+  });
+
+  it("add_channel (email/phone capture) is exposed over MCP", () => {
+    const exposed = new Set(MCP_TOOL_DEFINITIONS.map((d) => d.name));
+    expect(exposed.has("add_channel")).toBe(true);
+  });
+
+  it("inline-upload tools require filename and content_base64", () => {
+    for (const name of ["upload_room_file", "upload_room_logo"] as const) {
+      const required = TOOLS[name].definition.input_schema.required as string[];
+      expect(required, `${name} should require filename`).toContain("filename");
+      expect(required, `${name} should require content_base64`).toContain("content_base64");
     }
   });
 

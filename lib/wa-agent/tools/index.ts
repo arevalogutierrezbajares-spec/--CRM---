@@ -43,6 +43,8 @@ import { updatePartnerRoom } from "./update-partner-room";
 import { setRoomBranding } from "./set-room-branding";
 import { addRoomNextStep } from "./add-room-next-step";
 import { getRoomLink } from "./get-room-link";
+import { uploadRoomFile } from "./upload-room-file";
+import { uploadRoomLogo } from "./upload-room-logo";
 import { listDemos } from "./list-demos";
 import { featureRoomDemo } from "./feature-room-demo";
 
@@ -84,6 +86,8 @@ export const TOOLS: Record<string, ToolEntry> = {
   set_room_branding: setRoomBranding,
   add_room_next_step: addRoomNextStep,
   get_partner_room_link: getRoomLink,
+  upload_room_file: uploadRoomFile,
+  upload_room_logo: uploadRoomLogo,
   list_demos: listDemos,
   feature_room_demo: featureRoomDemo,
 };
