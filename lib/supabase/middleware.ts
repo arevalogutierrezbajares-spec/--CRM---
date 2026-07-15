@@ -16,6 +16,7 @@ const PUBLIC_PATHS = [
   "/demo/", // Public product-demo access pages authenticate by share token.
   "/api/access/", // Partner Access API routes (upload sign/finalize, next-step toggle) — auth by token hash.
   "/api/contact-logo/", // Public brand-logo proxy for co-branded rooms (GET streams the image; POST self-guards with requireUser).
+  "/api/room-hero/", // Public generated-hero proxy for partner rooms (GET-only route streams background art).
   "/f/", // Retired F&F Pitch Feedback links — public so old links show a notice.
   "/api/health",
   "/api/whatsapp/webhook", // Meta — verifies via WA_VERIFY_TOKEN + HMAC
