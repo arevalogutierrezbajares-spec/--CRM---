@@ -27,7 +27,10 @@ let package = Package(
         .executableTarget(
             name: "AGBCaptureHelper",
             dependencies: ["CaptureCore"],
-            path: "Sources/AGBCaptureHelper"
+            path: "Sources/AGBCaptureHelper",
+            resources: [
+                .copy("Resources"),
+            ]
         ),
         .testTarget(
             name: "CaptureCoreTests",

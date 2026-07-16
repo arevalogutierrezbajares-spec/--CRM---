@@ -2,7 +2,7 @@ import AppKit
 import CaptureCore
 import ServiceManagement
 
-// AGBCaptureHelper — macOS menu-bar call capture companion for AGB CRM.
+// AGB AI — macOS menu-bar call capture companion for AGB CRM.
 //
 // Modes:
 //   (no args)                 menu-bar app (accessory; no Dock icon)
@@ -14,7 +14,7 @@ import ServiceManagement
 let arguments = CommandLine.arguments
 
 if arguments.contains("--version") {
-    print("AGBCaptureHelper \(AudioConstants.helperVersion) (protocol \(AudioConstants.protocolVersion))")
+    print("AGB AI \(AudioConstants.helperVersion) (protocol \(AudioConstants.protocolVersion))")
     exit(0)
 }
 
@@ -28,7 +28,7 @@ if arguments.contains("--install-login") || arguments.contains("--uninstall-logi
     let install = arguments.contains("--install-login")
     guard Bundle.main.bundleURL.pathExtension == "app" else {
         FileHandle.standardError.write(Data("""
-        --install-login must run from inside AGBCaptureHelper.app.
+        --install-login must run from inside "AGB AI.app".
         Build the bundle first:  ./make-app.sh --install-login
 
         """.utf8))
@@ -37,10 +37,10 @@ if arguments.contains("--install-login") || arguments.contains("--uninstall-logi
     do {
         if install {
             try SMAppService.mainApp.register()
-            print("Registered AGBCaptureHelper as a login item (status: \(SMAppService.mainApp.status.rawValue)).")
+            print("Registered AGB AI as a login item (status: \(SMAppService.mainApp.status.rawValue)).")
         } else {
             try SMAppService.mainApp.unregister()
-            print("Unregistered AGBCaptureHelper login item.")
+            print("Unregistered AGB AI login item.")
         }
         exit(0)
     } catch {

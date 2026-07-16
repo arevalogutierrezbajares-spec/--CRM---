@@ -1,6 +1,6 @@
 # Call Capture — Status & Pickup Notes
 
-_Last updated: 2026-06-11. Working doc — keep your test notes at the bottom._
+_Last updated: 2026-07-16. Working doc — keep your test notes at the bottom._
 
 Full-call capture for the AGB CRM: a macOS Helper records both sides of a call
 (your mic + the other party's audio), uploads to the CRM, which transcribes
@@ -11,8 +11,11 @@ Full-call capture for the AGB CRM: a macOS Helper records both sides of a call
 - **Mac Helper:** `macos-helper/` (Swift, SPM)
 - **Windows Helper:** `windows-helper/` (C#/.NET — protocol-verified, needs a Windows build)
 - **Cofounder download page:** `/capture` in the CRM
+- **Local free STT / multi-speaker:** `docs/LOCAL-DIARIZATION-PLAN.md` + `scripts/local-transcribe/`
 
 ## What works (verified)
+- ✅ **In-person meeting mode (2026-07-15)** — menu **Start Meeting Recording…** (⌘M): mic-only room capture, no system-audio permission required, live labels as `Room` / `Room (name)`, CRM `sourceApp=In-Person Meeting`, no false `participant_channel_silent` flag.
+- ✅ **Multi-speaker D1–D3 (2026-07-16, code complete — live verify pending)** — meetings assemble mono L-channel WAV → optional local WhisperX/Vibe/whisper.cpp → `precomputedTranscript` on finalize (skips Deepgram). CRM stores `speaker_map` + `transcript_engine`; `/record` maps `SPEAKER_00…` → names and can re-file brief. Configure panel exposes local STT backend. Migration `0025_speaker_map.sql`.
 - ✅ **Capture both sides with headphones** — proven on real calls (WhatsApp/Zoom/Meet): both channels transcribed, attributed (You vs the contact), filed with an AI brief + action items.
 - ✅ **Post-call transcript + brief + action items + contact match** → `/record`.
 - ✅ **Live transcript window** — streams during the call (Deepgram WS, fixed auth + deadlock; verified 17 live captions, connection holds).

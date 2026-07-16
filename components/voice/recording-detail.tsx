@@ -23,6 +23,7 @@ type Utterance = {
   start: number;
   end: number;
   text: string;
+  diarizationId?: string;
 };
 
 type RecordingDetail = {
@@ -33,6 +34,8 @@ type RecordingDetail = {
   durationSecs: number | null;
   createdAt: string;
   utterances: Utterance[] | null;
+  speakerMap: Record<string, string> | null;
+  transcriptEngine: string | null;
   channels: number;
   sourceApp: string | null;
   partial: boolean;
@@ -69,6 +72,37 @@ const FLAG_COPY: Record<string, string> = {
     "The participants' side is near-silent — system audio may not have been captured.",
 };
 
+function extractClusters(utterances: Utterance[] | null): string[] {
+  if (!utterances?.length) return [];
+  const set = new Set<string>();
+  for (const u of utterances) {
+    if (u.diarizationId?.startsWith("SPEAKER_")) set.add(u.diarizationId);
+    else if (u.speaker.startsWith("SPEAKER_")) set.add(u.speaker);
+    else {
+      const m = u.speaker.match(/(SPEAKER_\d+)/);
+      if (m) set.add(m[1]);
+    }
+  }
+  return [...set].sort();
+}
+
+function labelForUtterance(
+  u: Utterance,
+  map: Record<string, string>,
+  founderLabel: string,
+  participantLabel: string,
+): string {
+  const key = u.diarizationId ?? u.speaker;
+  if (map[key]) return map[key];
+  const m = key.match(/(SPEAKER_\d+)/);
+  if (m && map[m[1]]) return map[m[1]];
+  if (u.speaker === "founder" || u.speaker.startsWith("founder:")) return founderLabel;
+  if (u.speaker === "participant" || u.speaker.startsWith("participant:"))
+    return participantLabel;
+  if (u.speaker.startsWith("SPEAKER_")) return u.speaker;
+  return u.channel === 0 ? founderLabel : participantLabel;
+}
+
 export function RecordingDetail({ id }: { id: string }) {
   const router = useRouter();
   const [rec, setRec] = useState<RecordingDetail | null>(null);
@@ -79,6 +113,8 @@ export function RecordingDetail({ id }: { id: string }) {
   const [editingConsent, setEditingConsent] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [mapDraft, setMapDraft] = useState<Record<string, string>>({});
+  const [refiling, setRefiling] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -91,6 +127,7 @@ export function RecordingDetail({ id }: { id: string }) {
           setRec(body);
           setTitleDraft(body.title);
           setConsentDraft(body.consentNote ?? "");
+          setMapDraft(body.speakerMap ?? {});
         }
       } catch {
         if (!cancelled) setError("Could not load this recording.");
@@ -139,8 +176,11 @@ export function RecordingDetail({ id }: { id: string }) {
     );
   }
 
-  const founderLabel = "You";
+  const isMeeting = rec.sourceApp === "In-Person Meeting";
+  const founderLabel = isMeeting ? "Room" : "You";
   const participantLabel = rec.contactName ?? "Participant";
+  const clusters = extractClusters(rec.utterances);
+  const speakerMap = rec.speakerMap ?? {};
 
   return (
     <div className="space-y-6">
@@ -295,6 +335,102 @@ export function RecordingDetail({ id }: { id: string }) {
         </div>
       )}
 
+      {rec.transcriptEngine && (
+        <p className="text-[11px] text-[var(--muted-foreground)]">
+          Transcript engine: <span className="font-mono">{rec.transcriptEngine}</span>
+        </p>
+      )}
+
+      {/* Multi-speaker map (D1) */}
+      {clusters.length > 0 && (
+        <div className="rounded-md border border-[var(--border)] p-3 space-y-3">
+          <div className="text-xs font-medium uppercase tracking-wide text-[var(--muted-foreground)]">
+            Speakers
+          </div>
+          <p className="text-xs text-[var(--muted-foreground)]">
+            Map diarization clusters to real names so notes and CRM show who said what.
+          </p>
+          <div className="space-y-2">
+            {clusters.map((id) => (
+              <div key={id} className="flex items-center gap-2">
+                <span className="w-24 shrink-0 font-mono text-[11px] text-[var(--muted-foreground)]">
+                  {id}
+                </span>
+                <input
+                  value={mapDraft[id] ?? ""}
+                  onChange={(e) =>
+                    setMapDraft((m) => ({ ...m, [id]: e.target.value }))
+                  }
+                  placeholder="e.g. Carlos"
+                  className="min-w-0 flex-1 rounded-md border border-[var(--border)] bg-transparent px-2 py-1.5 text-sm"
+                  maxLength={120}
+                />
+              </div>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              disabled={saving}
+              onClick={async () => {
+                setSaving(true);
+                try {
+                  const res = await fetch(`/api/voice/recording/${id}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ speakerMap: mapDraft }),
+                  });
+                  const body = (await res.json().catch(() => ({}))) as {
+                    transcript?: string;
+                  };
+                  setRec({
+                    ...rec,
+                    speakerMap: mapDraft,
+                    transcript: body.transcript ?? rec.transcript,
+                  });
+                } finally {
+                  setSaving(false);
+                }
+              }}
+            >
+              Save speaker names
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={refiling || saving}
+              onClick={async () => {
+                setRefiling(true);
+                try {
+                  const res = await fetch(`/api/voice/recording/${id}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ speakerMap: mapDraft, refile: true }),
+                  });
+                  const body = (await res.json().catch(() => ({}))) as {
+                    transcript?: string;
+                    title?: string;
+                    brief?: string;
+                  };
+                  setRec({
+                    ...rec,
+                    speakerMap: mapDraft,
+                    transcript: body.transcript ?? rec.transcript,
+                    title: body.title ?? rec.title,
+                    brief: body.brief ?? rec.brief,
+                  });
+                  if (body.title) setTitleDraft(body.title);
+                } finally {
+                  setRefiling(false);
+                }
+              }}
+            >
+              {refiling ? "Re-filing…" : "Save + re-file brief"}
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Dialogue transcript (FR-CALL-ATT-2) */}
       <div>
         <div className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--muted-foreground)]">
@@ -303,20 +439,27 @@ export function RecordingDetail({ id }: { id: string }) {
         {rec.utterances && rec.utterances.length > 0 ? (
           <div className="max-h-[32rem] space-y-2 overflow-y-auto rounded-md border border-[var(--border)] p-3">
             {rec.utterances.map((u, i) => {
-              const isFounder = u.speaker === "founder";
+              const label = labelForUtterance(
+                u,
+                { ...speakerMap, ...mapDraft },
+                founderLabel,
+                participantLabel,
+              );
+              const isFounder =
+                u.speaker === "founder" ||
+                u.speaker.startsWith("founder:") ||
+                (u.channel === 0 && !u.speaker.startsWith("SPEAKER_"));
               return (
-                <div key={i} className={`flex ${isFounder ? "justify-end" : "justify-start"}`}>
+                <div key={i} className={`flex ${isFounder && !isMeeting ? "justify-end" : "justify-start"}`}>
                   <div
                     className={`max-w-[85%] rounded-lg px-3 py-2 text-sm leading-relaxed ${
-                      isFounder
+                      isFounder && !isMeeting
                         ? "bg-[var(--primary)]/10 text-[var(--foreground)]"
                         : "bg-[var(--muted)]/40 text-[var(--foreground)]"
                     }`}
                   >
                     <div className="mb-0.5 flex items-baseline gap-2 text-[10px] uppercase tracking-wide text-[var(--muted-foreground)]">
-                      <span className="font-semibold">
-                        {isFounder ? founderLabel : participantLabel}
-                      </span>
+                      <span className="font-semibold">{label}</span>
                       <span>{fmtTs(u.start)}</span>
                     </div>
                     {u.text}

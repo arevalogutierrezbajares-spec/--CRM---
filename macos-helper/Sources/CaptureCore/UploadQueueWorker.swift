@@ -249,11 +249,19 @@ public final class UploadQueueWorker {
         snap = spooler.snapshot
         guard snap.readyToFinalize else { return }
 
+        // Meetings: try free local STT+diarize before finalize (D2/D3).
+        var precomputed: CaptureAPIClient.FinalizeBody.PrecomputedTranscript? = nil
+        if snap.kind.isMeeting {
+            precomputed = tryLocalTranscribe(spooler: spooler)
+        }
+
         let body = CaptureAPIClient.FinalizeBody(
             endedAtISO: snap.endedAt ?? ISO8601.string(from: Date()),
             durationSecs: snap.durationSecs ?? Int(spooler.spooledSeconds.rounded()),
             totalChunks: snap.seqsWritten.count,
-            partial: snap.partial
+            partial: snap.partial,
+            contactName: snap.contactName,
+            precomputedTranscript: precomputed
         )
 
         let finalize = try await client.finalizeRecovering(
@@ -281,6 +289,53 @@ public final class UploadQueueWorker {
         // 4b. Confirmed upload → local buffers deleted (NFR-CALL-SEC-1).
         try store.deleteSession(spooler)
         onSessionFinalized?(outcome)
+    }
+
+    // MARK: - Local free STT (meetings)
+
+    /// Assemble mono L channel and run WhisperX/Vibe/whisper.cpp when configured.
+    /// Returns nil on any failure so finalize can fall back to Deepgram.
+    private func tryLocalTranscribe(spooler: ChunkSpooler) -> CaptureAPIClient.FinalizeBody.PrecomputedTranscript? {
+        let cfg = HelperConfig.effective()
+        guard cfg.localTranscribeEnabled else {
+            log.info("local-stt disabled in config", category: "local-stt")
+            return nil
+        }
+        let backend = LocalTranscribeBackendId(rawValue: cfg.localTranscribeBackend) ?? .auto
+        if backend == .off { return nil }
+
+        let monoURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("agb-mono-\(spooler.localId).wav")
+        defer { try? FileManager.default.removeItem(at: monoURL) }
+
+        do {
+            try MonoWavAssembler.assembleLeftChannel(spooler: spooler, dest: monoURL)
+        } catch {
+            log.warn("local-stt mono assemble failed: \(error.localizedDescription)", category: "local-stt")
+            return nil
+        }
+
+        emitState(.uploading) // keep UI busy indicator while local STT runs
+        onError?("Transcribing locally (free, offline)…")
+
+        do {
+            let opts = LocalTranscribeRunner.Opts(
+                backend: backend,
+                explicitCommand: cfg.localTranscribeCommand,
+                model: cfg.localTranscribeModel,
+                timeoutSecs: cfg.localTranscribeTimeoutSecs,
+                repoRootHint: URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("AGB-CRM")
+            )
+            let result = try LocalTranscribeRunner.transcribe(wav: monoURL, opts: opts)
+            log.info(
+                "local-stt ok engine=\(result.engine) utterances=\(result.utterances.count)",
+                category: "local-stt"
+            )
+            return CaptureAPIClient.FinalizeBody.PrecomputedTranscript(result)
+        } catch {
+            log.warn("local-stt failed: \(error.localizedDescription) — cloud finalize will run", category: "local-stt")
+            return nil
+        }
     }
 
     // MARK: - Bookkeeping

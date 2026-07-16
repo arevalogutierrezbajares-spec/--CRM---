@@ -31,12 +31,16 @@ public final class SpoolStore {
     public func createSession(localId: String = UUID().uuidString,
                               startedAt: Date = Date(),
                               sourceApp: String? = nil,
+                              captureKind: CaptureKind = .call,
                               chunkSeconds: Int = AudioConstants.chunkSeconds) throws -> ChunkSpooler {
         let dir = rootURL.appendingPathComponent("session-\(localId)", isDirectory: true)
         try HelperPaths.ensureDirectory(dir)
+        let kind = captureKind
+        let app = kind.isMeeting ? CaptureKind.sourceAppMeeting : sourceApp
         let manifest = SessionManifest(sessionLocalId: localId,
                                        startedAt: startedAt,
-                                       sourceApp: sourceApp,
+                                       sourceApp: app,
+                                       captureKind: kind,
                                        chunkSeconds: chunkSeconds)
         let spooler = try ChunkSpooler(directory: dir, manifest: manifest)
         lock.lock(); cache[cacheKey(dir)] = spooler; lock.unlock()

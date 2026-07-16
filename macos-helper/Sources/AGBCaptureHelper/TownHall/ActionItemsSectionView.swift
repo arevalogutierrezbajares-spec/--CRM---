@@ -11,7 +11,7 @@ final class ActionItemsSectionView: TownHallSectionView, NSTableViewDataSource, 
     private let (scroll, table) = thMakeTable()
     private lazy var empty = thEmptyState(symbol: "checklist",
                                           title: "Nothing open",
-                                          subtitle: "Add an action item below.")
+                                          subtitle: "Add a task below, or open the full Daily board in CRM.")
 
     private let titleInput = THInput(placeholder: "New action item…  (↩ to add)")
     private let projectChip = THMenuButton(symbol: "number")
@@ -33,7 +33,13 @@ final class ActionItemsSectionView: TownHallSectionView, NSTableViewDataSource, 
         table.dataSource = self
         table.delegate = self
 
-        let header = thSectionLabel("ACTION ITEMS")
+        let title = thSectionLabel("ACTION ITEMS")
+        let openCRM = THButton(title: "Open Daily in CRM", style: .plain, symbol: "arrow.up.right",
+                               target: self, action: #selector(openCRMDaily))
+        let header = NSStackView(views: [title, NSView(), openCRM])
+        header.orientation = .horizontal
+        header.alignment = .centerY
+        header.spacing = 8
 
         titleInput.field.target = self
         titleInput.field.action = #selector(add)
@@ -63,8 +69,9 @@ final class ActionItemsSectionView: TownHallSectionView, NSTableViewDataSource, 
 
         addSubview(header); addSubview(scroll); addSubview(empty); addSubview(form)
         NSLayoutConstraint.activate([
-            header.topAnchor.constraint(equalTo: topAnchor, constant: 16),
-            header.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 20),
+            header.topAnchor.constraint(equalTo: topAnchor, constant: 14),
+            header.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
+            header.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
 
             scroll.topAnchor.constraint(equalTo: header.bottomAnchor, constant: 8),
             scroll.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
@@ -80,6 +87,12 @@ final class ActionItemsSectionView: TownHallSectionView, NSTableViewDataSource, 
         ])
     }
 
+    @objc private func openCRMDaily() {
+        if let url = HelperConfig.effective().crmWebURL(path: "/dashboard") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
     func setProjects(_ projects: [ProjectRef]) {
         self.projects = projects
         projectChip.setTitles(["No project"] + projects.map { $0.title })
@@ -88,11 +101,12 @@ final class ActionItemsSectionView: TownHallSectionView, NSTableViewDataSource, 
     override func reload() {
         run { [weak self] client in
             let items = try await client.getActionItems()
-            self?.apply(items)
+            self?.apply(items: items)
         }
     }
 
-    private func apply(_ items: [ActionItem]) {
+    /// Poller / external push — same apply path as a manual reload.
+    func apply(items: [ActionItem]) {
         self.items = items
         empty.isHidden = !items.isEmpty
         table.reloadData()
@@ -115,7 +129,7 @@ final class ActionItemsSectionView: TownHallSectionView, NSTableViewDataSource, 
         run { [weak self] client in
             _ = try await client.createActionItem(title: title, projectId: projectId, dueDate: dueDate, priority: priority)
             let items = try await client.getActionItems()
-            self?.apply(items)
+            self?.apply(items: items)
             self?.onMutation?()
         }
     }
@@ -127,7 +141,7 @@ final class ActionItemsSectionView: TownHallSectionView, NSTableViewDataSource, 
         run { [weak self] client in
             try await client.setActionItemDone(id: id, done: done)
             let items = try await client.getActionItems()
-            self?.apply(items)
+            self?.apply(items: items)
             self?.onMutation?()
         }
     }

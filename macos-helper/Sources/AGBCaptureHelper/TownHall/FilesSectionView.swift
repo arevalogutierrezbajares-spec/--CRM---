@@ -1,22 +1,25 @@
 import AppKit
 import CaptureCore
 
-/// Project files: pick a line of business (chip), browse its files (type icon +
-/// size, Open in browser), and upload via the Upload button or by dropping files
-/// anywhere on the list. Uploads run the 3-step sign→PUT→finalize flow.
+/// Project files browser: pick a portfolio unit, list files, open HTML decks and
+/// other files correctly (download via capture view proxy → open locally so
+/// presentations render — never open Supabase signed URLs for HTML).
 final class FilesSectionView: TownHallSectionView, NSTableViewDataSource, NSTableViewDelegate {
 
     private var lobs: [LobRef] = []
     private var files: [ProjectFile] = []
     private var selectedLobId: String?
+    private var opening = false
 
     private let lobChip = THMenuButton(symbol: "folder")
     private let (scroll, table) = thMakeTable()
     private let dropZone = DropZoneView()
     private let status = thMetaLabel("")
-    private lazy var empty = thEmptyState(symbol: "tray.and.arrow.down",
-                                          title: "No files here yet",
-                                          subtitle: "Drop files anywhere, or use Upload.")
+    private lazy var empty = thEmptyState(
+        symbol: "doc.richtext",
+        title: "No files yet",
+        subtitle: "Drop HTML decks, PDFs, or docs here — double-click to open."
+    )
 
     var onLobsNeeded: (() -> [LobRef])?
 
@@ -29,14 +32,21 @@ final class FilesSectionView: TownHallSectionView, NSTableViewDataSource, NSTabl
     private func build() {
         table.dataSource = self
         table.delegate = self
+        table.doubleAction = #selector(rowDoubleClicked)
+        table.target = self
+        table.intercellSpacing = NSSize(width: 0, height: 4)
 
         lobChip.maxWidth = 220
-        lobChip.setTitles(["No projects"])
+        lobChip.setTitles(["Select project…"])
         lobChip.onSelect = { [weak self] idx in self?.lobChosen(idx) }
         let uploadBtn = THButton(title: "Upload", style: .primary, symbol: "arrow.up.doc",
                                  target: self, action: #selector(pickFiles))
+        let openCRM = THButton(title: "Open in CRM", style: .plain, symbol: "arrow.up.right",
+                               target: self, action: #selector(openCRMFiles))
 
-        let header = NSStackView(views: [thSectionLabel("FILES"), lobChip, NSView(), status, uploadBtn])
+        let header = NSStackView(views: [
+            thSectionLabel("FILES"), lobChip, NSView(), status, openCRM, uploadBtn,
+        ])
         header.orientation = .horizontal
         header.alignment = .centerY
         header.spacing = 8
@@ -63,14 +73,23 @@ final class FilesSectionView: TownHallSectionView, NSTableViewDataSource, NSTabl
         self.lobs = lobs
         let previous = selectedLobId
         if lobs.isEmpty {
-            lobChip.setTitles(["No projects"])
+            lobChip.setTitles(["No portfolio projects"])
             selectedLobId = nil
+            apply([])
             return
         }
-        lobChip.setTitles(lobs.map { $0.title },
-                          selected: previous.flatMap { p in lobs.firstIndex(where: { $0.id == p }) } ?? 0)
+        lobChip.setTitles(
+            lobs.map(\.title),
+            selected: previous.flatMap { p in lobs.firstIndex(where: { $0.id == p }) } ?? 0
+        )
         selectedLobId = previous.flatMap { p in lobs.first(where: { $0.id == p })?.id } ?? lobs.first?.id
         loadFiles()
+    }
+
+    @objc private func openCRMFiles() {
+        if let url = HelperConfig.effective().crmWebURL(path: "/town-hall") {
+            NSWorkspace.shared.open(url)
+        }
     }
 
     override func reload() {
@@ -86,8 +105,10 @@ final class FilesSectionView: TownHallSectionView, NSTableViewDataSource, NSTabl
 
     private func loadFiles() {
         guard let lobId = selectedLobId else { apply([]); return }
+        status.stringValue = "Loading…"
         run { [weak self] client in
             let files = try await client.getLobFiles(lobId: lobId)
+            self?.status.stringValue = files.isEmpty ? "" : "\(files.count) file\(files.count == 1 ? "" : "s")"
             self?.apply(files)
         }
     }
@@ -104,6 +125,7 @@ final class FilesSectionView: TownHallSectionView, NSTableViewDataSource, NSTabl
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = true
+        panel.allowedContentTypes = [] // all; server allow-lists
         panel.begin { [weak self] resp in
             if resp == .OK { self?.upload(panel.urls) }
         }
@@ -112,36 +134,76 @@ final class FilesSectionView: TownHallSectionView, NSTableViewDataSource, NSTabl
     private func upload(_ urls: [URL]) {
         guard let lobId = selectedLobId else { onError?("Pick a project first."); return }
         guard !urls.isEmpty else { return }
-        status.stringValue = "Uploading \(urls.count) file\(urls.count == 1 ? "" : "s")…"
+        status.stringValue = "Uploading \(urls.count)…"
         run { [weak self] client in
             for url in urls { _ = try await client.uploadFile(url, toLob: lobId) }
-            self?.status.stringValue = ""
             let files = try await client.getLobFiles(lobId: lobId)
+            self?.status.stringValue = "\(files.count) file\(files.count == 1 ? "" : "s")"
             self?.apply(files)
             self?.onMutation?()
         }
     }
 
-    @objc private func openFile(_ sender: NSButton) {
-        guard sender.tag >= 0 && sender.tag < files.count, let urlStr = files[sender.tag].url,
-              let url = URL(string: urlStr) else {
-            onError?("This file has no download link.")
-            return
+    @objc private func rowDoubleClicked() {
+        let row = table.clickedRow
+        guard row >= 0 else { return }
+        openFile(at: row)
+    }
+
+    @objc private func openFileButton(_ sender: NSButton) {
+        openFile(at: sender.tag)
+    }
+
+    private func openFile(at row: Int) {
+        guard row >= 0, row < files.count else { return }
+        guard !opening else { return }
+        let file = files[row]
+        opening = true
+        status.stringValue = file.isHTMLPresentation ? "Opening presentation…" : "Opening…"
+        run { [weak self] client in
+            defer {
+                self?.opening = false
+            }
+            do {
+                let local = try await client.downloadProjectFile(file)
+                let ok = NSWorkspace.shared.open(local)
+                if !ok {
+                    // Fallback: reveal in Finder
+                    NSWorkspace.shared.activateFileViewerSelecting([local])
+                    self?.onError?("Opened in Finder — double-click the file to view.")
+                }
+                self?.status.stringValue = file.isHTMLPresentation
+                    ? "Opened \(file.preferredFilename)"
+                    : "\(self?.files.count ?? 0) file\((self?.files.count ?? 0) == 1 ? "" : "s")"
+            } catch {
+                self?.status.stringValue = ""
+                throw error
+            }
         }
-        NSWorkspace.shared.open(url)
     }
 
     private func fileSymbol(_ f: ProjectFile) -> String {
-        let ext = (f.originalFilename ?? f.label as String).split(separator: ".").last.map { $0.lowercased() } ?? ""
-        switch ext {
+        switch f.fileExtension {
+        case "html", "htm": return "rectangle.on.rectangle.angled"
         case "pdf": return "doc.richtext"
         case "png", "jpg", "jpeg", "gif", "webp", "heic": return "photo"
         case "doc", "docx": return "doc.text"
         case "xls", "xlsx", "csv": return "tablecells"
         case "ppt", "pptx": return "rectangle.on.rectangle"
+        case "md", "markdown": return "text.alignleft"
         case "zip": return "doc.zipper"
-        case "md", "txt": return "doc.plaintext"
+        case "txt": return "doc.plaintext"
         default: return "doc"
+        }
+    }
+
+    private func kindLabel(_ f: ProjectFile) -> String {
+        switch f.fileExtension {
+        case "html", "htm": return "HTML deck"
+        case "pdf": return "PDF"
+        case "md", "markdown": return "Markdown"
+        case "pptx", "ppt": return "Slides"
+        default: return f.fileExtension.uppercased().isEmpty ? "File" : f.fileExtension.uppercased()
         }
     }
 
@@ -154,21 +216,43 @@ final class FilesSectionView: TownHallSectionView, NSTableViewDataSource, NSTabl
         let f = files[row]
         let cell = NSTableCellView()
 
+        let well = NSView()
+        well.wantsLayer = true
+        well.layer?.cornerRadius = 10
+        well.layer?.backgroundColor = (f.isHTMLPresentation
+            ? NSColor.systemPurple : NSColor.controlAccentColor)
+            .withAlphaComponent(0.14).cgColor
+        well.translatesAutoresizingMaskIntoConstraints = false
+
         let icon = NSImageView()
         icon.image = NSImage(systemSymbolName: fileSymbol(f), accessibilityDescription: nil)
-        icon.symbolConfiguration = .init(pointSize: 16, weight: .regular)
-        icon.contentTintColor = .controlAccentColor
+        icon.symbolConfiguration = .init(pointSize: 15, weight: .semibold)
+        icon.contentTintColor = f.isHTMLPresentation ? .systemPurple : .controlAccentColor
         icon.translatesAutoresizingMaskIntoConstraints = false
+        well.addSubview(icon)
 
-        let name = thBodyLabel(f.label, weight: .medium)
-        var metaParts: [String] = []
-        if let c = f.category { metaParts.append(c) }
-        let size = thFormatBytes(f.sizeBytes); if !size.isEmpty { metaParts.append(size) }
-        let t = thRelativeTime(f.createdAt); if !t.isEmpty { metaParts.append(t) }
-        let meta = thMetaLabel(metaParts.joined(separator: "  ·  "))
+        let name = NSTextField(labelWithString: f.label)
+        name.font = .systemFont(ofSize: 13, weight: .semibold)
+        name.lineBreakMode = .byTruncatingTail
+        name.translatesAutoresizingMaskIntoConstraints = false
 
-        let open = THButton(title: "Open", style: .plain, symbol: "arrow.up.right.square",
-                            target: self, action: #selector(openFile(_:)))
+        var metaParts: [String] = [kindLabel(f)]
+        let size = thFormatBytes(f.sizeBytes)
+        if !size.isEmpty { metaParts.append(size) }
+        let t = thRelativeTime(f.createdAt)
+        if !t.isEmpty { metaParts.append(t) }
+        let meta = NSTextField(labelWithString: metaParts.joined(separator: "  ·  "))
+        meta.font = .systemFont(ofSize: 11)
+        meta.textColor = .secondaryLabelColor
+        meta.translatesAutoresizingMaskIntoConstraints = false
+
+        let open = THButton(
+            title: f.isHTMLPresentation ? "Present" : "Open",
+            style: .secondary,
+            symbol: f.isHTMLPresentation ? "play.rectangle" : "arrow.up.forward",
+            target: self,
+            action: #selector(openFileButton(_:))
+        )
         open.tag = row
 
         let textCol = NSStackView(views: [name, meta])
@@ -176,19 +260,23 @@ final class FilesSectionView: TownHallSectionView, NSTableViewDataSource, NSTabl
         textCol.alignment = .leading
         textCol.spacing = 2
 
-        let rowStack = NSStackView(views: [icon, textCol, NSView(), open])
+        let rowStack = NSStackView(views: [well, textCol, NSView(), open])
         rowStack.orientation = .horizontal
         rowStack.alignment = .centerY
-        rowStack.spacing = 11
+        rowStack.spacing = 12
         rowStack.translatesAutoresizingMaskIntoConstraints = false
 
         cell.addSubview(rowStack)
         NSLayoutConstraint.activate([
-            icon.widthAnchor.constraint(equalToConstant: 22),
-            rowStack.topAnchor.constraint(equalTo: cell.topAnchor, constant: 9),
-            rowStack.bottomAnchor.constraint(equalTo: cell.bottomAnchor, constant: -9),
-            rowStack.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 12),
-            rowStack.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -12),
+            well.widthAnchor.constraint(equalToConstant: 36),
+            well.heightAnchor.constraint(equalToConstant: 36),
+            icon.centerXAnchor.constraint(equalTo: well.centerXAnchor),
+            icon.centerYAnchor.constraint(equalTo: well.centerYAnchor),
+            rowStack.topAnchor.constraint(equalTo: cell.topAnchor, constant: 8),
+            rowStack.bottomAnchor.constraint(equalTo: cell.bottomAnchor, constant: -8),
+            rowStack.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 10),
+            rowStack.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -10),
+            cell.heightAnchor.constraint(greaterThanOrEqualToConstant: 52),
         ])
         return cell
     }

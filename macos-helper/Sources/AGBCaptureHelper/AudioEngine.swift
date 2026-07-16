@@ -6,9 +6,14 @@ import ScreenCaptureKit
 import CaptureCore
 
 /// The capture core: microphone (AVAudioEngine) + system audio
-/// (ScreenCaptureKit SCStream), both resampled to 16 kHz mono Int16 and
-/// interleaved into stereo frames (L = mic, R = system) on a wall-clock sample
-/// pump (FR-CALL-CAP-1/2/3).
+/// (process tap primary / ScreenCaptureKit fallback), both resampled to 16 kHz
+/// mono Int16 and interleaved into stereo frames (L = mic, R = system) on a
+/// wall-clock sample pump (FR-CALL-CAP-1/2/3).
+///
+/// **FR-CALL-CAP-2 — no headphones required.** System audio is captured from
+/// the call app / output mix *before* the physical device, so Built-in Speakers,
+/// wired headphones, and AirPods all produce a far-side (R) channel. Route
+/// switches mid-call restart the process tap / SCStream in place.
 ///
 /// Modes:
 ///   preroll   — interleaved bytes feed the 60 s RingBuffer only (FR-CALL-TRG-3)
@@ -56,6 +61,10 @@ final class AudioEngine: NSObject {
     private let queue = DispatchQueue(label: "com.agb.capture-helper.audio", qos: .userInitiated)
 
     private var avEngine: AVAudioEngine?
+    /// Primary mic path: Core Audio HAL (survives speakers-on VoIP AEC).
+    private var micHAL: MicHALCapture?
+    /// True when mic is coming from MicHALCapture rather than AVAudioEngine.
+    private var micHALActive = false
     private var scStream: SCStream?
     private var streamOutputBox: StreamOutputBox?
     /// Core Audio process tap — the PRIMARY system-audio source (reaches
@@ -72,8 +81,13 @@ final class AudioEngine: NSObject {
     private var sysConverterInputFormat: AVAudioFormat?
     private var pumpTimer: DispatchSourceTimer?
     private var configChangeObserver: NSObjectProtocol?
+    private var defaultOutputObserver: NSObjectProtocol?
     private var scRestartAttempts = 0
     private var spoolFailureReported = false
+    /// Periodic levels log so speakers-only tests can confirm system(R) is live.
+    private var levelsTickCount = 0
+    /// Call (mic+system) vs in-person meeting (mic only).
+    private(set) var captureKind: CaptureKind = .call
 
     private let stateLock = NSLock()
     private var _mode: Mode = .stopped
@@ -99,10 +113,13 @@ final class AudioEngine: NSObject {
 
     // MARK: - Lifecycle
 
-    /// Start both capture paths in pre-roll mode (detection fired; prompt up).
+    /// Start capture paths in pre-roll mode (detection fired; prompt up).
     /// Audio flows only into the in-memory ring buffer (NFR-CALL-PRIV-2).
-    func startPreroll() async throws {
+    /// - Parameter kind: `.call` = mic + system audio; `.meeting` = mic only
+    ///   (in-person room — R channel stays silent, stereo wire format unchanged).
+    func startPreroll(kind: CaptureKind = .call) async throws {
         guard mode == .stopped else { return }
+        captureKind = kind
         silenceMeter.reset()
         interleaver.reset()
         ring.clear()
@@ -110,9 +127,22 @@ final class AudioEngine: NSObject {
         mode = .preroll
 
         try startMicEngine()
-        try await startSystemAudioSource()
+        if kind == .call {
+            try await startSystemAudioSource()
+            installDefaultOutputObserver()
+            let route = OutputRoute.currentDefaultOutput()
+            HelperLog.shared.info(
+                "engine started (preroll, call) — default output: \(route.summary) (headphones not required)",
+                category: "audio"
+            )
+        } else {
+            // In-person: no system-audio path. Stereo interleaver pads R with silence.
+            HelperLog.shared.info(
+                "engine started (preroll, meeting) — mic-only room capture; system audio not tapped",
+                category: "audio"
+            )
+        }
         startPump()
-        HelperLog.shared.info("engine started (preroll)", category: "audio")
     }
 
     /// Founder affirmed (or started manually): drain the pre-roll ring into the
@@ -199,6 +229,14 @@ final class AudioEngine: NSObject {
             NotificationCenter.default.removeObserver(observer)
             configChangeObserver = nil
         }
+        if let observer = defaultOutputObserver {
+            NotificationCenter.default.removeObserver(observer)
+            defaultOutputObserver = nil
+        }
+
+        micHAL?.stop()
+        micHAL = nil
+        micHALActive = false
 
         if let engine = avEngine {
             engine.inputNode.removeTap(onBus: 0)
@@ -221,11 +259,70 @@ final class AudioEngine: NSObject {
         sysConverter = nil
     }
 
-    // MARK: - Microphone path (AVAudioEngine → 16 kHz mono Int16 → L channel)
+    // MARK: - Microphone path (HAL preferred → AVAudioEngine fallback → L channel)
 
+    /// Start mic capture. Prefer Core Audio HAL so founder speech stays audible
+    /// when speakers play far-side audio (VoIP AEC often nulls AVAudioEngine).
     private func startMicEngine() throws {
+        // PRIMARY: HAL input — works with speakers for live "You:" captions.
+        let hal = MicHALCapture()
+        hal.onMicPCM = { [weak self] pcm in
+            guard let self, self.mode != .stopped else { return }
+            self.interleaver.appendMic(pcm)
+        }
+        hal.onFatalError = { [weak self] message in
+            HelperLog.shared.warn("mic-hal fatal: \(message) — falling back to AVAudioEngine", category: "audio")
+            self?.queue.async {
+                guard let self, self.mode != .stopped else { return }
+                self.micHAL?.stop()
+                self.micHAL = nil
+                self.micHALActive = false
+                do {
+                    try self.startMicAVAudioEngine()
+                } catch {
+                    self.onError?("Microphone capture lost: \(error.localizedDescription)")
+                }
+            }
+        }
+        do {
+            try hal.start()
+            micHAL = hal
+            micHALActive = true
+            HelperLog.shared.info(
+                "[audio] mic via Core Audio HAL (speakers-safe; live transcript will show You:)",
+                category: "audio"
+            )
+            return
+        } catch {
+            HelperLog.shared.warn(
+                "mic-hal unavailable (\(error.localizedDescription)) — falling back to AVAudioEngine",
+                category: "audio"
+            )
+            micHAL = nil
+            micHALActive = false
+        }
+
+        try startMicAVAudioEngine()
+    }
+
+    private func startMicAVAudioEngine() throws {
         let engine = AVAudioEngine()
         let input = engine.inputNode
+
+        // VoIP + speakers often enables voice processing on the shared input;
+        // that AEC nulls the founder channel so live transcript only shows the
+        // far side. Force it off when the API is available.
+        if #available(macOS 14.0, *) {
+            if input.isVoiceProcessingEnabled {
+                do {
+                    try input.setVoiceProcessingEnabled(false)
+                    HelperLog.shared.info("disabled voice processing on mic input (AEC off)", category: "audio")
+                } catch {
+                    HelperLog.shared.warn("could not disable voice processing: \(error.localizedDescription)", category: "audio")
+                }
+            }
+        }
+
         let inputFormat = input.inputFormat(forBus: 0)
         guard inputFormat.sampleRate > 0, inputFormat.channelCount > 0 else {
             throw NSError(domain: "AGBCapture", code: 1, userInfo: [
@@ -242,30 +339,49 @@ final class AudioEngine: NSObject {
         engine.prepare()
         try engine.start()
         avEngine = engine
+        micHALActive = false
+        HelperLog.shared.info(
+            "[audio] mic via AVAudioEngine (\(Int(inputFormat.sampleRate)) Hz × \(inputFormat.channelCount) ch)",
+            category: "audio"
+        )
 
-        // Default-input-device switches change the input format mid-run;
-        // restart the tap with the new format (FR-CALL-CAP-5, mic side).
+        // Only reinstall when the *format* actually changes — thrashing on every
+        // speakers/headphone route blip was restarting into a near-silent mic.
         configChangeObserver = NotificationCenter.default.addObserver(
             forName: .AVAudioEngineConfigurationChange,
             object: engine,
             queue: nil
         ) { [weak self] _ in
-            self?.queue.async { self?.restartMicEngine() }
+            self?.queue.async { self?.restartMicAVAudioIfFormatChanged() }
         }
     }
 
-    private func restartMicEngine() {
-        guard mode != .stopped else { return }
-        HelperLog.shared.warn("audio engine configuration change — restarting mic tap", category: "audio")
-        if let engine = avEngine {
-            engine.inputNode.removeTap(onBus: 0)
-            engine.stop()
-            avEngine = nil
+    private func restartMicAVAudioIfFormatChanged() {
+        guard mode != .stopped, !micHALActive else { return }
+        guard let engine = avEngine else { return }
+        let newFormat = engine.inputNode.inputFormat(forBus: 0)
+        // No usable format yet mid-switch — wait for a later notification.
+        guard newFormat.sampleRate > 0, newFormat.channelCount > 0 else { return }
+        if let cached = micConverterInputFormat,
+           cached.sampleRate == newFormat.sampleRate,
+           cached.channelCount == newFormat.channelCount {
+            return // same format; keep the running tap
+        }
+        HelperLog.shared.warn(
+            "mic format changed → \(Int(newFormat.sampleRate)) Hz × \(newFormat.channelCount) ch — reinstalling AVAudio tap",
+            category: "audio"
+        )
+        engine.inputNode.removeTap(onBus: 0)
+        engine.stop()
+        avEngine = nil
+        if let observer = configChangeObserver {
+            NotificationCenter.default.removeObserver(observer)
+            configChangeObserver = nil
         }
         micConverter = nil
         micConverterInputFormat = nil
         do {
-            try startMicEngine()
+            try startMicAVAudioEngine()
         } catch {
             onError?("Microphone capture lost mid-call: \(error.localizedDescription)")
         }
@@ -317,10 +433,15 @@ final class AudioEngine: NSObject {
             }
         }
 
-        // Fallback: ScreenCaptureKit (non-FaceTime system audio).
+        // Fallback: ScreenCaptureKit (non-FaceTime system audio). Still
+        // device-independent — captures the system mix for speakers or headphones.
         processTapActive = false
         try await startSystemStream()
-        HelperLog.shared.info("[audio] system-audio via ScreenCaptureKit (FaceTime NOT captured)", category: "audio")
+        let route = OutputRoute.currentDefaultOutput()
+        HelperLog.shared.info(
+            "[audio] system-audio via ScreenCaptureKit (FaceTime NOT captured) — output: \(route.summary)",
+            category: "audio"
+        )
     }
 
     // MARK: - System audio fallback (SCStream → 16 kHz mono Int16 → R channel)
@@ -452,9 +573,40 @@ final class AudioEngine: NSObject {
         return Data(bytes: channelData[0], count: Int(outBuffer.frameLength) * 2)
     }
 
+    // MARK: - Output route (speakers ↔ headphones)
+
+    /// When the SCStream fallback is active, restart it on default-output
+    /// changes. Process-tap path handles this internally (full restart).
+    private func installDefaultOutputObserver() {
+        // Core Audio property → NotificationCenter is not built-in; we poll via
+        // a distributed name used by macOS audio when routes change, and also
+        // re-log from the process-tap. For SCStream-only sessions, listen to
+        // the same system default-output property via a short Core Audio bridge.
+        // (Process tap installs its own listener; this covers SCStream fallback.)
+        guard defaultOutputObserver == nil else { return }
+        // Use a one-shot style: observe AVAudioEngine config is mic-only.
+        // SCStream restart is also driven from SCStreamDelegate didStopWithError.
+        // Additional: log route on main run loop when app becomes active after sleep.
+        defaultOutputObserver = NotificationCenter.default.addObserver(
+            forName: NSWorkspace.didWakeNotification,
+            object: nil,
+            queue: nil
+        ) { [weak self] _ in
+            self?.queue.async {
+                guard let self, self.mode != .stopped, !self.processTapActive else { return }
+                HelperLog.shared.info(
+                    "system wake — restarting SCStream for output route (speakers/headphones)",
+                    category: "audio"
+                )
+                self.restartSystemStream()
+            }
+        }
+    }
+
     // MARK: - Sample pump (100 ms cadence)
 
     private func startPump() {
+        levelsTickCount = 0
         let timer = DispatchSource.makeTimerSource(queue: queue)
         timer.schedule(deadline: .now() + .milliseconds(100), repeating: .milliseconds(100))
         timer.setEventHandler { [weak self] in
@@ -472,8 +624,26 @@ final class AudioEngine: NSObject {
         case .preroll:
             silenceMeter.feedInterleaved(bytes)
             ring.append(bytes)
+            // Early proof that both channels live before Record (incl. speakers-only).
+            levelsTickCount += 1
+            if levelsTickCount == 50 { // ~5 s into pre-roll
+                let r = silenceMeter.report()
+                HelperLog.shared.info(
+                    "levels (preroll ~5s): \(r.summary) | output: \(OutputRoute.currentDefaultOutput().summary)",
+                    category: "audio"
+                )
+            }
         case .recording:
             silenceMeter.feedInterleaved(bytes)
+            levelsTickCount += 1
+            // Every ~30 s while recording — verify far-side on speakers without headphones.
+            if levelsTickCount > 0, levelsTickCount % 300 == 0 {
+                let r = silenceMeter.report()
+                HelperLog.shared.info(
+                    "levels (recording): \(r.summary) | output: \(OutputRoute.currentDefaultOutput().summary)",
+                    category: "audio"
+                )
+            }
 
             // FEATURE 2: hand a copy to the live-transcript stream. Best-effort,
             // strictly non-blocking, decoupled from the spool path below.

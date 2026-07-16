@@ -51,7 +51,7 @@ import { fileCallTranscript, type FileCallResult } from "./file-call";
 export async function transcribeWindowed(
   chunks: ChunkEntry[],
   fmt: { sampleRate: number; channels: number },
-  opts: { encodeMp3?: boolean } = {},
+  opts: { encodeMp3?: boolean; inPersonMeeting?: boolean } = {},
 ): Promise<
   | { ok: true; result: TranscriptionResult; durationSecs: number; mp3: Uint8Array | null }
   | { ok: false; status: number; error: string }
@@ -97,6 +97,7 @@ export async function transcribeWindowed(
     const txr = await transcribeDualChannelBytes({
       wav: asm.wav,
       durationSecs: Math.round(winDurationSecs),
+      inPersonMeeting: opts.inPersonMeeting,
     });
     if (!txr.ok) return { ok: false, status: 502, error: txr.error };
     if (language === null) language = txr.result.language;
@@ -112,6 +113,7 @@ export async function transcribeWindowed(
 
   const durationSecs = Math.round(totalDataBytes / bytesPerSec);
   merged.sort((a, b) => a.start - b.start);
+  const room = !!opts.inPersonMeeting;
   return {
     ok: true,
     durationSecs,
@@ -119,14 +121,23 @@ export async function transcribeWindowed(
     result: {
       utterances: merged,
       dialogueText: buildDialogue(merged, {
-        founder: "Founder",
+        founder: room ? "Room" : "Founder",
         participant: "Participant",
       }),
       language: language ?? "multi",
       // Silence detection must run over the WHOLE call, not per window.
-      suspectFlags: detectSilentChannels(merged, durationSecs),
+      suspectFlags: detectSilentChannels(merged, durationSecs, {
+        inPersonMeeting: room,
+      }),
     },
   };
+}
+
+/** CRM sourceApp value the Mac Helper sets for in-person room recordings. */
+export const SOURCE_APP_IN_PERSON_MEETING = "In-Person Meeting";
+
+export function isInPersonMeetingSource(sourceApp: string | null | undefined): boolean {
+  return (sourceApp ?? "").trim() === SOURCE_APP_IN_PERSON_MEETING;
 }
 
 export type FinalizeOutcome =
@@ -139,6 +150,12 @@ export type FinalizeOutcome =
     }
   | { ok: false; status: number; error: string; missing?: number[] };
 
+export type PrecomputedTranscript = {
+  language?: string | null;
+  engine?: string | null;
+  utterances: Utterance[];
+};
+
 export async function finalizeSession(opts: {
   session: CaptureSessionRow;
   founderLabel: string;
@@ -147,6 +164,8 @@ export async function finalizeSession(opts: {
   totalChunks: number | null; // null = salvage mode: use whatever chunks exist
   partial: boolean;
   contactName?: string | null;
+  /** Local free STT+diarize result from the Mac Helper — skips Deepgram. */
+  precomputedTranscript?: PrecomputedTranscript | null;
 }): Promise<FinalizeOutcome> {
   const { session } = opts;
   const workspaceId = session.workspaceId;
@@ -198,6 +217,7 @@ export async function finalizeSession(opts: {
   //     length (FR-CALL-TRX-3/5). Long-call playback is a tracked follow-up.
   const totalBytes = chunks.reduce((n, c) => n + Math.max(c.size, 0), 0);
   const fmt = { sampleRate: CAPTURE_SAMPLE_RATE, channels: CAPTURE_CHANNELS };
+  const inPersonMeeting = isInPersonMeetingSource(session.sourceApp);
 
   // Audio is always transcribed, but only persisted when the workspace opts in.
   // Transcript-only mode skips the bucket upload entirely (and the MP3 encode),
@@ -210,8 +230,61 @@ export async function finalizeSession(opts: {
   let audioPath: string | null = null;
   let audioStored = false;
   let audioBytes: number | null = null;
+  let transcriptEngine: string | null = null;
 
-  if (totalBytes > 0 && totalBytes <= STORE_AUDIO_MAX_BYTES) {
+  const pre = opts.precomputedTranscript;
+  const hasPrecomputed =
+    !!pre && Array.isArray(pre.utterances) && pre.utterances.length > 0;
+
+  if (hasPrecomputed && pre) {
+    // Free local path (WhisperX / Vibe / whisper.cpp): skip Deepgram entirely.
+    const utterances = pre.utterances.map((u) => ({
+      speaker: String(u.speaker || "SPEAKER_00").slice(0, 64),
+      diarizationId: u.diarizationId
+        ? String(u.diarizationId).slice(0, 64)
+        : u.speaker?.startsWith("SPEAKER_")
+          ? String(u.speaker).slice(0, 64)
+          : undefined,
+      channel: typeof u.channel === "number" ? u.channel : 0,
+      start: typeof u.start === "number" ? u.start : 0,
+      end: typeof u.end === "number" ? u.end : 0,
+      text: String(u.text ?? "").slice(0, 8000),
+    })).filter((u) => u.text.trim().length > 0);
+    durationSecs = opts.durationSecs;
+    transcriptEngine = pre.engine
+      ? `local:${String(pre.engine).slice(0, 40)}`
+      : "local";
+    txResult = {
+      utterances,
+      dialogueText: buildDialogue(utterances, {
+        founder: inPersonMeeting ? "Room" : opts.founderLabel,
+        participant: "Participant",
+      }),
+      language: pre.language ? String(pre.language).slice(0, 32) : "multi",
+      suspectFlags: detectSilentChannels(utterances, durationSecs ?? 0, {
+        inPersonMeeting,
+      }),
+    };
+    // Still try to store audio for playback when size allows.
+    if (storeCallAudio && totalBytes > 0 && totalBytes <= STORE_AUDIO_MAX_BYTES) {
+      const asm = await assembleSessionAudio(chunks, fmt);
+      if (asm.ok) {
+        if (!durationSecs) {
+          durationSecs = Math.round(
+            asm.dataBytes / (CAPTURE_CHANNELS * 2) / CAPTURE_SAMPLE_RATE,
+          );
+        }
+        audioPath = assembledObjectPath(workspaceId, session.id);
+        const stored = await putObject(audioPath, asm.wav);
+        if (stored.ok) {
+          audioStored = true;
+          audioBytes = asm.wav.length;
+        } else {
+          audioPath = null;
+        }
+      }
+    }
+  } else if (totalBytes > 0 && totalBytes <= STORE_AUDIO_MAX_BYTES) {
     const asm = await assembleSessionAudio(chunks, fmt);
     if (!asm.ok) {
       return fail(asm.error.includes("download") ? 502 : 400, asm.error);
@@ -223,9 +296,11 @@ export async function finalizeSession(opts: {
     const tx = await transcribeDualChannelBytes({
       wav: asm.wav,
       durationSecs: durationSecs ?? 0,
+      inPersonMeeting,
     });
     if (!tx.ok) return fail(502, tx.error);
     txResult = tx.result;
+    transcriptEngine = inPersonMeeting ? "deepgram+diarize" : "deepgram";
 
     // Store the audio best-effort for playback (FR-CALL-ACC-3), unless the
     // workspace is transcript-only. If storage rejects it we keep transcript +
@@ -250,10 +325,14 @@ export async function finalizeSession(opts: {
     const estDurationSecs = totalBytes / (CAPTURE_CHANNELS * 2 * CAPTURE_SAMPLE_RATE);
     const wantMp3 =
       storeCallAudio && estimatedMp3Bytes(estDurationSecs) <= STORE_AUDIO_MAX_BYTES;
-    const w = await transcribeWindowed(chunks, fmt, { encodeMp3: wantMp3 });
+    const w = await transcribeWindowed(chunks, fmt, {
+      encodeMp3: wantMp3,
+      inPersonMeeting,
+    });
     if (!w.ok) return fail(w.status, w.error);
     txResult = w.result;
     durationSecs = w.durationSecs || opts.durationSecs || null;
+    transcriptEngine = inPersonMeeting ? "deepgram+diarize" : "deepgram";
 
     if (storeCallAudio && w.mp3 && w.mp3.length <= STORE_AUDIO_MAX_BYTES) {
       audioPath = assembledMp3ObjectPath(workspaceId, session.id);
@@ -274,13 +353,34 @@ export async function finalizeSession(opts: {
     }
   }
 
-  const founderLabel = opts.founderLabel;
-  const participantLabel = (opts.contactName ?? "").trim() || "Participant";
+  // In-person: room mic on L; diarization yields SPEAKER_00… which buildDialogue
+  // keeps unless speakerMap maps them. contactName seeds founder/room label only.
+  const founderLabel = inPersonMeeting
+    ? (opts.contactName ?? "").trim() || "Room"
+    : opts.founderLabel;
+  const participantLabel = inPersonMeeting
+    ? "Remote"
+    : (opts.contactName ?? "").trim() || "Participant";
+  // If contactName is set and only one cluster appears, map SPEAKER_00 → name.
+  const speakerMap: Record<string, string> = {};
+  if (inPersonMeeting && (opts.contactName ?? "").trim()) {
+    const name = (opts.contactName ?? "").trim();
+    const clusters = [
+      ...new Set(
+        txResult.utterances
+          .map((u) => u.diarizationId ?? (u.speaker.startsWith("SPEAKER_") ? u.speaker : null))
+          .filter((x): x is string => !!x),
+      ),
+    ].sort();
+    if (clusters.length === 1) speakerMap[clusters[0]] = name;
+    // Multiple clusters: leave SPEAKER_xx for manual mapping in CRM (D1 UI).
+  }
   const dialogueText =
     txResult.utterances.length > 0
       ? buildDialogue(txResult.utterances, {
           founder: founderLabel,
           participant: participantLabel,
+          speakerMap,
         })
       : "(no speech detected)";
 
@@ -300,6 +400,8 @@ export async function finalizeSession(opts: {
     channels: CAPTURE_CHANNELS,
     sourceApp: session.sourceApp,
     utterances: txResult.utterances,
+    speakerMap: Object.keys(speakerMap).length ? speakerMap : null,
+    transcriptEngine,
     suspectFlags: txResult.suspectFlags.length ? txResult.suspectFlags : null,
     partial: opts.partial,
   });
@@ -317,11 +419,12 @@ export async function finalizeSession(opts: {
       contactName: opts.contactName ?? null,
       attributed: true,
       founderLabel,
+      inPersonMeeting,
       spendRoute: "capture:finalize:file",
     });
   } catch (e) {
     result = {
-      title: "Call",
+      title: inPersonMeeting ? "Meeting" : "Call",
       brief: "",
       note: "",
       actionItemCount: 0,

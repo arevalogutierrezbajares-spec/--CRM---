@@ -1,8 +1,10 @@
-# AGB Capture Helper (macOS)
+# AGB AI (macOS helper)
 
-Menu-bar companion that captures both sides of any call on the Mac — WhatsApp
+Menu-bar companion (**AGB AI**) that captures both sides of any call on the Mac — WhatsApp
 desktop, Zoom, Meet in any browser, FaceTime, Continuity cellular — and streams
 it to the AGB CRM for transcription and AI filing.
+
+> Finder / Dock name: **AGB AI**. Internal binary remains `AGBCaptureHelper` (SPM product + bundle executable). Config lives under `~/Library/Application Support/AGBCaptureHelper/` so existing tokens and spools keep working.
 
 Implements the helper side of:
 
@@ -49,8 +51,8 @@ Requires Swift 6.x on macOS 14+. No Xcode project — pure SwiftPM:
 ```bash
 cd macos-helper
 swift build            # debug binary at .build/debug/AGBCaptureHelper
-swift test             # 59 unit tests (CaptureCore)
-./make-app.sh          # release build wrapped into ./AGBCaptureHelper.app
+swift test             # unit tests (CaptureCore)
+./make-app.sh          # release build wrapped into ./AGB\ AI.app
 ```
 
 > Note: `Package.swift` depends on `swiftlang/swift-testing` (test-only). That
@@ -61,16 +63,20 @@ swift test             # 59 unit tests (CaptureCore)
 
 ## Setup
 
-1. **Build the app bundle** — `./make-app.sh`. Run the helper from the bundle
-   (`open AGBCaptureHelper.app`), not as a bare binary: TCC permissions attach
+1. **Build the app bundle** — `./make-app.sh`. Run from the bundle
+   (`open "AGB AI.app"`), not as a bare binary: TCC permissions attach
    to the bundle identity and the Info.plist carries
    `NSMicrophoneUsageDescription`.
 2. **Mint a capture token** — CRM Settings → `/settings` → Capture → mint
    token. It is shown once (`agbcap_<64 hex>`); the server stores only its
    SHA-256. Revoking it there cuts the helper off instantly (NFR-CALL-SEC-2).
-3. **Configure** — menu bar ○ → Configure… → CRM base URL + token. Saved to
-   `~/Library/Application Support/AGBCaptureHelper/config.json` (mode 0600).
+3. **Configure** — menu bar ○ → Configure… → CRM base URL + token, plus:
+   - on-device live transcript (Apple)
+   - keep audio local
+   - **local free STT + diarization for meetings** (WhisperX / Vibe / whisper.cpp / custom command)
+   Saved to `~/Library/Application Support/AGBCaptureHelper/config.json` (mode 0600).
    Then "Test Connection" should report workspace + retention days.
+   See `scripts/local-transcribe/README.md` and `docs/LOCAL-DIARIZATION-PLAN.md`.
 4. **Grant permissions** (FR-CALL-OPS-2) — the helper requests both on first
    capture and tells you exactly what is missing:
    - **Microphone** — System Settings → Privacy & Security → Microphone →
@@ -126,7 +132,7 @@ disabled by a footgun config):
 | Show / Hide live transcript | toggles the floating live-transcript window (⌘⇧T) |
 | Town Hall | expands the control panel into Town Hall (⌘⇧H) — feed, notifications, action items, files, notes, all in this one window |
 | Test Connection | `GET /api/capture/ping` |
-| Configure… | URL + token + never-prompt apps |
+| Configure… | URL + token + never-prompt apps + local STT backend for meetings |
 | Diagnostics | writes `~/Desktop/agb-capture-diagnostics.txt`: state, permissions, config (token masked), spool, last uploads, log tail (FR-CALL-OPS-6) |
 
 ### Call-end detection (three independent end conditions)
@@ -254,11 +260,14 @@ AGB_CRM_URL=http://127.0.0.1:8899 AGB_CRM_TOKEN=agbcap_test \
 | Prompt missing right after dismissing one | by design: a dismissed prompt stays away for the rest of that call | use the control window's button or ⌘⇧R to start anyway; detection re-arms when the mic is released |
 | "Microphone access is missing" | TCC denied | System Settings → Privacy & Security → **Microphone** → enable AGBCaptureHelper, restart helper (FR-CALL-OPS-2) |
 | "Screen Recording access is missing" / participants' side silent | system-audio gate | System Settings → Privacy & Security → **Screen & System Audio Recording** → enable AGBCaptureHelper, restart helper |
+| Works with headphones but not speakers? | usually permissions / silent R channel | **Headphones are not required.** Process tap + SCStream capture pre-device. Check log for `default output: … [speakers]` and `system(R) RMS` non-zero while the other person talks. Grant Screen & System Audio Recording. |
+| Record an **in-person meeting** (no call app)? | meeting mode | Menu → **Start Meeting Recording…** (⌘M). Mic-only; only needs Microphone permission. Label room with **Label room…**. `sourceApp` = `In-Person Meeting`. |
+| Meeting has one speaker / no SPEAKER_xx | no local STT or whisper.cpp-only | Install WhisperX (`scripts/local-transcribe/README.md`), enable local STT in Configure…, or map names on CRM `/record`. Without local STT, CRM may use Deepgram diarize if keyed. |
 | Recording shows "Suspect audio: mic(L) NEAR-SILENT" | muted mic / wrong input device | check input device + mute state; server also flags at filing (FR-CALL-OPS-4) |
 | ↑ stays on / "Upload retrying" | CRM unreachable | uploads retry forever with backoff and resume on reconnect (FR-CALL-TRX-2); check Test Connection |
 | Call captured but cut at device switch | SCStream error mid-call | helper auto-restarts the stream and continues the same session (FR-CALL-CAP-5); check Diagnostics log tail if gaps exceed ~2 s |
 | Helper crashed mid-call | — | relaunch: the spool is adopted, uploaded, and finalized as `partial: true` (FR-CALL-OPS-5); ≤30 s tail lost |
-| TCC prompts name your terminal instead of the helper | running the bare binary | use `AGBCaptureHelper.app` from `make-app.sh` |
+| TCC prompts name your terminal instead of the helper | running the bare binary | use `"AGB AI.app"` from `make-app.sh` |
 | No call-end auto-stop | macOS < 14.4 | per-process mic state needs 14.4+; stop manually (⌘⇧R) |
 
 ## Privacy posture

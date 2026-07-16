@@ -89,13 +89,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let prompt = PromptController()
     private var hotKey: GlobalHotKey?
     private var detectedSourceApp: String?
+    /// Far-side person name for this recording (never source app). Feeds live
+    /// captions + spool contactName → CRM finalize (FR-CALL-ATT-3).
+    private var activeParticipantName: String?
+    /// Active session kind (call vs in-person meeting).
+    private var activeCaptureKind: CaptureKind = .call
+    private var labelParticipantMenuItem: NSMenuItem?
+    private var startMeetingMenuItem: NSMenuItem?
 
     private let log = HelperLog.shared
 
     // MARK: - Launch
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        log.info("AGBCaptureHelper \(AudioConstants.helperVersion) launching", category: "app")
+        log.info("AGB AI \(AudioConstants.helperVersion) launching", category: "app")
         buildStatusItem()
 
         do {
@@ -124,6 +131,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controlWindow.onOpenTownHall = { [weak self] in self?.townHallOpened() }
         configureTownHall()
         controlWindow.show()
+
+        // R1: if already configured, start CRM sync immediately (badges without opening Town Hall).
+        if HelperConfig.effective().isComplete {
+            ensureTownHallPolling()
+        }
 
         detector.arm()
         refreshUI()
@@ -165,13 +177,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.controlWindow.pane.applyNotifications(unread: unread, items: items)
         }
         poller.onPosts = { [weak self] posts in self?.controlWindow.pane.applyPosts(posts) }
+        poller.onActionItems = { [weak self] items in
+            self?.controlWindow.pane.applyActionItems(items)
+        }
+        poller.onTickStarted = { [weak self] in
+            self?.controlWindow.pane.noteSyncStarted()
+        }
+        pane.onUnreadChange = { [weak self] unread in
+            self?.controlWindow.setTownHallBadge(unread)
+        }
         townHallPoller = poller
+
+        // After a call files: open Action Items + CRM extract (Haiku, confirm-first).
+        controlWindow.onAddActions = { [weak self] in
+            guard let self else { return }
+            self.controlWindow.setExpanded(true, animated: true)
+            self.controlWindow.pane.showActionItems()
+            if let url = HelperConfig.effective().crmWebURL(path: "/town-hall?extract=1") {
+                NSWorkspace.shared.open(url)
+            }
+        }
+    }
+
+    /// Start Town Hall polling once CRM is configured (badges + sync without opening pane).
+    private func ensureTownHallPolling() {
+        guard HelperConfig.effective().isComplete else { return }
+        townHallNotifier.requestAuthorizationOnce()
+        controlWindow.pane.noteSyncStarted()
+        townHallPoller?.start()
     }
 
     /// Fired the first time the panel expands into Town Hall.
     private func townHallOpened() {
-        townHallNotifier.requestAuthorizationOnce()
-        if HelperConfig.effective().isComplete { townHallPoller?.start() }
+        ensureTownHallPolling()
     }
 
     /// Menu item / hotkey: expand the control panel into Town Hall.
@@ -253,7 +291,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                    !base.isEmpty, let b = URL(string: base) {
                     crmURL = b.appendingPathComponent("meetings/recordings/\(rid)")
                 }
-                self.controlWindow.flashFiled(title: filedTitle, detail: detail, warning: warn, url: crmURL)
+                // R4: offer “Add actions” after filing (open Action Items + CRM extract).
+                self.controlWindow.flashFiled(
+                    title: filedTitle,
+                    detail: detail,
+                    warning: warn,
+                    url: crmURL,
+                    offerAddActions: true
+                )
             }
         }
         worker.onError = { [weak self] message in
@@ -288,11 +333,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 break
             }
         }
-        prompt.onRecord = { [weak self] in
-            self?.affirmRecording()
+        prompt.onRecord = { [weak self] name in
+            guard let self else { return }
+            self.activeParticipantName = LiveTranscriptStreamer.normalizeParticipantName(name)
+            self.affirmRecording()
         }
         prompt.onDecline = { [weak self] reason in
             self?.declineRecording(reason: reason)
+        }
+        controlWindow.onLabelParticipant = { [weak self] in
+            self?.labelParticipantTapped()
         }
     }
 
@@ -315,7 +365,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Start pre-roll capture immediately so affirming later loses nothing
         // (FR-CALL-TRG-3). Bytes stay in memory until affirmation.
         Task { @MainActor in
-            if let problem = await PermissionsManager.ensureCapturePermissions() {
+            if let problem = await PermissionsManager.ensureCapturePermissions(kind: .call) {
                 self.captureUnavailable(problem)
                 return
             }
@@ -323,7 +373,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.configureEngineCallbacks(engine)
             self.engine = engine
             do {
-                try await engine.startPreroll()
+                self.activeCaptureKind = .call
+                try await engine.startPreroll(kind: .call)
                 // The prompt persists while the call is live (pre-roll keeps
                 // rolling in RAM); only an absolute safety cap bounds it.
                 let cap = PromptPolicy.safetyCapSeconds(
@@ -346,15 +397,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         do {
             // Backdate startedAt to the first pre-rolled byte.
             let startedAt = Date().addingTimeInterval(-engine.preRollSeconds)
+            activeCaptureKind = .call
             let spooler = try store.createSession(startedAt: startedAt,
-                                                  sourceApp: detectedSourceApp)
+                                                  sourceApp: detectedSourceApp,
+                                                  captureKind: .call)
+            // Person name only — never sourceApp (WhatsApp/Zoom are not speakers).
+            let name = activeParticipantName
+            try spooler.setContactName(name)
             activeSpooler = spooler
             engine.promoteToRecording(spooler: spooler)
             state = .recording
             detector.watchForCallEnd()
-            beginRecordingSession(engine: engine, participant: detectedSourceApp)
+            beginRecordingSession(engine: engine, participant: name, kind: .call)
             worker?.kick() // chunks upload incrementally during the call
-            log.info("recording affirmed (source: \(detectedSourceApp ?? "unknown"))", category: "app")
+            log.info("recording affirmed (source: \(detectedSourceApp ?? "unknown"), participant: \(name ?? "unlabeled"))", category: "app")
         } catch {
             captureUnavailable("Could not create local spool: \(error.localizedDescription)")
         }
@@ -365,6 +421,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         engine?.abortAndClear()
         engine = nil
         detectedSourceApp = nil
+        activeParticipantName = nil
+        activeCaptureKind = .call
         state = .idle
         let what: String
         switch reason {
@@ -442,17 +500,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Start the auto-end watchdog (FEATURE 1), the live-transcript stream +
     /// window (FEATURE 2), and the menu's elapsed-time ticker. All best-effort:
     /// the live path failing leaves capture completely intact.
-    private func beginRecordingSession(engine: AudioEngine, participant: String?) {
+    private func beginRecordingSession(engine: AudioEngine,
+                                       participant: String?,
+                                       kind: CaptureKind) {
         let cfg = HelperConfig.effective()
         config = cfg
+        activeCaptureKind = kind
 
         recordingStartedAt = Date()
 
         // FEATURE 1: install the silence + max-duration watchdog.
+        // Meeting mode: R is silent by design; signal on L (room mic) resets timer.
         let monitor = CallEndMonitor(silenceWindow: cfg.silenceAutoEndSeconds,
                                      maxDuration: cfg.maxRecordingSeconds)
         engine.installCallEndMonitor(monitor)
-        log.info("auto-end armed (silence \(Int(cfg.silenceAutoEndSeconds))s, max \(Int(cfg.maxRecordingSeconds))s)", category: "app")
+        log.info(
+            "auto-end armed (kind=\(kind.rawValue), silence \(Int(cfg.silenceAutoEndSeconds))s, max \(Int(cfg.maxRecordingSeconds))s)",
+            category: "app"
+        )
 
         // FEATURE 2: best-effort live transcript.
         if cfg.liveTranscript {
@@ -461,8 +526,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // On-device (Apple) by default — private, free, no token; cloud as a
             // fallback. Both emit the same Line type, so the window is agnostic.
             let engine: LiveTranscribing = cfg.liveTranscriptOnDevice
-                ? OnDeviceTranscriber(participantName: participant)
-                : LiveTranscriptStreamer(config: cfg, participantName: participant)
+                ? OnDeviceTranscriber(participantName: participant, captureKind: kind)
+                : LiveTranscriptStreamer(config: cfg, participantName: participant, captureKind: kind)
             engine.onStatus = { [weak self] status in self?.handleLiveStatus(status) }
             engine.onLine = { [weak self] line in self?.liveWindow.append(line: line) }
             liveStreamer = engine
@@ -519,7 +584,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Refresh the menu's "Recording mm:ss — Stop" label.
         liveStopMenuItem.title = liveStopTitle()
         // Keep the floating control's elapsed time current while recording.
-        controlWindow.update(.capturing(elapsed: elapsedString()))
+        controlWindow.update(.capturing(elapsed: elapsedString(),
+                                        participant: activeParticipantName,
+                                        kind: activeCaptureKind))
         // Keep the window banner's timer current when the stream is live.
         if case .live = (liveStreamer?.status ?? .idle), liveWindow.isVisible {
             liveWindow.setStatus(liveStatusLine())
@@ -552,7 +619,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         center.requestAuthorization(options: [.alert, .sound]) { [weak center] granted, _ in
             guard granted, let center else { return }
             let content = UNMutableNotificationContent()
-            content.title = "AGB Capture — recording filed"
+            content.title = "AGB AI — recording filed"
             switch reason {
             case .silence(let seconds):
                 content.body = "Auto-ended after \(Int(seconds))s of silence (call appears to have ended). Filing now."
@@ -570,7 +637,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         center.requestAuthorization(options: [.alert, .sound]) { [weak center] granted, _ in
             guard granted, let center else { return }
             let content = UNMutableNotificationContent()
-            content.title = "AGB Capture — a call is stuck filing"
+            content.title = "AGB AI — a call is stuck filing"
             content.body = "A recorded call hasn't filed yet (\(reason)). It's saved locally and will keep retrying — check the helper if this persists."
             content.sound = .default
             let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
@@ -591,21 +658,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             prompt.dismissPanel()
             affirmRecording()
         case .idle, .uploading, .error:
-            manualStart()
+            manualStart(kind: .call)
+        default:
+            break
+        }
+    }
+
+    /// In-person room recording (mic only — no system-audio / call-app path).
+    @objc private func startMeetingRecordingTapped() {
+        switch state {
+        case .idle, .uploading, .error:
+            manualStart(kind: .meeting)
         default:
             break
         }
     }
 
     /// FR-CALL-TRG-4: manual start, independent of detection.
-    private func manualStart() {
+    /// - Parameter kind: `.call` = mic+system; `.meeting` = in-person room (mic only).
+    private func manualStart(kind: CaptureKind) {
         guard engine == nil, let store else {
             if store == nil { presentAlert(title: "Cannot record", text: lastError ?? "Spool unavailable") }
             return
         }
         detector.disarm()
         Task { @MainActor in
-            if let problem = await PermissionsManager.ensureCapturePermissions() {
+            if let problem = await PermissionsManager.ensureCapturePermissions(kind: kind) {
                 self.captureUnavailable(problem)
                 return
             }
@@ -613,15 +691,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.configureEngineCallbacks(engine)
             self.engine = engine
             do {
-                try await engine.startPreroll()
-                let spooler = try store.createSession(startedAt: Date(), sourceApp: nil)
+                try await engine.startPreroll(kind: kind)
+                // Manual/hotkey start begins unlabeled so it never blocks on a modal.
+                self.activeParticipantName = nil
+                self.activeCaptureKind = kind
+                let spooler = try store.createSession(
+                    startedAt: Date(),
+                    sourceApp: kind.isMeeting ? CaptureKind.sourceAppMeeting : nil,
+                    captureKind: kind
+                )
+                try spooler.setContactName(nil)
                 self.activeSpooler = spooler
                 engine.promoteToRecording(spooler: spooler)
                 self.state = .recording
-                self.detector.watchForCallEnd()
-                self.beginRecordingSession(engine: engine, participant: nil)
+                if kind == .call {
+                    self.detector.watchForCallEnd()
+                }
+                self.beginRecordingSession(engine: engine, participant: nil, kind: kind)
                 self.worker?.kick()
-                self.log.info("manual recording started", category: "app")
+                self.log.info(
+                    "manual \(kind.rawValue) recording started (participant: unlabeled)",
+                    category: "app"
+                )
             } catch {
                 self.captureUnavailable("Could not start capture: \(error.localizedDescription)")
             }
@@ -630,6 +721,52 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func stopRecordingTapped() {
         finishRecording(autoDetected: false)
+    }
+
+    /// Mid-call (or pre-record) rename: updates live labels + spool for finalize.
+    @objc private func labelParticipantTapped() {
+        guard state == .recording || state == .paused || state == .detected else { return }
+        let name = promptForParticipantName(default: activeParticipantName)
+        applyParticipantName(name)
+    }
+
+    /// Modal text field for person name. Cancel keeps current. Empty clears label.
+    private func promptForParticipantName(default current: String?) -> String? {
+        let alert = NSAlert()
+        if activeCaptureKind.isMeeting {
+            alert.messageText = "Who's in the room?"
+            alert.informativeText = "Name the primary contact or group so CRM notes attach correctly (e.g. “Carlos” or “Ucaima team”). Leave blank for “Room”."
+        } else {
+            alert.messageText = "Who's on the call?"
+            alert.informativeText = "Name the other person so the transcript and CRM notes use their name (not “Participant”). Leave blank to keep unlabeled."
+        }
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Cancel")
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
+        field.stringValue = current ?? ""
+        field.placeholderString = activeCaptureKind.isMeeting ? "e.g. Carlos, team standup" : "e.g. Carlos"
+        alert.accessoryView = field
+        // Make the field first responder after the alert lays out.
+        DispatchQueue.main.async { field.window?.makeFirstResponder(field) }
+        let response = alert.runModal()
+        guard response == .alertFirstButtonReturn else { return current }
+        return LiveTranscriptStreamer.normalizeParticipantName(field.stringValue)
+    }
+
+    private func applyParticipantName(_ name: String?) {
+        let normalized = LiveTranscriptStreamer.normalizeParticipantName(name)
+        activeParticipantName = normalized
+        if let spooler = activeSpooler {
+            do {
+                try spooler.setContactName(normalized)
+            } catch {
+                log.warn("setContactName failed: \(error.localizedDescription)", category: "app")
+            }
+        }
+        liveStreamer?.setParticipantName(normalized)
+        log.info("participant labeled: \(normalized ?? "(cleared)")", category: "app")
+        refreshUI()
     }
 
     private func finishRecording(autoDetected: Bool) {
@@ -642,6 +779,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         if let spooler = activeSpooler {
             do {
+                // Re-assert name at end so a late edit always rides finalize.
+                try spooler.setContactName(activeParticipantName)
                 try spooler.markEnded(endedAt: Date(), partial: false)
             } catch {
                 lastError = "Could not mark session ended: \(error.localizedDescription)"
@@ -651,10 +790,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 log.warn("near-silent channel: \(report.summary)", category: "app")
                 lastResult = "Suspect audio: \(report.summary)"
             }
-            log.info("recording ended (\(Int(spooler.spooledSeconds))s, auto=\(autoDetected)) — \(report.summary)", category: "app")
+            log.info("recording ended (\(Int(spooler.spooledSeconds))s, auto=\(autoDetected), participant: \(activeParticipantName ?? "unlabeled")) — \(report.summary)", category: "app")
         }
         activeSpooler = nil
         detectedSourceApp = nil
+        activeParticipantName = nil
+        activeCaptureKind = .call
         state = .uploading
         worker?.kick()
         // Wait for the mic to be released before re-arming: a manual stop
@@ -722,6 +863,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 config = updated
                 lastError = nil
                 log.info("configuration saved (url: \(updated.crmBaseUrl))", category: "app")
+                // R1: start live sync as soon as credentials are valid.
+                if updated.isComplete { ensureTownHallPolling() }
             } catch {
                 presentAlert(title: "Could not save config", text: error.localizedDescription)
             }
@@ -769,7 +912,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }.joined(separator: "\n")
 
         return """
-        AGB Capture Helper diagnostics — \(ISO8601.string(from: Date()))
+        AGB AI diagnostics — \(ISO8601.string(from: Date()))
         Helper version: \(AudioConstants.helperVersion) (protocol \(AudioConstants.protocolVersion))
         macOS: \(ProcessInfo.processInfo.operatingSystemVersionString)
 
@@ -811,7 +954,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             prompt.dismissPanel()
             affirmRecording()
         case .idle, .uploading, .error:
-            manualStart()
+            manualStart(kind: .call)
         }
     }
 
@@ -875,9 +1018,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(.separator())
 
-        let start = makeItem("Start Recording", #selector(startRecordingManually), "r")
+        let start = makeItem("Start Call Recording", #selector(startRecordingManually), "r")
         startMenuItem = start
         menu.addItem(start)
+
+        let meet = makeItem("Start Meeting Recording…", #selector(startMeetingRecordingTapped), "m")
+        startMeetingMenuItem = meet
+        menu.addItem(meet)
 
         let stop = makeItem("Stop Recording", #selector(stopRecordingTapped), "s")
         stopMenuItem = stop
@@ -890,6 +1037,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let offRecord = makeItem("Off the record: discard last 5 min", #selector(offTheRecordTapped), "")
         offRecordMenuItem = offRecord
         menu.addItem(offRecord)
+
+        let labelP = makeItem("Label participant…", #selector(labelParticipantTapped), "l")
+        labelParticipantMenuItem = labelP
+        menu.addItem(labelP)
 
         menu.addItem(.separator())
         let townHallItem = makeItem("Town Hall", #selector(openTownHall), "h")
@@ -948,10 +1099,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let isCapturing = (state == .recording || state == .paused)
         startMenuItem?.isEnabled = !isCapturing
+        startMeetingMenuItem?.isEnabled = !isCapturing && state != .detected
         stopMenuItem?.isEnabled = isCapturing
         pauseMenuItem?.isEnabled = isCapturing
         pauseMenuItem?.title = (state == .paused) ? "Resume" : "Pause"
         offRecordMenuItem?.isEnabled = isCapturing
+        labelParticipantMenuItem?.isEnabled = isCapturing || state == .detected
+        if let name = activeParticipantName, isCapturing || state == .detected {
+            labelParticipantMenuItem?.title = activeCaptureKind.isMeeting
+                ? "Label room… (\(name))"
+                : "Label participant… (\(name))"
+        } else {
+            labelParticipantMenuItem?.title = activeCaptureKind.isMeeting
+                ? "Label room…"
+                : "Label participant…"
+        }
 
         // Prominent live Stop item: visible + bold only while capturing.
         liveStopMenuItem.isHidden = !isCapturing
@@ -970,7 +1132,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // up (a second, unmissable affirm path), Stop while capturing.
         let controlMode: ControlWindow.Mode
         if isCapturing {
-            controlMode = .capturing(elapsed: elapsedString())
+            controlMode = .capturing(elapsed: elapsedString(),
+                                     participant: activeParticipantName,
+                                     kind: activeCaptureKind)
         } else if state == .detected {
             controlMode = .detected
         } else {

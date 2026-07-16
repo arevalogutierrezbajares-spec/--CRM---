@@ -23,13 +23,23 @@ final class LiveTranscriptStreamer: NSObject {
         case unavailable(String)
     }
 
-    /// Deepgram channel index → speaker label. ch0 = mic (founder), ch1 = system.
-    static func label(forChannel index: Int, participantName: String?) -> String {
+    /// Deepgram channel index → speaker label. ch0 = mic (founder / room), ch1 = system.
+    static func label(forChannel index: Int,
+                      participantName: String?,
+                      kind: CaptureKind = .call) -> String {
         switch index {
-        case 0: return "You"
-        case 1: return participantName ?? "Participant"
+        case 0: return kind.primarySpeakerLabel(participantName: participantName)
+        case 1: return kind.secondarySpeakerLabel(participantName: participantName)
         default: return "Channel \(index)"
         }
+    }
+
+    /// Trim + empty → nil so unlabeled calls stay "Participant".
+    static func normalizeParticipantName(_ name: String?) -> String? {
+        guard let t = name?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty else {
+            return nil
+        }
+        return t
     }
 
     /// One finalized or interim transcript line.
@@ -47,7 +57,8 @@ final class LiveTranscriptStreamer: NSObject {
     var onLine: ((Line) -> Void)?
 
     private let config: HelperConfig
-    private let participantName: String?
+    private var participantName: String?
+    private let captureKind: CaptureKind
     private let session: URLSession
     private var task: URLSessionWebSocketTask?
     private let queue = DispatchQueue(label: "com.agb.capture-helper.live")
@@ -56,14 +67,23 @@ final class LiveTranscriptStreamer: NSObject {
     private var pendingBeforeOpen: [Data] = []
     private(set) var status: Status = .idle
 
-    init(config: HelperConfig, participantName: String? = nil) {
+    init(config: HelperConfig, participantName: String? = nil, captureKind: CaptureKind = .call) {
         self.config = config
-        self.participantName = participantName
+        self.participantName = Self.normalizeParticipantName(participantName)
+        self.captureKind = captureKind
         let cfg = URLSessionConfiguration.ephemeral
         cfg.timeoutIntervalForRequest = 15
         cfg.waitsForConnectivity = false
         self.session = URLSession(configuration: cfg)
         super.init()
+    }
+
+    /// Update far-side speaker label mid-call. Thread-safe; subsequent lines use the new name.
+    func setParticipantName(_ name: String?) {
+        let normalized = Self.normalizeParticipantName(name)
+        queue.async { [weak self] in
+            self?.participantName = normalized
+        }
     }
 
     // MARK: - Lifecycle
@@ -238,13 +258,19 @@ final class LiveTranscriptStreamer: NSObject {
             return
         }
         // multichannel results carry channel_index = [thisChannel, totalChannels].
+        // Read label on the serial queue so mid-call renames are consistent.
         let channel = result.channelIndex?.first ?? 0
-        let speaker = Self.label(forChannel: channel, participantName: participantName)
-        let line = Line(speaker: speaker,
-                        text: transcript,
-                        isFinal: result.isFinal ?? false,
-                        channel: channel)
-        DispatchQueue.main.async { [weak self] in self?.onLine?(line) }
+        queue.async { [weak self] in
+            guard let self else { return }
+            let speaker = Self.label(forChannel: channel,
+                                     participantName: self.participantName,
+                                     kind: self.captureKind)
+            let line = Line(speaker: speaker,
+                            text: transcript,
+                            isFinal: result.isFinal ?? false,
+                            channel: channel)
+            DispatchQueue.main.async { self.onLine?(line) }
+        }
     }
 
     // MARK: - Status

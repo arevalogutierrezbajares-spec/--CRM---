@@ -13,6 +13,8 @@ protocol LiveTranscribing: AnyObject {
     func start()
     func send(pcm: Data)
     func stop()
+    /// Update far-side speaker label mid-call (FR-CALL-ATT-3). Empty → nil.
+    func setParticipantName(_ name: String?)
 }
 
 extension LiveTranscriptStreamer: LiveTranscribing {}
@@ -35,7 +37,8 @@ final class OnDeviceTranscriber: NSObject, LiveTranscribing {
     var onLine: ((LiveTranscriptStreamer.Line) -> Void)?
     private(set) var status: LiveTranscriptStreamer.Status = .idle
 
-    private let participantName: String?
+    private var participantName: String?
+    private let captureKind: CaptureKind
     private let queue = DispatchQueue(label: "com.agb.capture-helper.ondevice")
     private var closed = false
     private var started = false
@@ -56,12 +59,20 @@ final class OnDeviceTranscriber: NSObject, LiveTranscribing {
     private let monoFormat = AVAudioFormat(
         commonFormat: .pcmFormatInt16, sampleRate: 16_000, channels: 1, interleaved: true)!
 
-    init(participantName: String?) {
-        self.participantName = participantName
+    init(participantName: String?, captureKind: CaptureKind = .call) {
+        self.participantName = LiveTranscriptStreamer.normalizeParticipantName(participantName)
+        self.captureKind = captureKind
         super.init()
     }
 
     // MARK: - LiveTranscribing
+
+    func setParticipantName(_ name: String?) {
+        let normalized = LiveTranscriptStreamer.normalizeParticipantName(name)
+        queue.async { [weak self] in
+            self?.participantName = normalized
+        }
+    }
 
     func start() {
         setStatus(.connecting)
@@ -187,7 +198,12 @@ final class OnDeviceTranscriber: NSObject, LiveTranscribing {
     }
 
     private func emit(channel: Int, text: String, isFinal: Bool) {
-        let speaker = LiveTranscriptStreamer.label(forChannel: channel, participantName: participantName)
+        // Always called on `queue` — read participantName here (same serial queue).
+        // Meeting mode: only the mic channel carries room speech (R is silence).
+        if captureKind.isMeeting, channel != 0 { return }
+        let speaker = LiveTranscriptStreamer.label(forChannel: channel,
+                                                   participantName: participantName,
+                                                   kind: captureKind)
         let line = LiveTranscriptStreamer.Line(speaker: speaker, text: text, isFinal: isFinal, channel: channel)
         DispatchQueue.main.async { [weak self] in self?.onLine?(line) }
     }

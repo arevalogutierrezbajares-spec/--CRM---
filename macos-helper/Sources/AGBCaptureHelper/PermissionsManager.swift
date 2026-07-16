@@ -44,9 +44,9 @@ enum PermissionsManager {
 
     // MARK: - Combined preflight
 
-    /// Ensure both permissions, requesting whatever is requestable. Returns
-    /// nil when ready, else a founder-facing explanation of what is missing.
-    static func ensureCapturePermissions() async -> String? {
+    /// Ensure permissions for the capture kind. In-person **meetings** only need
+    /// the microphone; **calls** also need Screen & System Audio Recording.
+    static func ensureCapturePermissions(kind: CaptureKind = .call) async -> String? {
         var problems: [String] = []
 
         switch microphoneStatus() {
@@ -61,7 +61,8 @@ enum PermissionsManager {
             problems.append(microphoneInstructions)
         }
 
-        if !screenRecordingGranted() {
+        // Meeting mode is mic-only (room audio). Skip system-audio gate.
+        if kind == .call, !screenRecordingGranted() {
             // First call shows the OS prompt; permission applies after relaunch.
             requestScreenRecording()
             problems.append(screenRecordingInstructions)
@@ -72,15 +73,15 @@ enum PermissionsManager {
 
     static let microphoneInstructions = """
     Microphone access is missing (needed for your side of the call).
-    Fix: System Settings → Privacy & Security → Microphone → enable AGBCaptureHelper, \
-    then restart the helper.
+    Fix: System Settings → Privacy & Security → Microphone → enable AGB AI, \
+    then restart the app.
     """
 
     static let screenRecordingInstructions = """
     Screen Recording access is missing (macOS gates system-audio capture behind it — \
     needed for the participants' side).
     Fix: System Settings → Privacy & Security → Screen & System Audio Recording → \
-    enable AGBCaptureHelper, then restart the helper.
+    enable AGB AI, then restart the app.
     """
 
     // MARK: - Audio capture (Core Audio process tap)
@@ -96,7 +97,7 @@ enum PermissionsManager {
     other call-app audio cannot be recorded (the helper falls back to ScreenCaptureKit, \
     which only captures regular media playback).
     Fix: System Settings → Privacy & Security → Screen & System Audio Recording → \
-    enable AGBCaptureHelper, then restart the helper. (Audio-capture authorization for \
+    enable AGB AI, then restart the app. (Audio-capture authorization for \
     the process tap is granted alongside this control on macOS 14.4+.)
     """
 

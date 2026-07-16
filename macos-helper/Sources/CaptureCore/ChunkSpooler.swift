@@ -188,6 +188,16 @@ public final class ChunkSpooler {
         try persistManifest()
     }
 
+    /// Set/clear the far-side participant label (FR-CALL-ATT-3). Persists to
+    /// disk so a mid-call crash still finalizes with the name. Empty/whitespace
+    /// is stored as nil (unlabeled).
+    public func setContactName(_ name: String?) throws {
+        lock.lock(); defer { lock.unlock() }
+        let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines)
+        manifestStorage.contactName = (trimmed?.isEmpty == false) ? trimmed : nil
+        try persistManifest()
+    }
+
     /// Mark the call ended. Duration is derived from spooled bytes unless given.
     public func markEnded(endedAt: Date = Date(), durationSecs: Int? = nil, partial: Bool = false) throws {
         lock.lock(); defer { lock.unlock() }

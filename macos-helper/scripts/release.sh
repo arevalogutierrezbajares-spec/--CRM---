@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# release.sh — build, sign, zip, and PUBLISH the macOS Capture Helper so
+# release.sh — build, sign, zip, and PUBLISH AGB AI (macOS helper) so
 # workspace members can download it from the CRM's /capture page.
 #
 #   bash macos-helper/scripts/release.sh [version] [notes]
@@ -12,8 +12,8 @@ HELPER_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 CRM_DIR="$(cd "$HELPER_DIR/.." && pwd)"
 VERSION="${1:-$(date +%Y.%m.%d)}"
 NOTES="${2:-}"
-APP="$HELPER_DIR/AGBCaptureHelper.app"
-ZIP="$HELPER_DIR/AGBCaptureHelper.zip"
+APP="$HELPER_DIR/AGB AI.app"
+ZIP="$HELPER_DIR/AGB-AI.zip"
 
 echo "==> build + sign the .app"
 ( cd "$HELPER_DIR" && ./make-app.sh )

@@ -32,7 +32,13 @@ final class FeedSectionView: TownHallSectionView, NSTableViewDataSource, NSTable
         table.dataSource = self
         table.delegate = self
 
-        let header = thSectionLabel("FEED")
+        let title = thSectionLabel("FEED")
+        let openCRM = THButton(title: "Open in CRM", style: .plain, symbol: "arrow.up.right",
+                               target: self, action: #selector(openCRMFeed))
+        let header = NSStackView(views: [title, NSView(), openCRM])
+        header.orientation = .horizontal
+        header.alignment = .centerY
+        header.spacing = 8
 
         projectChip.setTitles(["No project"])
         projectChip.maxWidth = 150
@@ -63,8 +69,9 @@ final class FeedSectionView: TownHallSectionView, NSTableViewDataSource, NSTable
 
         addSubview(header); addSubview(scroll); addSubview(empty); addSubview(composeRow)
         NSLayoutConstraint.activate([
-            header.topAnchor.constraint(equalTo: topAnchor, constant: 16),
-            header.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 20),
+            header.topAnchor.constraint(equalTo: topAnchor, constant: 14),
+            header.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
+            header.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
 
             scroll.topAnchor.constraint(equalTo: header.bottomAnchor, constant: 8),
             scroll.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
@@ -78,6 +85,12 @@ final class FeedSectionView: TownHallSectionView, NSTableViewDataSource, NSTable
             composeRow.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
             composeRow.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -16),
         ])
+    }
+
+    @objc private func openCRMFeed() {
+        if let url = HelperConfig.effective().crmWebURL(path: "/town-hall") {
+            NSWorkspace.shared.open(url)
+        }
     }
 
     func setPickers(projects: [ProjectRef], members: [MemberRef]) {

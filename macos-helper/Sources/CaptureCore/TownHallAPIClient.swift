@@ -81,6 +81,61 @@ extension CaptureAPIClient {
         try await getDecoding(FilesResponse.self, path: "/api/capture/lobs/\(lobId)/files").files
     }
 
+    /// Download file bytes and write to a temp path with the correct extension.
+    ///
+    /// HTML decks: Supabase signed URLs force `text/plain`, so opening them in a
+    /// browser shows raw source. We download the bytes (proxy preferred; signed
+    /// URL fallback) and open a **local `.html` file** so Safari/Chrome render
+    /// the presentation correctly.
+    public func downloadProjectFile(_ file: ProjectFile) async throws -> URL {
+        let data = try await fetchProjectFileBytes(file)
+
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("AGB-Files", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let folder = dir.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+
+        var name = file.preferredFilename
+        // Ensure HTML decks keep a browser-friendly extension.
+        if file.isHTMLPresentation {
+            let lower = name.lowercased()
+            if !(lower.hasSuffix(".html") || lower.hasSuffix(".htm")) {
+                name += ".html"
+            }
+        }
+        let local = folder.appendingPathComponent(name)
+        try data.write(to: local, options: .atomic)
+        return local
+    }
+
+    private func fetchProjectFileBytes(_ file: ProjectFile) async throws -> Data {
+        // 1) Capture view proxy (correct Content-Type for HTML/MD when deployed).
+        if file.needsViewProxy {
+            do {
+                let request = makeRequest(path: "/api/capture/files/\(file.id)/view", method: "GET")
+                let (body, status) = try await send(request)
+                if status == 200, !body.isEmpty { return body }
+            } catch {
+                // Fall through to signed URL download.
+            }
+        }
+        // 2) Signed Supabase URL — bytes are still the real HTML/PDF content.
+        if let urlStr = file.url, let remote = URL(string: urlStr) {
+            let (body, response) = try await URLSession.shared.data(from: remote)
+            let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+            if code == 200, !body.isEmpty { return body }
+        }
+        // 3) Last resort: capture view again (clear error).
+        let request = makeRequest(path: "/api/capture/files/\(file.id)/view", method: "GET")
+        let (body, status) = try await send(request)
+        try throwForCommonStatus(status, data: body)
+        guard status == 200, !body.isEmpty else {
+            throw APIError.http(status: status, body: "Could not download file")
+        }
+        return body
+    }
+
     // MARK: - Feed
 
     public func getPosts() async throws -> [Post] {

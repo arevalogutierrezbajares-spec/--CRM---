@@ -198,4 +198,40 @@ import Testing
         try spooler.append(Data(count: second)) // becomes new seq 1
         #expect(spooler.snapshot.seqsWritten == [0, 1])
     }
+
+    // MARK: - Participant label (FR-CALL-ATT-3)
+
+    @Test func setContactNamePersistsAndSurvivesReopen() throws {
+        var spooler: ChunkSpooler? = try makeSpooler(chunkSeconds: 1)
+        try spooler?.setContactName("  Carlos  ")
+        #expect(spooler?.snapshot.contactName == "Carlos")
+
+        // Whitespace-only clears.
+        try spooler?.setContactName("   ")
+        #expect(spooler?.snapshot.contactName == nil)
+        try spooler?.setContactName("Ana")
+        spooler = nil
+
+        let reopened = try ChunkSpooler(openingDirectory: tempDir)
+        #expect(reopened.snapshot.contactName == "Ana")
+    }
+
+    @Test func oldManifestWithoutContactNameDecodesAsNil() throws {
+        // Simulate a pre-ATT-001 manifest on disk (no contactName key).
+        let legacy: [String: Any] = [
+            "sessionLocalId": "legacy",
+            "startedAt": "2026-06-01T12:00:00.000Z",
+            "sourceApp": "Zoom",
+            "seqsWritten": [] as [Int],
+            "seqsUploaded": [] as [Int],
+            "finalized": false,
+            "partial": false,
+            "chunkSeconds": 30,
+        ]
+        let data = try JSONSerialization.data(withJSONObject: legacy)
+        let manifest = try JSONDecoder().decode(SessionManifest.self, from: data)
+        #expect(manifest.contactName == nil)
+        #expect(manifest.sourceApp == "Zoom")
+        #expect(manifest.sessionLocalId == "legacy")
+    }
 }

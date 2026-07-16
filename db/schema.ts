@@ -2758,10 +2758,21 @@ export const callRecordings = pgTable("call_recordings", {
   // 1 = legacy mic-only; 2 = dual-channel capture (L=founder, R=participants).
   channels: integer("channels").notNull().default(1),
   sourceApp: text("source_app"),
-  // FR-CALL-ATT-1/2: speaker-attributed utterances [{speaker,channel,start,end,text}].
+  // FR-CALL-ATT-1/2: speaker-attributed utterances [{speaker,channel,start,end,text,diarizationId?}].
   utterances: jsonb("utterances").$type<
-    { speaker: string; channel: number; start: number; end: number; text: string }[]
+    {
+      speaker: string;
+      channel: number;
+      start: number;
+      end: number;
+      text: string;
+      diarizationId?: string;
+    }[]
   >(),
+  // Map diarization clusters → display names, e.g. { "SPEAKER_00": "Carlos" }.
+  speakerMap: jsonb("speaker_map").$type<Record<string, string>>(),
+  // STT engine used for filing: local:whisperx | deepgram | deepgram+diarize | null.
+  transcriptEngine: text("transcript_engine"),
   // FR-CALL-OPS-4: e.g. ["founder_channel_silent","participant_channel_silent"].
   suspectFlags: jsonb("suspect_flags").$type<string[]>(),
   // FR-CALL-RET-5: consent posture note ("participant informed verbally", …).

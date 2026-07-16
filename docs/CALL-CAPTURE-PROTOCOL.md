@@ -47,11 +47,30 @@ Server updates `last_chunk_seq` / `last_chunk_at` (crash-sweep heartbeat).
 Call ended. Body:
 ```json
 { "endedAt": "ISO-8601", "durationSecs": 1234, "totalChunks": 42,
-  "partial": false, "contactName": "Carlos" | null }
+  "partial": false, "contactName": "Carlos" | null,
+  "precomputedTranscript": {
+    "language": "en",
+    "engine": "whisperx",
+    "utterances": [
+      { "speaker": "SPEAKER_00", "diarizationId": "SPEAKER_00",
+        "channel": 0, "start": 1.2, "end": 3.4, "text": "…" }
+    ]
+  } | null }
 ```
+`contactName` (optional): founder-labeled far-side person name. When set, the
+server labels dialogue turns as that name (not `"Participant"`) and attempts a
+unique CRM contact match (FR-CALL-ATT-3 / FR-CALL-DST-4). The Mac Helper
+persists this on the spool manifest mid-call so crash salvage still sends it.
+Omit or null when unlabeled.
+
+`precomputedTranscript` (optional, additive): local free STT+diarization from
+the Mac Helper (WhisperX / Vibe / whisper.cpp). When present with ≥1 utterance,
+the server **skips Deepgram** and files from these utterances. Used primarily
+for **in-person meetings** (`sourceApp: "In-Person Meeting"`).
+
 Server: verifies chunks 0..totalChunks-1 present (missing → `409 { missing: [seqs] }`,
 helper re-uploads then retries finalize) → assembles single WAV → dual-channel
-transcription → speaker-attributed dialogue → AI filing → CRM rows.
+transcription (or precomputed) → speaker-attributed dialogue → AI filing → CRM rows.
 Synchronous; may take ~1–10 min for long calls. Helper calls it from its queue
 worker with a long timeout and retries on network failure (idempotent: a second
 finalize of a `filed` session returns the existing result).

@@ -64,6 +64,9 @@ const SYSTEM_PLAIN =
 const SYSTEM_DIALOGUE =
   "You file recorded phone calls for a busy operator. The transcript is a speaker-attributed dialogue: each line is '[mm:ss] Name: words'. The operator is the first-listed speaker label given in the message. Produce a skimmable brief, a short CRM note, and extract only genuinely actionable tasks. CRITICAL: attribute commitments to the correct speaker — distinguish what the operator promised from what the other party promised; in the brief, name who owes what. Action items are ONLY the operator's own tasks (including following up on the other party's promises). Write each action item in the language that the person who must act on it was speaking. Be faithful: preserve names, numbers, dates exactly; never invent a task or detail. Adaptive length. You MUST call the file_call tool exactly once.";
 
+const SYSTEM_MEETING =
+  "You file in-person meeting notes for a busy operator. The transcript is room audio (often a single 'Room' speaker stream mixing everyone present). Produce a skimmable brief, a short CRM note, and extract only genuinely actionable tasks for the operator. Prefer decisions, owners, and next steps. When names appear in the transcript or attendee label, use them. Never invent attendees or commitments. Adaptive length. Write in the transcript's primary language. You MUST call the file_call tool exactly once.";
+
 type CallItem = {
   title?: unknown;
   description?: unknown;
@@ -96,22 +99,32 @@ export async function fileCallTranscript(opts: {
   attributed?: boolean;
   /** Operator label used in the dialogue (e.g. "Founder" or display name). */
   founderLabel?: string;
+  /** In-person room capture (mic-only) — use meeting filing prompt. */
+  inPersonMeeting?: boolean;
   spendRoute?: string;
 }): Promise<FileCallResult> {
   const transcript = opts.transcript;
 
-  let title = "Call";
+  let title = opts.inPersonMeeting ? "Meeting" : "Call";
   let brief = "";
   let note = transcript.slice(0, 280);
   let items: CallItem[] = [];
 
-  const preamble = opts.attributed
-    ? `OPERATOR SPEAKER LABEL: ${opts.founderLabel ?? "Founder"}\nDURATION: ${opts.durationSecs ?? "unknown"}s\n\nDIALOGUE TRANSCRIPT:\n`
-    : `DURATION: ${opts.durationSecs ?? "unknown"}s\n\nTRANSCRIPT:\n`;
+  const preamble = opts.inPersonMeeting
+    ? `IN-PERSON MEETING\nPRIMARY LABEL: ${opts.founderLabel ?? "Room"}\nATTENDEE HINT: ${opts.contactName ?? "(none)"}\nDURATION: ${opts.durationSecs ?? "unknown"}s\n\nROOM TRANSCRIPT:\n`
+    : opts.attributed
+      ? `OPERATOR SPEAKER LABEL: ${opts.founderLabel ?? "Founder"}\nDURATION: ${opts.durationSecs ?? "unknown"}s\n\nDIALOGUE TRANSCRIPT:\n`
+      : `DURATION: ${opts.durationSecs ?? "unknown"}s\n\nTRANSCRIPT:\n`;
+
+  const system = opts.inPersonMeeting
+    ? SYSTEM_MEETING
+    : opts.attributed
+      ? SYSTEM_DIALOGUE
+      : SYSTEM_PLAIN;
 
   const res = await claudeWithTools({
     model: "claude-haiku-4-5",
-    system: opts.attributed ? SYSTEM_DIALOGUE : SYSTEM_PLAIN,
+    system,
     tools: [FILE_CALL_TOOL],
     maxTokens: 1500,
     spend: {

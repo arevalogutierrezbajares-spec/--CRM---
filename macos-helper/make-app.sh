@@ -1,8 +1,8 @@
 #!/bin/bash
-# make-app.sh — wrap the SwiftPM-built binary into AGBCaptureHelper.app and
+# make-app.sh — wrap the SwiftPM-built binary into "AGB AI.app" and
 # (optionally) register it as a login item (FR-CALL-OPS-1).
 #
-#   ./make-app.sh                  build release binary + create ./AGBCaptureHelper.app
+#   ./make-app.sh                  build release binary + create ./AGB AI.app
 #   ./make-app.sh --install-login  also register the app as a login item (SMAppService)
 #   ./make-app.sh --uninstall-login  unregister the login item
 #
@@ -10,14 +10,21 @@
 # and Screen Recording permission to the bundle identity, and the bundle's
 # Info.plist carries the required NSMicrophoneUsageDescription. Run the helper
 # from the bundle, not as a bare binary, for real capture.
+#
+# Product name (Finder/Dock): AGB AI
+# Executable / SPM product:   AGBCaptureHelper (stable binary name)
+# Bundle id / signing:        unchanged so TCC grants persist across rebuilds
 
 set -euo pipefail
 cd "$(dirname "$0")"
 
 APP_NAME="AGBCaptureHelper"
+DISPLAY_NAME="AGB AI"
 BUNDLE_ID="com.agb.capture-helper"
 VERSION="1.0.0"
-APP_DIR="$PWD/$APP_NAME.app"
+APP_DIR="$PWD/$DISPLAY_NAME.app"
+# Remove legacy bundle name so we don't leave two helpers around.
+LEGACY_APP_DIR="$PWD/AGBCaptureHelper.app"
 
 echo "==> swift build -c release"
 swift build -c release
@@ -30,6 +37,10 @@ fi
 
 echo "==> assembling $APP_DIR"
 rm -rf "$APP_DIR"
+if [[ -d "$LEGACY_APP_DIR" ]]; then
+    echo "    removing legacy $LEGACY_APP_DIR"
+    rm -rf "$LEGACY_APP_DIR"
+fi
 mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources"
 cp "$BIN" "$APP_DIR/Contents/MacOS/$APP_NAME"
 
@@ -41,6 +52,14 @@ else
     echo "    (no AppIcon.icns — run scripts/make-icon.sh; bundling without an icon)"
 fi
 
+# Idle cinema videos (Venezuela landscapes for the Bolívar intro).
+INTRO_SRC="$PWD/Sources/AGBCaptureHelper/Resources/intro"
+if [[ -d "$INTRO_SRC" ]]; then
+    echo "    bundling intro videos → Contents/Resources/intro"
+    mkdir -p "$APP_DIR/Contents/Resources/intro"
+    cp -f "$INTRO_SRC"/*.mp4 "$APP_DIR/Contents/Resources/intro/" 2>/dev/null || true
+fi
+
 cat > "$APP_DIR/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -50,7 +69,8 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
     <key>CFBundleExecutable</key>             <string>$APP_NAME</string>
     <key>CFBundleIdentifier</key>             <string>$BUNDLE_ID</string>
     <key>CFBundleInfoDictionaryVersion</key>  <string>6.0</string>
-    <key>CFBundleName</key>                   <string>AGB Capture Helper</string>
+    <key>CFBundleName</key>                   <string>$DISPLAY_NAME</string>
+    <key>CFBundleDisplayName</key>            <string>$DISPLAY_NAME</string>
     <key>CFBundleIconFile</key>               <string>AppIcon</string>
     <key>CFBundleIconName</key>               <string>AppIcon</string>
     <key>CFBundlePackageType</key>            <string>APPL</string>
@@ -58,12 +78,12 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
     <key>CFBundleVersion</key>                <string>$VERSION</string>
     <key>LSMinimumSystemVersion</key>         <string>14.0</string>
     <key>NSMicrophoneUsageDescription</key>
-    <string>AGB Capture Helper records your side of calls (with your explicit per-call consent) to file them into your CRM.</string>
+    <string>AGB AI records your side of calls (with your explicit per-call consent) to file them into your CRM.</string>
     <key>NSAudioCaptureUsageDescription</key>
-    <string>AGB Capture Helper records the other participants' audio — including FaceTime and other call apps — via a Core Audio process tap, so it can file the full conversation into your CRM (with your explicit per-call consent).</string>
+    <string>AGB AI records the other participants' audio — including FaceTime and other call apps — via a Core Audio process tap, so it can file the full conversation into your CRM (with your explicit per-call consent).</string>
     <key>NSSpeechRecognitionUsageDescription</key>
-    <string>AGB Capture Helper transcribes your calls on-device with Apple Speech so the live transcript stays private to your Mac.</string>
-    <key>NSHumanReadableCopyright</key>       <string>AGB CRM internal tool</string>
+    <string>AGB AI transcribes your calls on-device with Apple Speech so the live transcript stays private to your Mac.</string>
+    <key>NSHumanReadableCopyright</key>       <string>AGB AI — AGB CRM internal tool</string>
 </dict>
 </plist>
 PLIST

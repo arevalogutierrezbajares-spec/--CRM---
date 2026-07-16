@@ -45,8 +45,17 @@ export async function createCallRecording(input: {
   channels?: number;
   sourceApp?: string | null;
   utterances?:
-    | { speaker: string; channel: number; start: number; end: number; text: string }[]
+    | {
+        speaker: string;
+        channel: number;
+        start: number;
+        end: number;
+        text: string;
+        diarizationId?: string;
+      }[]
     | null;
+  speakerMap?: Record<string, string> | null;
+  transcriptEngine?: string | null;
   suspectFlags?: string[] | null;
   partial?: boolean;
 }): Promise<string> {
@@ -62,6 +71,8 @@ export async function createCallRecording(input: {
       channels: input.channels ?? 1,
       sourceApp: input.sourceApp ?? null,
       utterances: input.utterances ?? null,
+      speakerMap: input.speakerMap ?? null,
+      transcriptEngine: input.transcriptEngine ?? null,
       suspectFlags: input.suspectFlags ?? null,
       partial: input.partial ?? false,
       durationSecs: input.durationSecs ?? null,
@@ -83,6 +94,10 @@ export async function updateCallRecording(input: {
   actionItemCount?: number;
   consentNote?: string | null;
   contactAmbiguous?: boolean;
+  transcript?: string;
+  speakerMap?: Record<string, string> | null;
+  transcriptEngine?: string | null;
+  utterances?: CallRecordingRow["utterances"];
 }): Promise<void> {
   const patch: Partial<CallRecordingRow> = {};
   if (input.title !== undefined) patch.title = input.title;
@@ -94,6 +109,11 @@ export async function updateCallRecording(input: {
   if (input.consentNote !== undefined) patch.consentNote = input.consentNote;
   if (input.contactAmbiguous !== undefined)
     patch.contactAmbiguous = input.contactAmbiguous;
+  if (input.transcript !== undefined) patch.transcript = input.transcript;
+  if (input.speakerMap !== undefined) patch.speakerMap = input.speakerMap;
+  if (input.transcriptEngine !== undefined)
+    patch.transcriptEngine = input.transcriptEngine;
+  if (input.utterances !== undefined) patch.utterances = input.utterances;
   if (Object.keys(patch).length === 0) return;
   await db
     .update(callRecordings)

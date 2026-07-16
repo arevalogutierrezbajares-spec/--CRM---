@@ -8,7 +8,7 @@ import CaptureCore
 final class NotesSectionView: TownHallSectionView {
 
     private var lobs: [LobRef] = []
-    private let destination = NSSegmentedControl(labels: ["Town Hall", "Project"],
+    private let destination = NSSegmentedControl(labels: ["Town Hall feed", "Portfolio project"],
                                                  trackingMode: .selectOne, target: nil, action: nil)
     private let lobChip = THMenuButton(symbol: "folder")
     private let editor = THTextArea(placeholder: "Write a note…")
@@ -30,7 +30,7 @@ final class NotesSectionView: TownHallSectionView {
         destination.segmentStyle = .rounded
 
         lobChip.maxWidth = 220
-        lobChip.setTitles(["No projects"])
+        lobChip.setTitles(["Select project…"])
         lobChip.isHidden = true
 
         let header = thSectionLabel("NEW NOTE")
@@ -39,11 +39,14 @@ final class NotesSectionView: TownHallSectionView {
         destRow.alignment = .centerY
         destRow.spacing = 12
 
+        let extractBtn = THButton(title: "Extract actions in CRM", style: .plain, symbol: "sparkles",
+                                  target: self, action: #selector(openExtract))
         let saveBtn = THButton(title: "Save Note", style: .primary, symbol: "checkmark",
                                target: self, action: #selector(save))
-        let saveRow = NSStackView(views: [confirm, NSView(), saveBtn])
+        let saveRow = NSStackView(views: [confirm, NSView(), extractBtn, saveBtn])
         saveRow.orientation = .horizontal
         saveRow.alignment = .centerY
+        saveRow.spacing = 8
 
         for v in [header, destRow, editor, saveRow] { v.translatesAutoresizingMaskIntoConstraints = false }
         addSubview(header); addSubview(destRow); addSubview(editor); addSubview(saveRow)
@@ -68,7 +71,16 @@ final class NotesSectionView: TownHallSectionView {
 
     func setLobs(_ lobs: [LobRef]) {
         self.lobs = lobs
-        lobChip.setTitles(lobs.isEmpty ? ["No projects"] : lobs.map { $0.title })
+        lobChip.setTitles(lobs.isEmpty ? ["No portfolio projects"] : lobs.map { $0.title })
+    }
+
+    /// Opens CRM Town Hall extract flow (Haiku, confirm-before-commit — low AI spend).
+    @objc private func openExtract() {
+        if let url = HelperConfig.effective().crmWebURL(path: "/town-hall?extract=1") {
+            NSWorkspace.shared.open(url)
+        } else {
+            onError?("Configure CRM URL first (gear → Configure…).")
+        }
     }
 
     override func reload() {
@@ -86,10 +98,10 @@ final class NotesSectionView: TownHallSectionView {
         var lobId: String?
         if destination.selectedSegment == 1 {
             let idx = lobChip.selectedIndex
-            guard idx >= 0 && idx < lobs.count else { onError?("Pick a project for the note."); return }
+            guard idx >= 0 && idx < lobs.count else { onError?("Pick a portfolio project for the note."); return }
             lobId = lobs[idx].id
         }
-        let where_ = lobId == nil ? "Posted to the feed." : "Saved to the project."
+        let where_ = lobId == nil ? "Posted to the Town Hall feed." : "Saved on the portfolio project."
         run { [weak self] client in
             try await client.createNote(body: body, lobId: lobId)
             self?.editor.string = ""

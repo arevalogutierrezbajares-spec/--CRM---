@@ -51,6 +51,17 @@ public struct HelperConfig: Codable, Equatable {
     /// this only adds a local save before the spool is cleaned up.
     public var keepAudioLocal: Bool
 
+    // MARK: - Local free STT + diarization (meetings)
+
+    /// Run WhisperX / Vibe / whisper.cpp on meeting stop before finalize.
+    public var localTranscribeEnabled: Bool
+    /// auto | whisperx | vibe | whispercpp | off
+    public var localTranscribeBackend: String
+    /// Optional full command override, e.g. "/path/.venv/bin/python /path/transcribe.py"
+    public var localTranscribeCommand: String?
+    public var localTranscribeModel: String
+    public var localTranscribeTimeoutSecs: Double
+
     public init(crmBaseUrl: String = "",
                 token: String = "",
                 retentionNote: String? = nil,
@@ -61,7 +72,12 @@ public struct HelperConfig: Codable, Equatable {
                 liveTranscript: Bool = true,
                 liveTranscriptAutoShow: Bool = true,
                 liveTranscriptOnDevice: Bool = true,
-                keepAudioLocal: Bool = false) {
+                keepAudioLocal: Bool = false,
+                localTranscribeEnabled: Bool = true,
+                localTranscribeBackend: String = "auto",
+                localTranscribeCommand: String? = nil,
+                localTranscribeModel: String = "small",
+                localTranscribeTimeoutSecs: Double = 1800) {
         self.crmBaseUrl = crmBaseUrl
         self.token = token
         self.retentionNote = retentionNote
@@ -73,6 +89,11 @@ public struct HelperConfig: Codable, Equatable {
         self.liveTranscriptAutoShow = liveTranscriptAutoShow
         self.liveTranscriptOnDevice = liveTranscriptOnDevice
         self.keepAudioLocal = keepAudioLocal
+        self.localTranscribeEnabled = localTranscribeEnabled
+        self.localTranscribeBackend = localTranscribeBackend
+        self.localTranscribeCommand = localTranscribeCommand
+        self.localTranscribeModel = localTranscribeModel
+        self.localTranscribeTimeoutSecs = localTranscribeTimeoutSecs
     }
 
     /// 90 s of two-channel silence ≈ a clearly-ended call, well past any natural pause.
@@ -97,10 +118,26 @@ public struct HelperConfig: Codable, Equatable {
         liveTranscriptAutoShow = (try? c.decodeIfPresent(Bool.self, forKey: .liveTranscriptAutoShow)) ?? true
         liveTranscriptOnDevice = (try? c.decodeIfPresent(Bool.self, forKey: .liveTranscriptOnDevice)) ?? true
         keepAudioLocal = (try? c.decodeIfPresent(Bool.self, forKey: .keepAudioLocal)) ?? false
+        localTranscribeEnabled = (try? c.decodeIfPresent(Bool.self, forKey: .localTranscribeEnabled)) ?? true
+        localTranscribeBackend = (try? c.decodeIfPresent(String.self, forKey: .localTranscribeBackend)) ?? "auto"
+        localTranscribeCommand = try? c.decodeIfPresent(String.self, forKey: .localTranscribeCommand)
+        localTranscribeModel = (try? c.decodeIfPresent(String.self, forKey: .localTranscribeModel)) ?? "small"
+        let lt = (try? c.decodeIfPresent(Double.self, forKey: .localTranscribeTimeoutSecs)) ?? 1800
+        localTranscribeTimeoutSecs = lt > 0 ? lt : 1800
     }
 
     public var isComplete: Bool {
         !token.isEmpty && URL(string: crmBaseUrl) != nil && !crmBaseUrl.isEmpty
+    }
+
+    /// Absolute web URL for a CRM path (e.g. `/town-hall`, `/dashboard?x=1`).
+    /// Handles trailing slashes and query strings (unlike `appendingPathComponent`).
+    public func crmWebURL(path: String) -> URL? {
+        guard !crmBaseUrl.isEmpty else { return nil }
+        var base = crmBaseUrl.trimmingCharacters(in: .whitespacesAndNewlines)
+        while base.hasSuffix("/") { base.removeLast() }
+        let p = path.hasPrefix("/") ? path : "/\(path)"
+        return URL(string: base + p)
     }
 
     /// URL of the CRM live-transcript token-grant endpoint, derived from

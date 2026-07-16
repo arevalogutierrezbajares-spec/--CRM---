@@ -13,13 +13,18 @@ import CaptureCore
 /// safety cap (PromptPolicy). Declined/expired prompts persist zero bytes
 /// (NFR-CALL-PRIV-2).
 ///
+/// Optional participant name field (FR-CALL-ATT-3): founder can label the far
+/// side before recording so live captions + CRM dialogue use a person name.
+///
 /// Level is `.statusBar`: above other apps' `.floating` panels (e.g. the
 /// WhatsApp call window), so the Record button can never be buried under
 /// another window — the failure that lost the first 8.5 minutes of a call on
 /// 2026-06-12.
 final class PromptController {
 
-    var onRecord: (() -> Void)?
+    /// Called when Record is pressed. Argument is the optional participant name
+    /// (trimmed; empty → nil). Never the source app.
+    var onRecord: ((String?) -> Void)?
     /// The prompt ended without recording: explicit Dismiss or the safety cap.
     /// (A call-end dismissal comes from AppDelegate via `dismissPanel()`.)
     var onDecline: ((PromptPolicy.DeclineReason) -> Void)?
@@ -28,11 +33,17 @@ final class PromptController {
     private var capTimer: Timer?
     private var refreshTimer: Timer?
     private var label: NSTextField?
+    private var nameField: NSTextField?
     private var titleText = ""
     /// Live view into the engine's RAM pre-roll, for the buffered readout.
     private var bufferedSeconds: (() -> Double)?
 
     var isShowing: Bool { panel != nil }
+
+    /// Current name field value (trimmed empty → nil). Safe if panel dismissed.
+    var enteredParticipantName: String? {
+        LiveTranscriptStreamer.normalizeParticipantName(nameField?.stringValue)
+    }
 
     func show(sourceApp: String?,
               capSeconds: TimeInterval,
@@ -54,6 +65,16 @@ final class PromptController {
         label.maximumNumberOfLines = 2
         self.label = label
 
+        let nameField = NSTextField(string: "")
+        nameField.placeholderString = "Who's on the call? (optional)"
+        nameField.font = .systemFont(ofSize: 12)
+        nameField.isBezeled = true
+        nameField.bezelStyle = .roundedBezel
+        nameField.focusRingType = .default
+        nameField.translatesAutoresizingMaskIntoConstraints = false
+        nameField.widthAnchor.constraint(greaterThanOrEqualToConstant: 240).isActive = true
+        self.nameField = nameField
+
         let recordButton = NSButton(title: "Record", target: self, action: #selector(recordTapped))
         recordButton.bezelStyle = .rounded
         recordButton.keyEquivalent = "\r"
@@ -67,14 +88,14 @@ final class PromptController {
         buttons.orientation = .horizontal
         buttons.spacing = 8
 
-        let stack = NSStackView(views: [label, buttons])
+        let stack = NSStackView(views: [label, nameField, buttons])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 10
         stack.edgeInsets = NSEdgeInsets(top: 14, left: 16, bottom: 14, right: 16)
 
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 280, height: 92),
+            contentRect: NSRect(x: 0, y: 0, width: 300, height: 130),
             styleMask: [.nonactivatingPanel, .titled, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -140,6 +161,7 @@ final class PromptController {
         panel?.orderOut(nil)
         panel = nil
         label = nil
+        nameField = nil
         bufferedSeconds = nil
     }
 
@@ -166,8 +188,9 @@ final class PromptController {
     // MARK: - Actions
 
     @objc private func recordTapped() {
+        let name = enteredParticipantName
         dismissPanel()
-        onRecord?()
+        onRecord?(name)
     }
 
     @objc private func dismissTapped() {

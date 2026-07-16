@@ -14,7 +14,14 @@ public struct SessionManifest: Codable, Equatable {
     /// ISO-8601 call start (includes pre-roll: backdated to first buffered byte).
     public var startedAt: String
     /// App that opened the microphone, when resolvable (macOS 14.4+), else nil.
+    /// For in-person meetings this is `CaptureKind.sourceAppMeeting`.
     public var sourceApp: String?
+    /// `call` (default) or `meeting` (in-person, mic-only). Crash-safe.
+    public var captureKind: String?
+    /// Far-side participant display name (founder-labeled). Sent as finalize
+    /// `contactName` so CRM dialogue + contact match use a person, not "Participant".
+    /// Nil when unlabeled. Crash-safe: survives Helper restart via manifest.
+    public var contactName: String?
     /// Chunk seqs written to disk (contiguous from 0 by construction).
     public var seqsWritten: [Int]
     /// Chunk seqs confirmed uploaded (200 from PUT).
@@ -36,6 +43,8 @@ public struct SessionManifest: Codable, Equatable {
                 serverSessionId: String? = nil,
                 startedAt: Date,
                 sourceApp: String? = nil,
+                captureKind: CaptureKind = .call,
+                contactName: String? = nil,
                 seqsWritten: [Int] = [],
                 seqsUploaded: [Int] = [],
                 finalized: Bool = false,
@@ -47,6 +56,8 @@ public struct SessionManifest: Codable, Equatable {
         self.serverSessionId = serverSessionId
         self.startedAt = ISO8601.string(from: startedAt)
         self.sourceApp = sourceApp
+        self.captureKind = captureKind.rawValue
+        self.contactName = contactName
         self.seqsWritten = seqsWritten
         self.seqsUploaded = seqsUploaded
         self.finalized = finalized
@@ -58,6 +69,11 @@ public struct SessionManifest: Codable, Equatable {
 
     public var startedAtDate: Date? { ISO8601.date(from: startedAt) }
     public var endedAtDate: Date? { endedAt.flatMap(ISO8601.date(from:)) }
+
+    /// Resolved capture kind (defaults to call for older manifests).
+    public var kind: CaptureKind {
+        CaptureKind(rawValue: captureKind ?? "") ?? .call
+    }
 
     /// Seqs written but not yet confirmed uploaded, ascending.
     public var pendingUploadSeqs: [Int] {

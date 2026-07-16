@@ -9,6 +9,12 @@ import {
 import { getMeetingSummary } from "@/db/queries/meetings";
 import { removeObjects } from "@/lib/capture/storage";
 import { isUuid } from "@/lib/capture/validate";
+import {
+  rebuildDialogue,
+  type DialogueUtterance,
+} from "@/lib/capture/rebuild-dialogue";
+import { isInPersonMeetingSource } from "@/lib/capture/finalize";
+import { claudeChat } from "@/lib/anthropic";
 
 /** Full recording detail, workspace-fenced (transcript, dialogue, audio state). */
 export async function GET(
@@ -42,6 +48,8 @@ export async function GET(
     createdAt: rec.createdAt,
     // Capture-module surface (FR-CALL-ACC-2/3, ATT-2/3, RET-2/5, OPS-4):
     utterances: rec.utterances ?? null,
+    speakerMap: rec.speakerMap ?? null,
+    transcriptEngine: rec.transcriptEngine ?? null,
     channels: rec.channels,
     sourceApp: rec.sourceApp,
     partial: rec.partial,
@@ -75,9 +83,34 @@ export async function PATCH(
     title?: string;
     brief?: string | null;
     consentNote?: string | null;
+    speakerMap?: Record<string, string> | null;
+    refile?: boolean;
   } | null;
   if (!body) {
     return NextResponse.json({ error: "JSON body required" }, { status: 400 });
+  }
+
+  let transcript: string | undefined;
+  let speakerMap: Record<string, string> | null | undefined;
+  if (body.speakerMap !== undefined) {
+    const cleaned: Record<string, string> = {};
+    if (body.speakerMap && typeof body.speakerMap === "object") {
+      for (const [k, v] of Object.entries(body.speakerMap)) {
+        const key = String(k).slice(0, 64);
+        const name = String(v ?? "").trim().slice(0, 120);
+        if (key && name) cleaned[key] = name;
+      }
+    }
+    speakerMap = Object.keys(cleaned).length ? cleaned : null;
+    const utts = (rec.utterances ?? []) as DialogueUtterance[];
+    if (utts.length > 0) {
+      const inPerson = isInPersonMeetingSource(rec.sourceApp);
+      transcript = rebuildDialogue(utts, {
+        founder: inPerson ? "Room" : "You",
+        participant: "Participant",
+        speakerMap: cleaned,
+      });
+    }
   }
 
   await updateCallRecording({
@@ -91,8 +124,67 @@ export async function PATCH(
           ? null
           : String(body.consentNote).slice(0, 500)
         : undefined,
+    speakerMap,
+    transcript,
   });
-  return NextResponse.json({ ok: true });
+
+  let refileBrief: string | undefined;
+  let refileTitle: string | undefined;
+  if (body.refile === true && transcript) {
+    // Light re-file: refresh title/brief only — no new meeting/action items.
+    try {
+      const chat = await claudeChat({
+        model: "claude-haiku-4-5",
+        system:
+          "Summarize this speaker-labeled transcript. Reply with JSON only: " +
+          '{"title":"3-8 words","brief_markdown":"**TL;DR:** …"}. Same language as transcript.',
+        prompt: transcript.slice(0, 24000),
+        maxTokens: 800,
+        spend: {
+          workspaceId: user.workspaceId,
+          userId: user.id,
+          direction: "out",
+          payload: { route: "voice:recording:refile", chars: transcript.length },
+          trackUsage: true,
+        },
+      });
+      if (chat.ok) {
+        const m = chat.text.match(/\{[\s\S]*\}/);
+        if (m) {
+          const parsed = JSON.parse(m[0]) as {
+            title?: string;
+            brief_markdown?: string;
+          };
+          refileTitle = (parsed.title || "").slice(0, 120) || undefined;
+          refileBrief = parsed.brief_markdown || chat.text;
+        } else {
+          refileBrief = chat.text;
+        }
+        await updateCallRecording({
+          id,
+          workspaceId: user.workspaceId,
+          title: refileTitle,
+          brief: refileBrief ?? null,
+        });
+      }
+    } catch (e) {
+      return NextResponse.json(
+        {
+          ok: true,
+          transcript: transcript ?? undefined,
+          refileError: String(e).slice(0, 200),
+        },
+        { status: 200 },
+      );
+    }
+  }
+
+  return NextResponse.json({
+    ok: true,
+    transcript: transcript ?? undefined,
+    title: refileTitle,
+    brief: refileBrief,
+  });
 }
 
 /**

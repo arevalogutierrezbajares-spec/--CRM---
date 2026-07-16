@@ -44,6 +44,8 @@ public final class TownHallPoller {
     public var onNotifications: ((_ unread: Int, _ items: [THNotification]) -> Void)?
     /// The latest feed (for the Feed section).
     public var onPosts: (([Post]) -> Void)?
+    /// Open action items (for the Action Items section — keeps helper in sync with CRM).
+    public var onActionItems: (([ActionItem]) -> Void)?
 
     private var deduper = NotificationDeduper()
     private var timer: Timer?
@@ -73,15 +75,22 @@ public final class TownHallPoller {
     /// Force an immediate refresh (call after any mutation so the UI isn't stale).
     public func pokeNow() { tick() }
 
+    /// Optional: UI can show a “Syncing…” indicator at the start of each tick.
+    public var onTickStarted: (() -> Void)?
+
     private func tick() {
         guard !ticking, let client = clientProvider() else { return }
         ticking = true
+        onTickStarted?()
         Task { @MainActor [weak self] in
-            // Notifications + posts independently; one failing doesn't sink the other.
+            // Each endpoint independently; one failing doesn't sink the others.
+            // No AI spend — pure CRM reads over the capture token.
             async let notifsResult = try? client.getNotifications()
             async let postsResult = try? client.getPosts()
+            async let itemsResult = try? client.getActionItems()
             let notifs = await notifsResult
             let posts = await postsResult
+            let items = await itemsResult
 
             guard let self else { return }
             self.ticking = false
@@ -95,6 +104,12 @@ public final class TownHallPoller {
                 }
             }
             if let posts { self.onPosts?(posts) }
+            if let items { self.onActionItems?(items) }
+            // If everything failed, surface a soft error via empty callbacks absence —
+            // sections keep last good data (Apple Mail pattern).
+            if notifs == nil && posts == nil && items == nil {
+                // no-op at poller layer; pane keeps prior status
+            }
         }
     }
 }

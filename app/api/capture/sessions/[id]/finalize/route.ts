@@ -8,7 +8,11 @@ import {
 } from "@/db/queries/capture-sessions";
 import { getCallRecording, getContactName } from "@/db/queries/call-recordings";
 import { finalizeSession } from "@/lib/capture/finalize";
-import { isUuid, MAX_TOTAL_CHUNKS } from "@/lib/capture/validate";
+import {
+  isUuid,
+  MAX_TOTAL_CHUNKS,
+  parsePrecomputedTranscript,
+} from "@/lib/capture/validate";
 import { FINALIZE_LEASE_MINUTES } from "@/lib/capture/constants";
 
 export const maxDuration = 800; // long calls: assembly + transcription + filing
@@ -37,6 +41,7 @@ export async function POST(
     totalChunks?: number;
     partial?: boolean;
     contactName?: string | null;
+    precomputedTranscript?: unknown;
   } | null;
   if (!body || !Number.isInteger(body.totalChunks) || body.totalChunks! < 1) {
     return NextResponse.json(
@@ -116,6 +121,7 @@ export async function POST(
   }
 
   const endedAt = body.endedAt ? new Date(body.endedAt) : new Date();
+  const precomputed = parsePrecomputedTranscript(body.precomputedTranscript);
   const outcome = await finalizeSession({
     session,
     founderLabel: identity.displayName?.split(/\s+/)[0] ?? "Founder",
@@ -125,6 +131,7 @@ export async function POST(
     totalChunks: body.totalChunks!,
     partial: body.partial === true,
     contactName: body.contactName ?? null,
+    precomputedTranscript: precomputed,
   });
 
   if (!outcome.ok) {

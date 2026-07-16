@@ -13,6 +13,12 @@ import CaptureCore
 /// reads a process's audio *directly* and reaches that path, so FaceTime call
 /// audio is actually captured.
 ///
+/// **Output device independence (FR-CALL-CAP-2):** the global process tap reads
+/// app audio *before* it hits the default output device. Built-in speakers,
+/// wired headphones, and AirPods all work — no headphones required. When the
+/// default output device changes mid-call (plug/unplug headphones), we fully
+/// restart the tap so capture never goes silent on speakers-only routes.
+///
 /// Pattern (mirrors github.com/insidegui/AudioCap, the proven approach the
 /// shipping "Dipper" recorder uses):
 ///   1. Build a GLOBAL stereo tap of every process EXCEPT our own (so we capture
@@ -64,9 +70,15 @@ final class ProcessAudioTap {
     /// (which changes sample rate / channel count) re-reads the format and
     /// restarts the IOProc, mirroring the SCStream-restart resilience.
     private var formatListenerInstalled = false
+    /// Listener on the system default *output* device so speakers ↔ headphones
+    /// plug events restart capture even when the aggregate stream format is
+    /// unchanged (common: both 48 kHz stereo).
+    private var defaultOutputListenerInstalled = false
     /// Serial queue the format-change listener fires on (off the real-time
     /// IOProc thread; serialized so overlapping route changes can't race).
     private let listenerQueue = DispatchQueue(label: "com.agb.capture-helper.process-tap.listener")
+    /// Debounce stacked route notifications (plug + format fire close together).
+    private var lastFullRestartAt: CFAbsoluteTime = 0
 
     // MARK: - Lifecycle
 
@@ -75,35 +87,50 @@ final class ProcessAudioTap {
     func start() throws {
         lock.lock(); defer { lock.unlock() }
         guard !isRunning else { return }
+        try startLocked()
+    }
 
+    /// Must be called with `lock` held. `isRunning` must be false.
+    private func startLocked() throws {
+        try startHardwareLocked()
+        installDefaultOutputListener() // once per ProcessAudioTap instance
+        isRunning = true
+        let route = OutputRoute.currentDefaultOutput()
+        HelperLog.shared.info(
+            "process-tap started (aggregate \(aggregateID), \(Int(tapInputFormat?.sampleRate ?? 0)) Hz × \(tapInputFormat?.channelCount ?? 0) ch, output: \(route.summary))",
+            category: "audio"
+        )
+    }
+
+    /// Create tap + aggregate + IOProc. Does not touch the system default-output
+    /// listener (that lives for the whole ProcessAudioTap lifetime).
+    private func startHardwareLocked() throws {
         let tap = try createTap()
         let (aggregate, format) = try createAggregate(forTapUUID: tap.uuid)
         self.tapID = tap.id
         self.aggregateID = aggregate
         self.tapInputFormat = format
-        self.converter = nil // rebuilt lazily against `format`
-
+        self.converter = nil
         try installIOProcAndStart(on: aggregate)
         installFormatListener(on: aggregate)
-
-        isRunning = true
-        HelperLog.shared.info(
-            "process-tap started (aggregate \(aggregate), \(Int(format.sampleRate)) Hz × \(format.channelCount) ch)",
-            category: "audio"
-        )
     }
 
     /// Robust, idempotent teardown. Safe to call when nothing was created.
     func stop() {
         lock.lock(); defer { lock.unlock() }
-        teardownLocked()
+        teardownLocked(removeOutputListener: true)
         HelperLog.shared.info("process-tap stopped", category: "audio")
     }
 
     /// Must be called with `lock` held.
-    private func teardownLocked() {
+    /// - Parameter removeOutputListener: false during mid-call full restart so we
+    ///   don't stack system property listeners (flag-only "remove" is a no-op HAL-wise).
+    private func teardownLocked(removeOutputListener: Bool = true) {
         isRunning = false
         removeFormatListenerLocked()
+        if removeOutputListener {
+            removeDefaultOutputListenerLocked()
+        }
 
         if aggregateID != AudioObjectID(kAudioObjectUnknown) {
             AudioDeviceStop(aggregateID, ioProcID)
@@ -126,6 +153,39 @@ final class ProcessAudioTap {
 
         converter = nil
         tapInputFormat = nil
+    }
+
+    /// Tear down + recreate the full tap after a default-output route change
+    /// (speakers ↔ headphones). Debounced; keeps the system output listener.
+    private func fullRestartAfterRouteChange(reason: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard isRunning else { return }
+        let now = CFAbsoluteTimeGetCurrent()
+        // Ignore bursts within 0.75 s (plug events often fire twice).
+        guard now - lastFullRestartAt > 0.75 else { return }
+        lastFullRestartAt = now
+
+        let route = OutputRoute.currentDefaultOutput()
+        HelperLog.shared.warn(
+            "process-tap full restart (\(reason)) → output: \(route.summary)",
+            category: "audio"
+        )
+        teardownLocked(removeOutputListener: false)
+        do {
+            try startHardwareLocked()
+            isRunning = true
+            HelperLog.shared.info(
+                "process-tap restarted after route change (output: \(route.summary))",
+                category: "audio"
+            )
+        } catch {
+            HelperLog.shared.error(
+                "process-tap full restart failed: \(error.localizedDescription)",
+                category: "audio"
+            )
+            onFatalError?("System-audio tap lost after output route change: \(error.localizedDescription)")
+        }
     }
 
     // MARK: - Tap creation
@@ -343,7 +403,7 @@ final class ProcessAudioTap {
         return Data(bytes: channelData[0], count: Int(outBuffer.frameLength) * 2)
     }
 
-    // MARK: - Mid-call format / route changes (AirPods connect/disconnect)
+    // MARK: - Mid-call format / route changes (speakers ↔ headphones / AirPods)
 
     private func installFormatListener(on device: AudioObjectID) {
         var address = AudioObjectPropertyAddress(
@@ -368,6 +428,38 @@ final class ProcessAudioTap {
         // `isRunning` is false (and bails the instant the aggregate is gone). We
         // also cannot match the original block by identity to remove it.
         formatListenerInstalled = false
+    }
+
+    /// System-wide default *output* device (speakers / headphones / AirPods).
+    /// Plug-unplug often does not change the aggregate stream format, so the
+    /// format listener alone is not enough — we fully restart the tap.
+    private func installDefaultOutputListener() {
+        guard !defaultOutputListenerInstalled else { return }
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        let status = AudioObjectAddPropertyListenerBlock(
+            AudioObjectID(kAudioObjectSystemObject), &address, listenerQueue
+        ) { [weak self] _, _ in
+            // Already on listenerQueue (third arg above).
+            self?.fullRestartAfterRouteChange(reason: "default output device changed")
+        }
+        defaultOutputListenerInstalled = (status == noErr)
+        if status != noErr {
+            HelperLog.shared.warn(
+                "could not install default-output listener (OSStatus \(status)) — speaker/headphone plug events may not auto-recover",
+                category: "audio"
+            )
+        }
+    }
+
+    private func removeDefaultOutputListenerLocked() {
+        // Same deadlock-avoidance as format listener: do not remove the system
+        // listener under lock. Flag off so we re-install on next start; orphaned
+        // system listeners no-op when `isRunning` is false (fullRestart bails).
+        defaultOutputListenerInstalled = false
     }
 
     /// A route change (e.g. AirPods connect/disconnect) altered the aggregate's

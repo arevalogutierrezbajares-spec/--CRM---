@@ -1,7 +1,11 @@
 /**
  * Dual-channel prerecorded transcription via Deepgram (FR-CALL-TRX-3/4,
- * FR-CALL-ATT-1). Channel 0 = founder, channel 1 = participants — speaker
- * attribution falls out of the channel index, no diarization guesswork.
+ * FR-CALL-ATT-1). Channel 0 = founder/room mic, channel 1 = system/participants.
+ *
+ * For two-party *calls*, speaker attribution falls out of the channel index
+ * (no ML diarization). For *in-person meetings* (mic-only room mix), optional
+ * Deepgram `diarize=true` labels SPEAKER_0… within channel 0 — preferred path
+ * is still free local WhisperX / whisper.cpp (see docs/LOCAL-DIARIZATION-PLAN.md).
  */
 import "server-only";
 import {
@@ -11,11 +15,18 @@ import {
 } from "./constants";
 
 export type Utterance = {
-  speaker: string; // "founder" | "participant"
+  /**
+   * Display / cluster id:
+   * - "founder" | "participant" — dual-channel call sides
+   * - "SPEAKER_00"… — diarization clusters (meeting or multi-person far side)
+   */
+  speaker: string;
   channel: number;
   start: number; // seconds
   end: number;
   text: string;
+  /** Raw diarization cluster before human mapping (optional). */
+  diarizationId?: string;
 };
 
 export type TranscriptionResult = {
@@ -26,11 +37,20 @@ export type TranscriptionResult = {
   suspectFlags: string[];
 };
 
+/** Map channel-based sides + optional diarization clusters → display names. */
+export type DialogueLabels = {
+  founder: string;
+  participant: string;
+  /** e.g. { SPEAKER_00: "Carlos", SPEAKER_01: "Ana" } */
+  speakerMap?: Record<string, string>;
+};
+
 type DeepgramUtterance = {
   start?: number;
   end?: number;
   channel?: number;
   transcript?: string;
+  speaker?: number;
 };
 
 function fmtTs(secs: number): string {
@@ -39,13 +59,38 @@ function fmtTs(secs: number): string {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
+/**
+ * Resolve display label for one utterance.
+ * Priority: speakerMap[diarizationId|speaker] → channel founder/participant
+ * → raw speaker string.
+ */
+export function resolveSpeakerLabel(
+  u: Utterance,
+  labels: DialogueLabels,
+): string {
+  const map = labels.speakerMap ?? {};
+  const key = u.diarizationId ?? u.speaker;
+  if (map[key]) return map[key];
+  if (u.speaker.startsWith("SPEAKER_") && map[u.speaker]) return map[u.speaker];
+
+  // Dual-channel call sides (no diarization clusters).
+  if (u.speaker === "founder" || (u.channel === FOUNDER_CHANNEL && !u.diarizationId)) {
+    // Meeting diarization: keep SPEAKER_xx rather than collapsing to one "Room".
+    if (u.speaker.startsWith("SPEAKER_")) return u.speaker;
+    if (u.speaker === "founder") return labels.founder;
+  }
+  if (u.speaker === "participant") return labels.participant;
+  if (u.speaker.startsWith("SPEAKER_")) return u.speaker;
+  return u.channel === FOUNDER_CHANNEL ? labels.founder : labels.participant;
+}
+
 export function buildDialogue(
   utterances: Utterance[],
-  labels: { founder: string; participant: string },
+  labels: DialogueLabels,
 ): string {
   return utterances
     .map((u) => {
-      const who = u.channel === FOUNDER_CHANNEL ? labels.founder : labels.participant;
+      const who = resolveSpeakerLabel(u, labels);
       return `[${fmtTs(u.start)}] ${who}: ${u.text}`;
     })
     .join("\n");
@@ -60,6 +105,7 @@ export function buildDialogue(
 export function detectSilentChannels(
   utterances: Utterance[],
   durationSecs: number,
+  opts?: { inPersonMeeting?: boolean },
 ): string[] {
   const speech = [0, 0];
   const count = [0, 0];
@@ -74,16 +120,16 @@ export function detectSilentChannels(
     count[ch] === 0 || (speech[ch] < floor && count[1 - ch] >= 3);
   if (durationSecs >= 20) {
     if (suspicious(0)) flags.push(FLAG_FOUNDER_SILENT);
-    if (suspicious(1)) flags.push(FLAG_PARTICIPANT_SILENT);
+    // In-person meetings are mic-only (R channel intentionally silent).
+    if (suspicious(1) && !opts?.inPersonMeeting) {
+      flags.push(FLAG_PARTICIPANT_SILENT);
+    }
   }
   return flags;
 }
 
-// nova-3 multichannel, ES/EN code-switching (FR-CALL-TRX-4), channel index =
-// speaker. mip_opt_out belt-and-suspenders for NFR-CALL-SEC-3 (no-training is
-// also an account-level posture — see docs/CALL-CAPTURE-PROTOCOL.md).
-function deepgramParams(): URLSearchParams {
-  return new URLSearchParams({
+function deepgramParams(opts?: { diarize?: boolean }): URLSearchParams {
+  const p = new URLSearchParams({
     model: "nova-3",
     language: "multi",
     multichannel: "true",
@@ -92,6 +138,32 @@ function deepgramParams(): URLSearchParams {
     utterances: "true",
     mip_opt_out: "true",
   });
+  // Diarization within each channel (needed for in-person room mixes on ch0).
+  if (opts?.diarize) p.set("diarize", "true");
+  return p;
+}
+
+function mapDeepgramSpeaker(
+  u: DeepgramUtterance,
+  opts?: { inPersonMeeting?: boolean; diarize?: boolean },
+): { speaker: string; diarizationId?: string } {
+  const ch = u.channel ?? 0;
+  const hasDiarize =
+    opts?.diarize && typeof u.speaker === "number" && Number.isFinite(u.speaker);
+
+  if (hasDiarize) {
+    const id = `SPEAKER_${String(u.speaker).padStart(2, "0")}`;
+    // On calls, still prefix with side so founder channel clusters ≠ remote.
+    if (!opts?.inPersonMeeting) {
+      const side = ch === FOUNDER_CHANNEL ? "founder" : "participant";
+      return { speaker: `${side}:${id}`, diarizationId: id };
+    }
+    return { speaker: id, diarizationId: id };
+  }
+
+  return {
+    speaker: ch === FOUNDER_CHANNEL ? "founder" : "participant",
+  };
 }
 
 function parseDeepgram(
@@ -102,29 +174,37 @@ function parseDeepgram(
     };
   } | null,
   durationSecs: number,
+  opts?: { inPersonMeeting?: boolean; diarize?: boolean },
 ): { ok: true; result: TranscriptionResult } | { ok: false; error: string } {
   if (!json?.results) return { ok: false, error: "Deepgram: empty results" };
   const raw = Array.isArray(json.results.utterances) ? json.results.utterances : [];
   const utterances: Utterance[] = raw
     .filter((u) => (u.transcript ?? "").trim().length > 0)
-    .map((u) => ({
-      speaker: (u.channel ?? 0) === FOUNDER_CHANNEL ? "founder" : "participant",
-      channel: u.channel ?? 0,
-      start: u.start ?? 0,
-      end: u.end ?? u.start ?? 0,
-      text: (u.transcript ?? "").trim(),
-    }))
+    .map((u) => {
+      const sp = mapDeepgramSpeaker(u, opts);
+      return {
+        speaker: sp.speaker,
+        diarizationId: sp.diarizationId,
+        channel: u.channel ?? 0,
+        start: u.start ?? 0,
+        end: u.end ?? u.start ?? 0,
+        text: (u.transcript ?? "").trim(),
+      };
+    })
     .sort((a, b) => a.start - b.start);
+
+  const labels: DialogueLabels = {
+    founder: opts?.inPersonMeeting ? "Room" : "Founder",
+    participant: "Participant",
+  };
+
   return {
     ok: true,
     result: {
       utterances,
-      dialogueText: buildDialogue(utterances, {
-        founder: "Founder",
-        participant: "Participant",
-      }),
+      dialogueText: buildDialogue(utterances, labels),
       language: json.results.channels?.[0]?.detected_language ?? "multi",
-      suspectFlags: detectSilentChannels(utterances, durationSecs),
+      suspectFlags: detectSilentChannels(utterances, durationSecs, opts),
     },
   };
 }
@@ -138,21 +218,28 @@ function parseDeepgram(
 export async function transcribeDualChannelBytes(opts: {
   wav: Uint8Array;
   durationSecs: number;
+  inPersonMeeting?: boolean;
+  /** Enable speaker diarization (paid Deepgram). Prefer free local worker for meetings. */
+  diarize?: boolean;
 }): Promise<
   | { ok: true; result: TranscriptionResult }
   | { ok: false; error: string }
 > {
   const key = process.env.DEEPGRAM_API_KEY;
   if (!key) return { ok: false, error: "DEEPGRAM_API_KEY not set" };
+  // Meetings default to diarize so multi-person room mixes get SPEAKER_xx labels
+  // when local free worker is not used.
+  const diarize = opts.diarize ?? !!opts.inPersonMeeting;
   let resp: Response;
   try {
-    resp = await fetch(`https://api.deepgram.com/v1/listen?${deepgramParams()}`, {
-      method: "POST",
-      headers: { Authorization: `Token ${key}`, "Content-Type": "audio/wav" },
-      // undici's fetch (Node/Vercel) accepts a Uint8Array body directly; the
-      // DOM BodyInit type is just over-conservative about the buffer's origin.
-      body: opts.wav as unknown as BodyInit,
-    });
+    resp = await fetch(
+      `https://api.deepgram.com/v1/listen?${deepgramParams({ diarize })}`,
+      {
+        method: "POST",
+        headers: { Authorization: `Token ${key}`, "Content-Type": "audio/wav" },
+        body: opts.wav as unknown as BodyInit,
+      },
+    );
   } catch (e) {
     return { ok: false, error: `Deepgram unreachable: ${String(e)}` };
   }
@@ -161,7 +248,10 @@ export async function transcribeDualChannelBytes(opts: {
     return { ok: false, error: `Deepgram ${resp.status}: ${body.slice(0, 300)}` };
   }
   const json = (await resp.json().catch(() => null)) as Parameters<typeof parseDeepgram>[0];
-  return parseDeepgram(json, opts.durationSecs);
+  return parseDeepgram(json, opts.durationSecs, {
+    inPersonMeeting: opts.inPersonMeeting,
+    diarize,
+  });
 }
 
 /**
@@ -171,23 +261,29 @@ export async function transcribeDualChannelBytes(opts: {
 export async function transcribeDualChannel(opts: {
   audioUrl: string;
   durationSecs: number;
+  inPersonMeeting?: boolean;
+  diarize?: boolean;
 }): Promise<
   | { ok: true; result: TranscriptionResult }
   | { ok: false; error: string }
 > {
   const key = process.env.DEEPGRAM_API_KEY;
   if (!key) return { ok: false, error: "DEEPGRAM_API_KEY not set" };
+  const diarize = opts.diarize ?? !!opts.inPersonMeeting;
 
   let resp: Response;
   try {
-    resp = await fetch(`https://api.deepgram.com/v1/listen?${deepgramParams()}`, {
-      method: "POST",
-      headers: {
-        Authorization: `Token ${key}`,
-        "Content-Type": "application/json",
+    resp = await fetch(
+      `https://api.deepgram.com/v1/listen?${deepgramParams({ diarize })}`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Token ${key}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ url: opts.audioUrl }),
       },
-      body: JSON.stringify({ url: opts.audioUrl }),
-    });
+    );
   } catch (e) {
     return { ok: false, error: `Deepgram unreachable: ${String(e)}` };
   }
@@ -197,5 +293,8 @@ export async function transcribeDualChannel(opts: {
   }
 
   const json = (await resp.json().catch(() => null)) as Parameters<typeof parseDeepgram>[0];
-  return parseDeepgram(json, opts.durationSecs);
+  return parseDeepgram(json, opts.durationSecs, {
+    inPersonMeeting: opts.inPersonMeeting,
+    diarize,
+  });
 }

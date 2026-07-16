@@ -82,23 +82,69 @@ public final class CaptureAPIClient {
         public let totalChunks: Int
         public let partial: Bool
         public let contactName: String?
+        /// Local free STT+diarize payload (skips Deepgram when present).
+        public let precomputedTranscript: PrecomputedTranscript?
+
+        public struct PrecomputedTranscript: Encodable {
+            public let language: String?
+            public let engine: String?
+            public let utterances: [Utterance]
+
+            public struct Utterance: Encodable {
+                public let speaker: String
+                public let diarizationId: String?
+                public let channel: Int
+                public let start: Double
+                public let end: Double
+                public let text: String
+
+                public init(speaker: String, diarizationId: String?, channel: Int,
+                            start: Double, end: Double, text: String) {
+                    self.speaker = speaker
+                    self.diarizationId = diarizationId
+                    self.channel = channel
+                    self.start = start
+                    self.end = end
+                    self.text = text
+                }
+            }
+
+            public init(language: String?, engine: String?, utterances: [Utterance]) {
+                self.language = language
+                self.engine = engine
+                self.utterances = utterances
+            }
+
+            public init(_ t: LocalTranscript) {
+                language = t.language
+                engine = t.engine
+                utterances = t.utterances.map {
+                    Utterance(speaker: $0.speaker, diarizationId: $0.diarizationId,
+                              channel: $0.channel, start: $0.start, end: $0.end, text: $0.text)
+                }
+            }
+        }
 
         public init(endedAt: Date, durationSecs: Int, totalChunks: Int,
-                    partial: Bool, contactName: String? = nil) {
+                    partial: Bool, contactName: String? = nil,
+                    precomputedTranscript: PrecomputedTranscript? = nil) {
             self.endedAt = ISO8601.string(from: endedAt)
             self.durationSecs = durationSecs
             self.totalChunks = totalChunks
             self.partial = partial
             self.contactName = contactName
+            self.precomputedTranscript = precomputedTranscript
         }
 
         public init(endedAtISO: String, durationSecs: Int, totalChunks: Int,
-                    partial: Bool, contactName: String? = nil) {
+                    partial: Bool, contactName: String? = nil,
+                    precomputedTranscript: PrecomputedTranscript? = nil) {
             self.endedAt = endedAtISO
             self.durationSecs = durationSecs
             self.totalChunks = totalChunks
             self.partial = partial
             self.contactName = contactName
+            self.precomputedTranscript = precomputedTranscript
         }
 
         public func encode(to encoder: Encoder) throws {
@@ -111,6 +157,9 @@ public final class CaptureAPIClient {
                 try c.encode(contactName, forKey: .init("contactName"))
             } else {
                 try c.encodeNil(forKey: .init("contactName"))
+            }
+            if let precomputedTranscript {
+                try c.encode(precomputedTranscript, forKey: .init("precomputedTranscript"))
             }
         }
     }

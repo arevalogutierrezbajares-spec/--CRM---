@@ -57,6 +57,35 @@ public struct ProjectFile: Decodable, Identifiable, Equatable {
         url = try? c.decodeIfPresent(String.self, forKey: .url)
         createdAt = try? c.decodeIfPresent(String.self, forKey: .createdAt)
     }
+
+    /// Best display / temp filename (keeps extension for HTML decks).
+    public var preferredFilename: String {
+        let raw = (originalFilename?.isEmpty == false ? originalFilename! : label)
+            .replacingOccurrences(of: "/", with: "-")
+        return raw.isEmpty ? "file" : raw
+    }
+
+    /// Extension without dot, lowercased.
+    public var fileExtension: String {
+        let name = preferredFilename
+        guard let dot = name.lastIndex(of: ".") else { return "" }
+        return String(name[name.index(after: dot)...]).lowercased()
+    }
+
+    /// HTML decks + Markdown need the capture view proxy (not raw signed URL).
+    public var needsViewProxy: Bool {
+        switch fileExtension {
+        case "html", "htm", "md", "markdown": return true
+        default: return false
+        }
+    }
+
+    public var isHTMLPresentation: Bool {
+        switch fileExtension {
+        case "html", "htm": return true
+        default: return false
+        }
+    }
 }
 
 // MARK: - Posts (feed)
