@@ -1,0 +1,67 @@
+# AGB-CRM — LLM / agent documentation index
+
+> Curated entry points for coding agents (Claude, Codex, Cursor, Grok).
+> Structure is derived into THE BRAIN graph via `pnpm brain:build` (docs corpus).
+> Prefer Brain rebuild-guard search on `/brain` or `searchBrain()` for “does it exist?”.
+
+## Portfolio map (THE BRAIN)
+
+- [Brain ops runbook](brain-ops.md) — regenerate graph, CI, freshness, secrets
+- [THE BRAIN HLR](requirements/THE-BRAIN-HLR.md) — product requirements for the living map
+- [Brain Phase 1 build plan](requirements/brain-phase1/00-BUILD-PLAN.md)
+- [Brain CRM-native UI notes](brain-crm-native-ui-2026-07-17.md)
+
+## Getting oriented
+
+- [Getting started](GETTING-STARTED.md)
+- [CLAUDE.md](../CLAUDE.md) — agent operating rules for this repo (root)
+
+## Architecture decisions
+
+- [ADR-001 tech stack](adr/ADR-001-tech-stack.md)
+- [ADR-002 locked decisions](adr/ADR-002-locked-decisions.md)
+
+## How-tos / runbooks
+
+- [Email module runbook](EMAIL-MODULE-RUNBOOK.md)
+- [Call capture protocol](CALL-CAPTURE-PROTOCOL.md)
+- [Posada onboarding](posada-onboarding.md)
+- [WA agent notes](WA-AGENT.md)
+
+## Requirements (reference)
+
+- [HLR V2](requirements/HLR-V2.md)
+- [FR matrix](requirements/FR-MATRIX.md)
+- [Email module V1](requirements/EMAIL-MODULE-V1.md)
+- [Call capture module V1](requirements/CALL-CAPTURE-MODULE-V1.md)
+
+## Cross-system
+
+- [VAV ↔ CaneyCloud ↔ CRM sync status](VAV-CaneyCloud-CRM-sync-status.md)
+- [Integration close-loop checklist](checklists/INTEGRATION-CLOSE-LOOP-CRM-CC-VAV.md)
+
+## RCA / agent usage
+
+When diagnosing an incident or “does this already exist?”:
+
+1. Search the Brain (`/brain` rebuild-guard or `searchBrain(graph, query)`).
+2. Prefer hits of kind `doc` / `adr` and architecture nodes with `docs_ref` / `summary`.
+3. Open the linked markdown path under `docs/` (paths are stored on doc nodes as `docs_ref`).
+4. For cross-system issues, inspect interchange edges (kind `interchange`) and follow `documents` edges from related docs.
+5. Cite `brain_node` ids and doc paths in the write-up; do not invent surfaces that search returns as empty (verify before building).
+
+## Corpus model (Phase 1)
+
+Markdown under `docs/**` is scanned on `pnpm brain:build`. Optional YAML frontmatter:
+
+```yaml
+---
+brain_node: crm.capture   # join key to architecture node id
+type: howto               # howto | explanation | reference | adr | failure-mode
+system: crm
+title: Human title
+summary: One-line agent-facing summary
+---
+```
+
+Doc nodes use kind `doc` or `adr` and edge kind `documents` when `brain_node` resolves.

@@ -1,3 +1,11 @@
+---
+brain_node: crm
+type: howto
+system: crm
+title: Brain ops runbook
+summary: How the Brain graph is regenerated, checked for staleness, and served on Vercel — multi-repo CI, local roots, and secrets.
+---
+
 # Brain ops runbook
 
 The Brain (`/brain`) is a **derived** portfolio map. Structure comes from

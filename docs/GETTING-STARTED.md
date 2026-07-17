@@ -1,3 +1,11 @@
+---
+brain_node: crm
+type: howto
+system: crm
+title: Getting started with AGB-CRM
+summary: Operator onboarding for local dev, env, and first workflows.
+---
+
 # AGB CRM — Getting started
 
 A 10-minute path from "fresh laptop" to "I just logged my first touch."

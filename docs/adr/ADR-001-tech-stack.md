@@ -1,3 +1,11 @@
+---
+type: adr
+system: crm
+brain_node: crm
+title: ADR 001 tech stack
+summary: Architecture decision record for AGB-CRM (ADR-001-tech-stack).
+---
+
 # ADR-001 — Tech Stack
 
 **Status:** Accepted

@@ -16,7 +16,7 @@
     "db:seed-demo": "tsx scripts/seed-demo.ts",
     "obsidian:sync": "tsx scripts/obsidian-sync.ts",
     "greetings:gen": "tsx scripts/gen-greetings.ts",
-    "brain:build": "node scripts/brain/build-graph.mjs",
+    "brain:build": "BRAIN_SCIP=1 node scripts/brain/build-graph.mjs",
     "brain:check": "node scripts/brain/check-staleness.mjs",
     "brain:scip:index": "node scripts/brain/scip/build-caney-index.mjs",
     "brain:scip:report": "node scripts/brain/scip/report.mjs",

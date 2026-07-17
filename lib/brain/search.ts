@@ -9,7 +9,14 @@ import type { BrainGraph, BrainNode } from "./types";
 
 export type BrainSearchHit = {
   id: string;
-  kind: "system" | "domain" | "surface" | "entity" | "interchange";
+  kind:
+    | "system"
+    | "domain"
+    | "surface"
+    | "entity"
+    | "interchange"
+    | "doc"
+    | "adr";
   label: string;
   system: string | null;
   path: string;
@@ -94,10 +101,25 @@ export function buildSearchIndex(graph: BrainGraph): IndexEntry[] {
           ? "domain"
           : n.kind === "entity"
             ? "entity"
-            : "surface";
+            : n.kind === "doc"
+              ? "doc"
+              : n.kind === "adr"
+                ? "adr"
+                : "surface";
     const label = n.label;
-    const path = nodePath(n);
-    const haystack = [n.id, n.label, n.system ?? "", n.docs_ref ?? "", ...(n.surfaces ?? [])]
+    const path =
+      n.kind === "doc" || n.kind === "adr"
+        ? (n.docs_ref ?? nodePath(n))
+        : nodePath(n);
+    const haystack = [
+      n.id,
+      n.label,
+      n.system ?? "",
+      n.docs_ref ?? "",
+      n.summary ?? "",
+      n.meta ?? "",
+      ...(n.surfaces ?? []),
+    ]
       .join(" ")
       .toLowerCase();
     entries.push({
@@ -144,6 +166,8 @@ const KIND_BOOST: Record<BrainSearchHit["kind"], number> = {
   system: 40,
   domain: 30,
   interchange: 25,
+  adr: 28,
+  doc: 22,
   surface: 20,
   entity: 15,
 };

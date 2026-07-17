@@ -42,6 +42,7 @@ import { extractStateOverlay } from "./extractors/state-overlay.mjs";
 import { extractHostMount } from "./extractors/host-mount.mjs";
 import { extractManifestSource } from "./extractors/manifest-source.mjs";
 import { extractDocsRef } from "./extractors/docs-ref.mjs";
+import { extractDocsCorpus } from "./extractors/docs-corpus.mjs";
 import { applyContractHashes } from "./extractors/contract-hasher.mjs";
 
 /** Resolve a short commit SHA for a repo root; null if not a git repo. */
@@ -190,11 +191,8 @@ async function main() {
     if (next) n.state = next;
   }
 
-  // 8. B4 — docs→node join: populate `summary` + `docs_ref` on any node whose
-  //    id matches a docs/brain/*.md front-matter `brain_node:` in the caney
-  //    repo. No-op unless BRAIN_ROOT_CANEY points at the clone that carries the
-  //    docs (--TOURISM--), NOT the stale tour-pms-main default. Applies to
-  //    nodes emitted by earlier extractors; never adds nodes of its own.
+  // 8. B4 — sibling cartographer docs→node join (caney docs/brain). Soft no-op
+  //    when the clone lacks that tree.
   const docs = extractDocsRef();
   let docsApplied = 0;
   for (const n of gb.nodes()) {
@@ -207,6 +205,33 @@ async function main() {
   if (docs.stats.matched) {
     console.log(
       `[brain:build] docs-ref: matched ${docs.stats.matched} doc(s) → applied to ${docsApplied} node(s)`,
+    );
+  }
+
+  // 9. Phase 1 — CRM docs/** corpus: emit doc/adr nodes + documents edges.
+  {
+    const existingIds = new Set(gb.nodes().map((n) => n.id));
+    const corpus = extractDocsCorpus({ existingNodeIds: existingIds });
+    gb.addNodes(corpus.nodes);
+    gb.addEdges(corpus.edges);
+    let corpusJoined = 0;
+    for (const n of gb.nodes()) {
+      if (n.kind === "doc" || n.kind === "adr") continue;
+      const ref = corpus.joins[n.id];
+      if (!ref) continue;
+      // Prefer richer markdown docs_ref over bare openapi globs when empty/generic
+      if (
+        !n.docs_ref ||
+        n.docs_ref.includes("**") ||
+        n.docs_ref.startsWith("openapi")
+      ) {
+        n.docs_ref = ref.docs_ref;
+      }
+      if (ref.summary && !n.summary) n.summary = ref.summary;
+      corpusJoined++;
+    }
+    console.log(
+      `[brain:build] docs-corpus: scanned ${corpus.stats.scanned} · docs ${corpus.stats.docs} · documents-edges ${corpus.stats.joins} · arch-joins ${corpusJoined}`,
     );
   }
 

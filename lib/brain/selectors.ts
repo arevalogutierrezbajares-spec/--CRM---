@@ -75,7 +75,11 @@ export function isPortalNode(n: BrainNode): n is ClusterNode {
 
 /** Direct children of a node id (by parentId). Pure, order = artifact order. */
 export function childrenOf(graph: BrainGraph, parentId: string | null): BrainNode[] {
-  return graph.nodes.filter((n) => n.parentId === parentId);
+  // Doc/ADR corpus nodes are not architecture children (Phase 1 — search only).
+  return graph.nodes.filter(
+    (n) =>
+      n.parentId === parentId && n.kind !== "doc" && n.kind !== "adr",
+  );
 }
 
 /** All nodes belonging to a system at a given level. */

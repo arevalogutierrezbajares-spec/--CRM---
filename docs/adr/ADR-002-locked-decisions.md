@@ -1,3 +1,11 @@
+---
+type: adr
+system: crm
+brain_node: crm
+title: ADR 002 locked decisions
+summary: Architecture decision record for AGB-CRM (ADR-002-locked-decisions).
+---
+
 # ADR-002 — AGB CRM Locked Decisions
 
 **Status:** Accepted (partial — see Deferred section)

@@ -60,6 +60,8 @@ const KIND_META: Record<
   surface: { label: "Route", Icon: Route },
   entity: { label: "Table", Icon: Box },
   interchange: { label: "Wire", Icon: Cable },
+  doc: { label: "Doc", Icon: FolderTree },
+  adr: { label: "ADR", Icon: LayoutGrid },
 };
 
 export function BrainSearch() {

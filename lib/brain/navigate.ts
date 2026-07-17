@@ -30,6 +30,36 @@ export function navFromHit(
     return [{ type: "select", id: hit.id }];
   }
 
+  // Documentation: prefer linked architecture node via documents edge.
+  if (hit.kind === "doc" || hit.kind === "adr") {
+    const link = graph.edges.find(
+      (e) =>
+        e.kind === "documents" &&
+        (e.from.domain === hit.id || e.id.includes(hit.id)),
+    );
+    if (link?.to?.domain) {
+      const target = graph.nodes.find((n) => n.id === link.to.domain);
+      if (target) {
+        return navFromHit(graph, {
+          id: target.id,
+          kind:
+            target.kind === "system"
+              ? "system"
+              : target.kind === "domain"
+                ? "domain"
+                : target.kind === "entity"
+                  ? "entity"
+                  : "surface",
+          label: target.label,
+          system: target.system,
+          path: target.id,
+          score: hit.score,
+        });
+      }
+    }
+    return [{ type: "select", id: hit.id }];
+  }
+
   const node = graph.nodes.find((n) => n.id === hit.id);
   if (!node) {
     // Portal / synthetic

@@ -1,3 +1,11 @@
+---
+brain_node: crm
+type: howto
+system: crm
+title: Email module runbook
+summary: How to operate and debug the email sync module.
+---
+
 # AGB CRM Email Module Runbook
 
 Version: 2026-06-07

@@ -29,4 +29,27 @@ Rules for new migrations:
 npm run dev          # dev server
 npx vitest run       # unit tests
 npx tsc --noEmit     # typecheck
+pnpm brain:build     # regenerate portfolio graph (includes docs corpus)
+pnpm brain:check     # fail if graph stale / SHA drift
 ```
+
+## THE BRAIN + documentation (agents)
+
+The living architecture map lives at `/brain`. Structure and **markdown docs under `docs/**`** are derived into `lib/brain/generated/brain-graph.json` by `pnpm brain:build` (no LLM in the pipeline).
+
+| Resource | Path |
+|----------|------|
+| Agent docs index | `docs/llms.txt` |
+| Ops runbook | `docs/brain-ops.md` |
+| Search API (pure) | `searchBrain()` in `lib/brain/search.ts` |
+| Doc frontmatter contract | `brain_node`, `type`, `summary`, `title`, `system` on markdown |
+
+### RCA / “does it already exist?”
+
+1. Call rebuild-guard search (`searchBrain(graph, query)` or the `/brain` search field). Hits may be `system` / `domain` / `surface` / `entity` / `interchange` / **`doc` / `adr`**.
+2. For doc hits, open `docs_ref` (repo-relative path). For architecture hits, use `summary` + `docs_ref` when present.
+3. Cross-system issues: inspect `interchange` edges and any `documents` edges linking runbooks/ADRs.
+4. Cite node ids and doc paths. If search is empty, **verify before building** (typos/synonyms may not appear)—do not invent surfaces.
+
+Prefer `docs/llms.txt` over freeform walking the whole tree when starting an investigation.
+

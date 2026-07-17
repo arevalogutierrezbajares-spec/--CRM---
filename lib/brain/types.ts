@@ -19,10 +19,22 @@ export type System = "vav" | "caney" | "crm" | "restaurants" | "academy";
 /** 0 portfolio · 1 system · 2 domain · 3 surface (FR-GRAPH-1). */
 export type NodeLevel = 0 | 1 | 2 | 3;
 
-export type NodeKind = "system" | "domain" | "surface" | "entity";
+export type NodeKind =
+  | "system"
+  | "domain"
+  | "surface"
+  | "entity"
+  /** Phase 1 — markdown documentation / ADR (not drawn as architecture chips). */
+  | "doc"
+  | "adr";
 
 /** Derivation provenance (V1.1). `manifest` ⇒ state must be "needed" (NFR-OBS-5). */
-export type NodeSource = "openapi" | "migrations" | "manifest" | "host_mount";
+export type NodeSource =
+  | "openapi"
+  | "migrations"
+  | "manifest"
+  | "host_mount"
+  | "docs";
 
 /** The 7 business functions (FR-AXIS-3 + OQ-9 `education`). */
 export type Fn =
@@ -43,7 +55,13 @@ export type Liveness = "ok" | "dead" | "atrophy";
 /** ∝ child count — FR-GRAPH-5: ≥3 surfaces ⇒ lg, 1–2 ⇒ md, 0 ⇒ sm. */
 export type NodeSize = "sm" | "md" | "lg";
 
-export type EdgeKind = "contains" | "calls" | "reads_writes" | "interchange";
+export type EdgeKind =
+  | "contains"
+  | "calls"
+  | "reads_writes"
+  | "interchange"
+  /** Phase 1 — documentation documents an architecture node. */
+  | "documents";
 
 /** `host_mount` = module-mounted-in-host (restaurants → caney);
  * `reads`/`writes` = direction of a reads_writes route→table micro-edge. */

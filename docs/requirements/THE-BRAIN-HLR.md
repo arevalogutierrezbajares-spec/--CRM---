@@ -1,3 +1,11 @@
+---
+brain_node: crm
+type: reference
+system: crm
+title: THE BRAIN HLR
+summary: High-level requirements for the living architecture map module.
+---
+
 # THE BRAIN — HLR (High-Level Requirements)
 
 **Project:** The Brain — living architecture-map module, `/brain` route inside AGB-CRM

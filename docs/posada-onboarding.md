@@ -1,3 +1,11 @@
+---
+brain_node: crm
+type: explanation
+system: crm
+title: Posada onboarding
+summary: Product and ops notes for posada partner onboarding.
+---
+
 # Posada Onboarding Intake Wizard (AGB-CRM → TOUR PMS)
 
 End-to-end note for the operator-facing wizard that stands up a posada (small
