@@ -18,7 +18,9 @@
  */
 export const REPO_ROOTS = {
   vav: process.env.BRAIN_ROOT_VAV ?? "/Users/tomas/VZ_Tourism_Project",
-  caney: process.env.BRAIN_ROOT_CANEY ?? "/Users/tomas/tour-pms-main",
+  // Prefer the active TOURISM clone (Overlord + WA work). Override with
+  // BRAIN_ROOT_CANEY if CI checks out tour-pms-main instead.
+  caney: process.env.BRAIN_ROOT_CANEY ?? "/Users/tomas/--TOURISM--",
   crm: process.env.BRAIN_ROOT_CRM ?? "/Users/tomas/AGB-CRM",
   restaurants:
     process.env.BRAIN_ROOT_RESTAURANTS ?? "/Users/tomas/caneycloud-restaurant",

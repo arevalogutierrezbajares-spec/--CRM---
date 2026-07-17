@@ -2,6 +2,7 @@ import { requireUser } from "@/lib/current-user";
 import { TopBar } from "@/components/layout/top-bar";
 import { PlatformCard } from "@/components/platforms/platform-card";
 import { DemoLinksSection } from "@/components/platforms/demo-links-section";
+import { LinkageOverview } from "@/components/platforms/linkage-overview";
 import { VaultSection } from "@/components/platforms/vault-section";
 import { PLATFORMS } from "@/lib/platforms/config";
 import {
@@ -9,6 +10,10 @@ import {
   vavChecks,
   type PlatformCheck,
 } from "@/lib/platforms/status.server";
+import {
+  listPlatformLinkedRooms,
+  type LinkedPartnerRoomRow,
+} from "@/lib/platforms/linkage.server";
 import { isVaultConfigured } from "@/lib/vault/crypto.server";
 import { isVaultUnlocked } from "@/lib/vault/gate.server";
 import {
@@ -38,6 +43,11 @@ export default async function PlatformsPage() {
 
   const demoLinksRes = await safeRead<DemoLinkRow[]>(
     () => listDemoLinks(user.workspaceId),
+    [],
+  );
+
+  const linkedRoomsRes = await safeRead<LinkedPartnerRoomRow[]>(
+    () => listPlatformLinkedRooms(user.workspaceId),
     [],
   );
 
@@ -76,6 +86,8 @@ export default async function PlatformsPage() {
             checks={checksById[platform.id] ?? []}
           />
         ))}
+
+        <LinkageOverview rooms={linkedRoomsRes.data ?? []} />
 
         <DemoLinksSection items={demoLinksRes.data ?? []} siteUrl={SITE_URL} />
 

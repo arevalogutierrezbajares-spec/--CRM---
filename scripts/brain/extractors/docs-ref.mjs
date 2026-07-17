@@ -10,7 +10,7 @@
  * Deterministic + read-only (NFR-SEC-3). Missing docs dir → zero overrides
  * (a stale caney clone with no docs/brain simply yields nothing, never throws).
  *
- * ⚠️ DRIFT TRAP: `REPO_ROOTS.caney` defaults to /Users/tomas/tour-pms-main,
+ * ⚠️ DRIFT TRAP: `REPO_ROOTS.caney` defaults to /Users/tomas/--TOURISM--,
  * which does NOT contain docs/brain. Run the regen with
  * `BRAIN_ROOT_CANEY=/Users/tomas/--TOURISM--` (the clone that has both the
  * OTA/VAV storefront work AND these docs) or this extractor no-ops silently.

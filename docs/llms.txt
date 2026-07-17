@@ -23,6 +23,9 @@
 
 ## How-tos / runbooks
 
+- [Portfolio access & linkage](runbooks/PORTFOLIO-ACCESS-AND-LINKAGE.md) — signup matrix, demos, pilot IDs, probes
+- [CaneyCloud API health](runbooks/CANEYCLOUD-API-HEALTH.md) — Cloud Run vs api.caneycloud.com
+- [Authenticated walkthrough evidence](runbooks/AUTHENTICATED-WALKTHROUGH-EVIDENCE.md)
 - [Email module runbook](EMAIL-MODULE-RUNBOOK.md)
 - [Call capture protocol](CALL-CAPTURE-PROTOCOL.md)
 - [Posada onboarding](posada-onboarding.md)
@@ -39,6 +42,7 @@
 
 - [VAV ↔ CaneyCloud ↔ CRM sync status](VAV-CaneyCloud-CRM-sync-status.md)
 - [Integration close-loop checklist](checklists/INTEGRATION-CLOSE-LOOP-CRM-CC-VAV.md)
+- CRM **Platforms** hub (`/platforms`) — live health + partner-room linkage chips
 
 ## RCA / agent tools
 

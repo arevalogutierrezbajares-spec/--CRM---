@@ -117,17 +117,52 @@ export async function vavChecks(siteUrl: string): Promise<PlatformCheck[]> {
   return Promise.all(checks);
 }
 
+/**
+ * Probe CaneyCloud PMS API health. Cloud Run FastAPI exposes `/health`
+ * (not `/api/v1/health`). Falls through common paths so a wrong base URL
+ * still surfaces something useful.
+ */
+async function caneyApiHealth(baseUrl: string): Promise<PlatformCheck> {
+  const root = baseUrl.replace(/\/$/, "");
+  const paths = ["/health", "/api/v1/health", "/api/health"];
+  let last: PlatformCheck = {
+    label: "Backend API",
+    status: "down",
+    detail: "No health endpoint responded",
+  };
+  for (const path of paths) {
+    const r = await ping(`${root}${path}`, "Backend API");
+    if (r.status === "ok" || r.status === "warn") {
+      return {
+        ...r,
+        detail: `${path} · ${r.detail}`,
+      };
+    }
+    last = { ...r, detail: `${path} · ${r.detail}` };
+  }
+  // Hint when someone still points at the broken Vercel alias.
+  if (root.includes("api.caneycloud.com")) {
+    return {
+      label: "Backend API",
+      status: "down",
+      detail:
+        "api.caneycloud.com is not the PMS API — set CANEY_PMS_API_URL to Cloud Run (tour-pms-backend-*.run.app)",
+    };
+  }
+  return last;
+}
+
 export async function caneyChecks(siteUrl: string): Promise<PlatformCheck[]> {
   const checks: Promise<PlatformCheck>[] = [ping(siteUrl, "Site")];
   const apiUrl = process.env.CANEY_PMS_API_URL;
   if (apiUrl) {
-    checks.push(ping(`${apiUrl}/health`, "Backend API"));
+    checks.push(caneyApiHealth(apiUrl));
   } else {
     checks.push(
       Promise.resolve<PlatformCheck>({
         label: "Backend API",
         status: "off",
-        detail: "Set CANEY_PMS_API_URL",
+        detail: "Set CANEY_PMS_API_URL (Cloud Run tour-pms-backend)",
       }),
     );
   }
