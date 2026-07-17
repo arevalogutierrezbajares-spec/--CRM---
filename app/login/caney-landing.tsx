@@ -1,39 +1,109 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { requestSignInLink, signInWithPassword } from "@/app/actions/auth";
-import { createClient as createBrowserSupabase } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ArenaLoader } from "@/components/arena-loader";
+import { AgbEnterLogo } from "@/components/brand/agb-enter-logo";
 
 // ─── CONFIGURATION ────────────────────────────────────────────────────────────
-// Drop your Caney photo at /public/caney.jpg (or update IMAGE_SRC below).
-// Then tune the hotspot region. Toggle DEBUG=true to see hotspot bounds while
-// you dial it in, then set DEBUG=false to ship the mystery.
+// Primary enter: glowing AGB mark, top-right (see AgbEnterLogo).
+// Optional easter egg: the BOOK in the Caney photo (desktop pointer).
 //
-// Coordinates are percentages of the rendered image (so they survive any
-// viewport size).
-//
-// Tip: open DevTools, hover the image, and watch the console — when DEBUG is
-// on, mousemove logs the x/y % so you can pick exact coords by eye.
+// Book hotspot coords are percentages of the SOURCE IMAGE (not the viewport),
+// mapped through object-fit: cover math. Toggle DEBUG=true to dial them in.
 
 // Real photo: man reading in a tent, surveyors in distance, mountains beyond.
-// The entry point is the BOOK he's holding in front of his face.
 const IMAGE_SRC = "/caney.png";
-const HOTSPOT = {
-  xPct: 58,    // center of book — slightly right of image center
-  yPct: 73,    // book is in the lower-middle area
-  wPct: 7,     // book is small — narrow hotspot
-  hPct: 11,    // book is roughly portrait orientation
+const IMAGE_NATURAL = { w: 1672, h: 941 };
+
+/** Book easter-egg hotspot in source-image space. */
+const HOTSPOT_IMG = {
+  xPct: 58,
+  yPct: 73,
+  wPct: 7,
+  hPct: 11,
 };
+
 const DEBUG = false;
 
 // Shatter tuning
 const GRID_X = 10;
 const GRID_Y = 8;
 const SHATTER_MS = 700;
+
+// ─── Cover layout math ────────────────────────────────────────────────────────
+
+type CoverLayout = {
+  /** Rendered image size in container pixels (may exceed container). */
+  rw: number;
+  rh: number;
+  /** Offset of image top-left relative to container (usually ≤ 0). */
+  ox: number;
+  oy: number;
+  cw: number;
+  ch: number;
+};
+
+function computeCoverLayout(cw: number, ch: number): CoverLayout {
+  const { w: iw, h: ih } = IMAGE_NATURAL;
+  const scale = Math.max(cw / iw, ch / ih);
+  const rw = iw * scale;
+  const rh = ih * scale;
+  const ox = (cw - rw) / 2;
+  const oy = (ch - rh) / 2;
+  return { rw, rh, ox, oy, cw, ch };
+}
+
+/** Map image-% hotspot → container-% box (left/top/width/height). */
+function hotspotToContainer(
+  layout: CoverLayout,
+  img = HOTSPOT_IMG,
+  expandPx = 0,
+): { left: number; top: number; width: number; height: number } {
+  const { rw, rh, ox, oy, cw, ch } = layout;
+  let leftPx = ox + (img.xPct / 100) * rw - (img.wPct / 100) * rw * 0.5;
+  let topPx = oy + (img.yPct / 100) * rh - (img.hPct / 100) * rh * 0.5;
+  let widthPx = (img.wPct / 100) * rw;
+  let heightPx = (img.hPct / 100) * rh;
+
+  // Expand to a usable tap target without shifting the visual center.
+  if (expandPx > 0) {
+    const needW = Math.max(0, expandPx - widthPx);
+    const needH = Math.max(0, expandPx - heightPx);
+    leftPx -= needW / 2;
+    topPx -= needH / 2;
+    widthPx += needW;
+    heightPx += needH;
+  }
+
+  return {
+    left: (leftPx / cw) * 100,
+    top: (topPx / ch) * 100,
+    width: (widthPx / cw) * 100,
+    height: (heightPx / ch) * 100,
+  };
+}
+
+function pointInHotspot(
+  clientX: number,
+  clientY: number,
+  rect: DOMRect,
+  layout: CoverLayout,
+  expandPx: number,
+): boolean {
+  const box = hotspotToContainer(layout, HOTSPOT_IMG, expandPx);
+  const xPct = ((clientX - rect.left) / rect.width) * 100;
+  const yPct = ((clientY - rect.top) / rect.height) * 100;
+  return (
+    xPct >= box.left &&
+    xPct <= box.left + box.width &&
+    yPct >= box.top &&
+    yPct <= box.top + box.height
+  );
+}
 
 // ─── COMPONENT ────────────────────────────────────────────────────────────────
 
@@ -44,7 +114,24 @@ export function CaneyLanding() {
   const [hover, setHover] = useState(false);
   const [cursor, setCursor] = useState({ x: -100, y: -100, vis: false });
   const [hintVisible, setHintVisible] = useState(false);
+  const [layout, setLayout] = useState<CoverLayout | null>(null);
   const imgRef = useRef<HTMLDivElement>(null);
+
+  // Keep cover layout in sync with the container (resize / orientation).
+  useEffect(() => {
+    const el = imgRef.current;
+    if (!el) return;
+    const measure = () => {
+      const r = el.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) {
+        setLayout(computeCoverLayout(r.width, r.height));
+      }
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // Show the poetic hint after 10s of idle dwell on the page (only once).
   useEffect(() => {
@@ -91,49 +178,79 @@ export function CaneyLanding() {
     })();
   }, []);
 
-  function handleMove(e: React.MouseEvent<HTMLDivElement>) {
+  /** Primary enter — AGB logo already played its Pixar beat; open the form. */
+  const enterFromLogo = useCallback(() => {
+    if (phase !== "idle") return;
+    setHover(false);
+    setCursor((c) => ({ ...c, vis: false }));
+    setPhase("form");
+  }, [phase]);
+
+  /** Book easter egg — pixel shatter then form. */
+  const enterFromBook = useCallback(() => {
+    if (phase !== "idle") return;
+    setPhase("shattering");
+    setHover(false);
+    setCursor((c) => ({ ...c, vis: false }));
+    setTimeout(() => setPhase("form"), SHATTER_MS - 100);
+  }, [phase]);
+
+  function handlePointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (phase !== "idle") return;
     const el = imgRef.current;
-    if (!el) return;
+    if (!el || !layout) return;
+    // Book easter egg is pointer-only; skip touch (logo is the mobile enter).
+    if (e.pointerType === "touch") return;
     const rect = el.getBoundingClientRect();
-    const xPct = ((e.clientX - rect.left) / rect.width) * 100;
-    const yPct = ((e.clientY - rect.top) / rect.height) * 100;
-    const inHotspot =
-      xPct >= HOTSPOT.xPct - HOTSPOT.wPct / 2 &&
-      xPct <= HOTSPOT.xPct + HOTSPOT.wPct / 2 &&
-      yPct >= HOTSPOT.yPct - HOTSPOT.hPct / 2 &&
-      yPct <= HOTSPOT.yPct + HOTSPOT.hPct / 2;
+    const inHotspot = pointInHotspot(e.clientX, e.clientY, rect, layout, 0);
     setHover(inHotspot);
     setCursor({ x: e.clientX, y: e.clientY, vis: true });
     if (DEBUG) {
+      const { rw, rh, ox, oy } = layout;
+      const imgX = ((e.clientX - rect.left - ox) / rw) * 100;
+      const imgY = ((e.clientY - rect.top - oy) / rh) * 100;
       // eslint-disable-next-line no-console
-      console.log(`x=${xPct.toFixed(1)}% y=${yPct.toFixed(1)}% inside=${inHotspot}`);
+      console.log(
+        `img x=${imgX.toFixed(1)}% y=${imgY.toFixed(1)}% inside=${inHotspot}`,
+      );
     }
   }
 
-  function handleLeave() {
+  function handlePointerLeave() {
     setHover(false);
     setCursor((c) => ({ ...c, vis: false }));
   }
 
-  function handleClick() {
-    if (phase !== "idle" || !hover) return;
-    setPhase("shattering");
-    // After the shatter completes, switch to the form
-    setTimeout(() => setPhase("form"), SHATTER_MS - 100);
+  function handlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    if (phase !== "idle" || !layout) return;
+    // Keep the book as a desktop easter egg only.
+    if (e.pointerType === "touch") return;
+    const el = imgRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    if (!pointInHotspot(e.clientX, e.clientY, rect, layout, 0)) return;
+    e.preventDefault();
+    enterFromBook();
   }
+
+  const box = layout ? hotspotToContainer(layout, HOTSPOT_IMG, 0) : null;
 
   return (
     <main
       className="relative h-screen w-screen overflow-hidden bg-black text-white"
-      style={{ cursor: hover && phase === "idle" ? "none" : "default" }}
+      style={{
+        cursor: hover && phase === "idle" ? "none" : "default",
+        // Prevent iOS rubber-band / double-tap zoom from stealing the gesture.
+        touchAction: "manipulation",
+      }}
     >
       {/* Caney image — full bleed */}
       <div
         ref={imgRef}
         className="absolute inset-0"
-        onMouseMove={phase === "idle" ? handleMove : undefined}
-        onMouseLeave={handleLeave}
-        onClick={handleClick}
+        onPointerMove={phase === "idle" ? handlePointerMove : undefined}
+        onPointerLeave={handlePointerLeave}
+        onPointerDown={phase === "idle" ? handlePointerDown : undefined}
       >
         <div
           className="absolute inset-0 bg-cover bg-center transition-[filter,transform] duration-700"
@@ -148,24 +265,40 @@ export function CaneyLanding() {
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_55%,rgba(0,0,0,0.6)_100%)] [animation:vignette-pulse_8s_ease-in-out_infinite]" />
         <div className="pointer-events-none absolute inset-0 [background-image:repeating-linear-gradient(0deg,rgba(255,255,255,0.015)_0,rgba(255,255,255,0.015)_1px,transparent_1px,transparent_3px)] mix-blend-overlay" />
 
-        {/* Debug overlay — shows hotspot bounds */}
-        {DEBUG && (
+        {/* Debug overlay — book easter-egg bounds */}
+        {DEBUG && box && (
           <div
-            className="absolute border-2 border-pink-400/70 bg-pink-400/10 pointer-events-none"
+            className="pointer-events-none absolute border-2 border-pink-400/70 bg-pink-400/10"
             style={{
-              left: `${HOTSPOT.xPct - HOTSPOT.wPct / 2}%`,
-              top: `${HOTSPOT.yPct - HOTSPOT.hPct / 2}%`,
-              width: `${HOTSPOT.wPct}%`,
-              height: `${HOTSPOT.hPct}%`,
+              left: `${box.left}%`,
+              top: `${box.top}%`,
+              width: `${box.width}%`,
+              height: `${box.height}%`,
             }}
           />
         )}
 
         {/* Pixel-shatter cells — only rendered during shatter */}
-        {phase === "shattering" && <ShatterGrid />}
+        {phase === "shattering" && layout && (
+          <ShatterGrid layout={layout} />
+        )}
       </div>
 
-      {/* Custom glowing cursor (only visible over the hotspot) */}
+      {/* Primary enter: glowing AGB mark, top-right */}
+      {phase === "idle" && (
+        <div
+          className="absolute right-3 top-3 z-50 sm:right-7 sm:top-6"
+          style={{
+            // Notch / home-indicator safe on iOS
+            marginTop: "env(safe-area-inset-top, 0px)",
+            marginRight: "env(safe-area-inset-right, 0px)",
+          }}
+        >
+          <AgbEnterLogo onEnter={enterFromLogo} size={44} />
+        </div>
+      )}
+
+      {/* Custom glowing cursor (over the book easter egg) */}
       {phase === "idle" && hover && cursor.vis && (
         <div
           className="pointer-events-none fixed z-50"
@@ -183,15 +316,15 @@ export function CaneyLanding() {
         </div>
       )}
 
-      {/* Poetic hint after 10s of dwell — never points at the location */}
+      {/* Poetic hint after 10s of dwell */}
       {phase === "idle" && hintVisible && (
         <div className="pointer-events-none absolute bottom-12 left-1/2 -translate-x-1/2 font-mono text-xs uppercase tracking-[0.4em] text-white/30 [animation:fade-in_3s_ease-out]">
           every house has a way in
         </div>
       )}
 
-      {/* Brand mark — always present, faint */}
-      <div className="pointer-events-none absolute left-8 top-8 z-30 font-mono text-[10px] uppercase tracking-[0.5em]">
+      {/* Brand mark — top-left wordmark */}
+      <div className="pointer-events-none absolute left-5 top-5 z-30 font-mono text-[10px] uppercase tracking-[0.5em] sm:left-8 sm:top-8">
         <span className="text-cyan-300/80">X</span>
         <span className="text-white/30"> . </span>
         <span className="text-white/60">JEAV</span>
@@ -236,20 +369,19 @@ function cellNoise(row: number, col: number, salt: number): number {
   return x - Math.floor(x);
 }
 
-function ShatterGrid() {
-  // Render a grid of cells over the hotspot area. Each shows the same
-  // background image with an offset so it looks seamless before shattering.
+function ShatterGrid({ layout }: { layout: CoverLayout }) {
+  // Shatter cells track the *visual* book region (image-mapped), so the effect
+  // still erupts from the book even when the mobile hit target is larger.
+  const box = hotspotToContainer(layout, HOTSPOT_IMG, 0);
   const cells: React.ReactNode[] = [];
-  const left = HOTSPOT.xPct - HOTSPOT.wPct / 2;
-  const top = HOTSPOT.yPct - HOTSPOT.hPct / 2;
-  const vw = typeof window !== "undefined" ? window.innerWidth : 1920;
-  const vh = typeof window !== "undefined" ? window.innerHeight : 1080;
   for (let row = 0; row < GRID_Y; row++) {
     for (let col = 0; col < GRID_X; col++) {
-      const cellLeftPct = left + (HOTSPOT.wPct / GRID_X) * col;
-      const cellTopPct = top + (HOTSPOT.hPct / GRID_Y) * row;
-      const cellWidthPct = HOTSPOT.wPct / GRID_X;
-      const cellHeightPct = HOTSPOT.hPct / GRID_Y;
+      const cellLeftPct = box.left + (box.width / GRID_X) * col;
+      const cellTopPct = box.top + (box.height / GRID_Y) * row;
+      const cellWidthPct = box.width / GRID_X;
+      const cellHeightPct = box.height / GRID_Y;
+      const cellLeftPx = (cellLeftPct / 100) * layout.cw;
+      const cellTopPx = (cellTopPct / 100) * layout.ch;
       const tx = (cellNoise(row, col, 1) - 0.5) * 600;
       const ty = (cellNoise(row, col, 2) - 0.5) * 600 - 50;
       const rot = (cellNoise(row, col, 3) - 0.5) * 720;
@@ -265,11 +397,10 @@ function ShatterGrid() {
               width: `${cellWidthPct}%`,
               height: `${cellHeightPct}%`,
               backgroundImage: `url(${IMAGE_SRC}), linear-gradient(135deg, #0a0e14, #1a1410)`,
-              // Each cell shows its own slice of the underlying image. We
-              // make the background fill the viewport, then offset it so the
-              // cell at (cellLeftPct, cellTopPct) shows the matching piece.
-              backgroundSize: "100vw 100vh",
-              backgroundPosition: `${-vw * cellLeftPct / 100}px ${-vh * cellTopPct / 100}px`,
+              // Match object-fit: cover — position image relative to each cell
+              // so the slice under that cell matches the photo underneath.
+              backgroundSize: `${layout.rw}px ${layout.rh}px`,
+              backgroundPosition: `${layout.ox - cellLeftPx}px ${layout.oy - cellTopPx}px`,
               animation: `shatter-cell ${SHATTER_MS}ms cubic-bezier(0.4, 0, 0.6, 1) ${delay}ms forwards`,
               "--tx": `${tx}px`,
               "--ty": `${ty}px`,
