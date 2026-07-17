@@ -16,7 +16,7 @@ export const brainSearch: ToolEntry = {
       "Use BEFORE inventing a new route or capability, and at the start of RCA. " +
       "Hit kinds: system|domain|surface|entity|interchange|doc|adr. " +
       "After a hit, call brain_neighborhood(id) then brain_doc_get for docs_ref paths. " +
-      "If matches is empty, verify synonyms/typos before building — do not invent surfaces. Deterministic, no AI cost.",
+      "If matches is empty, verify before building (typos/synonyms may not appear) — do not invent surfaces. Deterministic, no AI cost.",
     input_schema: {
       type: "object",
       properties: {

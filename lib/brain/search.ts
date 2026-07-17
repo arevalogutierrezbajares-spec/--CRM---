@@ -111,12 +111,15 @@ export function buildSearchIndex(graph: BrainGraph): IndexEntry[] {
       n.kind === "doc" || n.kind === "adr"
         ? (n.docs_ref ?? nodePath(n))
         : nodePath(n);
+    // Include hyphen/underscore splits so "email-sync" matches token "email"+"sync"
+    const summary = n.summary ?? "";
     const haystack = [
       n.id,
       n.label,
       n.system ?? "",
       n.docs_ref ?? "",
-      n.summary ?? "",
+      summary,
+      summary.replace(/[-_/]+/g, " "),
       n.meta ?? "",
       ...(n.surfaces ?? []),
     ]

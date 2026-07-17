@@ -60,39 +60,29 @@ export function buildRcaPack(
       ? { query: q, matches: [], safeToBuild: false as const }
       : searchBrain(graph, q, opts?.searchLimit ?? 12);
 
-  const primary =
-    effectiveSearch.matches.find(
-      (m) => m.kind !== "doc" && m.kind !== "adr",
-    ) ?? effectiveSearch.matches[0] ?? null;
+  const qTokens = q
+    .toLowerCase()
+    .split(/[\s/_-]+/)
+    .filter((t) => t.length > 2);
 
-  const neigh = primary
-    ? neighborhood(graph, primary.id, 1)
-    : null;
-
-  const qTokens = q.toLowerCase().split(/\s+/).filter((t) => t.length > 2);
-  const failureModes = graph.nodes
+  // Score failure-mode docs by symptom tokens (even when full-text search misses).
+  const scoredFms = graph.nodes
     .filter(isFailureMode)
     .map((n) => {
       const hay = [n.label, n.summary, n.docs_ref, n.meta, n.id]
         .join(" ")
         .toLowerCase();
       const score = qTokens.reduce((s, t) => s + (hay.includes(t) ? 1 : 0), 0);
-      // also match if documents-edge to primary
-      let linkBonus = 0;
-      if (primary) {
-        const linked = graph.edges.some(
-          (e) =>
-            e.kind === "documents" &&
-            e.from.domain === n.id &&
-            (e.to.domain === primary.id ||
-              e.to.domain.startsWith(primary.id.split(".")[0] ?? "")),
-        );
-        if (linked) linkBonus = 3;
-      }
-      return { n, score: score + linkBonus };
+      return { n, score };
     })
-    .filter((x) => x.score > 0 || q.length === 0)
-    .sort((a, b) => b.score - a.score)
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score);
+
+  const fms = (
+    scoredFms.length > 0
+      ? scoredFms
+      : graph.nodes.filter(isFailureMode).slice(0, 3).map((n) => ({ n, score: 0 }))
+  )
     .slice(0, 5)
     .map(({ n }) => ({
       id: n.id,
@@ -102,22 +92,55 @@ export function buildRcaPack(
       meta: n.meta,
     }));
 
-  // If no token match, still surface up to 3 FMs when query non-empty
-  const fms =
-    failureModes.length > 0
-      ? failureModes
-      : graph.nodes
-          .filter(isFailureMode)
-          .slice(0, 3)
-          .map((n) => ({
-            id: n.id,
-            label: n.label,
-            summary: n.summary,
-            docs_ref: n.docs_ref,
-            meta: n.meta,
-          }));
+  // Primary: prefer architecture search hit; else FM-linked architecture via documents edge.
+  let primary =
+    effectiveSearch.matches.find(
+      (m) => m.kind !== "doc" && m.kind !== "adr",
+    ) ?? effectiveSearch.matches[0] ?? null;
 
-  const hypotheses = effectiveSearch.matches.slice(0, 5).map((m, i) => ({
+  if (!primary && fms[0]) {
+    const link = graph.edges.find(
+      (e) => e.kind === "documents" && e.from.domain === fms[0].id,
+    );
+    if (link) {
+      const target = graph.nodes.find((n) => n.id === link.to.domain);
+      if (target) {
+        primary = {
+          id: target.id,
+          kind:
+            target.kind === "system"
+              ? "system"
+              : target.kind === "domain"
+                ? "domain"
+                : target.kind === "entity"
+                  ? "entity"
+                  : target.kind === "doc"
+                    ? "doc"
+                    : target.kind === "adr"
+                      ? "adr"
+                      : "surface",
+          label: target.label,
+          system: target.system,
+          path: target.id,
+          score: 1,
+        };
+      }
+    }
+    if (!primary) {
+      primary = {
+        id: fms[0].id,
+        kind: "doc",
+        label: fms[0].label,
+        system: "crm",
+        path: fms[0].docs_ref ?? fms[0].id,
+        score: 1,
+      };
+    }
+  }
+
+  const neigh = primary ? neighborhood(graph, primary.id, 1) : null;
+
+  const hypothesesFromSearch = effectiveSearch.matches.slice(0, 5).map((m, i) => ({
     rank: i + 1,
     nodeId: m.id,
     kind: m.kind,
@@ -132,6 +155,18 @@ export function buildRcaPack(
       graph.nodes.find((n) => n.id === m.id)?.docs_ref ??
       (m.path?.startsWith("docs/") ? m.path : null),
   }));
+
+  const hypotheses =
+    hypothesesFromSearch.length > 0
+      ? hypothesesFromSearch
+      : fms.slice(0, 3).map((f, i) => ({
+          rank: i + 1,
+          nodeId: f.id,
+          kind: "doc",
+          label: f.label,
+          reason: "Failure-mode corpus match — read via brain_doc_get",
+          docs_ref: f.docs_ref,
+        }));
 
   const freshness = brainFreshness(graph, {
     isGenerated: opts?.isGenerated,
