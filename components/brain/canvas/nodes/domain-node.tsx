@@ -25,24 +25,17 @@ import { emphasisOf } from "@/lib/brain/analytics";
 import { useBrain } from "../graph-provider";
 import "./brain-nodes.css";
 
-/** The domain slug (last dotted segment) — interchange endpoints key by it. */
-function slugOf(id: string): string {
-  const i = id.lastIndexOf(".");
-  return i >= 0 ? id.slice(i + 1) : id;
-}
-
 export default function DomainNode({ data, selected }: NodeProps) {
   const d = data as unknown as RFNodeData;
   const { graph, actions } = useBrain();
   const node = d.node;
 
-  const slug = slugOf(node.id);
-  // Derive cross-system link: any LIVE interchange edge touching this domain.
+  // Interchange endpoints store full node ids (e.g. "crm.projects"), not slugs.
   const isXlink = graph.edges.some(
     (e) =>
       e.kind === "interchange" &&
-      ((e.from.system === node.system && e.from.domain === slug) ||
-        (e.to.system === node.system && e.to.domain === slug)),
+      e.contract_status === "live" &&
+      (e.from.domain === node.id || e.to.domain === node.id),
   );
 
   const accent =

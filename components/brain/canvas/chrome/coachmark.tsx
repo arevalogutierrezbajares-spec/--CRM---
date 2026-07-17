@@ -1,17 +1,19 @@
 "use client";
 
 /**
- * THE BRAIN — first-run coachmark.
+ * THE BRAIN — first-run coachmark (search-first).
  *
- * A one-time, localStorage-gated hint naming the two core interactions (drill,
- * zoom) + the way out. Without it a first-time viewer lands on a constellation
- * of ring-gauges with no on-canvas instruction (the pitch / first-contact gap).
- * Shows once, then never again; dismissable; SSR-safe.
+ * One-time, localStorage-gated hint that names the primary habit (search the
+ * portfolio before building), how to query, and the way out. Sits above the
+ * L0 rebuild-guard dock (bottom offset) and below it in z-order so the dock
+ * stays the hero. Shows once per version key, then never again; dismissable;
+ * SSR-safe.
  */
 
 import { useState } from "react";
 
-const SEEN_KEY = "brain.coachmark.v1";
+/** Bump when copy/placement changes so prior dismissals don't hide the new tip. */
+const SEEN_KEY = "brain.coachmark.v2";
 
 /** Whether the hint hasn't been dismissed yet. Read once at mount — the canvas
  * is client-only (next/dynamic ssr:false) so `window` is available and there is
@@ -46,9 +48,11 @@ export function Coachmark() {
       style={{
         position: "absolute",
         left: "50%",
-        bottom: 20,
+        /* Sit above the L0 rebuild-guard dock so it doesn't cover search forever. */
+        bottom: 200,
         transform: "translateX(-50%)",
-        zIndex: 22,
+        /* Below rebuild-guard / command surfaces; above canvas chrome only. */
+        zIndex: 7,
         display: "flex",
         alignItems: "center",
         gap: 12,
@@ -62,9 +66,11 @@ export function Coachmark() {
       }}
     >
       <span>
-        <b style={{ color: "var(--ink)" }}>Click a node</b> to drill in ·{" "}
-        <b style={{ color: "var(--ink)" }}>pinch</b> or use the + / − controls to
-        zoom · <b style={{ color: "var(--ink)" }}>Esc</b> to go back
+        <b style={{ color: "var(--ink)" }}>Search before you build</b>
+        {" · "}
+        type a route or wire
+        {" · "}
+        <b style={{ color: "var(--ink)" }}>Esc</b> goes back
       </span>
       <button
         type="button"

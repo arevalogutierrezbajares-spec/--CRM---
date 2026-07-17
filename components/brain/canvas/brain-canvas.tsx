@@ -177,7 +177,21 @@ function CanvasInner() {
     const applyPresetEmphasis =
       view.level === 0 && view.axis === "system" && emphasize.length > 0;
 
-    const rfNodes = centeredNodes.map<Node>((n, i) => {
+    // Radial spawn: delay by distance from focus (center) so rim blooms last.
+    const focusId =
+      view.level >= 2
+        ? view.focusDomainId
+        : view.level === 1
+          ? view.focusSystemId ??
+            (view.focusFn ? `fn.${view.focusFn}` : null)
+          : null;
+    const focusPos = focusId
+      ? centeredNodes.find((n) => n.id === focusId)?.position
+      : undefined;
+    const cx = focusPos?.x ?? 0;
+    const cy = focusPos?.y ?? 0;
+
+    const rfNodes = centeredNodes.map<Node>((n) => {
       let data = n.data as RFNodeData;
       if (
         applyPresetEmphasis &&
@@ -186,19 +200,19 @@ function CanvasInner() {
       ) {
         data = { ...data, dimmed: true, emphasis: Math.min(data.emphasis, 0.5) };
       }
+      const dist = Math.hypot(n.position.x - cx, n.position.y - cy);
+      const delay = view.level === 0 ? 0 : Math.min(dist / 900, 0.35);
       return {
         id: n.id,
         type: n.type,
         position: n.position,
         data: data as unknown as Record<string, unknown>,
-        // Reflect provider selection so the custom components light up.
         selected: view.selection === n.id,
         draggable: false,
         connectable: false,
-        // Staggered spawn: the center (i=0) blooms first, children cascade out —
-        // a dynamic drill reveal. Read by .brain-spawn's animation-delay (brain.css).
-        style: { "--spawn-delay": `${Math.min(i * 0.02, 0.42)}s` } as CSSProperties,
-        // L0 function axis renders the function capability set, not BrainNodes.
+        style: {
+          "--spawn-delay": `${delay}s`,
+        } as CSSProperties,
       };
     });
 
@@ -230,8 +244,10 @@ function CanvasInner() {
   // Signature of the node SET + altitude — changes only on drill/up/axis/preset/
   // cluster-expand (NOT lens or selection), which is exactly when positions reseed.
   const layoutSig = `${view.axis}:${view.level}:${view.focusSystemId ?? ""}:${
-    view.focusDomainId ?? ""
-  }:${derivedNodes.length}:${derivedNodes.map((n) => n.id).join(",")}`;
+    view.focusFn ?? ""
+  }:${view.focusDomainId ?? ""}:${derivedNodes.length}:${derivedNodes
+    .map((n) => n.id)
+    .join(",")}`;
 
   // Reseed positions + data when the SET changes; mark it for a fresh resolve.
   useEffect(() => {
@@ -258,27 +274,46 @@ function CanvasInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [derivedNodes]);
 
-  // Once React Flow has measured the chips, separate any overlaps and refit.
-  // Sizes are read straight off the DOM (offsetWidth/Height = unscaled chip
-  // size) so the pass uses the REAL footprint — the hub orb's tall label stack
-  // included — regardless of React Flow's internal measured-field shape.
+  // Once React Flow has measured the chips, separate overlaps and do ONE fitView.
+  // Retries if DOM dims are incomplete (font/paint race) — never stuck on seed.
   useEffect(() => {
     if (!nodesInitialized || resolvedSigRef.current === layoutSig) return;
     const wrap = graphWrapRef.current;
     if (!wrap) return;
-    const raf = requestAnimationFrame(() => {
+    let cancelled = false;
+    let attempts = 0;
+    const maxAttempts = 8;
+    let raf = 0;
+
+    const run = () => {
+      if (cancelled) return;
+      attempts += 1;
       const dims = new Map<string, { w: number; h: number }>();
       wrap.querySelectorAll<HTMLElement>(".react-flow__node").forEach((el) => {
         const id = el.getAttribute("data-id");
         if (id) dims.set(id, { w: el.offsetWidth, h: el.offsetHeight });
       });
       const measured = rf.getNodes();
-      if (measured.length === 0 || dims.size < measured.length) return;
+      // Empty set: retry briefly (RF paint race), then mark resolved — never spin forever.
+      if (measured.length === 0) {
+        if (attempts < maxAttempts) {
+          raf = requestAnimationFrame(run);
+          return;
+        }
+        resolvedSigRef.current = layoutSig;
+        return;
+      }
+      if (dims.size < measured.length && attempts < maxAttempts) {
+        raf = requestAnimationFrame(run);
+        return;
+      }
+      // Pin hub: system id on By-System, fn.<id> on By-Function.
       const centerId =
         view.level >= 2
           ? view.focusDomainId
           : view.level === 1
-            ? view.focusSystemId
+            ? view.focusSystemId ??
+              (view.focusFn ? `fn.${view.focusFn}` : null)
             : null;
       const resolved = resolveOverlaps(
         measured.map((n) => {
@@ -298,23 +333,48 @@ function CanvasInner() {
       setDisplayNodes((cur) =>
         cur.map((n) => (resolved[n.id] ? { ...n, position: resolved[n.id] } : n)),
       );
-      requestAnimationFrame(() =>
-        rf.fitView({ padding: 0.1, maxZoom: 1.7, duration: reduceMotion ? 0 : 360 }),
-      );
-    });
-    return () => cancelAnimationFrame(raf);
+      // Single camera settle after layout (no altitude race).
+      requestAnimationFrame(() => {
+        if (cancelled) return;
+        const pad = measured.length > 16 ? 0.14 : 0.1;
+        rf.fitView({
+          padding: pad,
+          maxZoom: 1.7,
+          duration: reduceMotion ? 0 : 420,
+        });
+        if (wrap && !wrap.contains(document.activeElement)) {
+          wrap
+            .querySelector<HTMLElement>(".react-flow__node button")
+            ?.focus({ preventScroll: true });
+        }
+      });
+    };
+    raf = requestAnimationFrame(run);
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodesInitialized, layoutSig, reduceMotion]);
 
-  // Esc = one of the 3 up-paths (back button + breadcrumb are the other two).
+  // Esc: clear selection → go up. Don't steal from inputs/dialogs.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        if (view.selection != null) {
-          actions.clear();
-        } else if (view.level > 0) {
-          actions.goUp();
-        }
+      if (e.key !== "Escape") return;
+      const el = document.activeElement as HTMLElement | null;
+      if (
+        el &&
+        (el.tagName === "INPUT" ||
+          el.tagName === "TEXTAREA" ||
+          el.isContentEditable ||
+          el.closest("[role='dialog']"))
+      ) {
+        return;
+      }
+      if (view.selection != null) {
+        actions.clear();
+      } else if (view.level > 0) {
+        actions.goUp();
       }
     }
     window.addEventListener("keydown", onKey);
@@ -326,12 +386,6 @@ function CanvasInner() {
     if (view.selection != null) actions.clear();
   }, [actions, view.selection]);
 
-  // Altitude signature — changes only on a real navigation (drill / up / axis /
-  // preset), NOT on lens or selection. Drives the camera glide + focus restore.
-  const altitudeKey = `${view.axis}:${view.level}:${view.focusSystemId ?? ""}:${
-    view.focusFn ?? ""
-  }:${view.focusDomainId ?? ""}`;
-
   // Plain-language altitude for the screen-reader live region.
   const altitudeLabel =
     view.level === 0
@@ -339,28 +393,6 @@ function CanvasInner() {
         ? "Capability map"
         : "Portfolio"
       : view.focusDomainId ?? view.focusSystemId ?? `Level ${view.level}`;
-
-  // Camera glide + focus management on every altitude change. Replaces the old
-  // remount-crossfade that teleported the viewport and dropped keyboard focus to
-  // <body>. React Flow tweens the viewport FROM the previous framing INTO the
-  // new node set, so drilling reads as a continuous zoom (FR-NAV-6); reduced
-  // motion → instant. Afterward, if focus left the canvas (the node you
-  // activated just unmounted), restore it to the first node so keyboard users
-  // keep their place — :focus-visible keeps the ring keyboard-only, so a mouse
-  // user who clicked to drill sees no focus flash.
-  useEffect(() => {
-    const raf = requestAnimationFrame(() => {
-      rf.fitView({ padding: 0.1, maxZoom: 1.7, duration: reduceMotion ? 0 : 460 });
-      const wrap = graphWrapRef.current;
-      if (wrap && !wrap.contains(document.activeElement)) {
-        wrap
-          .querySelector<HTMLElement>(".react-flow__node button")
-          ?.focus({ preventScroll: true });
-      }
-    });
-    return () => cancelAnimationFrame(raf);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [altitudeKey, reduceMotion]);
 
   // Re-fit when the canvas itself resizes (the app sidebar collapses, the window
   // resizes, the detail panel mounts/unmounts). Without this the graph drifts
@@ -443,8 +475,8 @@ function CanvasInner() {
           id="brain-graph"
           ref={graphWrapRef}
           tabIndex={-1}
-          role="application"
-          aria-label="Architecture graph — pan with two fingers, zoom with the controls or pinch, click a node to drill in"
+          role="region"
+          aria-label="Architecture graph. Tab to nodes, Enter to drill, Esc to go back. Pinch or use zoom controls."
           style={{ position: "absolute", inset: 0, outline: "none" }}
         >
           <ReactFlow
@@ -455,8 +487,7 @@ function CanvasInner() {
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             onPaneClick={onPaneClick}
-            fitView
-            fitViewOptions={{ padding: 0.1, maxZoom: 1.7 }}
+            fitView={false}
             minZoom={0.2}
             maxZoom={1.6}
             proOptions={{ hideAttribution: true }}
@@ -467,6 +498,7 @@ function CanvasInner() {
             disableKeyboardA11y
             elementsSelectable
             panOnScroll
+            data-lens={view.lens}
           >
             <Background variant={BackgroundVariant.Dots} gap={42} size={1} />
             {/* On-screen zoom for mouse/keyboard users (trackpad pinch already

@@ -9,6 +9,9 @@
  *  - the full list of cross-system interchanges with double-encoded health +
  *    purpose (FR-DETAIL-2 / FR-XSYS-8). Clicking a system or interchange routes
  *    the canvas selection through the provider.
+ *
+ * Function readiness rows switch to the function axis and drill into that fn
+ * hub (same shape as HubNode on the By-Function root).
  */
 
 import { useMemo } from "react";
@@ -153,20 +156,45 @@ export function SelPortfolio() {
           })}
         </section>
 
-        {/* 7-function readiness map (FR-AXIS-4) */}
+        {/* 7-function readiness map (FR-AXIS-4) — clickable → By Function drill */}
         <section className="d-sec">
           <h5>Function readiness</h5>
           {graph.functions.map((fn) => {
             const color = FN_COLOR[fn.id as Fn] ?? "var(--ink-dim)";
             return (
-              <div key={fn.id} className="fnrow" style={{ "--fc": color } as React.CSSProperties}>
+              <button
+                key={fn.id}
+                type="button"
+                className="fnrow"
+                style={
+                  {
+                    "--fc": color,
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    width: "100%",
+                    textAlign: "left",
+                    padding: "5px 0",
+                  } as React.CSSProperties
+                }
+                title={`Open ${FN_LABEL[fn.id as Fn] ?? fn.name} on By Function axis`}
+                onClick={() => {
+                  // Switch axis (resets to L0 function root), then drill the fn hub.
+                  actions.setAxis("function");
+                  actions.drillInto({
+                    nodeId: `fn.${fn.id}`,
+                    level: 1,
+                    fn: fn.id,
+                  });
+                }}
+              >
                 <span className="fdot" />
                 <span className="fname">{FN_LABEL[fn.id as Fn] ?? fn.name}</span>
                 <span className="fbar">
                   <span style={{ width: `${fn.pct}%` }} />
                 </span>
                 <span className="fpct">{fn.pct}%</span>
-              </div>
+              </button>
             );
           })}
         </section>

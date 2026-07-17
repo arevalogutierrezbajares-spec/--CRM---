@@ -13,6 +13,8 @@ export type BrainNavAction =
       level: 1 | 2;
       system: System | null;
       domainId?: string | null;
+      /** By-Function axis hub id segment (nodeId `fn.<fn>`). */
+      fn?: string | null;
     }
   | { type: "select"; id: string };
 

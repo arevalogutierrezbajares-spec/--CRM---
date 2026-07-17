@@ -99,27 +99,35 @@
   color: var(--ink-faint);
 }
 
-/* ── Live "data flowing" marching-ants on interchange stations ───────────────
- * The highest-leverage "alive" signal: the cross-system LINKS (the headline
- * "where they connect" story) visibly flow instead of sitting as inert lines.
- * Scoped to the station edge group so the hub-and-spoke spokes stay quiet. */
-@keyframes brain-flow {
-  to {
-    stroke-dashoffset: -18;
-  }
-}
-.brain-root .react-flow__edge-station .react-flow__edge-path {
-  stroke-dasharray: 2 7;
-  animation: brain-flow 1.1s linear infinite;
+/* ── Edge life hierarchy (Wave 2) ───────────────────────────────────────────
+ * station ok/warn: slow ants · station dark: static dash · data-flow: slower
+ * ants · contains: brief draw-in then solid. Never force ants over health.
+ *
+ * Station dash/animation is owned by station.tsx (inline) so dark wires can
+ * keep a static 7 7 dash — CSS must not blanket-override presentation attrs. */
+
+/* Data-flow micro-edges (reads_writes / calls) — very slow ants */
+.brain-root .react-flow__edge-spoke .react-flow__edge-path[stroke-dasharray] {
+  animation: brain-flow 3.2s linear infinite;
 }
 
-/* Reduced motion: kill the pin pop AND the flow (fall back to static line). */
+/* Contains spokes: short draw-in on mount (then animation ends solid-ish) */
+.brain-root .react-flow__edge-spoke .react-flow__edge-path:not([stroke-dasharray]) {
+  stroke-dasharray: 48;
+  animation: brain-spoke-draw 0.55s var(--ease) backwards;
+  animation-fill-mode: both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .brain-root .station .pin {
     transition: none;
+    transform: none;
+  }
+  .brain-root .react-flow__edge-station .react-flow__edge-path,
+  .brain-root .react-flow__edge-spoke .react-flow__edge-path {
+    animation: none !important;
   }
   .brain-root .react-flow__edge-station .react-flow__edge-path {
-    animation: none;
     stroke-dasharray: none;
   }
 }

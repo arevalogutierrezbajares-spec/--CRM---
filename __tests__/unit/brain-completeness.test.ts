@@ -49,9 +49,9 @@ describe("navFromHit", () => {
 });
 
 describe("safeToBuildMessage", () => {
-  it("uses the product phrase", () => {
+  it("uses humble verify-before-build copy", () => {
     const msg = safeToBuildMessage("xyzzy-not-real");
-    expect(msg).toContain("safe to build");
+    expect(msg.toLowerCase()).toContain("verify before building");
     expect(msg).toContain("xyzzy-not-real");
   });
 

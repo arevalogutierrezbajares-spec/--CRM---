@@ -9,16 +9,19 @@
  *             + Function overlay                        → actions.setLens
  *  - Audience: Investor / Agent / Operator preset       → actions.setPreset
  *  - Legends: status double-encoding · system colors · the 7 function colors
+ *             (default-collapsed; Insights lives under the same fold)
  *
- * Every control wires to a provider action; nothing here holds its own state.
- * Disabled lenses are real <button disabled> with a tooltip explaining "v1" so
- * the affordance is discoverable but inert (degrade-safe).
+ * Every control wires to a provider action; nothing here holds its own state
+ * except the Legends open/closed toggle. Disabled lenses are real
+ * <button disabled> with a tooltip explaining "v2" so the affordance is
+ * discoverable but inert (degrade-safe).
  */
 
+import { useState } from "react";
 import { useBrain } from "@/components/brain/canvas/graph-provider";
 import { SearchTrigger } from "@/components/brain/canvas/chrome/search-trigger";
 import { Insights } from "@/components/brain/canvas/chrome/insights";
-import { PRESET_LIST } from "@/lib/brain/presets";
+import { getPreset, PRESET_LIST } from "@/lib/brain/presets";
 import { FUNCS, FN_COLOR } from "@/lib/brain/functions";
 import {
   STATE_GLYPH,
@@ -59,6 +62,7 @@ const LENSES: LensDef[] = [
 
 export function Rail() {
   const { view, actions } = useBrain();
+  const [legendsOpen, setLegendsOpen] = useState(false);
 
   return (
     <aside
@@ -152,79 +156,122 @@ export function Rail() {
           value={view.preset}
           onChange={(v) => actions.setPreset(v as (typeof PRESET_LIST)[number]["id"])}
         />
+        {getPreset(view.preset).badge ? (
+          <p
+            style={{
+              margin: "6px 2px 0",
+              fontFamily: "var(--mono)",
+              fontSize: 11,
+              color: "var(--ink-faint)",
+              letterSpacing: "0.04em",
+            }}
+          >
+            {getPreset(view.preset).badge}
+          </p>
+        ) : null}
       </Section>
 
-      {/* ── Insights (graphology gap-finding overlay) ────────────────── */}
-      <Section title="Insights">
-        <Insights />
-      </Section>
+      {/* ── Legends (default collapsed) + Insights ───────────────────── */}
+      <section style={{ marginBottom: 20 }}>
+        <button
+          type="button"
+          aria-expanded={legendsOpen}
+          onClick={() => setLegendsOpen((o) => !o)}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            width: "100%",
+            margin: "2px 0 9px",
+            padding: "2px 4px",
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            fontFamily: "var(--mono)",
+            fontSize: 11,
+            letterSpacing: ".14em",
+            textTransform: "uppercase",
+            color: "var(--ink-faint)",
+          }}
+        >
+          <span>Legends</span>
+          <span aria-hidden="true" style={{ fontSize: 10, opacity: 0.7 }}>
+            {legendsOpen ? "▾" : "▸"}
+          </span>
+        </button>
 
-      {/* ── Status legend (double-encoded) ───────────────────────────── */}
-      <Section title="Status">
-        <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-          {(["done", "doing", "needed"] as NodeState[]).map((s) => (
-            <LegendRow
-              key={s}
-              glyph={STATE_GLYPH[s]}
-              glyphColor={STATE_VAR[s]}
-              label={STATE_LABEL[s]}
-            />
-          ))}
-          <LegendRow glyph="⇄" glyphColor="var(--warn)" label="CROSS-SYSTEM LINK" />
-        </div>
-      </Section>
+        {legendsOpen ? (
+          <>
+            <Section title="Insights">
+              <Insights />
+            </Section>
 
-      {/* ── Systems legend ───────────────────────────────────────────── */}
-      <Section title="Systems">
-        <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-          {(Object.keys(SYSTEM_ACCENT) as System[]).map((sys) => (
-            <div
-              key={sys}
-              style={{ display: "flex", alignItems: "center", gap: 8 }}
-            >
-              <span
-                aria-hidden="true"
-                style={{
-                  width: 10,
-                  height: 10,
-                  borderRadius: 3,
-                  background: SYSTEM_ACCENT[sys],
-                  flexShrink: 0,
-                }}
-              />
-              <span style={{ fontSize: 11, color: "var(--ink-dim)" }}>
-                {SYSTEM_LABEL[sys]}
-              </span>
-            </div>
-          ))}
-        </div>
-      </Section>
+            <Section title="Status">
+              <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                {(["done", "doing", "needed"] as NodeState[]).map((s) => (
+                  <LegendRow
+                    key={s}
+                    glyph={STATE_GLYPH[s]}
+                    glyphColor={STATE_VAR[s]}
+                    label={STATE_LABEL[s]}
+                  />
+                ))}
+                <LegendRow glyph="⇄" glyphColor="var(--warn)" label="CROSS-SYSTEM LINK" />
+              </div>
+            </Section>
 
-      {/* ── Functions legend (the 7) ─────────────────────────────────── */}
-      <Section title="Functions">
-        <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-          {FUNCS.map((f) => (
-            <div
-              key={f.id}
-              style={{ display: "flex", alignItems: "center", gap: 8 }}
-            >
-              <span
-                aria-hidden="true"
-                style={{
-                  width: 10,
-                  height: 10,
-                  borderRadius: 3,
-                  background: FN_COLOR[f.id],
-                  flexShrink: 0,
-                }}
-              />
-              <span style={{ fontSize: 11, color: "var(--ink-dim)" }}>
-                {f.name}
-              </span>
-            </div>
-          ))}
-        </div>
-      </Section>
+            <Section title="Systems">
+              <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                {(Object.keys(SYSTEM_ACCENT) as System[]).map((sys) => (
+                  <div
+                    key={sys}
+                    style={{ display: "flex", alignItems: "center", gap: 8 }}
+                  >
+                    <span
+                      aria-hidden="true"
+                      style={{
+                        width: 10,
+                        height: 10,
+                        borderRadius: 3,
+                        background: SYSTEM_ACCENT[sys],
+                        flexShrink: 0,
+                      }}
+                    />
+                    <span style={{ fontSize: 11, color: "var(--ink-dim)" }}>
+                      {SYSTEM_LABEL[sys]}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </Section>
+
+            <Section title="Functions">
+              <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                {FUNCS.map((f) => (
+                  <div
+                    key={f.id}
+                    style={{ display: "flex", alignItems: "center", gap: 8 }}
+                  >
+                    <span
+                      aria-hidden="true"
+                      style={{
+                        width: 10,
+                        height: 10,
+                        borderRadius: 3,
+                        background: FN_COLOR[f.id],
+                        flexShrink: 0,
+                      }}
+                    />
+                    <span style={{ fontSize: 11, color: "var(--ink-dim)" }}>
+                      {f.name}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </Section>
+          </>
+        ) : null}
+      </section>
     </aside>
   );
 }

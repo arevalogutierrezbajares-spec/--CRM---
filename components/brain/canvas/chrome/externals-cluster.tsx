@@ -21,9 +21,9 @@ export function ExternalsCluster() {
       aria-label="External dependencies"
       style={{
         position: "absolute",
-        top: 14,
+        top: 108,
         right: 14,
-        zIndex: 15,
+        zIndex: 18,
         display: "flex",
         flexWrap: "wrap",
         justifyContent: "flex-end",

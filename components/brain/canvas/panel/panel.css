@@ -32,8 +32,18 @@
   }
 }
 @media (max-width: 820px) {
+  /* Overlay drawer so the graph keeps full width under the panel. */
   .brain-root .brain-detail {
-    width: 248px;
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(320px, 92vw);
+    z-index: 30;
+    background: rgba(15, 18, 23, 0.96);
+    backdrop-filter: blur(16px);
+    box-shadow: var(--shadow-high);
+    border-left: 1px solid var(--line-2);
   }
 }
 

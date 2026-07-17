@@ -24,6 +24,7 @@ import {
   useEffect,
   useMemo,
   useReducer,
+  useRef,
   type ReactNode,
 } from "react";
 import type { BrainGraph, NodeLevel, System } from "@/lib/brain/types";
@@ -34,6 +35,11 @@ import {
   getPreset,
   type PresetId,
 } from "@/lib/brain/presets";
+import {
+  navFromNodeId,
+  parseBrainUrl,
+  pushBrainUrl,
+} from "@/lib/brain/url-state";
 
 /* ── View-preference persistence (SSR-safe) ─────────────────────────────── */
 
@@ -267,6 +273,8 @@ export function GraphProvider({
   // through the reducer here (preset first, then the user's explicit axis/lens)
   // makes the very first committed state correct, avoiding the effect-ordering
   // race where a persist effect would clobber the stored prefs on mount.
+  // Hydrate prefs + URL in the lazy initializer (client-only; no SSR mismatch).
+  // URL wins over localStorage for navigation params when present.
   const [view, dispatch] = useReducer(reducer, undefined, () => {
     let v = initialView(graph, initialPreset);
     if (typeof window === "undefined") return v;
@@ -274,8 +282,60 @@ export function GraphProvider({
     if (prefs.preset) v = reducer(v, { type: "SET_PRESET", preset: prefs.preset });
     if (prefs.axis) v = reducer(v, { type: "SET_AXIS", axis: prefs.axis });
     if (prefs.lens) v = reducer(v, { type: "SET_LENS", lens: prefs.lens });
+
+    const url = parseBrainUrl(window.location.search);
+    if (url.preset) v = reducer(v, { type: "SET_PRESET", preset: url.preset });
+    // Function-hub deep-links imply By-Function when axis is omitted.
+    if (url.axis) {
+      v = reducer(v, { type: "SET_AXIS", axis: url.axis });
+    } else if (url.node?.startsWith("fn.")) {
+      v = reducer(v, { type: "SET_AXIS", axis: "function" });
+    }
+    if (url.lens) v = reducer(v, { type: "SET_LENS", lens: url.lens });
+    if (url.node) {
+      for (const step of navFromNodeId(graph, url.node)) {
+        if (step.type === "drill") {
+          v = reducer(v, {
+            type: "DRILL_INTO",
+            nodeId: step.nodeId,
+            level: step.level,
+            system: step.system,
+            domainId: step.domainId,
+            fn: step.fn,
+          });
+        } else {
+          v = reducer(v, { type: "SELECT", id: step.id });
+        }
+      }
+    }
     return v;
   });
+
+  // Skip the first URL write so we don't clobber a deep-link before paint settles.
+  const urlReadyRef = useRef(false);
+  useEffect(() => {
+    if (!urlReadyRef.current) {
+      urlReadyRef.current = true;
+      return;
+    }
+    pushBrainUrl({
+      level: view.level,
+      axis: view.axis,
+      lens: view.lens,
+      preset: view.preset,
+      focusSystemId: view.focusSystemId,
+      focusDomainId: view.focusDomainId,
+      selection: view.selection,
+    });
+  }, [
+    view.level,
+    view.axis,
+    view.lens,
+    view.preset,
+    view.focusSystemId,
+    view.focusDomainId,
+    view.selection,
+  ]);
 
   // Persist axis/lens/preset whenever they change. (On mount this re-writes the
   // same values that hydrated the initial state — a harmless no-op, not a clobber.)

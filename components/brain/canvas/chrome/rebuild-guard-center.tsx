@@ -1,10 +1,10 @@
 "use client";
 
 /**
- * Search-first rebuild-guard command center (Area 1).
+ * Search-first rebuild-guard (Wave 3 — always on).
  *
- * Floating dock on L0 when nothing is selected — the default habit surface.
- * Elite motion, example chips, live results, safe-to-build empty state.
+ * L0 hero dock when portfolio + no selection + system axis.
+ * Slim top bar at every other altitude so search is a habit, not a mode.
  */
 
 import {
@@ -27,6 +27,7 @@ import {
   type BrainSearchHit,
 } from "@/lib/brain/search";
 import { navFromHit } from "@/lib/brain/navigate";
+import { parseBrainUrl } from "@/lib/brain/url-state";
 import { SYSTEM_ACCENT, type System } from "@/lib/brain/types";
 
 const KIND_LABEL: Record<BrainSearchHit["kind"], string> = {
@@ -46,13 +47,21 @@ export function RebuildGuardCenter() {
   const [recent, setRecent] = useState<string[]>([]);
   const [focused, setFocused] = useState(false);
 
-  // Only on portfolio with no selection — command center mode
-  const visible =
+  // Hero = full dock copy; everywhere else = slim always-on bar.
+  const hero =
     view.level === 0 && view.selection == null && view.axis === "system";
+  const slim = !hero;
+
+  // Prefill from ?q= once on mount (shareable rebuild-guard links).
+  useEffect(() => {
+    const { q } = parseBrainUrl(window.location.search);
+    if (q) setQuery(q);
+    setRecent(loadRecentSearches());
+  }, []);
 
   useEffect(() => {
-    if (visible) setRecent(loadRecentSearches());
-  }, [visible]);
+    setRecent(loadRecentSearches());
+  }, [view.level, view.axis]);
 
   const result = useMemo(
     () => (query.trim() ? searchBrain(graph, query, 8) : null),
@@ -71,6 +80,7 @@ export function RebuildGuardCenter() {
             level: step.level,
             system: step.system,
             domainId: step.domainId,
+            fn: step.fn,
           });
         } else {
           actions.select(step.id);
@@ -78,6 +88,7 @@ export function RebuildGuardCenter() {
       }
       setQuery("");
       setActive(0);
+      inputRef.current?.blur();
     },
     [actions, graph, query],
   );
@@ -88,6 +99,17 @@ export function RebuildGuardCenter() {
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Escape") {
+      if (query) {
+        e.preventDefault();
+        e.stopPropagation();
+        setQuery("");
+        setActive(0);
+        return;
+      }
+      inputRef.current?.blur();
+      return;
+    }
     if (!result?.matches.length) return;
     if (e.key === "ArrowDown") {
       e.preventDefault();
@@ -95,10 +117,6 @@ export function RebuildGuardCenter() {
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setActive((i) => Math.max(0, i - 1));
-    } else if (e.key === "Escape") {
-      setQuery("");
-      setActive(0);
-      inputRef.current?.blur();
     }
   };
 
@@ -106,27 +124,48 @@ export function RebuildGuardCenter() {
     setActive(0);
   }, [query]);
 
-  if (!visible) return null;
+  // `/` focuses search when not already in an input (habit shortcut).
+  useEffect(() => {
+    function onSlash(e: KeyboardEvent | globalThis.KeyboardEvent) {
+      if (e.key !== "/" || e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      if (
+        t &&
+        (t.tagName === "INPUT" ||
+          t.tagName === "TEXTAREA" ||
+          t.isContentEditable)
+      ) {
+        return;
+      }
+      e.preventDefault();
+      inputRef.current?.focus();
+    }
+    window.addEventListener("keydown", onSlash);
+    return () => window.removeEventListener("keydown", onSlash);
+  }, []);
 
   const showSafe = result && result.safeToBuild && query.trim().length >= 2;
   const showHits = result && result.matches.length > 0;
 
   return (
     <div
-      className={`brain-rg${focused || query ? " brain-rg--hot" : ""}${
-        reduceMotion ? " brain-rg--static" : ""
-      }`}
+      className={`brain-rg${slim ? " brain-rg--slim" : ""}${
+        focused || query ? " brain-rg--hot" : ""
+      }${reduceMotion ? " brain-rg--static" : ""}`}
       role="search"
       aria-label="Rebuild-guard search"
     >
-      <div className="brain-rg__glow" aria-hidden />
-      <header className="brain-rg__head">
-        <span className="brain-rg__eyebrow">Rebuild-guard</span>
-        <h2 className="brain-rg__title">Does it already exist?</h2>
-        <p className="brain-rg__sub">
-          Search the live portfolio map before you build. Deterministic — no AI.
-        </p>
-      </header>
+      {!slim ? <div className="brain-rg__glow" aria-hidden /> : null}
+      {!slim ? (
+        <header className="brain-rg__head">
+          <span className="brain-rg__eyebrow">Rebuild-guard</span>
+          <h2 className="brain-rg__title">Does it already exist?</h2>
+          <p className="brain-rg__sub">
+            Search the live portfolio map before you build. Deterministic — no
+            AI.
+          </p>
+        </header>
+      ) : null}
 
       <form className="brain-rg__form" onSubmit={onSubmit}>
         <span className="brain-rg__glyph" aria-hidden>
@@ -140,16 +179,21 @@ export function RebuildGuardCenter() {
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
           onKeyDown={onKeyDown}
-          placeholder="Route, domain, wire, table…"
+          placeholder={
+            slim
+              ? "Search map… (routes, wires, domains)"
+              : "Route, domain, wire, table…"
+          }
           aria-autocomplete="list"
           aria-controls="brain-rg-results"
+          aria-expanded={Boolean(showHits)}
           autoComplete="off"
           spellCheck={false}
         />
-        <kbd className="brain-rg__kbd">↵</kbd>
+        <kbd className="brain-rg__kbd">{slim ? "/" : "↵"}</kbd>
       </form>
 
-      {!query.trim() ? (
+      {!query.trim() && !slim ? (
         <div className="brain-rg__chips">
           {BRAIN_SEARCH_EXAMPLES.map((ex) => (
             <button
@@ -202,7 +246,9 @@ export function RebuildGuardCenter() {
                   onClick={() => jump(hit)}
                   style={{ ["--hit-accent" as string]: accent }}
                 >
-                  <span className="brain-rg__hit-kind">{KIND_LABEL[hit.kind]}</span>
+                  <span className="brain-rg__hit-kind">
+                    {KIND_LABEL[hit.kind]}
+                  </span>
                   <span className="brain-rg__hit-label">{hit.label}</span>
                   <span className="brain-rg__hit-path">{hit.path}</span>
                   <span className="brain-rg__hit-go" aria-hidden>
@@ -218,10 +264,10 @@ export function RebuildGuardCenter() {
       {showSafe ? (
         <div className="brain-rg__safe" role="status">
           <div className="brain-rg__safe-icon" aria-hidden>
-            ✓
+            ?
           </div>
           <div>
-            <p className="brain-rg__safe-title">Safe to build</p>
+            <p className="brain-rg__safe-title">Verify before building</p>
             <p className="brain-rg__safe-body">{safeToBuildMessage(query)}</p>
           </div>
         </div>

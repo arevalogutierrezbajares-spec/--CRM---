@@ -264,20 +264,22 @@
 /* ── Motion (keyframes spawn/zoom; NO neon glow) ──────────────────────────
  * spawn = node entrance; zoom-in/out = drill choreography (FR-NAV-6).
  * `beat` (liveness pulse) is v2 and intentionally omitted here. */
+/* Spawn uses scale+opacity ONLY — never translate(-50%) which broke RF top-left
+ * layout and diverged under prefers-reduced-motion. */
 @keyframes brain-spawn {
   from {
     opacity: 0;
-    transform: translate(-50%, -50%) scale(0.8);
+    transform: scale(0.92);
   }
   to {
     opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
+    transform: scale(1);
   }
 }
 @keyframes brain-zoom-in {
   from {
     opacity: 0;
-    transform: scale(1.25);
+    transform: scale(1.04);
   }
   to {
     opacity: 1;
@@ -287,19 +289,46 @@
 @keyframes brain-zoom-out {
   from {
     opacity: 0;
-    transform: scale(0.85);
+    transform: scale(0.97);
   }
   to {
     opacity: 1;
     transform: scale(1);
   }
 }
+@keyframes brain-orb-breathe {
+  0%,
+  100% {
+    box-shadow: var(--shadow-med), var(--gleam);
+  }
+  50% {
+    box-shadow: var(--shadow-high), var(--gleam);
+  }
+}
+@keyframes brain-flow {
+  to {
+    stroke-dashoffset: -14;
+  }
+}
+@keyframes brain-spoke-draw {
+  from {
+    stroke-dashoffset: 48;
+    opacity: 0.15;
+  }
+  to {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}
 
 .brain-root .brain-spawn {
-  animation: brain-spawn 0.44s var(--ease) both;
-  /* Per-node stagger set on the React Flow node wrapper (brain-canvas) so the
-   * fan blooms outward from the center on drill. Defaults to 0 (no stagger). */
+  animation: brain-spawn 0.4s var(--ease) backwards;
+  transform-origin: center center;
+  /* Radial stagger from focus set on RF wrapper (brain-canvas). */
   animation-delay: var(--spawn-delay, 0s);
+}
+.brain-root .hub .orb {
+  animation: brain-orb-breathe 5.5s ease-in-out infinite;
 }
 .brain-root .brain-zoom-in {
   animation: brain-zoom-in 0.22s var(--ease) both;
@@ -312,7 +341,16 @@
 @media (prefers-reduced-motion: reduce) {
   .brain-root .brain-spawn,
   .brain-root .brain-zoom-in,
-  .brain-root .brain-zoom-out {
+  .brain-root .brain-zoom-out,
+  .brain-root .hub .orb {
+    animation: none !important;
+  }
+  .brain-root .react-flow__edge-path {
+    animation: none !important;
+    transition: none;
+  }
+  .brain-root .brain-completeness__fill {
+    transition: none;
     animation: none;
   }
   .brain-root * {
@@ -397,6 +435,23 @@
   .brain-root .brain-rail {
     display: none;
   }
+  /* Floating search fills the missing rail SearchTrigger. */
+  .brain-root .brain-rg.brain-rg--slim {
+    width: min(360px, calc(100% - 24px));
+    top: 10px;
+  }
+  .brain-root .brain-rg:not(.brain-rg--slim) {
+    width: min(440px, calc(100% - 24px));
+    bottom: 16px;
+  }
+  .brain-root .brain-trust-stack {
+    top: 56px;
+    max-width: min(280px, 48vw);
+  }
+  .brain-root .brain-externals,
+  .brain-root [aria-label="External dependencies"] {
+    top: 148px !important;
+  }
 }
 
 /* ── Completeness strip (Area 5) ─────────────────────────────────────────── */
@@ -404,7 +459,7 @@
   position: absolute;
   top: 12px;
   right: 14px;
-  z-index: 5;
+  z-index: 20;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -433,10 +488,10 @@
 }
 .brain-root .brain-completeness__label {
   font-family: var(--mono);
-  font-size: 9px;
-  letter-spacing: 0.16em;
+  font-size: 11px;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--ink-faint);
+  color: var(--ink-dim);
 }
 .brain-root .brain-completeness__stats {
   font-family: var(--mono);
@@ -464,7 +519,7 @@
   height: 100%;
   border-radius: 999px;
   background: linear-gradient(90deg, var(--caney), var(--done));
-  box-shadow: 0 0 12px rgba(91, 188, 230, 0.35);
+  /* no glow — anti-slop */
   transition: width 0.7s var(--ease);
   animation: brain-bar-in 0.9s var(--ease) both;
 }
@@ -512,7 +567,7 @@
   position: absolute;
   left: 50%;
   bottom: 28px;
-  z-index: 8;
+  z-index: 25;
   width: min(440px, calc(100% - 48px));
   transform: translateX(-50%);
   padding: 16px 16px 14px;
@@ -528,6 +583,25 @@
   pointer-events: auto;
   animation: brain-rg-in 0.55s var(--ease) both;
   overflow: hidden;
+}
+/* Slim always-on search bar (Wave 3) when not in L0 hero mode */
+.brain-root .brain-rg.brain-rg--slim {
+  bottom: auto;
+  top: 12px;
+  left: 50%;
+  width: min(380px, calc(100% - 280px));
+  padding: 8px 10px;
+  z-index: 21;
+}
+.brain-root .brain-rg.brain-rg--slim .brain-rg__head,
+.brain-root .brain-rg.brain-rg--slim .brain-rg__glow {
+  display: none;
+}
+.brain-root .brain-rg.brain-rg--slim .brain-rg__form {
+  height: 38px;
+}
+.brain-root .brain-rg.brain-rg--slim .brain-rg__list {
+  max-height: 200px;
 }
 .brain-root .brain-rg--hot {
   border-color: rgba(91, 188, 230, 0.35);

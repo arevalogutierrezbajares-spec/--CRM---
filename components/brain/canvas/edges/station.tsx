@@ -79,15 +79,19 @@ export default function StationEdge({
         stroke={stroke}
         strokeWidth={2}
         strokeOpacity={isSelected ? 0.85 : 0.5}
-        strokeDasharray={health === "dark" ? "7 7" : undefined}
+        strokeDasharray={health === "dark" ? "7 7" : "4 10"}
         strokeLinecap="round"
         className="react-flow__edge-path"
-        style={{ transition: "stroke-opacity .2s var(--ease)" }}
+        style={{
+          transition: "stroke-opacity .2s var(--ease)",
+          animation:
+            health === "dark" ? "none" : "brain-flow 1.8s linear infinite",
+        }}
       />
 
       <EdgeLabelRenderer>
         <div
-          className={`station${isSelected ? " sel" : ""}`}
+          className={`station${isSelected ? " sel" : ""}${health === "dark" ? " dark" : ""}`}
           data-health={health}
           style={{
             position: "absolute",

@@ -21,8 +21,9 @@ import { ringLayout } from "./layout/radial";
 
 export type Axis = "system" | "function";
 
-/** Maximum nodes shown per altitude before clustering kicks in (NFR-SCALE-2). */
-export const NODE_CAP = 30;
+/** Maximum nodes shown per altitude before clustering kicks in (NFR-SCALE-2).
+ *  Lowered for full inventory: dense L3 (caney.auth 30+) stays readable. */
+export const NODE_CAP = 22;
 
 /** Minimum number of `needed` siblings that collapse into a cluster (FR-NAV-7). */
 export const CLUSTER_THRESHOLD = 2;
@@ -220,7 +221,10 @@ export function capWithOverflow(
   } = {},
 ): BrainNode[] {
   const cap = opts.cap ?? NODE_CAP;
-  if (opts.expanded || siblings.length <= cap) return siblings;
+  // Expanded: show up to 2× cap, then re-overflow (never unbounded dump).
+  const effectiveCap = opts.expanded ? Math.min(siblings.length, cap * 2) : cap;
+  if (siblings.length <= effectiveCap) return siblings;
+  // Fall through with effectiveCap as keep budget
 
   const priority = opts.priorityIds ?? new Set<string>();
   const sorted = [...siblings].sort((a, b) => {
@@ -236,7 +240,7 @@ export function capWithOverflow(
   });
 
   // Leave one slot for the overflow chip.
-  const keep = Math.max(1, cap - 1);
+  const keep = Math.max(1, effectiveCap - 1);
   const kept = sorted.slice(0, keep);
   const rest = sorted.slice(keep);
   if (rest.length === 0) return kept;
@@ -297,9 +301,22 @@ export function relationalPriorityIds(
 /** Rough rendered width of a chip from its label. The pure layout has no DOM,
  * so this only needs to be close — the measured separation pass in brain-canvas
  * guarantees the final no-overlap; a good estimate just keeps the seed tidy. */
+/** Chip width estimate aligned with brain-nodes.css max-width ceilings
+ *  (surface chip ≤244, path ≤148; domain chip ≤220, title ≤160). */
 function estWidth(node: BrainNode): number {
-  const len = (node.label ?? "").length;
-  return Math.max(100, Math.min(244, Math.round(len * 6.8 + 48)));
+  const label = node.label ?? "";
+  const methodMatch = /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)(\/[A-Z]+)?\s+/.exec(
+    label,
+  );
+  if (methodMatch || label.startsWith("/")) {
+    // Surface: method badge ~52 + path (CSS max 148) + lang ~36 + pad ~40
+    const pathText = methodMatch ? label.slice(methodMatch[0].length) : label;
+    const pathW = Math.min(148, Math.max(24, Math.round(pathText.length * 6.8)));
+    return Math.max(120, Math.min(244, 52 + pathW + 36 + 40));
+  }
+  // Domain / hub chip: title capped 160 + glyph + pad
+  const title = Math.min(160, Math.round(label.length * 6.8));
+  return Math.max(100, Math.min(220, title + 48));
 }
 
 /**

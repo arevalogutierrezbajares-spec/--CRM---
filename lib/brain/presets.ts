@@ -4,8 +4,9 @@
  * A preset is a saved "reading" of the map for an audience: it picks a default
  * axis + lens and a set of systems to emphasize on entry. Investor is the v0
  * real default (lands on the State lens so BUILT/WIP reads first, roadmap
- * recedes). Agent and Operator are stubs whose default lenses (topology /
- * liveness) are v1/v2 — selectable but their lenses degrade gracefully today.
+ * recedes). Agent emphasizes the three live platforms under Topology. Operator
+ * also lands on Topology (liveness stays disabled until telemetry lands) —
+ * health is read via interchange wires, not a dead lens.
  */
 
 import type { System } from "./types";
@@ -21,6 +22,8 @@ export interface Preset {
   defaultLens: LensKey;
   /** System ids to visually emphasize on entry (others recede). */
   emphasize: System[];
+  /** Optional short chip shown next to the preset label in chrome. */
+  badge?: string;
 }
 
 export const PRESETS: Record<PresetId, Preset> = {
@@ -32,21 +35,23 @@ export const PRESETS: Record<PresetId, Preset> = {
     defaultLens: "state",
     emphasize: ["vav", "caney", "crm"],
   },
-  // Agent (v1): topology-first — how the pieces wire together.
+  // Agent: topology-first — how the pieces wire together.
   agent: {
     id: "agent",
     label: "Agent",
     defaultAxis: "system",
     defaultLens: "topology",
-    emphasize: [],
+    emphasize: ["crm", "caney", "vav"],
   },
-  // Operator (v2): liveness-first — what's healthy / running right now.
+  // Operator: topology (liveness lens is disabled until telemetry). Health is
+  // read from interchange wire state — "health via wires".
   operator: {
     id: "operator",
     label: "Operator",
     defaultAxis: "system",
-    defaultLens: "liveness",
+    defaultLens: "topology",
     emphasize: [],
+    badge: "health via wires",
   },
 };
 

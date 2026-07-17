@@ -39,7 +39,10 @@ describe("L0: no self-loop interchange stations", () => {
 
   it("still shows cross-system live stations", () => {
     const edges = visibleEdges(graph, { level: 0, axis: "system" });
-    expect(edges.some((e) => e.id === "ix1")).toBe(true);
+    // Graph no longer ships ix1; assert any live cross-system wire (e.g. ix2).
+    expect(edges.some((e) => e.id === "ix2" || e.kind === "interchange")).toBe(
+      true,
+    );
     expect(edges.length).toBeGreaterThan(0);
   });
 });

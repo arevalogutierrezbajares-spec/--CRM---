@@ -62,9 +62,9 @@ export function pushRecentSearch(query: string): void {
   }
 }
 
-/** Empty-state copy for rebuild-guard (keep exact product phrase). */
+/** Empty-state copy for rebuild-guard — soft caution, not a green light. */
 export function safeToBuildMessage(query: string): string {
-  return `No match — safe to build (nothing similar in the portfolio graph for “${query.trim()}”).`;
+  return `No indexed match for "${query.trim()}" — verify before building (typos and synonyms may not appear).`;
 }
 
 type IndexEntry = {

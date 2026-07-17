@@ -6,6 +6,9 @@
  * Meta line (routes/pages/migrations/stack), commit SHA, cartographer summary
  * (null in v0 → omitted), the interchange links-out count + list, and the
  * domain list with double-encoded states. Restaurants shows its host-mount note.
+ *
+ * Action hierarchy (Wave 3): one primary drill, secondary open-in-repo, then at
+ * most two smaller deep-links (Platforms / Roadmap).
  */
 
 import Link from "next/link";
@@ -174,6 +177,28 @@ export function SelSystem({ node }: { node: BrainNode }) {
       </div>
 
       <div className="d-actions">
+        {/* Primary — one clear next step */}
+        <button
+          type="button"
+          className="btn"
+          style={{
+            background: "var(--panel-s)",
+            borderColor: "var(--line-2)",
+            color: "var(--ink)",
+            fontWeight: 600,
+          }}
+          onClick={() =>
+            actions.drillInto({
+              nodeId: node.id,
+              level: 1,
+              system: node.system,
+            })
+          }
+        >
+          Drill into {node.label}
+        </button>
+
+        {/* Secondary */}
         {repoUrl ? (
           <a className="btn" href={repoUrl} target="_blank" rel="noreferrer">
             Open in repo ↗
@@ -189,18 +214,40 @@ export function SelSystem({ node }: { node: BrainNode }) {
             Open docs ↗
           </a>
         ) : null}
-        <Link className="btn" href="/platforms">
-          Platforms
-        </Link>
-        <Link className="btn" href="/roadmap">
-          Roadmap
-        </Link>
-        <Link className="btn" href="/overlord">
-          Overlord
-        </Link>
-        <button type="button" className="btn" onClick={() => actions.drillInto({ nodeId: node.id, level: 1, system: node.system })}>
-          Drill into {node.label}
-        </button>
+
+        {/* Smaller deep-links — two only */}
+        <div
+          style={{
+            display: "flex",
+            gap: 6,
+            marginTop: 2,
+          }}
+        >
+          <Link
+            className="btn"
+            href="/platforms"
+            style={{
+              flex: 1,
+              padding: "6px 8px",
+              fontSize: 10,
+              opacity: 0.85,
+            }}
+          >
+            Platforms
+          </Link>
+          <Link
+            className="btn"
+            href="/roadmap"
+            style={{
+              flex: 1,
+              padding: "6px 8px",
+              fontSize: 10,
+              opacity: 0.85,
+            }}
+          >
+            Roadmap
+          </Link>
+        </div>
       </div>
     </>
   );
