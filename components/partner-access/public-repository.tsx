@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ArrowUpRight,
   Banknote,
@@ -125,6 +125,7 @@ export function PublicRepository({
   commentsByTarget,
   signaturesByTarget = {},
   defaultSignerName = "",
+  defaultSignerEmail = "",
   ownerLabel,
 }: {
   token: string;
@@ -134,6 +135,7 @@ export function PublicRepository({
   commentsByTarget: Record<string, RepoComment[]>;
   signaturesByTarget?: Record<string, RepoSignature>;
   defaultSignerName?: string;
+  defaultSignerEmail?: string;
   ownerLabel: string;
 }) {
   // Server props + a local override of what was just signed this session —
@@ -144,6 +146,42 @@ export function PublicRepository({
   );
   const { t, rel } = useRoomI18n();
   const activity = useRoomActivity();
+
+  // Deep link: ?sign=<requestId> opens the pending sign modal once per request.
+  // sessionStorage prevents re-open after the guest dismisses (or after remount).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const id = new URLSearchParams(window.location.search).get("sign");
+    if (!id) return;
+
+    const dismissKey = `ruta_sign_dismissed:${id}`;
+    try {
+      if (sessionStorage.getItem(dismissKey) === "1") {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("sign");
+        window.history.replaceState({}, "", url.pathname + url.search + url.hash);
+        return;
+      }
+    } catch {
+      /* private mode */
+    }
+
+    for (const [key, sig] of Object.entries(signaturesByTarget)) {
+      if (sig.requestId === id && sig.status === "pending") {
+        const title =
+          key.startsWith("item:")
+            ? items.find((i) => i.id === key.slice(5))?.title
+            : shares.find((s) => s.id === key.slice(6))?.title;
+        setSigning({ key, sig, title: title ?? sig.requestId });
+        const url = new URL(window.location.href);
+        url.searchParams.delete("sign");
+        window.history.replaceState({}, "", url.pathname + url.search + url.hash);
+        break;
+      }
+    }
+    // Only on mount for deep-link handoff.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function signatureFor(key: string): RepoSignature | null {
     const base = signaturesByTarget[key];
@@ -305,8 +343,27 @@ export function PublicRepository({
           documentTitle={signing.title}
           message={signing.sig.message}
           defaultName={defaultSignerName}
-          onClose={() => setSigning(null)}
+          defaultEmail={defaultSignerEmail}
+          onClose={() => {
+            try {
+              sessionStorage.setItem(
+                `ruta_sign_dismissed:${signing.sig.requestId}`,
+                "1",
+              );
+            } catch {
+              /* private mode */
+            }
+            setSigning(null);
+          }}
           onSigned={(result) => {
+            try {
+              sessionStorage.setItem(
+                `ruta_sign_dismissed:${signing.sig.requestId}`,
+                "1",
+              );
+            } catch {
+              /* private mode */
+            }
             setSignedNow((prev) => ({ ...prev, [signing.key]: result }));
             // Hero "firmas pendientes" chip tracks the signature live.
             activity?.signatureSigned();

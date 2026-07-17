@@ -596,6 +596,7 @@ export default async function PublicAccessRoomPage({
               commentsByTarget={commentsByTarget}
               signaturesByTarget={signaturesByTarget}
               defaultSignerName={member?.displayName ?? ""}
+              defaultSignerEmail={member?.email ?? ""}
               ownerLabel={dict.common.team}
             />
             </div>

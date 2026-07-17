@@ -41,6 +41,10 @@ export async function stampSignedPdf(opts: {
   ip: string | null;
   userAgent: string | null;
   placement?: SignaturePlacement | null;
+  /** Optional consent / request metadata for the certificate page. */
+  consentLocale?: string | null;
+  consentTextKey?: string | null;
+  requestId?: string | null;
 }): Promise<Uint8Array> {
   const doc = await PDFDocument.load(opts.pdfBytes, { ignoreEncryption: true });
   const helvetica = await doc.embedFont(StandardFonts.Helvetica);
@@ -103,6 +107,15 @@ export async function stampSignedPdf(opts: {
     ["SHA-256 del documento", opts.documentSha256],
     ["Dirección IP", opts.ip ?? "—"],
     ["Dispositivo", (opts.userAgent ?? "—").slice(0, 110)],
+    [
+      "Consentimiento",
+      opts.consentTextKey
+        ? `Sí · ${opts.consentLocale ?? "—"} · ${opts.consentTextKey}`
+        : "Sí",
+    ],
+    ...(opts.requestId
+      ? ([["ID de solicitud", opts.requestId]] as [string, string][])
+      : []),
   ];
   for (const [label, value] of rows) {
     page.drawText(label.toUpperCase(), {

@@ -1,10 +1,22 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { CheckCircle2, Download, FileSignature, Loader2, XCircle } from "lucide-react";
 import {
+  CheckCircle2,
+  Copy,
+  Download,
+  FileSignature,
+  Loader2,
+  Mail,
+  RefreshCw,
+  XCircle,
+} from "lucide-react";
+import {
+  getSignatureDeepLinkAction,
   getSignedPdfUrlAction,
   requestSignatureAction,
+  resendSignatureNotifyAction,
+  retryStampAction,
   voidSignatureRequestAction,
 } from "@/app/(app)/partner-access/actions";
 
@@ -25,14 +37,19 @@ export type SignatureRequestView = {
   signerEmail: string | null;
   signedAt: string | null;
   documentSha256: string | null;
+  documentSha256AtRequest: string | null;
   ip: string | null;
   hasSignedPdf: boolean;
+  stampStatus: string | null;
+  lastNotifiedAt: string | null;
+  notifyError: string | null;
+  notifyEmails: string[] | null;
 };
 
 /**
  * Owner panel: request a signature on any repository entry, void pending
- * requests, and read the audit record (signer, server timestamp, doc hash,
- * IP) once signed.
+ * requests, resend notify, copy deep link, retry stamp, and read the audit
+ * record once signed.
  */
 export function RoomSignaturesManager({
   roomId,
@@ -46,8 +63,9 @@ export function RoomSignaturesManager({
   const [pending, startTransition] = useTransition();
   const [selected, setSelected] = useState("");
   const [message, setMessage] = useState("");
+  const [extraEmails, setExtraEmails] = useState("");
   const [error, setError] = useState<string | null>(null);
-  // Server props + local deltas (requested/voided this session).
+  const [info, setInfo] = useState<string | null>(null);
   const [localRequests, setLocalRequests] = useState<SignatureRequestView[]>([]);
   const [voidedNow, setVoidedNow] = useState<Set<string>>(new Set());
 
@@ -61,8 +79,16 @@ export function RoomSignaturesManager({
   const activeTargets = new Set(allRequests.map((r) => `${r.targetKind}:${r.targetId}`));
   const available = entries.filter((e) => !activeTargets.has(`${e.targetKind}:${e.targetId}`));
 
+  function parseExtraEmails(): string[] {
+    return extraEmails
+      .split(/[,;\s]+/)
+      .map((e) => e.trim())
+      .filter((e) => e.includes("@"));
+  }
+
   function request() {
     setError(null);
+    setInfo(null);
     const entry = available.find((e) => `${e.targetKind}:${e.targetId}` === selected);
     if (!entry) {
       setError("Pick a document first.");
@@ -75,6 +101,7 @@ export function RoomSignaturesManager({
         targetId: entry.targetId,
         title: entry.title,
         message: message.trim() || null,
+        notifyEmails: parseExtraEmails(),
       });
       if (!res.ok) {
         setError(res.error);
@@ -92,13 +119,37 @@ export function RoomSignaturesManager({
           signerEmail: null,
           signedAt: null,
           documentSha256: null,
+          documentSha256AtRequest: res.documentSha256,
           ip: null,
           hasSignedPdf: false,
+          stampStatus: null,
+          lastNotifiedAt: res.notified > 0 ? new Date().toISOString() : null,
+          notifyError: res.notifyError,
+          notifyEmails: null,
         },
         ...prev,
       ]);
       setSelected("");
       setMessage("");
+      if (res.notified > 0) {
+        setInfo(`Requested. Notified ${res.notified} recipient(s).`);
+      } else if (res.notifyError === "no_recipients") {
+        setInfo("Requested. No emails on file — copy the guest link to share.");
+      } else if (res.notifyError === "resend_not_configured") {
+        setInfo("Requested. Email not configured — copy the guest link to share.");
+      } else if (res.notifyError) {
+        setInfo(`Requested. Notify failed (${res.notifyError}) — copy the link.`);
+      } else {
+        setInfo("Requested.");
+      }
+      if (res.deepLink) {
+        try {
+          await navigator.clipboard.writeText(res.deepLink);
+          setInfo((prev) => `${prev ?? "Requested."} Link copied.`);
+        } catch {
+          /* ignore */
+        }
+      }
     });
   }
 
@@ -118,13 +169,65 @@ export function RoomSignaturesManager({
     });
   }
 
+  function resend(id: string) {
+    startTransition(async () => {
+      setError(null);
+      const res = await resendSignatureNotifyAction({
+        roomId,
+        requestId: id,
+        notifyEmails: parseExtraEmails(),
+      });
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      if (res.notified > 0) setInfo(`Re-sent to ${res.notified} recipient(s).`);
+      else setInfo(res.notifyError ? `Notify: ${res.notifyError}` : "No recipients.");
+    });
+  }
+
+  function copyLink(id: string) {
+    startTransition(async () => {
+      const res = await getSignatureDeepLinkAction({ roomId, requestId: id });
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(res.deepLink);
+        setInfo("Deep link copied.");
+      } catch {
+        setInfo(res.deepLink);
+      }
+    });
+  }
+
+  function retryStamp(id: string) {
+    startTransition(async () => {
+      setError(null);
+      const res = await retryStampAction({ roomId, requestId: id });
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      setLocalRequests((prev) =>
+        prev.map((r) =>
+          r.id === id ? { ...r, hasSignedPdf: true, stampStatus: "ready" } : r,
+        ),
+      );
+      setInfo("Signed PDF ready.");
+      window.open(res.url, "_blank", "noopener");
+    });
+  }
+
   return (
     <div className="space-y-4">
       {allRequests.length === 0 && (
         <p className="text-sm text-[var(--muted-foreground)]">
           No signature requests yet. Pick a repository document below — the
-          guest signs from their phone and the server records name, timestamp,
-          document hash, and IP.
+          guest signs from their phone and the server records name, email,
+          consent, timestamp, document hash, and IP. The document is frozen at
+          request time.
         </p>
       )}
 
@@ -152,11 +255,22 @@ export function RoomSignaturesManager({
                         })
                       : ""}
                     {r.ip ? ` · IP ${r.ip}` : ""}
-                    {r.documentSha256 ? ` · SHA-256 ${r.documentSha256.slice(0, 12)}…` : ""}
+                    {(r.documentSha256 ?? r.documentSha256AtRequest)
+                      ? ` · SHA-256 ${(r.documentSha256 ?? r.documentSha256AtRequest)!.slice(0, 12)}…`
+                      : ""}
+                    {r.stampStatus === "failed" ? " · stamp failed" : ""}
                   </p>
                 ) : (
                   <p className="mt-0.5 text-xs text-amber-600 dark:text-amber-400">
                     Awaiting signature
+                    {r.documentSha256AtRequest
+                      ? ` · frozen ${r.documentSha256AtRequest.slice(0, 12)}…`
+                      : ""}
+                    {r.lastNotifiedAt
+                      ? ` · notified ${new Date(r.lastNotifiedAt).toLocaleString()}`
+                      : r.notifyError
+                        ? ` · notify: ${r.notifyError}`
+                        : ""}
                   </p>
                 )}
               </div>
@@ -182,16 +296,49 @@ export function RoomSignaturesManager({
                   Signed PDF
                 </button>
               )}
+              {r.status === "signed" &&
+                !r.hasSignedPdf &&
+                r.stampStatus !== "skipped_non_pdf" && (
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => retryStamp(r.id)}
+                    className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-2 py-1 text-xs hover:bg-[var(--secondary)] disabled:opacity-50"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" />
+                    Retry stamp
+                  </button>
+                )}
               {r.status === "pending" && (
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => voidRequest(r.id)}
-                  className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-2 py-1 text-xs text-[var(--muted-foreground)] hover:bg-[var(--secondary)] disabled:opacity-50"
-                >
-                  <XCircle className="h-3.5 w-3.5" />
-                  Void
-                </button>
+                <>
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => copyLink(r.id)}
+                    className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-2 py-1 text-xs hover:bg-[var(--secondary)] disabled:opacity-50"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                    Copy link
+                  </button>
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => resend(r.id)}
+                    className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-2 py-1 text-xs hover:bg-[var(--secondary)] disabled:opacity-50"
+                  >
+                    <Mail className="h-3.5 w-3.5" />
+                    Resend
+                  </button>
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => voidRequest(r.id)}
+                    className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-2 py-1 text-xs text-[var(--muted-foreground)] hover:bg-[var(--secondary)] disabled:opacity-50"
+                  >
+                    <XCircle className="h-3.5 w-3.5" />
+                    Void
+                  </button>
+                </>
               )}
             </li>
           ))}
@@ -233,8 +380,20 @@ export function RoomSignaturesManager({
           placeholder="Optional note for the signer (shown in the signing sheet)"
           className="mt-2 w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
         />
+        <input
+          type="text"
+          value={extraEmails}
+          onChange={(e) => setExtraEmails(e.target.value)}
+          placeholder="Extra notify emails (comma-separated; claimed guests + contact emailed by default)"
+          className="mt-2 w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
+        />
       </div>
 
+      {info && (
+        <p className="text-sm text-emerald-700 dark:text-emerald-400" role="status">
+          {info}
+        </p>
+      )}
       {error && (
         <p role="alert" className="text-sm text-red-600 dark:text-red-400">
           {error}

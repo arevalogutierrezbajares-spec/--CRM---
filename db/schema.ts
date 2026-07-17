@@ -249,6 +249,10 @@ export const partnerAccessEventType = pgEnum("partner_access_event_type", [
   "item_commented",
   "signature_requested",
   "document_signed",
+  "signature_notify_sent",
+  "signature_notify_failed",
+  "signed_pdf_downloaded",
+  "signature_stamp_retried",
 ]);
 
 /* ─── Pitch feedback module enums ─────────────────────────────────────── */
@@ -1215,6 +1219,14 @@ export const partnerNextSteps = pgTable("partner_next_steps", {
 // E-signatures on partner-room repository entries. The request is the owner's
 // ask; the signature row is the audit record (server timestamp, signer
 // identity, document hash, IP/UA, stamped PDF copy for PDF targets).
+// P0: freeze at request, consent metadata, placement + stamp status, notify.
+export type SignaturePlacementJson = {
+  pageIndex: number;
+  x: number;
+  y: number;
+  width: number;
+};
+
 export const partnerSignatureRequests = pgTable(
   "partner_signature_requests",
   {
@@ -1233,6 +1245,16 @@ export const partnerSignatureRequests = pgTable(
     requestedBy: uuid("requested_by").references(() => users.id, {
       onDelete: "set null",
     }),
+    // Frozen document snapshot taken at request time (sign prefers these).
+    sourceStoragePath: text("source_storage_path"),
+    frozenStoragePath: text("frozen_storage_path"),
+    documentSha256AtRequest: text("document_sha256_at_request"),
+    documentByteLength: integer("document_byte_length"),
+    documentMimeType: text("document_mime_type"),
+    notifyEmails: text("notify_emails").array(),
+    lastNotifiedAt: timestamp("last_notified_at", { withTimezone: true }),
+    notifyError: text("notify_error"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -1268,6 +1290,15 @@ export const partnerSignatures = pgTable("partner_signatures", {
   ip: text("ip"),
   userAgent: text("user_agent"),
   signedAt: timestamp("signed_at", { withTimezone: true }).notNull().defaultNow(),
+  consentAccepted: boolean("consent_accepted").notNull().default(true),
+  consentTextKey: text("consent_text_key"),
+  consentLocale: text("consent_locale"),
+  consentAt: timestamp("consent_at", { withTimezone: true }),
+  placement: jsonb("placement").$type<SignaturePlacementJson | null>(),
+  // pending | ready | skipped_non_pdf | failed
+  stampStatus: text("stamp_status").notNull().default("pending"),
+  stampError: text("stamp_error"),
+  stampAttempts: integer("stamp_attempts").notNull().default(0),
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -4,19 +4,18 @@ import { getSignatureRequest } from "@/db/queries/partner-signatures";
 import { isPartnerRoomUnlocked } from "@/lib/partner-room-gate.server";
 import { getRoomDict } from "@/lib/partner-room-i18n";
 import {
-  fetchSignatureTargetBytes,
+  fetchBytesForSignatureRequest,
   isPdfBytes,
 } from "@/lib/signatures/target.server";
 
 type Params = Promise<{ token: string; requestId: string }>;
 
 /**
- * Serves the pending document for the in-portal signing viewer. Proxied
- * through the app (same-origin) so pdf.js can fetch it without depending on
- * storage CORS; only pending requests are readable here — once signed, the
- * stamped copy has its own route.
+ * Serves the pending document for the in-portal signing viewer.
+ * Prefers frozen bytes from request time when present.
  */
 export async function GET(req: NextRequest, props: { params: Params }) {
+  void req;
   const { token, requestId } = await props.params;
   const room = await resolvePartnerRoomByToken(token).catch(() => null);
   const t = getRoomDict(room?.locale).api;
@@ -34,20 +33,11 @@ export async function GET(req: NextRequest, props: { params: Params }) {
     return NextResponse.json({ error: t.signUnavailable }, { status: 404 });
   }
 
-  const bytes = await fetchSignatureTargetBytes({
-    token,
-    roomId: room.id,
-    targetKind: request.targetKind,
-    targetId: request.targetId,
-  });
+  const bytes = await fetchBytesForSignatureRequest({ token, request });
   if (!bytes) {
-    return NextResponse.json(
-      { error: t.docLoadFailed },
-      { status: 404 },
-    );
+    return NextResponse.json({ error: t.docLoadFailed }, { status: 404 });
   }
   if (!isPdfBytes(bytes)) {
-    // The client falls back to the pad-only signing sheet for non-PDF targets.
     return NextResponse.json({ error: "not-pdf" }, { status: 415 });
   }
 

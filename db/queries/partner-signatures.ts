@@ -1,6 +1,8 @@
 import { and, desc, eq, gt, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
+import type { SignaturePlacementJson } from "@/db/schema";
 import { notifyUsers } from "@/db/queries/town-hall";
+import type { StampStatus } from "@/lib/signatures/sign-body";
 
 export type PartnerSignatureRequest =
   typeof schema.partnerSignatureRequests.$inferSelect;
@@ -9,7 +11,17 @@ export type PartnerSignature = typeof schema.partnerSignatures.$inferSelect;
 export type SignatureRequestWithSignature = PartnerSignatureRequest & {
   signature: Pick<
     PartnerSignature,
-    "id" | "signerName" | "signerEmail" | "signedAt" | "signedPdfPath" | "documentSha256" | "ip"
+    | "id"
+    | "signerName"
+    | "signerEmail"
+    | "signedAt"
+    | "signedPdfPath"
+    | "documentSha256"
+    | "ip"
+    | "stampStatus"
+    | "placement"
+    | "consentAccepted"
+    | "consentLocale"
   > | null;
 };
 
@@ -27,6 +39,10 @@ export async function listSignatureRequestsByRoom(input: {
       signedPdfPath: schema.partnerSignatures.signedPdfPath,
       documentSha256: schema.partnerSignatures.documentSha256,
       ip: schema.partnerSignatures.ip,
+      stampStatus: schema.partnerSignatures.stampStatus,
+      placement: schema.partnerSignatures.placement,
+      consentAccepted: schema.partnerSignatures.consentAccepted,
+      consentLocale: schema.partnerSignatures.consentLocale,
     })
     .from(schema.partnerSignatureRequests)
     .leftJoin(
@@ -47,6 +63,10 @@ export async function listSignatureRequestsByRoom(input: {
           signedPdfPath: r.signedPdfPath,
           documentSha256: r.documentSha256,
           ip: r.ip,
+          stampStatus: r.stampStatus as string,
+          placement: r.placement,
+          consentAccepted: r.consentAccepted as boolean,
+          consentLocale: r.consentLocale,
         }
       : null,
   }));
@@ -89,6 +109,7 @@ export async function getSignatureForRequest(input: {
 /**
  * Owner asks for a signature on a repository entry. Re-requesting a voided
  * target re-opens it; a signed target is immutable (the audit record wins).
+ * Caller must freeze the document and attach freeze metadata after insert.
  */
 export async function createSignatureRequest(input: {
   workspaceId: string;
@@ -128,6 +149,15 @@ export async function createSignatureRequest(input: {
         titleSnapshot: input.title,
         message: input.message?.trim() || null,
         requestedBy: input.actorId,
+        // Clear prior freeze/notify so re-request re-freezes cleanly.
+        sourceStoragePath: null,
+        frozenStoragePath: null,
+        documentSha256AtRequest: null,
+        documentByteLength: null,
+        documentMimeType: null,
+        notifyEmails: null,
+        lastNotifiedAt: null,
+        notifyError: null,
         updatedAt: now,
       })
       .where(eq(schema.partnerSignatureRequests.id, existing.id))
@@ -161,6 +191,85 @@ export async function createSignatureRequest(input: {
     .catch(() => {});
 
   return { ok: true, request };
+}
+
+/** Attach freeze metadata after successful storage copy. */
+export async function setSignatureRequestFreeze(input: {
+  requestId: string;
+  roomId: string;
+  sourceStoragePath: string;
+  frozenStoragePath: string;
+  documentSha256AtRequest: string;
+  documentByteLength: number;
+  documentMimeType: string;
+}): Promise<PartnerSignatureRequest | null> {
+  const [updated] = await db
+    .update(schema.partnerSignatureRequests)
+    .set({
+      sourceStoragePath: input.sourceStoragePath,
+      frozenStoragePath: input.frozenStoragePath,
+      documentSha256AtRequest: input.documentSha256AtRequest,
+      documentByteLength: input.documentByteLength,
+      documentMimeType: input.documentMimeType,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(schema.partnerSignatureRequests.id, input.requestId),
+        eq(schema.partnerSignatureRequests.roomId, input.roomId),
+      ),
+    )
+    .returning();
+  return updated ?? null;
+}
+
+/** Record notify attempt (success or failure). Never throws for callers. */
+export async function setSignatureRequestNotify(input: {
+  requestId: string;
+  roomId: string;
+  emails: string[];
+  error: string | null;
+}): Promise<void> {
+  await db
+    .update(schema.partnerSignatureRequests)
+    .set({
+      notifyEmails: input.emails.length > 0 ? input.emails : null,
+      lastNotifiedAt: input.error ? null : new Date(),
+      notifyError: input.error,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(schema.partnerSignatureRequests.id, input.requestId),
+        eq(schema.partnerSignatureRequests.roomId, input.roomId),
+      ),
+    )
+    .catch(() => {});
+
+  if (input.emails.length > 0) {
+    const [req] = await db
+      .select({ workspaceId: schema.partnerSignatureRequests.workspaceId })
+      .from(schema.partnerSignatureRequests)
+      .where(eq(schema.partnerSignatureRequests.id, input.requestId))
+      .limit(1);
+    if (req) {
+      await db
+        .insert(schema.partnerAccessEvents)
+        .values({
+          workspaceId: req.workspaceId,
+          roomId: input.roomId,
+          eventType: input.error
+            ? "signature_notify_failed"
+            : "signature_notify_sent",
+          metadata: {
+            requestId: input.requestId,
+            emails: input.emails,
+            error: input.error,
+          },
+        })
+        .catch(() => {});
+    }
+  }
 }
 
 /** Void a pending request (signed ones are immutable). */
@@ -213,14 +322,19 @@ export async function createPartnerSignature(input: {
   requestId: string;
   memberId: string | null;
   signerName: string;
-  signerEmail: string | null;
+  signerEmail: string;
   signatureImagePath: string | null;
   documentSha256: string | null;
   signedPdfPath: string | null;
   ip: string | null;
   userAgent: string | null;
-  /** Server clock instant — same value stamped into the PDF certificate. */
   signedAt: Date;
+  consentAccepted: boolean;
+  consentTextKey: string | null;
+  consentLocale: string | null;
+  consentAt: Date;
+  placement: SignaturePlacementJson | null;
+  stampStatus: StampStatus;
 }): Promise<{ ok: true; signature: PartnerSignature } | { ok: false; error: string }> {
   const result = await db.transaction(async (tx) => {
     const [claimed] = await tx
@@ -251,6 +365,13 @@ export async function createPartnerSignature(input: {
         ip: input.ip,
         userAgent: input.userAgent,
         signedAt: input.signedAt,
+        consentAccepted: input.consentAccepted,
+        consentTextKey: input.consentTextKey,
+        consentLocale: input.consentLocale,
+        consentAt: input.consentAt,
+        placement: input.placement,
+        stampStatus: input.stampStatus,
+        stampAttempts: 0,
       })
       .returning();
 
@@ -261,6 +382,7 @@ export async function createPartnerSignature(input: {
       metadata: {
         requestId: input.requestId,
         signerName: input.signerName,
+        signerEmail: input.signerEmail,
         title: claimed.titleSnapshot,
       },
     });
@@ -272,8 +394,6 @@ export async function createPartnerSignature(input: {
     return { ok: false, error: "Esta solicitud ya no está pendiente." };
   }
 
-  // Bell for the room owner — a signed contract is the one event you never
-  // want to miss.
   try {
     const [room] = await db
       .select({ createdBy: schema.partnerRooms.createdBy, name: schema.partnerRooms.name })
@@ -302,17 +422,41 @@ export async function createPartnerSignature(input: {
 /**
  * Attach the stamped-PDF path after the fact. Stamping runs AFTER the
  * signature record is committed (it's best-effort by design — a pdf-lib
- * failure or hang must never lose a completed signature), so the path
- * lands in a follow-up update.
+ * failure or hang must never lose a completed signature).
  */
-export async function setSignaturePdfPath(input: {
+export async function setSignatureStampResult(input: {
   signatureId: string;
   roomId: string;
-  signedPdfPath: string;
+  signedPdfPath: string | null;
+  stampStatus: StampStatus;
+  stampError: string | null;
+  incrementAttempts?: boolean;
 }): Promise<boolean> {
+  if (input.incrementAttempts) {
+    const [updated] = await db
+      .update(schema.partnerSignatures)
+      .set({
+        signedPdfPath: input.signedPdfPath,
+        stampStatus: input.stampStatus,
+        stampError: input.stampError,
+        stampAttempts: sql`${schema.partnerSignatures.stampAttempts} + 1`,
+      })
+      .where(
+        and(
+          eq(schema.partnerSignatures.id, input.signatureId),
+          eq(schema.partnerSignatures.roomId, input.roomId),
+        ),
+      )
+      .returning({ id: schema.partnerSignatures.id });
+    return Boolean(updated);
+  }
   const [updated] = await db
     .update(schema.partnerSignatures)
-    .set({ signedPdfPath: input.signedPdfPath })
+    .set({
+      signedPdfPath: input.signedPdfPath,
+      stampStatus: input.stampStatus,
+      stampError: input.stampError,
+    })
     .where(
       and(
         eq(schema.partnerSignatures.id, input.signatureId),
@@ -321,4 +465,20 @@ export async function setSignaturePdfPath(input: {
     )
     .returning({ id: schema.partnerSignatures.id });
   return Boolean(updated);
+}
+
+/** @deprecated use setSignatureStampResult — kept for any leftover call sites */
+export async function setSignaturePdfPath(input: {
+  signatureId: string;
+  roomId: string;
+  signedPdfPath: string;
+}): Promise<boolean> {
+  return setSignatureStampResult({
+    signatureId: input.signatureId,
+    roomId: input.roomId,
+    signedPdfPath: input.signedPdfPath,
+    stampStatus: "ready",
+    stampError: null,
+    incrementAttempts: true,
+  });
 }

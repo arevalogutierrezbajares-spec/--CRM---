@@ -1,16 +1,16 @@
 /**
- * Resolves the exact bytes of a signature request's target document (a room
- * repository item or a share). Both the signing endpoint (hash + stamp) and
- * the in-document viewer route read through this so they always see the same
- * bytes.
+ * Resolves the exact bytes of a signature request's target document.
+ * Prefers frozen bytes when the request has a freeze; falls back to live
+ * storage for legacy pending requests created before P0.
  */
 import "server-only";
-import { and, eq } from "drizzle-orm";
-import { db, schema } from "@/db";
-import { getPublicPartnerShareByToken } from "@/db/queries/partner-access";
-import { createSignedDownloadUrl } from "@/lib/project-files/storage";
+import {
+  fetchFrozenOrLiveBytes,
+} from "@/lib/signatures/freeze.server";
+import type { PartnerSignatureRequest } from "@/db/queries/partner-signatures";
+import { SIGN_DOC_MAX_BYTES as MAX_BYTES } from "@/lib/signatures/freeze-paths";
 
-export const SIGN_DOC_MAX_BYTES = 30 * 1024 * 1024;
+export const SIGN_DOC_MAX_BYTES = MAX_BYTES;
 
 export function isPdfBytes(bytes: Uint8Array | null): bytes is Uint8Array {
   return (
@@ -23,43 +23,39 @@ export function isPdfBytes(bytes: Uint8Array | null): bytes is Uint8Array {
   );
 }
 
+/**
+ * Prefer request.frozenStoragePath; otherwise live path resolution.
+ * `token` is accepted for API compatibility but freeze/live resolve via DB.
+ */
 export async function fetchSignatureTargetBytes(opts: {
   token: string;
   roomId: string;
+  workspaceId: string;
   targetKind: string;
   targetId: string;
+  frozenStoragePath?: string | null;
 }): Promise<Uint8Array | null> {
-  let storagePath: string | null = null;
-  if (opts.targetKind === "item") {
-    const [item] = await db
-      .select({ storagePath: schema.partnerRoomItems.storagePath })
-      .from(schema.partnerRoomItems)
-      .where(
-        and(
-          eq(schema.partnerRoomItems.id, opts.targetId),
-          eq(schema.partnerRoomItems.roomId, opts.roomId),
-        ),
-      )
-      .limit(1);
-    storagePath = item?.storagePath ?? null;
-  } else {
-    const row = await getPublicPartnerShareByToken({
-      token: opts.token,
-      shareId: opts.targetId,
-    }).catch(() => null);
-    storagePath = row?.storagePath ?? null;
-  }
-  if (!storagePath) return null;
+  void opts.token;
+  return fetchFrozenOrLiveBytes({
+    frozenStoragePath: opts.frozenStoragePath,
+    roomId: opts.roomId,
+    workspaceId: opts.workspaceId,
+    targetKind: opts.targetKind,
+    targetId: opts.targetId,
+  });
+}
 
-  const signed = await createSignedDownloadUrl(storagePath);
-  if (!signed.ok) return null;
-  try {
-    const res = await fetch(signed.url);
-    if (!res.ok) return null;
-    const buf = await res.arrayBuffer();
-    if (buf.byteLength > SIGN_DOC_MAX_BYTES) return null;
-    return new Uint8Array(buf);
-  } catch {
-    return null;
-  }
+/** Convenience: load bytes for a full request row. */
+export async function fetchBytesForSignatureRequest(opts: {
+  token: string;
+  request: PartnerSignatureRequest;
+}): Promise<Uint8Array | null> {
+  return fetchSignatureTargetBytes({
+    token: opts.token,
+    roomId: opts.request.roomId,
+    workspaceId: opts.request.workspaceId,
+    targetKind: opts.request.targetKind,
+    targetId: opts.request.targetId,
+    frozenStoragePath: opts.request.frozenStoragePath,
+  });
 }

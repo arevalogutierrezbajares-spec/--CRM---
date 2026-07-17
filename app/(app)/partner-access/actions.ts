@@ -1052,7 +1052,19 @@ async function _requestSignatureAction(opts: {
   targetId: string;
   title: string;
   message?: string | null;
-}): Promise<{ ok: true; requestId: string } | { ok: false; error: string }> {
+  /** Extra emails beyond claimed members / contact. */
+  notifyEmails?: string[] | null;
+}): Promise<
+  | {
+      ok: true;
+      requestId: string;
+      notified: number;
+      notifyError: string | null;
+      deepLink: string | null;
+      documentSha256: string | null;
+    }
+  | { ok: false; error: string }
+> {
   const user = await requireUser();
   const room = await getPartnerRoomBasic({
     workspaceId: user.workspaceId,
@@ -1062,7 +1074,11 @@ async function _requestSignatureAction(opts: {
   const title = opts.title.trim();
   if (!title) return { ok: false, error: "Title is required" };
 
-  const { createSignatureRequest } = await import("@/db/queries/partner-signatures");
+  const {
+    createSignatureRequest,
+    setSignatureRequestFreeze,
+    voidSignatureRequest,
+  } = await import("@/db/queries/partner-signatures");
   const result = await createSignatureRequest({
     workspaceId: user.workspaceId,
     actorId: user.id,
@@ -1074,8 +1090,58 @@ async function _requestSignatureAction(opts: {
   });
   if (!result.ok) return result;
 
+  // Freeze document bytes — if freeze fails, void the request so we never
+  // leave a pending ask without an integrity snapshot (except legacy recovery).
+  const { freezeSignatureTarget } = await import("@/lib/signatures/freeze.server");
+  const freeze = await freezeSignatureTarget({
+    workspaceId: user.workspaceId,
+    roomId: opts.roomId,
+    requestId: result.request.id,
+    targetKind: opts.targetKind,
+    targetId: opts.targetId,
+  });
+  if (!freeze.ok) {
+    await voidSignatureRequest({
+      workspaceId: user.workspaceId,
+      roomId: opts.roomId,
+      requestId: result.request.id,
+    });
+    return { ok: false, error: freeze.error };
+  }
+
+  await setSignatureRequestFreeze({
+    requestId: result.request.id,
+    roomId: opts.roomId,
+    sourceStoragePath: freeze.sourceStoragePath,
+    frozenStoragePath: freeze.frozenStoragePath,
+    documentSha256AtRequest: freeze.documentSha256,
+    documentByteLength: freeze.documentByteLength,
+    documentMimeType: freeze.documentMimeType,
+  });
+
+  const { notifySignatureRequested } = await import(
+    "@/lib/signatures/notify.server"
+  );
+  const notify = await notifySignatureRequested({
+    workspaceId: user.workspaceId,
+    roomId: opts.roomId,
+    requestId: result.request.id,
+    title,
+    message: opts.message ?? null,
+    locale: room.locale ?? "es",
+    roomName: room.name,
+    extraEmails: opts.notifyEmails ?? null,
+  });
+
   revalidatePath(`/partner-access/rooms/${opts.roomId}`);
-  return { ok: true, requestId: result.request.id };
+  return {
+    ok: true,
+    requestId: result.request.id,
+    notified: notify.sent,
+    notifyError: notify.error,
+    deepLink: notify.deepLink,
+    documentSha256: freeze.documentSha256,
+  };
 }
 
 async function _voidSignatureRequestAction(opts: {
@@ -1119,6 +1185,232 @@ async function _getSignedPdfUrlAction(opts: {
   return { ok: true, url: signed.url };
 }
 
+/** Re-send the “please sign” email (best-effort). */
+async function _resendSignatureNotifyAction(opts: {
+  roomId: string;
+  requestId: string;
+  notifyEmails?: string[] | null;
+}): Promise<
+  | { ok: true; notified: number; notifyError: string | null; deepLink: string | null }
+  | { ok: false; error: string }
+> {
+  const user = await requireUser();
+  const room = await getPartnerRoomBasic({
+    workspaceId: user.workspaceId,
+    roomId: opts.roomId,
+  });
+  if (!room) return { ok: false, error: "Room not found" };
+
+  const { getSignatureRequest } = await import("@/db/queries/partner-signatures");
+  const request = await getSignatureRequest({
+    roomId: opts.roomId,
+    requestId: opts.requestId,
+  });
+  if (!request || request.status !== "pending") {
+    return { ok: false, error: "Request is not pending" };
+  }
+
+  const { notifySignatureRequested } = await import(
+    "@/lib/signatures/notify.server"
+  );
+  const notify = await notifySignatureRequested({
+    workspaceId: user.workspaceId,
+    roomId: opts.roomId,
+    requestId: request.id,
+    title: request.titleSnapshot,
+    message: request.message,
+    locale: room.locale ?? "es",
+    roomName: room.name,
+    extraEmails: opts.notifyEmails ?? request.notifyEmails ?? null,
+  });
+
+  revalidatePath(`/partner-access/rooms/${opts.roomId}`);
+  return {
+    ok: true,
+    notified: notify.sent,
+    notifyError: notify.error,
+    deepLink: notify.deepLink,
+  };
+}
+
+/** Retry PDF stamping without re-signing (uses frozen bytes + saved placement). */
+async function _retryStampAction(opts: {
+  roomId: string;
+  requestId: string;
+}): Promise<
+  | { ok: true; hasSignedPdf: true; url: string }
+  | { ok: false; error: string }
+> {
+  const user = await requireUser();
+  const room = await getPartnerRoomBasic({
+    workspaceId: user.workspaceId,
+    roomId: opts.roomId,
+  });
+  if (!room) return { ok: false, error: "Room not found" };
+
+  const {
+    getSignatureRequest,
+    getSignatureForRequest,
+    setSignatureStampResult,
+  } = await import("@/db/queries/partner-signatures");
+  const request = await getSignatureRequest({
+    roomId: opts.roomId,
+    requestId: opts.requestId,
+  });
+  const signature = await getSignatureForRequest({
+    roomId: opts.roomId,
+    requestId: opts.requestId,
+  });
+  if (!request || !signature) return { ok: false, error: "Signature not found" };
+  if (signature.stampStatus === "ready" && signature.signedPdfPath) {
+    const { createSignedDownloadUrl } = await import("@/lib/project-files/storage");
+    const signed = await createSignedDownloadUrl(signature.signedPdfPath);
+    if (signed.ok) return { ok: true, hasSignedPdf: true, url: signed.url };
+  }
+
+  const { fetchFrozenOrLiveBytes } = await import("@/lib/signatures/freeze.server");
+  const { isPdfBytes } = await import("@/lib/signatures/target.server");
+  const { createSignedDownloadUrl, uploadBytes } = await import(
+    "@/lib/project-files/storage"
+  );
+  const { stampSignedPdf } = await import("@/lib/signatures/stamp.server");
+  const { signedPdfPath: buildSignedPdfPath } = await import(
+    "@/lib/signatures/freeze-paths"
+  );
+
+  const docBytes = await fetchFrozenOrLiveBytes({
+    frozenStoragePath: request.frozenStoragePath,
+    roomId: request.roomId,
+    workspaceId: request.workspaceId,
+    targetKind: request.targetKind,
+    targetId: request.targetId,
+  });
+  if (!isPdfBytes(docBytes)) {
+    await setSignatureStampResult({
+      signatureId: signature.id,
+      roomId: opts.roomId,
+      signedPdfPath: null,
+      stampStatus: "skipped_non_pdf",
+      stampError: null,
+      incrementAttempts: true,
+    });
+    return { ok: false, error: "Document is not a PDF" };
+  }
+
+  if (!signature.signatureImagePath) {
+    return { ok: false, error: "Signature image missing" };
+  }
+  const sigSigned = await createSignedDownloadUrl(signature.signatureImagePath);
+  if (!sigSigned.ok) return { ok: false, error: "Could not load signature image" };
+  let signaturePng: Uint8Array;
+  try {
+    const res = await fetch(sigSigned.url);
+    if (!res.ok) return { ok: false, error: "Could not load signature image" };
+    signaturePng = new Uint8Array(await res.arrayBuffer());
+  } catch {
+    return { ok: false, error: "Could not load signature image" };
+  }
+
+  try {
+    const stamped = await stampSignedPdf({
+      pdfBytes: docBytes,
+      signaturePng,
+      title: request.titleSnapshot,
+      signerName: signature.signerName,
+      signerEmail: signature.signerEmail,
+      signedAt: signature.signedAt,
+      documentSha256: signature.documentSha256 ?? request.documentSha256AtRequest ?? "",
+      ip: signature.ip,
+      userAgent: signature.userAgent,
+      placement: signature.placement,
+      consentLocale: signature.consentLocale,
+      consentTextKey: signature.consentTextKey,
+      requestId: request.id,
+    });
+    const path = buildSignedPdfPath({
+      workspaceId: room.workspaceId,
+      roomId: opts.roomId,
+      requestId: request.id,
+    });
+    const up = await uploadBytes(path, stamped, "application/pdf");
+    if (!up.ok) {
+      await setSignatureStampResult({
+        signatureId: signature.id,
+        roomId: opts.roomId,
+        signedPdfPath: null,
+        stampStatus: "failed",
+        stampError: up.error,
+        incrementAttempts: true,
+      });
+      return { ok: false, error: up.error };
+    }
+    await setSignatureStampResult({
+      signatureId: signature.id,
+      roomId: opts.roomId,
+      signedPdfPath: path,
+      stampStatus: "ready",
+      stampError: null,
+      incrementAttempts: true,
+    });
+    const { db, schema } = await import("@/db");
+    await db
+      .insert(schema.partnerAccessEvents)
+      .values({
+        workspaceId: user.workspaceId,
+        roomId: opts.roomId,
+        actorUserId: user.id,
+        eventType: "signature_stamp_retried",
+        metadata: { requestId: request.id },
+      })
+      .catch(() => {});
+
+    const dl = await createSignedDownloadUrl(path);
+    revalidatePath(`/partner-access/rooms/${opts.roomId}`);
+    if (!dl.ok) return { ok: false, error: "Stamped but download URL failed" };
+    return { ok: true, hasSignedPdf: true, url: dl.url };
+  } catch (e) {
+    await setSignatureStampResult({
+      signatureId: signature.id,
+      roomId: opts.roomId,
+      signedPdfPath: null,
+      stampStatus: "failed",
+      stampError: e instanceof Error ? e.message : "stamp_failed",
+      incrementAttempts: true,
+    });
+    return { ok: false, error: e instanceof Error ? e.message : "Stamp failed" };
+  }
+}
+
+/** Guest deep link for a pending request (copy to clipboard). */
+async function _getSignatureDeepLinkAction(opts: {
+  roomId: string;
+  requestId: string;
+}): Promise<{ ok: true; deepLink: string } | { ok: false; error: string }> {
+  const user = await requireUser();
+  const room = await getPartnerRoomBasic({
+    workspaceId: user.workspaceId,
+    roomId: opts.roomId,
+  });
+  if (!room) return { ok: false, error: "Room not found" };
+  const { buildGuestDeepLink } = await import("@/lib/signatures/notify.server");
+  const deepLink = await buildGuestDeepLink({
+    roomId: opts.roomId,
+    requestId: opts.requestId,
+    roomName: room.name,
+  });
+  if (!deepLink) return { ok: false, error: "Guest link unavailable — regenerate room access" };
+  return { ok: true, deepLink };
+}
+
 export const requestSignatureAction = withActionGuard("requestSignatureAction", _requestSignatureAction);
 export const voidSignatureRequestAction = withActionGuard("voidSignatureRequestAction", _voidSignatureRequestAction);
 export const getSignedPdfUrlAction = withActionGuard("getSignedPdfUrlAction", _getSignedPdfUrlAction);
+export const resendSignatureNotifyAction = withActionGuard(
+  "resendSignatureNotifyAction",
+  _resendSignatureNotifyAction,
+);
+export const retryStampAction = withActionGuard("retryStampAction", _retryStampAction);
+export const getSignatureDeepLinkAction = withActionGuard(
+  "getSignatureDeepLinkAction",
+  _getSignatureDeepLinkAction,
+);

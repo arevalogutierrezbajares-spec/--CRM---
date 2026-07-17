@@ -62,6 +62,7 @@ export function SignDocumentModal({
   documentTitle,
   message,
   defaultName,
+  defaultEmail = "",
   onClose,
   onSigned,
 }: {
@@ -70,6 +71,7 @@ export function SignDocumentModal({
   documentTitle: string;
   message: string | null;
   defaultName: string;
+  defaultEmail?: string;
   onClose: () => void;
   onSigned: (result: SignatureResult) => void;
 }) {
@@ -83,11 +85,19 @@ export function SignDocumentModal({
   const [placement, setPlacement] = useState<Placement | null>(null);
 
   const [name, setName] = useState(defaultName);
+  const [email, setEmail] = useState(defaultEmail);
   const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Ignore late submit responses after the guest dismisses the sheet.
+  const closedRef = useRef(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  function handleClose() {
+    closedRef.current = true;
+    onClose();
+  }
 
   // Lock body scroll while the full-screen flow is open.
   useEffect(() => {
@@ -98,16 +108,34 @@ export function SignDocumentModal({
     };
   }, []);
 
+  // Escape always dismisses (even while loading or submitting).
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        handleClose();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Fetch the document and boot pdf.js. Any failure (non-PDF target, old
   // device, network) drops to the pad-only sheet — signing must never block.
   useEffect(() => {
     let cancelled = false;
     let task: PdfLoadingTask | null = null;
+    const ac = new AbortController();
     (async () => {
       try {
-        const res = await fetch(`/api/access/${token}/sign/${requestId}/doc`);
+        const res = await fetch(`/api/access/${token}/sign/${requestId}/doc`, {
+          signal: ac.signal,
+        });
         if (!res.ok) throw new Error("doc-unavailable");
         const buf = await res.arrayBuffer();
+        if (cancelled || closedRef.current) return;
         const pdfjs = (await import(
           "pdfjs-dist/legacy/build/pdf.mjs"
         )) as unknown as PdfJsModule;
@@ -117,15 +145,16 @@ export function SignDocumentModal({
         ).toString();
         task = pdfjs.getDocument({ data: buf });
         const doc = await task.promise;
-        if (cancelled) return;
+        if (cancelled || closedRef.current) return;
         setPdf(doc);
         setMode("doc");
       } catch {
-        if (!cancelled) setMode("pad");
+        if (!cancelled && !closedRef.current) setMode("pad");
       }
     })();
     return () => {
       cancelled = true;
+      ac.abort();
       // Teardown lives on the loading task, not the document proxy.
       task?.destroy().catch(() => {});
     };
@@ -151,6 +180,10 @@ export function SignDocumentModal({
       setError(t.sign.nameRequired);
       return;
     }
+    if (!email.trim() || !email.includes("@")) {
+      setError(t.sign.emailRequired);
+      return;
+    }
     if (!consent) {
       setError(t.sign.consentRequired);
       return;
@@ -163,11 +196,14 @@ export function SignDocumentModal({
         body: JSON.stringify({
           requestId,
           signerName: name.trim(),
+          signerEmail: email.trim(),
           signatureDataUrl: sig.dataUrl,
           consent: true,
+          consentTextKey: "sign.consentText",
           placement: finalPlacement,
         }),
       });
+      if (closedRef.current) return;
       const data = (await res.json().catch(() => ({}))) as {
         error?: string;
         signedAt?: string;
@@ -185,9 +221,9 @@ export function SignDocumentModal({
         hasSignedPdf: Boolean(data.hasSignedPdf),
       });
     } catch {
-      setError(t.sign.networkError);
+      if (!closedRef.current) setError(t.sign.networkError);
     } finally {
-      setBusy(false);
+      if (!closedRef.current) setBusy(false);
     }
   }
 
@@ -203,9 +239,9 @@ export function SignDocumentModal({
       role="dialog"
       aria-modal="true"
       aria-label={t.sign.dialogAria(documentTitle)}
-      className="fixed inset-0 z-50 flex flex-col bg-[var(--background)]"
+      className="fixed inset-0 z-[100] flex flex-col bg-[var(--background)]"
     >
-      <header className="flex items-center justify-between gap-3 border-b border-[var(--border)] px-4 py-2.5">
+      <header className="relative z-[110] flex shrink-0 items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--background)] px-4 py-2.5">
         <div className="min-w-0">
           <p className="inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-[var(--primary)]">
             <PenLine className="h-3 w-3" />
@@ -217,11 +253,11 @@ export function SignDocumentModal({
         </div>
         <button
           type="button"
-          onClick={onClose}
+          onClick={handleClose}
           aria-label={t.common.close}
-          className="grid h-10 w-10 shrink-0 place-items-center rounded-md text-[var(--muted-foreground)] hover:bg-[var(--secondary)]"
+          className="relative z-[120] grid h-11 w-11 shrink-0 place-items-center rounded-md text-[var(--muted-foreground)] hover:bg-[var(--secondary)] active:bg-[var(--secondary)]"
         >
-          <X className="h-4 w-4" />
+          <X className="h-5 w-5" aria-hidden />
         </button>
       </header>
 
@@ -348,6 +384,8 @@ export function SignDocumentModal({
           <NameConsentFields
             name={name}
             onName={setName}
+            email={email}
+            onEmail={setEmail}
             consent={consent}
             onConsent={setConsent}
           />
@@ -397,6 +435,8 @@ export function SignDocumentModal({
               <NameConsentFields
                 name={name}
                 onName={setName}
+                email={email}
+                onEmail={setEmail}
                 consent={consent}
                 onConsent={setConsent}
               />
@@ -711,11 +751,15 @@ function PadCanvas({
 function NameConsentFields({
   name,
   onName,
+  email,
+  onEmail,
   consent,
   onConsent,
 }: {
   name: string;
   onName: (v: string) => void;
+  email: string;
+  onEmail: (v: string) => void;
   consent: boolean;
   onConsent: (v: boolean) => void;
 }) {
@@ -731,6 +775,20 @@ function NameConsentFields({
           value={name}
           onChange={(e) => onName(e.target.value)}
           placeholder={t.sign.fullNamePlaceholder}
+          autoComplete="name"
+          className="mt-1.5 w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2.5 text-base outline-none focus:ring-2 focus:ring-[var(--ring)] sm:text-sm"
+        />
+      </label>
+      <label className="mt-3 block">
+        <span className="text-xs font-medium uppercase tracking-wide text-[var(--muted-foreground)]">
+          {t.sign.emailLabel}
+        </span>
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => onEmail(e.target.value)}
+          placeholder={t.sign.emailPlaceholder}
+          autoComplete="email"
           className="mt-1.5 w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2.5 text-base outline-none focus:ring-2 focus:ring-[var(--ring)] sm:text-sm"
         />
       </label>

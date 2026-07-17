@@ -499,8 +499,13 @@ export default async function PartnerAccessRoomPage(props: { params: Params }) {
                     signerEmail: r.signature?.signerEmail ?? null,
                     signedAt: r.signature?.signedAt?.toISOString() ?? null,
                     documentSha256: r.signature?.documentSha256 ?? null,
+                    documentSha256AtRequest: r.documentSha256AtRequest ?? null,
                     ip: r.signature?.ip ?? null,
                     hasSignedPdf: Boolean(r.signature?.signedPdfPath),
+                    stampStatus: r.signature?.stampStatus ?? null,
+                    lastNotifiedAt: r.lastNotifiedAt?.toISOString() ?? null,
+                    notifyError: r.notifyError ?? null,
+                    notifyEmails: r.notifyEmails ?? null,
                   }))}
                 />
               </CardContent>

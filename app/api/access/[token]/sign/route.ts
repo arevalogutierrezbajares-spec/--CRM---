@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
 import {
   getPartnerRoomMember,
   resolvePartnerRoomByToken,
@@ -8,7 +7,7 @@ import {
   countRecentSignatures,
   createPartnerSignature,
   getSignatureRequest,
-  setSignaturePdfPath,
+  setSignatureStampResult,
 } from "@/db/queries/partner-signatures";
 import {
   getPartnerMemberIdFromCookies,
@@ -18,30 +17,19 @@ import { getRoomDict } from "@/lib/partner-room-i18n";
 import { decodeSignatureDataUrl } from "@/lib/signatures/signature-image";
 import { sha256Hex, stampSignedPdf } from "@/lib/signatures/stamp.server";
 import {
-  fetchSignatureTargetBytes,
+  fetchBytesForSignatureRequest,
   isPdfBytes,
 } from "@/lib/signatures/target.server";
 import { uploadBytes } from "@/lib/project-files/storage";
-
-const Body = z.object({
-  requestId: z.string().uuid(),
-  signerName: z.string().trim().min(3, "Escribe tu nombre completo").max(120),
-  signerEmail: z.string().trim().email().max(200).optional().nullable(),
-  // data:image/png;base64,… — decoded + magic-checked server-side.
-  signatureDataUrl: z.string().min(64).max(450_000),
-  consent: z.literal(true),
-  // Where the signer dropped their signature on the document, in page-relative
-  // fractions (in-document signing). Absent for pad-only fallback signing.
-  placement: z
-    .object({
-      pageIndex: z.number().int().min(0).max(4999),
-      x: z.number().min(0).max(1),
-      y: z.number().min(0).max(1),
-      width: z.number().min(0.05).max(1),
-    })
-    .optional()
-    .nullable(),
-});
+import {
+  assertFrozenHashMatch,
+  validateSignBody,
+} from "@/lib/signatures/sign-body";
+import {
+  signatureImagePath as buildSigImagePath,
+  signedPdfPath as buildSignedPdfPath,
+} from "@/lib/signatures/freeze-paths";
+import { notifySignatureCompleted } from "@/lib/signatures/notify.server";
 
 const RATE_WINDOW_SECONDS = 60;
 const RATE_MAX_IN_WINDOW = 5;
@@ -65,9 +53,18 @@ export async function POST(req: NextRequest, props: { params: Params }) {
   } catch {
     return NextResponse.json({ error: t.invalidRequest }, { status: 400 });
   }
-  const parsed = Body.safeParse(json);
-  if (!parsed.success) {
-    return NextResponse.json({ error: t.invalidRequest }, { status: 400 });
+
+  const parsed = validateSignBody(json);
+  if (!parsed.ok) {
+    const msg =
+      parsed.error === "email_required"
+        ? t.emailRequired
+        : parsed.error === "consent_required"
+          ? t.consentRequired
+          : parsed.error === "name_required"
+            ? t.nameRequired
+            : t.invalidRequest;
+    return NextResponse.json({ error: msg }, { status: 400 });
   }
 
   const recent = await countRecentSignatures({
@@ -80,13 +77,13 @@ export async function POST(req: NextRequest, props: { params: Params }) {
 
   const request = await getSignatureRequest({
     roomId: room.id,
-    requestId: parsed.data.requestId,
+    requestId: parsed.requestId,
   });
   if (!request || request.status !== "pending") {
     return NextResponse.json({ error: t.signUnavailable }, { status: 404 });
   }
 
-  const signaturePng = decodeSignatureDataUrl(parsed.data.signatureDataUrl);
+  const signaturePng = decodeSignatureDataUrl(parsed.signatureDataUrl);
   if (!signaturePng) {
     return NextResponse.json({ error: t.signInvalid }, { status: 400 });
   }
@@ -96,87 +93,143 @@ export async function POST(req: NextRequest, props: { params: Params }) {
     ? await getPartnerRoomMember({ roomId: room.id, memberId }).catch(() => null)
     : null;
 
-  // Resolve the exact bytes being signed so the audit record carries their
-  // SHA-256 — and, for PDFs, so we can stamp a signed copy.
-  const docBytes = await fetchSignatureTargetBytes({
-    token,
-    roomId: room.id,
-    targetKind: request.targetKind,
-    targetId: request.targetId,
-  });
+  // Prefer frozen bytes; hash must match freeze when present.
+  const docBytes = await fetchBytesForSignatureRequest({ token, request });
   const documentSha256 = docBytes ? sha256Hex(docBytes) : null;
+  const integrity = assertFrozenHashMatch({
+    frozenSha256AtRequest: request.documentSha256AtRequest,
+    bytesSha256: documentSha256,
+  });
+  if (!integrity.ok) {
+    return NextResponse.json({ error: t.signHashMismatch }, { status: 409 });
+  }
 
-  // The server clock IS the signature timestamp — never client-supplied.
   const signedAt = new Date();
   const ip =
     req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
   const userAgent = req.headers.get("user-agent")?.slice(0, 300) ?? null;
 
-  const basePath = `${room.workspaceId}/partner-signatures/${room.id}/${request.id}`;
-  const signatureImagePath = `${basePath}-firma.png`;
+  const signatureImagePath = buildSigImagePath({
+    workspaceId: room.workspaceId,
+    roomId: room.id,
+    requestId: request.id,
+  });
   const sigUpload = await uploadBytes(signatureImagePath, signaturePng, "image/png");
   if (!sigUpload.ok) {
     return NextResponse.json({ error: t.signSaveFailed }, { status: 503 });
   }
 
-  // Commit the signature record FIRST — it (hash + server timestamp + image)
-  // is the legal artifact. Stamping is best-effort decoration; a pdf-lib
-  // failure after this point can degrade the download, never the signature.
+  const isPdf = isPdfBytes(docBytes);
+  // pending until stamp succeeds; non-pdf skips.
+  const preStampStatus = isPdf ? "pending" : "skipped_non_pdf";
+
   const result = await createPartnerSignature({
     workspaceId: room.workspaceId,
     roomId: room.id,
     requestId: request.id,
     memberId: member?.id ?? null,
-    signerName: parsed.data.signerName,
-    signerEmail: parsed.data.signerEmail ?? member?.email ?? null,
+    signerName: parsed.signerName,
+    signerEmail: parsed.signerEmail,
     signatureImagePath,
     documentSha256,
     signedPdfPath: null,
     ip,
     userAgent,
     signedAt,
+    consentAccepted: true,
+    consentTextKey: parsed.consentTextKey,
+    consentLocale: room.locale ?? "es",
+    consentAt: signedAt,
+    placement: parsed.placement,
+    stampStatus: preStampStatus,
   });
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: 409 });
   }
 
-  // PDF targets get a stamped signed copy: the signature drawn into the page
-  // the signer chose (when placed in-document) + the appended certificate page.
   let signedPdfPath: string | null = null;
-  if (isPdfBytes(docBytes)) {
+  let stampStatus = preStampStatus;
+  if (isPdf && docBytes) {
     try {
       const stamped = await stampSignedPdf({
         pdfBytes: docBytes,
         signaturePng,
         title: request.titleSnapshot,
-        signerName: parsed.data.signerName,
-        signerEmail: parsed.data.signerEmail ?? member?.email ?? null,
+        signerName: parsed.signerName,
+        signerEmail: parsed.signerEmail,
         signedAt,
         documentSha256: documentSha256 as string,
         ip,
         userAgent,
-        placement: parsed.data.placement ?? null,
+        placement: parsed.placement,
+        consentLocale: room.locale ?? "es",
+        consentTextKey: parsed.consentTextKey,
+        requestId: request.id,
       });
-      const path = `${basePath}-firmado.pdf`;
+      const path = buildSignedPdfPath({
+        workspaceId: room.workspaceId,
+        roomId: room.id,
+        requestId: request.id,
+      });
       const up = await uploadBytes(path, stamped, "application/pdf");
       if (up.ok) {
-        const recorded = await setSignaturePdfPath({
+        signedPdfPath = path;
+        stampStatus = "ready";
+        await setSignatureStampResult({
           signatureId: result.signature.id,
           roomId: room.id,
           signedPdfPath: path,
+          stampStatus: "ready",
+          stampError: null,
+          incrementAttempts: true,
         });
-        if (recorded) signedPdfPath = path;
+      } else {
+        stampStatus = "failed";
+        await setSignatureStampResult({
+          signatureId: result.signature.id,
+          roomId: room.id,
+          signedPdfPath: null,
+          stampStatus: "failed",
+          stampError: up.error,
+          incrementAttempts: true,
+        });
       }
-    } catch {
-      signedPdfPath = null;
+    } catch (e) {
+      stampStatus = "failed";
+      await setSignatureStampResult({
+        signatureId: result.signature.id,
+        roomId: room.id,
+        signedPdfPath: null,
+        stampStatus: "failed",
+        stampError: e instanceof Error ? e.message : "stamp_failed",
+        incrementAttempts: true,
+      });
     }
   }
+
+  // Completed email — never blocks signature success.
+  void notifySignatureCompleted({
+    workspaceId: room.workspaceId,
+    roomId: room.id,
+    requestId: request.id,
+    title: request.titleSnapshot,
+    locale: room.locale ?? "es",
+    roomName: room.name,
+    signerName: parsed.signerName,
+    signerEmail: parsed.signerEmail,
+    signedAt,
+    documentSha256,
+    hasSignedPdf: Boolean(signedPdfPath),
+    ownerUserId: room.createdBy ?? null,
+  });
 
   return NextResponse.json({
     id: result.signature.id,
     requestId: request.id,
     signerName: result.signature.signerName,
+    signerEmail: result.signature.signerEmail,
     signedAt: result.signature.signedAt,
     hasSignedPdf: Boolean(signedPdfPath),
+    stampStatus,
   });
 }
