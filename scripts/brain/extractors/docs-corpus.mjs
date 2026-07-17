@@ -12,7 +12,7 @@ import { readdirSync, existsSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 
 import { REPO_ROOTS } from "../config.mjs";
-import { docRecordsFromFiles } from "../lib/docs-corpus.mjs";
+import { docRecordsFromFiles, docTypeJoinRank } from "../lib/docs-corpus.mjs";
 import { baseNodeLikeDoc, documentsEdge } from "../lib/docs-emit.mjs";
 
 /**
@@ -70,7 +70,7 @@ function walkMarkdown(absDir, baseAbs) {
  * @returns {{
  *   nodes: object[],
  *   edges: object[],
- *   joins: Record<string, { summary: string|null, docs_ref: string }>,
+ *   joins: Record<string, { summary: string|null, docs_ref: string, doc_type: string, rank: number }>,
  *   stats: { scanned: number, docs: number, joins: number }
  * }}
  */
@@ -93,7 +93,7 @@ export function extractDocsCorpus(opts = {}) {
   const nodes = [];
   /** @type {object[]} */
   const edges = [];
-  /** @type {Record<string, { summary: string|null, docs_ref: string }>} */
+  /** @type {Record<string, { summary: string|null, docs_ref: string, doc_type: string, rank: number }>} */
   const joins = {};
 
   for (const rec of records) {
@@ -107,11 +107,17 @@ export function extractDocsCorpus(opts = {}) {
           targetSystem: rec.brain_node.split(".")[0],
         }),
       );
-      // Prefer non-empty summary for architecture join fields
-      if (!joins[rec.brain_node] || rec.summary) {
+      // Architecture paint: never use failure-mode prose as domain summary/docs_ref.
+      // Rank howto/explanation/reference above generic docs; FM rank is 0 → skip.
+      const rank = docTypeJoinRank(rec.doc_type);
+      if (rank <= 0) continue;
+      const prev = joins[rec.brain_node];
+      if (!prev || rank > prev.rank) {
         joins[rec.brain_node] = {
           summary: rec.summary,
           docs_ref: rec.path,
+          doc_type: rec.doc_type,
+          rank,
         };
       }
     }

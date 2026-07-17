@@ -1,6 +1,6 @@
 # THE BRAIN — Agent Consumption Roadmap (P0 → P3)
 
-**Status:** Implementation plan (requirements + orchestration)  
+**Status:** Shipped (P0–P3)  
 **Date:** 2026-07-17  
 **Depends on:** Phase 1 docs corpus (shipped) — doc/adr nodes, `documents` edges, `searchBrain`, `docs/llms.txt`, `AGENTS.md`  
 **Goal:** Agents can diagnose, root-cause, and remediate portfolio issues using the Living Brain as the primary architecture substrate—not freeform repo grepping.
@@ -267,13 +267,13 @@ P0c can parallel P0b. P1a can start after P0a (needs graph only).
 
 ### 8.4 Definition of Done (program)
 
-- [ ] P0 tools callable via MCP allowlist  
-- [ ] Investigation protocol in AGENTS.md  
-- [ ] P1 rca_pack + ≥5 FMs  
-- [ ] P2 remediation skill + citation template  
-- [ ] P3 mapping + optional Sentry; degrade without secrets  
-- [ ] Full `__tests__/unit/brain-*` green  
-- [ ] No hand-edited graph; regen only via `pnpm brain:build`
+- [x] P0 tools callable via MCP allowlist  
+- [x] Investigation protocol in AGENTS.md  
+- [x] P1 rca_pack + ≥5 FMs  
+- [x] P2 remediation skill + citation template  
+- [x] P3 mapping + optional Sentry; degrade without secrets  
+- [x] Full `__tests__/unit/brain-*` green  
+- [x] No hand-edited graph; regen only via `pnpm brain:build`
 
 ---
 
@@ -357,13 +357,13 @@ docs/requirements/BRAIN-AGENT-CONSUMPTION-P0-P3.md
 - All phases: brain unit tests green; no hand-broken graph integrity.
 
 ## Task checklist
-- [ ] P0 pure neighborhood + doc-get + freshness + tests
-- [ ] P0 tools + MCP allowlist + brain_search copy fix
-- [ ] P0 AGENTS/CLAUDE/llms investigation protocol
-- [ ] P1 failure-mode seeds + rca_pack tool + skill
-- [ ] P2 remediate skill + citation gate/template
-- [ ] P3 mapping + optional Sentry correlate
-- [ ] Final vitest + brain:build + evidence logs in {SCRATCH}
+- [x] P0 pure neighborhood + doc-get + freshness + tests
+- [x] P0 tools + MCP allowlist + brain_search copy fix
+- [x] P0 AGENTS/CLAUDE/llms investigation protocol
+- [x] P1 failure-mode seeds + rca_pack tool + skill
+- [x] P2 remediate skill + citation gate/template
+- [x] P3 mapping + optional Sentry correlate
+- [x] Final vitest + brain:build + evidence logs in {SCRATCH}
 
 ## Non-goals
 LLM wiki writing into graph JSON; auto-merge PRs; unscoped production mutation; IcePanel rewrite; canvas chips for every doc.

@@ -231,6 +231,42 @@ export function inferBrainNode(relPath, body, existingNodeIds) {
  * @param {string} [o.repo]   "crm" | "caney" | ...
  * @param {Set<string>|string[]} [o.existingNodeIds]
  */
+/**
+ * Rank for architecture join preference (higher wins).
+ * Failure-modes must never paint domain truth.
+ */
+export function docTypeJoinRank(docType) {
+  switch (docType) {
+    case "howto":
+      return 50;
+    case "explanation":
+      return 40;
+    case "reference":
+      return 35;
+    case "adr":
+      return 30;
+    case "doc":
+      return 20;
+    case "failure-mode":
+      return 0; // never apply as architecture docs_ref/summary
+    default:
+      return 10;
+  }
+}
+
+/**
+ * Fold symptoms (and similar) frontmatter into a search-facing summary.
+ * FR-BA-102: symptom tokens must be findable via searchBrain haystack.
+ */
+export function foldSymptomsIntoSummary(summary, fm = {}) {
+  const symptoms = String(fm.symptoms ?? fm.symptom ?? "").trim();
+  if (!symptoms) return summary ?? null;
+  const base = (summary ?? "").trim();
+  if (!base) return symptoms.slice(0, 500);
+  if (base.toLowerCase().includes(symptoms.toLowerCase())) return base;
+  return `${base} Symptoms: ${symptoms}`.slice(0, 600);
+}
+
 export function parseDocMarkdown(o) {
   const relPath = o.relPath.replace(/\\/g, "/");
   const repo = o.repo ?? "crm";
@@ -240,7 +276,9 @@ export function parseDocMarkdown(o) {
   const body = bodyAfterFrontMatter(raw);
   const type = inferDocType(relPath, fm);
   const title = inferTitle(body, relPath, fm);
-  const summary = inferSummary(body, fm);
+  const baseSummary = inferSummary(body, fm);
+  const summary = foldSymptomsIntoSummary(baseSummary, fm);
+  const symptoms = String(fm.symptoms ?? fm.symptom ?? "").trim() || null;
   const slug = slugFromPath(relPath);
   const id =
     (fm.id && fm.id.trim()) ||
@@ -274,6 +312,7 @@ export function parseDocMarkdown(o) {
     kind: type === "adr" ? "adr" : "doc",
     label: title,
     summary,
+    symptoms,
     path: relPath,
     system,
     brain_node: brainNode,

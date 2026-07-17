@@ -6,7 +6,11 @@ import { describe, it, expect } from "vitest";
 import { graph, isGenerated } from "@/lib/brain/data/graph";
 import { searchBrain } from "@/lib/brain/search";
 import { neighborhood } from "@/lib/brain/neighborhood";
-import { getBrainDoc, resolveDocsPath } from "@/lib/brain/doc-get";
+import {
+  getBrainDoc,
+  resolveDocsPath,
+  isPathInsideDocsRoot,
+} from "@/lib/brain/doc-get";
 import { brainFreshness } from "@/lib/brain/freshness";
 import { buildRcaPack } from "@/lib/brain/rca-pack";
 import { remediationGate } from "@/lib/brain/remediation-gate";
@@ -76,6 +80,15 @@ describe("brain doc-get", () => {
   it("rejects absolute paths", () => {
     const r = resolveDocsPath({ path: "/etc/passwd" });
     expect(r.ok).toBe(false);
+  });
+
+  it("realpath boundary requires path separator (NFR-BA-402)", () => {
+    const root = "/repo/docs";
+    expect(isPathInsideDocsRoot("/repo/docs/brain-ops.md", root)).toBe(true);
+    expect(isPathInsideDocsRoot("/repo/docs", root)).toBe(true);
+    // Prefix without separator must not match (docs-evil attack)
+    expect(isPathInsideDocsRoot("/repo/docs-evil/secret.md", root)).toBe(false);
+    expect(isPathInsideDocsRoot("/repo/other/file.md", root)).toBe(false);
   });
 });
 

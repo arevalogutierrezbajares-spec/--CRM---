@@ -9,6 +9,8 @@ import {
   resolveBrainNodeJoin,
   inferDocType,
   slugFromPath,
+  foldSymptomsIntoSummary,
+  docTypeJoinRank,
 } from "../../scripts/brain/lib/docs-corpus.mjs";
 import { searchBrain } from "@/lib/brain/search";
 import { graph } from "@/lib/brain/data/graph";
@@ -70,6 +72,83 @@ More text about capture.
     expect(recs.length).toBe(2);
     expect(recs[0].id < recs[1].id || recs[0].id > recs[1].id).toBe(true);
     expect(recs.every((r) => r.system === "crm")).toBe(true);
+  });
+
+  it("folds symptoms into summary for search haystack (FR-BA-102)", () => {
+    const folded = foldSymptomsIntoSummary("Email sync fails", {
+      symptoms: "postmark, schema_migrations",
+    });
+    expect(folded).toContain("Email sync fails");
+    expect(folded).toMatch(/postmark/i);
+    expect(folded).toMatch(/schema_migrations/i);
+
+    const raw = `---
+brain_node: crm
+type: failure-mode
+summary: email-sync cron returns 500
+symptoms: email sync, postmark, schema_migrations
+---
+
+# Email sync
+`;
+    const rec = parseDocMarkdown({
+      relPath: "docs/RCA/failure-modes/fm-email-sync-500.md",
+      raw,
+      repo: "crm",
+      existingNodeIds: ["crm"],
+    });
+    expect(rec.symptoms).toMatch(/postmark/i);
+    expect(rec.summary).toMatch(/postmark/i);
+    expect(rec.summary).toMatch(/schema_migrations/i);
+  });
+
+  it("ranks failure-mode below architecture docs for joins", () => {
+    expect(docTypeJoinRank("failure-mode")).toBe(0);
+    expect(docTypeJoinRank("howto")).toBeGreaterThan(docTypeJoinRank("doc"));
+    expect(docTypeJoinRank("howto")).toBeGreaterThan(docTypeJoinRank("failure-mode"));
+    expect(docTypeJoinRank("explanation")).toBeGreaterThan(docTypeJoinRank("adr"));
+  });
+
+  it("never selects failure-mode as architecture join paint", () => {
+    // Simulate join selection: same logic as extractDocsCorpus
+    const docs = [
+      {
+        brain_node: "crm",
+        doc_type: "failure-mode",
+        summary: "FM only",
+        path: "docs/RCA/failure-modes/x.md",
+      },
+      {
+        brain_node: "crm",
+        doc_type: "howto",
+        summary: "How to operate Brain",
+        path: "docs/brain-ops.md",
+      },
+    ];
+    /** @type {Record<string, { summary: string|null, docs_ref: string, rank: number }>} */
+    const joins = {};
+    for (const rec of docs) {
+      const rank = docTypeJoinRank(rec.doc_type);
+      if (rank <= 0) continue;
+      const prev = joins[rec.brain_node];
+      if (!prev || rank > prev.rank) {
+        joins[rec.brain_node] = {
+          summary: rec.summary,
+          docs_ref: rec.path,
+          rank,
+        };
+      }
+    }
+    expect(joins.crm.docs_ref).toBe("docs/brain-ops.md");
+    expect(joins.crm.summary).toContain("operate Brain");
+    // FM alone must not paint
+    const joinsFmOnly = {};
+    for (const rec of docs.filter((d) => d.doc_type === "failure-mode")) {
+      const rank = docTypeJoinRank(rec.doc_type);
+      if (rank <= 0) continue;
+      joinsFmOnly[rec.brain_node] = { summary: rec.summary, docs_ref: rec.path, rank };
+    }
+    expect(joinsFmOnly.crm).toBeUndefined();
   });
 });
 

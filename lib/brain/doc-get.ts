@@ -4,7 +4,7 @@
  */
 
 import { readFileSync, existsSync, realpathSync, statSync } from "node:fs";
-import { join, relative, resolve, isAbsolute } from "node:path";
+import { relative, resolve, isAbsolute, sep } from "node:path";
 import type { BrainGraph, BrainNode } from "./types";
 
 const MAX_BYTES = 200_000;
@@ -30,6 +30,15 @@ function crmRoot(): string {
 
 function docsRoot(): string {
   return resolve(crmRoot(), "docs");
+}
+
+/**
+ * True if `real` is the docs root or a path strictly under it (sep-bounded).
+ * Prevents `docs-evil` from matching prefix `docs`.
+ */
+export function isPathInsideDocsRoot(real: string, realDocsRoot: string): boolean {
+  const boundary = realDocsRoot.endsWith(sep) ? realDocsRoot : realDocsRoot + sep;
+  return real === realDocsRoot || real.startsWith(boundary);
 }
 
 /**
@@ -81,7 +90,7 @@ export function resolveDocsPath(
   try {
     const real = realpathSync(abs);
     const realDocs = realpathSync(root);
-    if (!real.startsWith(realDocs)) {
+    if (!isPathInsideDocsRoot(real, realDocs)) {
       return { ok: false, error: "path escapes docs/ (symlink)" };
     }
   } catch {
