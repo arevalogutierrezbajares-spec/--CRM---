@@ -1,10 +1,10 @@
 {
   "version": "1.1",
-  "generatedAt": "2026-07-17T05:57:11.957Z",
+  "generatedAt": "2026-07-17T05:57:43.897Z",
   "commit": {
     "vav": "2b53b2126",
     "caney": "6a741e58",
-    "crm": "49d3eb0",
+    "crm": "e491ec4",
     "restaurants": "fa515d1",
     "academy": null
   },
@@ -7824,31 +7824,6 @@
       "surfaces": [],
       "meta": "reference",
       "summary": "High-level requirements for the living architecture map module.",
-      "pos": {
-        "x": 0,
-        "y": 0
-      }
-    },
-    {
-      "id": "crm.doc.requirements-voice-note-and-commands-v1",
-      "level": 3,
-      "kind": "doc",
-      "parentId": null,
-      "label": "AGB AI — Voice Note & Voice Commands Module V1",
-      "system": "crm",
-      "source": "docs",
-      "hosted_by": null,
-      "fn": null,
-      "state": "done",
-      "liveness": null,
-      "size": "sm",
-      "owner": null,
-      "branch": null,
-      "last_commit": null,
-      "docs_ref": "docs/requirements/VOICE-NOTE-AND-COMMANDS-V1.md",
-      "surfaces": [],
-      "meta": "reference",
-      "summary": "> Reader contract: this document defines WHAT the helper + CRM must do for **voice → CRM notes/commands**. It does **not** replace FluidVoice. AGB reuses existing mic + on-device STT plumbing (`OnDeviceTranscriber`, `MicHALCapture`) and existing note filing (`POST /api/capture/notes`). FluidVoice remains the system-wide “type at caret” tool; AGB must never prompt “Record this call?” when FluidVoic",
       "pos": {
         "x": 0,
         "y": 0
