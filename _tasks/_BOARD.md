@@ -1,13 +1,61 @@
 # AGB CRM — Task Board
 
-**Updated:** 2026-05-27 (late session)
+**Updated:** 2026-07-15 (Call capture attendee labeling Phase 0+1 + VAV storefront)
 **Workflow:** [`_WORKFLOW.md`](./_WORKFLOW.md)
 **Source of truth for ACs:** [`docs/requirements/FR-MATRIX.md`](../docs/requirements/FR-MATRIX.md)
+**Storefront ops note (AGB must-do):** [`docs/storefront/AGB-STOREFRONT-WORK-NOTE.md`](../docs/storefront/AGB-STOREFRONT-WORK-NOTE.md)
 **Tests:** 202 unit + 23 E2E smoke + 18-scenario WA bench — `npx vitest run` + `env -u DATABASE_URL npx tsx scripts/smoke-all-tools.ts` + `env -u DATABASE_URL AGB_WA_DAILY_TOKEN_CAP=10000000 npx tsx scripts/bench-agent.ts`
 **Score:** ~9.3/10 — login is invite-gated and live in prod; WA bot verified end-to-end on real phone; token diet shipped (-57% input tokens)
 **Hot path:** Text the WA bot at the live Cloud number; 20-tool agent routes through regex intent classifier → dynamic tool gating (3 tools avg per call) → Haiku 4.5 for routine intents, Sonnet 4.6 for reasoning. Mention pre-resolver injects contact IDs + org + rel before the LLM, eliminating most second-turn lookups. Outbound send failures now write `error` rows to `wa_activity` so an expired WA token can't silently break the bot again.
 
-**Index of this doc:** _What shipped this session_ → _At a glance_ → _Phase tables (0-7 + Wave D + Wave E)_ → _CoS-Bot Backlog_ (tactical polish) → _Brainstorm_ (strategic / multi-system, NOT committed: BR-1 RAG, BR-2 creator program, BR-3 partner portal, BR-4 in-CRM agent UI) → _Recommended pick-up order_
+**Index of this doc:** _What shipped this session_ → **_Wave CALL-ATT — participant labeling_** → **_Wave SF — VAV storefront (AGB)_** → _At a glance_ → _Phase tables (0-7 + Wave D + Wave E)_ → _CoS-Bot Backlog_ → _Brainstorm_ → _Recommended pick-up order_
+
+## Wave CALL-ATT — Call capture participant labeling (Phase 0+1) · 2026-07-15
+
+**Context:** Helper already attributes Founder vs Participant by dual channel (Deepgram multichannel). Finalize API accepts `contactName` for dialogue labels + CRM match, but the Mac Helper never collects or sends a person name, and live captions wrongly use source app ("WhatsApp") as speaker. Phase 0+1: persist name on spool, send on finalize, UI to label during call.
+
+**Plan source:** session review — Phase 0 wire + Phase 1 in-call label UI. Phase 2 multi-attendee + Phase 3 diarization deferred.
+
+| ID | Title | Pri | Pts | Owner | Status | Depends |
+|----|-------|-----|-----|-------|--------|---------|
+| [AGB-CALL-ATT-001](TASK-AGB-CALL-ATT-001-contact-name-wire.md) | Persist contactName on spool + finalize wire | P0 | 3 | grok | review | — |
+| [AGB-CALL-ATT-002](TASK-AGB-CALL-ATT-002-label-participant-ui.md) | Label participant UI during call | P0 | 5 | grok | review | ATT-001 |
+| [AGB-CALL-ATT-003](TASK-AGB-CALL-ATT-003-live-label-api.md) | Live transcript mid-call rename API | P0 | 2 | grok | review | — |
+
+**Pickup / parallel:** ATT-001 ∥ ATT-003 first; ATT-002 UI lands against their APIs. Merge order: 001 → 003 → 002 (or 001+003 then UI).
+
+**Out of scope this wave:** multi-attendee chips, CRM contact typeahead, Windows Helper UI, post-call re-file.
+
+### Diarization / free STT (follow-on)
+
+| Track | Approach | Status |
+|-------|----------|--------|
+| Calls | Dual-channel (free You vs them) | shipped |
+| Meetings multi-speaker | **Local WhisperX** (`scripts/local-transcribe/`) preferred free; Deepgram `diarize=true` paid fallback | plan + worker scaffold + Deepgram diarize for meetings |
+| Live multi-speaker | Defer (Apple STT captions only) | deferred |
+
+See [`docs/LOCAL-DIARIZATION-PLAN.md`](../docs/LOCAL-DIARIZATION-PLAN.md).
+
+## Wave SF — VAV white-label storefront (AGB control plane) · 2026-07-15
+
+**Context:** VAV Phases 0–2 landed in `vav-storefront-phase0` (schema, tax, provider request API, host rewrite, schema-driven renderer, AI draft + preview token, custom fonts, booking sheet UI). AGB already has MCP stubs + HMAC client; **production ops still blocked on secrets + live smoke + ops playbook**. Caney deps live on Overlord `section-client-portals` (PORTAL-001..004).
+
+**Master note:** [`docs/storefront/AGB-STOREFRONT-WORK-NOTE.md`](../docs/storefront/AGB-STOREFRONT-WORK-NOTE.md)
+
+| ID | Title | Pri | Pts | Owner | Status | Depends |
+|----|-------|-----|-----|-------|--------|---------|
+| [AGB-SF-001](TASK-AGB-SF-001-storefront-env-and-secrets.md) | Configure VAV storefront HMAC env on AGB | P0 | 2 | — | open | — |
+| [AGB-SF-002](TASK-AGB-SF-002-storefront-mcp-live-smoke.md) | Live-smoke create/list/generate/preview MCP tools | P0 | 3 | — | open | SF-001 |
+| [AGB-SF-003](TASK-AGB-SF-003-storefront-ops-playbook.md) | Tomas MCP ops playbook | P0 | 2 | — | open | SF-002 |
+| [AGB-SF-004](TASK-AGB-SF-004-partner-room-storefront-bridge.md) | Partner room → create storefront request | P1 | 5 | — | open | SF-001, LINK-001 |
+| [AGB-SF-005](TASK-AGB-SF-005-storefront-transition-notifications.md) | Lifecycle notifications (draft ready / published) | P1 | 5 | — | open | SF-002 |
+| [AGB-SF-006](TASK-AGB-SF-006-storefront-queue-ui.md) | In-CRM storefront queue UI | P2 | 8 | — | open | SF-002 |
+| [AGB-SF-007](TASK-AGB-SF-007-storefront-patch-feedback.md) | Structured patch-intent feedback | P2 | 5 | — | open | VAV Phase 3 |
+| [AGB-SF-008](TASK-AGB-SF-008-storefront-initiative-tracking.md) | Board hygiene across AGB + Overlord + VAV | P2 | 1 | — | open | — |
+
+**Pickup order:** SF-001 → SF-002 → SF-003, then SF-004 (Ucaima pilot) + SF-005 in parallel.
+
+**Not AGB (do not put here):** live book E2E (VAV), approve/publish (VAV Phase 3), wildcard DNS (VAV/Vercel), Caney `tax_config` webhook / media / Mi Sitio (Overlord PORTAL-*).
 
 ## What shipped this session (2026-05-27 late)
 

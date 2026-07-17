@@ -47,6 +47,11 @@ import { uploadRoomFile } from "./upload-room-file";
 import { uploadRoomLogo } from "./upload-room-logo";
 import { listDemos } from "./list-demos";
 import { featureRoomDemo } from "./feature-room-demo";
+// VAV white-label storefront control plane (Phase 0–2)
+import { createStorefrontRequest } from "./create-storefront-request";
+import { listStorefrontQueue } from "./list-storefront-queue";
+import { generateStorefrontDraft } from "./generate-storefront-draft";
+import { getStorefrontPreviewLink } from "./get-storefront-preview-link";
 
 export const TOOLS: Record<string, ToolEntry> = {
   find_contact: findContact,
@@ -90,6 +95,11 @@ export const TOOLS: Record<string, ToolEntry> = {
   upload_room_logo: uploadRoomLogo,
   list_demos: listDemos,
   feature_room_demo: featureRoomDemo,
+  // VAV storefront (Phase 0–2)
+  create_storefront_request: createStorefrontRequest,
+  list_storefront_queue: listStorefrontQueue,
+  generate_storefront_draft: generateStorefrontDraft,
+  get_storefront_preview_link: getStorefrontPreviewLink,
 };
 
 export const TOOL_NAMES = Object.keys(TOOLS);

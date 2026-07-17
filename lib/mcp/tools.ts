@@ -53,6 +53,11 @@ export const MCP_TOOL_NAMES = [
   // Demos — feature a product demo as a "Demo access" card in a room
   "list_demos",
   "feature_room_demo",
+  // VAV white-label storefront (Phase 0–2)
+  "create_storefront_request",
+  "list_storefront_queue",
+  "generate_storefront_draft",
+  "get_storefront_preview_link",
 ] as const;
 
 const ALLOWED = new Set<string>(MCP_TOOL_NAMES);
