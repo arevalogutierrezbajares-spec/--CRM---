@@ -17,7 +17,7 @@ import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { STATE_GLYPH } from "@/lib/brain/types";
 import type { RFNodeData } from "@/lib/brain/lenses/types";
 import { isClusterNode } from "@/lib/brain/selectors";
-import { useBrain } from "../graph-provider";
+import { useBrain } from "@/components/brain/canvas/graph-provider";
 import "./brain-nodes.css";
 
 export default function ClusterNode({ data, selected }: NodeProps) {

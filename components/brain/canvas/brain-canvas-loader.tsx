@@ -3,11 +3,9 @@
 /**
  * THE BRAIN — client-only canvas loader.
  *
- * @xyflow/react measures the DOM and touches `window` at render, so the canvas
- * cannot be server-rendered (a hard GET of /brain would 500). Defer to the
- * client with next/dynamic({ ssr: false }) — the established BlockNote pattern
- * (components/lob/doc-editor-loader.tsx). The portfolio-silhouette skeleton
- * (LoadingState) fills the gap so the route never flashes blank (NFR-OBS-4).
+ * Loads BrainCanvas (GraphProvider + ReactFlow + chrome) as one client chunk
+ * so createContext and useBrain share a single module instance. TopBar never
+ * imports this tree — only brain-search-events for focus.
  */
 
 import dynamic from "next/dynamic";

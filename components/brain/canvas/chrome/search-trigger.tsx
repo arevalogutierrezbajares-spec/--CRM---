@@ -4,7 +4,7 @@
  * @deprecated Replaced by BrainSearch in the rail.
  * Re-exports focus helper for any remaining shortcuts.
  */
-export { focusBrainSearch as openBrainSearch } from "./brain-search";
+export { focusBrainSearch as openBrainSearch } from "./brain-search-events";
 
 export function SearchTrigger() {
   return null;

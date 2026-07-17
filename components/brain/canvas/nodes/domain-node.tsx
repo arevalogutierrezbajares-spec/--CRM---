@@ -22,7 +22,7 @@ import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { STATE_GLYPH, STATE_LABEL, SYSTEM_ACCENT, type System } from "@/lib/brain/types";
 import type { RFNodeData } from "@/lib/brain/lenses/types";
 import { emphasisOf } from "@/lib/brain/analytics";
-import { useBrain } from "../graph-provider";
+import { useBrain } from "@/components/brain/canvas/graph-provider";
 import "./brain-nodes.css";
 
 export default function DomainNode({ data, selected }: NodeProps) {

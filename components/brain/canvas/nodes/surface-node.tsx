@@ -16,7 +16,7 @@ import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { SYSTEM_ACCENT, type NodeSource, type System } from "@/lib/brain/types";
 import type { RFNodeData } from "@/lib/brain/lenses/types";
 import { emphasisOf } from "@/lib/brain/analytics";
-import { useBrain } from "../graph-provider";
+import { useBrain } from "@/components/brain/canvas/graph-provider";
 import "./brain-nodes.css";
 
 const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];

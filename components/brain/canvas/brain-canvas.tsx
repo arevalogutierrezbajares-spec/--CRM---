@@ -54,7 +54,7 @@ import {
   GraphProvider,
   useBrain,
   type BrainView,
-} from "./graph-provider";
+} from "@/components/brain/canvas/graph-provider";
 import { getPreset, type PresetId } from "@/lib/brain/presets";
 
 import HubNode from "./nodes/hub-node";
@@ -131,9 +131,9 @@ function FloatingBreadcrumb() {
   );
 }
 
-/* ── Inner canvas (inside the provider) ──────────────────────────────────── */
+/* ── Inner canvas (inside GraphProvider + ReactFlowProvider) ─────────────── */
 
-function CanvasInner() {
+export function CanvasInner() {
   const { graph, view, actions } = useBrain();
   const reduceMotion = useReducedMotion();
   const rf = useReactFlow();
@@ -541,7 +541,7 @@ function CanvasInner() {
   );
 }
 
-/* ── Public component ────────────────────────────────────────────────────── */
+/* ── Public component (tests / Storybook — providers included) ───────────── */
 
 export function BrainCanvas({
   graph = defaultGraph,
@@ -550,6 +550,8 @@ export function BrainCanvas({
   graph?: BrainGraph;
   initialPreset?: PresetId;
 }) {
+  // Production /brain uses BrainCanvasLoader (providers outside dynamic).
+  // This wrapper keeps a one-shot entry for unit/visual tests.
   return (
     <ReactFlowProvider>
       <GraphProvider graph={graph} initialPreset={initialPreset}>

@@ -23,7 +23,7 @@ import {
   type System,
 } from "@/lib/brain/types";
 import type { RFEdgeData } from "@/lib/brain/lenses/types";
-import { useBrain } from "../graph-provider";
+import { useBrain } from "@/components/brain/canvas/graph-provider";
 import "./brain-edges.css";
 
 const HEALTH_COLOR: Record<Health, string> = {

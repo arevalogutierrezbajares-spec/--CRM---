@@ -43,14 +43,13 @@ import {
 import { navFromHit } from "@/lib/brain/navigate";
 import { parseBrainUrl } from "@/lib/brain/url-state";
 import { SYSTEM_ACCENT, type System } from "@/lib/brain/types";
+import {
+  BRAIN_FOCUS_SEARCH,
+  focusBrainSearch,
+} from "./brain-search-events";
 
-export const BRAIN_FOCUS_SEARCH = "brain:focus-search";
-
-export function focusBrainSearch() {
-  if (typeof window !== "undefined") {
-    window.dispatchEvent(new Event(BRAIN_FOCUS_SEARCH));
-  }
-}
+// Re-export for callers that already imported from this module.
+export { BRAIN_FOCUS_SEARCH, focusBrainSearch };
 
 const KIND_META: Record<
   BrainSearchHit["kind"],

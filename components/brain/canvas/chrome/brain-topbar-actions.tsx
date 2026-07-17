@@ -1,12 +1,12 @@
 "use client";
 
 /**
- * TopBar chip — lives OUTSIDE GraphProvider (page shell).
- * Must not call useBrain(); only dispatches focus to rail search.
+ * TopBar chip — outside GraphProvider. Must never import graph-provider
+ * or brain-search (those pull context into a separate bundle).
  */
 
 import { Search } from "lucide-react";
-import { focusBrainSearch } from "./brain-search";
+import { focusBrainSearch } from "./brain-search-events";
 
 export function BrainTopBarActions() {
   return (

@@ -27,7 +27,7 @@ import {
 import "./brain-nodes.css";
 import { FN_COLOR } from "@/lib/brain/functions";
 import type { RFNodeData } from "@/lib/brain/lenses/types";
-import { useBrain } from "../graph-provider";
+import { useBrain } from "@/components/brain/canvas/graph-provider";
 
 /** Percent-built for a hub: weighted mean of children, surfaced via node.pos hints. */
 function hubPercent(data: RFNodeData): number {

@@ -5,7 +5,7 @@
  */
 
 import { useState } from "react";
-import { focusBrainSearch } from "./brain-search";
+import { focusBrainSearch } from "./brain-search-events";
 
 const SEEN_KEY = "brain.coachmark.v3";
 
