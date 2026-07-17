@@ -35,14 +35,16 @@ describe("brain: generated reads_writes edges (Phase 1 extractor)", () => {
     expect(targets).toContain("vav.entity.guest_bookings");
   });
 
-  it("emits the 3 honest Caney (Python) route→table edges (Phase 3)", () => {
-    const pair = (from: string, to: string) =>
-      readsWrites.some((e) => e.from.domain === from && e.to.domain === to);
-    expect(pair("caney.surface.get-availability", "caney.entity.availability")).toBe(true);
-    expect(pair("caney.surface.get-bookings", "caney.entity.bookings")).toBe(true);
-    expect(
-      pair("caney.surface.post-internal-quotes-compute", "caney.entity.rate_plans"),
-    ).toBe(true);
+  it("emits SCIP Caney (Python) route→table edges (precise path, BRAIN_SCIP)", () => {
+    const caneyRw = readsWrites.filter((e) => e.from.system === "caney");
+    // Full inventory + SCIP report: dozens of edges, not the old 3 regex hits.
+    expect(caneyRw.length).toBeGreaterThanOrEqual(20);
+    const pair = (fromSub: string, to: string) =>
+      caneyRw.some(
+        (e) => e.from.domain.includes(fromSub) && e.to.domain === to,
+      );
+    expect(pair("availability", "caney.entity.availability")).toBe(true);
+    expect(pair("booking", "caney.entity.bookings")).toBe(true);
   });
 
   it("does NOT fabricate the accounting→journal-entries edge (no real reference)", () => {

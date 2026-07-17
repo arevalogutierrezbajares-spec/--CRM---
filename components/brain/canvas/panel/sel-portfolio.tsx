@@ -11,10 +11,21 @@
  *    the canvas selection through the provider.
  */
 
+import { useMemo } from "react";
+import Link from "next/link";
 import { useBrain } from "@/components/brain/canvas/graph-provider";
 import { FN_COLOR, FN_LABEL } from "@/lib/brain/functions";
-import type { BrainNode, Fn } from "@/lib/brain/types";
+import { computeCompleteness } from "@/lib/brain/completeness";
+import type { BrainNode, Fn, System } from "@/lib/brain/types";
 import { healthGlyph, readinessPct, systemAccent, systemLabel } from "./panel-utils";
+
+const GAP_GLYPH: Record<string, string> = {
+  dark_wire: "·",
+  warn_wire: "!",
+  low_coverage: "↓",
+  empty_domain: "○",
+  planned_wire: "…",
+};
 
 export function SelPortfolio() {
   const { graph, actions } = useBrain();
@@ -22,6 +33,7 @@ export function SelPortfolio() {
   const systems = graph.nodes.filter((n) => n.level === 1);
   const domains = graph.nodes.filter((n) => n.level === 2);
   const aggregate = readinessPct(domains);
+  const completeness = useMemo(() => computeCompleteness(graph), [graph]);
 
   // LIVE interchanges first (rendered as stations); planned listed after.
   const interchanges = graph.edges
@@ -41,12 +53,62 @@ export function SelPortfolio() {
           The Brain
         </h2>
         <div className="d-route">
-          {systems.length} systems · {graph.functions.length} functions ·{" "}
-          {interchanges.length} interchanges
+          {systems.length} systems · {completeness.totalSurfaces} surfaces ·{" "}
+          {completeness.liveInterchanges} live wires
+          {completeness.portfolioCoveragePct != null
+            ? ` · ~${completeness.portfolioCoveragePct}% coverage`
+            : ""}
         </div>
       </div>
 
       <div className="d-scroll">
+        {/* Catalog gaps — completeness loop */}
+        {completeness.gaps.length > 0 ? (
+          <section className="d-sec">
+            <h5>Gaps · {completeness.gaps.length}</h5>
+            <div className="gap-list">
+              {completeness.gaps.slice(0, 8).map((g) => (
+                <button
+                  key={g.id}
+                  type="button"
+                  className="gap-row"
+                  onClick={() => {
+                    if (g.kind === "empty_domain" || g.kind === "low_coverage") {
+                      const sys = g.system as System | null;
+                      if (sys && g.targetId === sys) {
+                        actions.drillInto({
+                          nodeId: sys,
+                          level: 1,
+                          system: sys,
+                        });
+                      } else if (sys) {
+                        actions.drillInto({
+                          nodeId: g.targetId,
+                          level: 2,
+                          system: sys,
+                          domainId: g.targetId,
+                        });
+                      } else {
+                        actions.select(g.targetId);
+                      }
+                    } else {
+                      actions.select(g.targetId);
+                    }
+                  }}
+                >
+                  <span className="gkind" aria-hidden>
+                    {GAP_GLYPH[g.kind] ?? "·"}
+                  </span>
+                  <span>
+                    <div className="glabel">{g.label}</div>
+                    <div className="gdetail">{g.detail}</div>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
         {/* Aggregate + per-system readiness */}
         <section className="d-sec">
           <h5>Readiness</h5>
@@ -142,6 +204,8 @@ export function SelPortfolio() {
           })}
         </section>
       </div>
+
+      <PortfolioDeepLinks />
     </>
   );
 }
@@ -152,4 +216,22 @@ function endpointNode(
   domain: string,
 ): BrainNode | undefined {
   return nodes.find((n) => n.system === system && n.id === `${system}.${domain}`);
+}
+
+// Deep-links sit after the interchanges section — appended via fragment in the
+// component return. (Actions bar for portfolio overview.)
+export function PortfolioDeepLinks() {
+  return (
+    <div className="d-actions">
+      <Link className="btn" href="/platforms">
+        Platforms
+      </Link>
+      <Link className="btn" href="/overlord">
+        Overlord
+      </Link>
+      <Link className="btn" href="/roadmap">
+        Roadmap
+      </Link>
+    </div>
+  );
 }

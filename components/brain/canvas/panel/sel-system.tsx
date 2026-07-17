@@ -8,6 +8,7 @@
  * domain list with double-encoded states. Restaurants shows its host-mount note.
  */
 
+import Link from "next/link";
 import { useBrain } from "@/components/brain/canvas/graph-provider";
 import { childrenOf } from "@/lib/brain/selectors";
 import type { BrainNode } from "@/lib/brain/types";
@@ -188,6 +189,15 @@ export function SelSystem({ node }: { node: BrainNode }) {
             Open docs ↗
           </a>
         ) : null}
+        <Link className="btn" href="/platforms">
+          Platforms
+        </Link>
+        <Link className="btn" href="/roadmap">
+          Roadmap
+        </Link>
+        <Link className="btn" href="/overlord">
+          Overlord
+        </Link>
         <button type="button" className="btn" onClick={() => actions.drillInto({ nodeId: node.id, level: 1, system: node.system })}>
           Drill into {node.label}
         </button>

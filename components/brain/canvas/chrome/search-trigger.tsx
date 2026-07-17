@@ -41,19 +41,20 @@ export function SearchTrigger() {
     <button
       type="button"
       onClick={openBrainCommandPalette}
-      aria-label="Search nodes (press / or ⌘⇧K)"
-      title="Search nodes"
+      aria-label="Rebuild-guard search (press / or ⌘⇧K)"
+      title="Does it already exist?"
       style={{
         display: "flex",
         alignItems: "center",
         gap: 7,
         width: "100%",
-        height: 34,
+        height: 36,
         marginBottom: 14,
         padding: "0 10px",
         borderRadius: 9,
         border: "1px solid var(--line-2)",
-        background: "var(--panel-2)",
+        background:
+          "linear-gradient(180deg, rgba(91,188,230,.06), transparent 70%), var(--panel-2)",
         boxShadow: "var(--gleam)",
         cursor: "pointer",
         color: "var(--ink-faint)",
@@ -61,27 +62,31 @@ export function SearchTrigger() {
         fontSize: 12,
         letterSpacing: ".01em",
         whiteSpace: "nowrap",
-        transition: "border-color .18s var(--ease), color .18s var(--ease)",
+        transition:
+          "border-color .18s var(--ease), color .18s var(--ease), box-shadow .18s var(--ease)",
       }}
       onMouseEnter={(e) => {
         (e.currentTarget as HTMLButtonElement).style.borderColor =
-          "var(--line-2, rgba(255,255,255,.12))";
+          "rgba(91,188,230,.4)";
         (e.currentTarget as HTMLButtonElement).style.color = "var(--ink-dim)";
+        (e.currentTarget as HTMLButtonElement).style.boxShadow =
+          "0 0 0 3px rgba(91,188,230,.08)";
       }}
       onMouseLeave={(e) => {
         (e.currentTarget as HTMLButtonElement).style.borderColor =
           "var(--line-2)";
         (e.currentTarget as HTMLButtonElement).style.color = "var(--ink-faint)";
+        (e.currentTarget as HTMLButtonElement).style.boxShadow = "var(--gleam)";
       }}
     >
       {/* Search glyph */}
-      <span aria-hidden="true" style={{ fontSize: 13, lineHeight: 1 }}>
+      <span aria-hidden="true" style={{ fontSize: 13, lineHeight: 1, color: "var(--caney)" }}>
         ⌕
       </span>
 
       {/* Placeholder text */}
-      <span style={{ color: "var(--ink-faint)", fontSize: 12 }}>
-        Search nodes
+      <span style={{ color: "var(--ink-dim)", fontSize: 12 }}>
+        Rebuild-guard…
       </span>
 
       {/* kbd hint — purely decorative, stays smaller */}

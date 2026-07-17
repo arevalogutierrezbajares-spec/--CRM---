@@ -8,9 +8,9 @@
  *   - AGB-CRM    app/**  route.ts + page groups                (walkAppRoutes)
  *
  * Each surface is bucketed into one canonical domain via keyword matching
- * (lib/taxonomy.mjs). We emit up to ~6 representative surfaces per system to
- * keep L3 legible (NFR-SCALE: ≤30 nodes/level), and feed real path/route counts
- * into the system meta map.
+ * (lib/taxonomy.mjs). We emit the FULL inventory into brain-graph.json so
+ * search/rebuild-guard is truthful. The canvas still clusters via selectors
+ * (NFR-SCALE: ≤30 visible nodes/level) — scale is a UI concern, not a data cut.
  *
  * Read-only (NFR-SEC-3); a missing spec degrades to empty (never throws).
  */
@@ -28,7 +28,8 @@ import {
   CRM_DOMAINS,
 } from "../lib/taxonomy.mjs";
 
-const MAX_SURFACES_PER_SYSTEM = 6;
+/** Soft safety cap only (pathological OpenAPI). Not a legibility sample. */
+const MAX_SURFACES_PER_SYSTEM = 5000;
 
 /** Slugify a path into an id-safe token. */
 function slug(s) {
@@ -42,13 +43,13 @@ function slug(s) {
 
 /**
  * Build surface nodes + contains edges for an OpenAPI system.
- * Picks the first surface that lands in each distinct domain, capping total.
+ * Emits every path that resolves to a domain (full inventory).
  */
 function surfacesFromOpenApi(system, absPath, domains) {
   const parsed = parseOpenApi(absPath);
   const nodes = [];
   const edges = [];
-  const usedDomains = new Set();
+  const usedIds = new Set();
 
   for (const p of parsed.paths) {
     if (nodes.length >= MAX_SURFACES_PER_SYSTEM) break;
@@ -61,11 +62,11 @@ function surfacesFromOpenApi(system, absPath, domains) {
     }
     if (!domain) domain = bucketByKeyword(p.path, domains);
     if (!domain) continue;
-    // One representative surface per domain for legibility.
-    if (usedDomains.has(domain.id)) continue;
-    usedDomains.add(domain.id);
 
     const id = `${system}.surface.${slug(p.method + "-" + p.path)}`;
+    if (usedIds.has(id)) continue;
+    usedIds.add(id);
+
     nodes.push(
       surfaceNode({
         id,
@@ -90,15 +91,14 @@ function surfacesFromOpenApi(system, absPath, domains) {
   return { nodes, edges, pathCount: parsed.pathCount, tagCount: parsed.tagCount };
 }
 
-/** Build representative surface nodes from the CRM app-route tree. */
+/** Build full surface inventory from the CRM app-route tree (API routes). */
 function surfacesFromRoutes(system, repoRoot, domains) {
   const appDir = resolveAppDir(repoRoot);
   const walked = walkAppRoutes(appDir);
   const nodes = [];
   const edges = [];
-  const usedDomains = new Set();
+  const usedIds = new Set();
 
-  // Prefer API routes (machine contracts) for representative surfaces.
   const apiRoutes = walked.segments.filter(
     (s) => s.kind === "route" && s.routePath.startsWith("/api/"),
   );
@@ -106,10 +106,11 @@ function surfacesFromRoutes(system, repoRoot, domains) {
     if (nodes.length >= MAX_SURFACES_PER_SYSTEM) break;
     const domain = bucketByKeyword(seg.routePath, domains);
     if (!domain) continue;
-    if (usedDomains.has(domain.id)) continue;
-    usedDomains.add(domain.id);
 
     const id = `${system}.surface.${slug(seg.routePath)}`;
+    if (usedIds.has(id)) continue;
+    usedIds.add(id);
+
     nodes.push(
       surfaceNode({
         id,

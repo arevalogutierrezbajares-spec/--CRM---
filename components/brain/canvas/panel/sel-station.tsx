@@ -10,8 +10,11 @@
  *    (FR-XSYS-8),
  *  - "what breaks" list (FR-XSYS-7); planned/dark edges render as PLANNED
  *    fog-of-war (not warn/red) and state the build blocker (FR-XSYS-11).
+ *  - live platforms health + deep-links into control-plane pages.
  */
 
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useBrain } from "@/components/brain/canvas/graph-provider";
 import { nodeById } from "@/lib/brain/selectors";
 import type { BrainEdge, System } from "@/lib/brain/types";
@@ -23,9 +26,33 @@ import {
   systemLabel,
 } from "./panel-utils";
 
+type LiveHealth = {
+  status: string;
+  detail: string;
+  path?: string;
+};
+
 export function SelStation({ edge }: { edge: BrainEdge }) {
   const { graph, actions } = useBrain();
   const planned = edge.contract_status === "planned";
+  const [live, setLive] = useState<LiveHealth | null>(null);
+
+  useEffect(() => {
+    if (planned) return;
+    let cancelled = false;
+    fetch("/api/brain/health")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((body) => {
+        if (cancelled || !body?.stations?.[edge.id]) return;
+        setLive(body.stations[edge.id] as LiveHealth);
+      })
+      .catch(() => {
+        /* offline / unauth — leave structural health only */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [edge.id, planned]);
 
   const fromNode = nodeById(graph, `${edge.from.system}.${edge.from.domain}`);
   const toNode = nodeById(graph, `${edge.to.system}.${edge.to.domain}`);
@@ -74,6 +101,17 @@ export function SelStation({ edge }: { edge: BrainEdge }) {
                 ⤿
               </span>
               host mount
+            </span>
+          ) : null}
+          {live ? (
+            <span
+              className={`badge ${live.status === "ok" ? "ok" : live.status === "down" ? "dark" : "warn"}`}
+              title={live.detail}
+            >
+              <span className="gi" aria-hidden>
+                📡
+              </span>
+              live {live.status}
             </span>
           ) : null}
         </div>
@@ -198,13 +236,24 @@ export function SelStation({ edge }: { edge: BrainEdge }) {
         </section>
       </div>
 
-      {/* Actions (FR-XSYS-9 trace + FR-DETAIL-7 open contract) */}
+      {/* Actions (FR-XSYS-9 trace + FR-DETAIL-7 open contract + control-plane) */}
       <div className="d-actions">
         {contractUrl ? (
           <a className="btn" href={contractUrl} target="_blank" rel="noreferrer">
             Open contract ↗
           </a>
         ) : null}
+        <Link className="btn" href="/platforms">
+          Platforms health
+        </Link>
+        {live?.path && live.path.startsWith("/") ? (
+          <Link className="btn" href={live.path}>
+            Open fix path
+          </Link>
+        ) : null}
+        <Link className="btn" href="/overlord">
+          Overlord
+        </Link>
         <button
           type="button"
           className="btn"

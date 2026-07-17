@@ -22,33 +22,76 @@ import "./brain-nodes.css";
 
 export default function ClusterNode({ data, selected }: NodeProps) {
   const d = data as unknown as RFNodeData;
-  const { actions } = useBrain();
+  const { actions, graph, view } = useBrain();
   const node = d.node;
 
+  const kind = isClusterNode(node) ? (node.clusterKind ?? "roadmap") : "roadmap";
   const memberCount = isClusterNode(node) ? node.clusterMembers.length : 0;
-  const glyph = STATE_GLYPH.needed;
+  const isPortal = kind === "portal";
+  const isOverflow = kind === "overflow";
 
-  const expand = () => actions.expandCluster(node.id);
+  const title = isPortal
+    ? node.label
+    : isOverflow
+      ? "More"
+      : "Roadmap";
+  const sub = isPortal
+    ? "open interchange"
+    : isOverflow
+      ? `${memberCount} hidden ▸`
+      : `${memberCount} needed ▸`;
+  const glyph = isPortal ? "↗" : isOverflow ? "…" : STATE_GLYPH.needed;
+  const accent = isPortal
+    ? "var(--caney)"
+    : isOverflow
+      ? "var(--doing)"
+      : "var(--needed)";
+  const dataState = isPortal ? "doing" : isOverflow ? "doing" : "needed";
+
+  const activate = () => {
+    if (isPortal && isClusterNode(node) && node.portalSystem) {
+      // Open the interchange detail for the live edge to the remote system.
+      const focus = view.focusSystemId;
+      const remote = node.portalSystem;
+      const edge = graph.edges.find(
+        (e) =>
+          e.kind === "interchange" &&
+          e.contract_status === "live" &&
+          ((e.from.system === focus && e.to.system === remote) ||
+            (e.to.system === focus && e.from.system === remote)),
+      );
+      actions.select(edge?.id ?? node.id);
+      return;
+    }
+    actions.expandCluster(node.id);
+  };
   const onKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
-      expand();
+      activate();
     }
   };
 
   return (
     <button
       type="button"
-      className={`nd cluster brain-spawn${selected ? " sel" : ""}`}
-      data-state="needed"
+      className={`nd cluster brain-spawn${selected ? " sel" : ""}${isPortal ? " portal" : ""}`}
+      data-state={dataState}
       data-size="md"
-      aria-label={`Roadmap — ${memberCount} needed. Expand.`}
+      data-cluster={kind}
+      aria-label={
+        isPortal
+          ? `${node.label} — cross-system portal`
+          : isOverflow
+            ? `Show ${memberCount} more surfaces`
+            : `Roadmap — ${memberCount} needed. Expand.`
+      }
       aria-expanded={false}
-      onClick={expand}
+      onClick={activate}
       onKeyDown={onKeyDown}
       style={
         {
-          "--accent": "var(--needed)",
+          "--accent": accent,
           display: "flex",
           flexDirection: "column",
           alignItems: "flex-start",
@@ -69,9 +112,9 @@ export default function ClusterNode({ data, selected }: NodeProps) {
         <span className="si" aria-hidden="true">
           {glyph}
         </span>
-        <span className="t">Roadmap</span>
+        <span className="t">{title}</span>
       </div>
-      <span className="more">{memberCount} needed ▸</span>
+      <span className="more">{sub}</span>
     </button>
   );
 }

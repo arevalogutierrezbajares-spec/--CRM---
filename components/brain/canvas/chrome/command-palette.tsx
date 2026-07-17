@@ -1,18 +1,10 @@
 "use client";
 
 /**
- * THE BRAIN — canvas-scoped ⌘K palette (stub).
+ * THE BRAIN — canvas-scoped rebuild-guard palette (⌘⇧K + `/`).
  *
- * Mirrors the existing global palette (components/command/command-palette.tsx):
- * same `cmdk` Command.Dialog structure, `shouldFilter={false}`, ⌘K/Ctrl+K open,
- * Esc close. But this one is SCOPED TO THE CANVAS — it lists Brain nodes to jump
- * to (drill into systems/domains, select surfaces) plus lens/preset switches,
- * dispatching through the provider rather than navigating routes.
- *
- * It deliberately does NOT register a second route-level palette; it only opens
- * when the canvas has focus interest. The global AGB-CRM ⌘K still works for app
- * navigation — this is an additive, canvas-local jump tool (a v0 stub: search +
- * jump + lens/preset, no fuzzy ranking beyond substring).
+ * Uses the same deterministic searchBrain ranking as /api/brain/search and the
+ * floating command center. Jump actions go through navFromHit.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -21,11 +13,11 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { useBrain } from "@/components/brain/canvas/graph-provider";
 import { PRESET_LIST } from "@/lib/brain/presets";
 import {
-  STATE_GLYPH,
-  SYSTEM_LABEL,
-  type BrainNode,
-  type System,
-} from "@/lib/brain/types";
+  pushRecentSearch,
+  safeToBuildMessage,
+  searchBrain,
+} from "@/lib/brain/search";
+import { navFromHit } from "@/lib/brain/navigate";
 import type { LensKey } from "@/lib/brain/lenses/types";
 
 const OPEN_EVENT = "open-brain-command-palette";
@@ -38,13 +30,9 @@ export function openBrainCommandPalette() {
 const ACTIVE_LENSES: { key: LensKey; label: string }[] = [
   { key: "navigation", label: "Navigation lens" },
   { key: "state", label: "State lens" },
+  { key: "topology", label: "Topology lens" },
   { key: "function", label: "Function overlay" },
 ];
-
-interface JumpTarget {
-  node: BrainNode;
-  kind: "system" | "domain" | "surface";
-}
 
 export function BrainCommandPalette() {
   const { graph, view, actions } = useBrain();
@@ -79,53 +67,57 @@ export function BrainCommandPalette() {
     setQuery("");
   }, []);
 
-  // Flat jump index: systems (L1) + domains (L2) + surfaces (L3 placeholders).
-  const targets = useMemo<JumpTarget[]>(() => {
-    const out: JumpTarget[] = [];
-    for (const n of graph.nodes) {
-      if (n.level === 1) out.push({ node: n, kind: "system" });
-      else if (n.level === 2) out.push({ node: n, kind: "domain" });
-      else if (n.level === 3) out.push({ node: n, kind: "surface" });
-    }
-    return out;
-  }, [graph.nodes]);
-
-  const q = query.trim().toLowerCase();
-  const JUMP_LIMIT = 24;
-  const filtered = useMemo(
+  // Unified rebuild-guard index (same ranking as /api/brain/search).
+  const searchResult = useMemo(
     () =>
-      q
-        ? targets.filter(
-            (t) =>
-              t.node.label.toLowerCase().includes(q) ||
-              t.node.id.toLowerCase().includes(q),
-          )
-        : targets.filter((t) => t.kind !== "surface"),
-    [targets, q],
+      query.trim()
+        ? searchBrain(graph, query, 24)
+        : {
+            query: "",
+            matches: graph.nodes
+              .filter((n) => n.level === 1 || n.level === 2)
+              .slice(0, 24)
+              .map((n) => ({
+                id: n.id,
+                kind: (n.level === 1 ? "system" : "domain") as
+                  | "system"
+                  | "domain",
+                label: n.label,
+                system: n.system,
+                path: n.id,
+                score: 0,
+              })),
+            safeToBuild: false,
+          },
+    [graph, query],
   );
-  const matches = filtered.slice(0, JUMP_LIMIT);
 
-  const jump = useCallback(
-    (t: JumpTarget) => {
-      if (t.kind === "system") {
-        actions.drillInto({
-          nodeId: t.node.id,
-          level: 1,
-          system: t.node.system as System,
-        });
-      } else if (t.kind === "domain") {
-        actions.drillInto({
-          nodeId: t.node.id,
-          level: 2,
-          system: t.node.system as System,
-          domainId: t.node.id,
-        });
-      } else {
-        actions.select(t.node.id);
+  const jumpHit = useCallback(
+    (id: string, kind: string, label: string) => {
+      if (query.trim()) pushRecentSearch(query.trim());
+      const hit = searchResult.matches.find((m) => m.id === id) ?? {
+        id,
+        kind: kind as "system" | "domain" | "surface" | "entity" | "interchange",
+        label,
+        system: null,
+        path: id,
+        score: 0,
+      };
+      for (const step of navFromHit(graph, hit)) {
+        if (step.type === "drill") {
+          actions.drillInto({
+            nodeId: step.nodeId,
+            level: step.level,
+            system: step.system,
+            domainId: step.domainId,
+          });
+        } else {
+          actions.select(step.id);
+        }
       }
       close();
     },
-    [actions, close],
+    [actions, close, graph, query, searchResult.matches],
   );
 
   return (
@@ -188,7 +180,7 @@ export function BrainCommandPalette() {
         <Command.Input
           value={query}
           onValueChange={setQuery}
-          placeholder="Jump to a system, domain, or surface…"
+          placeholder="Does it already exist? Route, domain, wire…"
           style={{
             height: 46,
             flex: 1,
@@ -226,39 +218,33 @@ export function BrainCommandPalette() {
             color: "var(--ink-faint)",
           }}
         >
-          No node matches “{query}” — safe to build it.
+          {query.trim().length >= 2
+            ? safeToBuildMessage(query)
+            : "Type to search the portfolio graph."}
         </Command.Empty>
 
-        <Group heading="Jump to">
-          {matches.map((t) => (
+        <Group heading="Rebuild-guard">
+          {searchResult.matches.map((hit) => (
             <Row
-              key={t.node.id}
+              key={hit.id}
               icon={
-                t.kind === "surface"
-                  ? "›"
-                  : STATE_GLYPH[t.node.state]
+                hit.kind === "interchange"
+                  ? "⇄"
+                  : hit.kind === "surface"
+                    ? "›"
+                    : hit.kind === "entity"
+                      ? "▣"
+                      : "●"
               }
-              right={kindRight(t)}
-              onSelect={() => jump(t)}
+              right={hit.kind}
+              onSelect={() => jumpHit(hit.id, hit.kind, hit.label)}
             >
-              {t.node.label}
+              {hit.label}
             </Row>
           ))}
-          {filtered.length > JUMP_LIMIT ? (
-            <div
-              style={{
-                padding: "6px 10px 8px",
-                fontFamily: "var(--mono)",
-                fontSize: 11,
-                color: "var(--ink-faint)",
-              }}
-            >
-              Showing {JUMP_LIMIT} of {filtered.length} — keep typing to narrow.
-            </div>
-          ) : null}
         </Group>
 
-        {!q && (
+        {!query.trim() && (
           <>
             <Group heading="Lenses">
               {ACTIVE_LENSES.map((l) => (
@@ -294,14 +280,6 @@ export function BrainCommandPalette() {
       </Command.List>
     </Command.Dialog>
   );
-}
-
-function kindRight(t: JumpTarget): string {
-  if (t.kind === "system") return "system";
-  if (t.kind === "domain") {
-    return t.node.system ? SYSTEM_LABEL[t.node.system as System] : "domain";
-  }
-  return t.node.surfaces[0] ?? "surface";
 }
 
 function Group({

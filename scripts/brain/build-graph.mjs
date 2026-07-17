@@ -42,6 +42,7 @@ import { extractStateOverlay } from "./extractors/state-overlay.mjs";
 import { extractHostMount } from "./extractors/host-mount.mjs";
 import { extractManifestSource } from "./extractors/manifest-source.mjs";
 import { extractDocsRef } from "./extractors/docs-ref.mjs";
+import { applyContractHashes } from "./extractors/contract-hasher.mjs";
 
 /** Resolve a short commit SHA for a repo root; null if not a git repo. */
 function gitShaFor(root) {
@@ -167,6 +168,16 @@ async function main() {
   const manifest = extractManifestSource();
   gb.addNodes(manifest.nodes);
   gb.addEdges(manifest.edges);
+
+  // 6b. FR-PIPE-5/6 — contract hashes on all interchange edges (live only).
+  //     Mutates edges already in the builder. Compares to previous artifact.
+  {
+    const ixEdges = gb.edges().filter((e) => e.kind === "interchange");
+    const { hashed, warned } = applyContractHashes(ixEdges);
+    console.log(
+      `[brain:build] contract-hash: ${hashed} hashed · ${warned} drift-warn`,
+    );
+  }
 
   // 7. FR-PIPE-7 — state overlay: apply board-derived overrides to domain nodes.
   //    Never overrides a manifest ("needed") node (NFR-OBS-5) — manifest domains

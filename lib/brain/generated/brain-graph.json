@@ -1,11 +1,11 @@
 {
   "version": "1.1",
-  "generatedAt": "2026-06-21T16:33:41.985Z",
+  "generatedAt": "2026-07-17T04:10:57.752Z",
   "commit": {
-    "vav": "e7950c6c9",
-    "caney": "2eeb0871",
-    "crm": "b980385",
-    "restaurants": "2f77a2b",
+    "vav": "2b53b2126",
+    "caney": "6a741e58",
+    "crm": "0be4979",
+    "restaurants": "fa515d1",
     "academy": null
   },
   "nodes": [
@@ -52,7 +52,7 @@
       "last_commit": null,
       "docs_ref": null,
       "surfaces": [],
-      "meta": "10 api · 141 mig · 10 domains",
+      "meta": "10 api · 157 mig · 10 domains",
       "summary": null,
       "pos": {
         "x": 0,
@@ -374,7 +374,7 @@
       "last_commit": null,
       "docs_ref": null,
       "surfaces": [],
-      "meta": "36 api · 137 mig · 9 domains",
+      "meta": "38 api · 151 mig · 9 domains",
       "summary": null,
       "pos": {
         "x": 494.5,
@@ -670,7 +670,7 @@
       "last_commit": null,
       "docs_ref": null,
       "surfaces": [],
-      "meta": "77 routes · 72 pages · 109 tables",
+      "meta": "82 routes · 73 pages · 110 tables",
       "summary": null,
       "pos": {
         "x": 305.6,
@@ -1071,11 +1071,111 @@
       }
     },
     {
+      "id": "vav.surface.get-api-holds-id",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "vav.booking",
+      "label": "GET /api/holds/{id}",
+      "system": "vav",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "openapi",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "vav.surface.delete-api-holds-id",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "vav.booking",
+      "label": "DELETE /api/holds/{id}",
+      "system": "vav",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "openapi",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "vav.surface.post-api-holds-id-extend",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "vav.booking",
+      "label": "POST /api/holds/{id}/extend",
+      "system": "vav",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "openapi",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
       "id": "vav.surface.get-api-listings-slug-availability",
       "level": 3,
       "kind": "surface",
       "parentId": "vav.marketplace",
       "label": "GET /api/listings/{slug}/availability",
+      "system": "vav",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "openapi",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "vav.surface.get-api-listings-slug-pms-availability",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "vav.marketplace",
+      "label": "GET /api/listings/{slug}/pms-availability",
       "system": "vav",
       "source": "openapi",
       "hosted_by": null,
@@ -1121,6 +1221,56 @@
       }
     },
     {
+      "id": "vav.surface.post-api-pms-webhook-caneyclouds",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "vav.pms-integration",
+      "label": "POST /api/pms/webhook/caneyclouds",
+      "system": "vav",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "openapi",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "vav.surface.post-api-quotes",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "vav.booking",
+      "label": "POST /api/quotes",
+      "system": "vav",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "openapi",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
       "id": "caney.surface.get-accounting-accountant-access-tokens",
       "level": 3,
       "kind": "surface",
@@ -1137,6 +1287,531 @@
       "branch": null,
       "last_commit": null,
       "docs_ref": "openapi#accountingListAccessTokens",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.post-accounting-accountant-access-tokens",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.accounting",
+      "label": "POST /accounting/accountant-access-tokens",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "openapi#accountingCreateAccessToken",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.delete-accounting-accountant-access-tokens-token",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.accounting",
+      "label": "DELETE /accounting/accountant-access-tokens/{token_id}",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "openapi#accountingRevokeAccessToken",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.get-accounting-chart",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.accounting",
+      "label": "GET /accounting/chart",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "openapi#accountingGetChart",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.post-accounting-chart",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.accounting",
+      "label": "POST /accounting/chart",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "openapi#accountingUpsertChart",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.get-accounting-dashboard",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.accounting",
+      "label": "GET /accounting/dashboard",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "openapi#accountingGetDashboard",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.get-accounting-exceptions",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.accounting",
+      "label": "GET /accounting/exceptions",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "openapi#accountingListExceptions",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.post-accounting-exceptions-exception-id-waive",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.accounting",
+      "label": "POST /accounting/exceptions/{exception_id}/waive",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "openapi#accountingWaiveException",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.get-accounting-export-profiles",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.accounting",
+      "label": "GET /accounting/export-profiles",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "openapi#accountingListExportProfiles",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.post-accounting-export-profiles",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.accounting",
+      "label": "POST /accounting/export-profiles",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "openapi#accountingUpsertExportProfile",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.post-accounting-exports",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.accounting",
+      "label": "POST /accounting/exports",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "openapi#accountingCreateExport",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.get-accounting-exports-job-id",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.accounting",
+      "label": "GET /accounting/exports/{job_id}",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "openapi#accountingGetExport",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.get-accounting-journal-entries",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.accounting",
+      "label": "GET /accounting/journal-entries",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "openapi#accountingListJournalEntries",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.get-accounting-mapping",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.accounting",
+      "label": "GET /accounting/mapping",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "openapi#accountingGetMapping",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.post-accounting-mapping",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.accounting",
+      "label": "POST /accounting/mapping",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "openapi#accountingUpsertMapping",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.get-accounting-periods",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.accounting",
+      "label": "GET /accounting/periods",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "openapi#accountingListPeriods",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.post-accounting-periods-period-id-close",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.accounting",
+      "label": "POST /accounting/periods/{period_id}/close",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "openapi#accountingClosePeriod",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.post-accounting-periods-period-id-reopen",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.accounting",
+      "label": "POST /accounting/periods/{period_id}/reopen",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "openapi#accountingReopenPeriod",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.get-accounting-posting-templates",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.accounting",
+      "label": "GET /accounting/posting-templates",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "openapi#accountingListPostingTemplates",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.post-accounting-posting-templates",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.accounting",
+      "label": "POST /accounting/posting-templates",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "openapi#accountingUpsertPostingTemplate",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.get-accounting-source-events",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.accounting",
+      "label": "GET /accounting/source-events",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "openapi#accountingListSourceEvents",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.post-accounting-source-events",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.accounting",
+      "label": "POST /accounting/source-events",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "openapi#accountingCreateSourceEvent",
       "surfaces": [],
       "meta": null,
       "summary": null,
@@ -1171,6 +1846,31 @@
       }
     },
     {
+      "id": "caney.surface.post-availability-block",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.availability",
+      "label": "POST /availability/block",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "openapi#blockAvailability",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
       "id": "caney.surface.get-bookings",
       "level": 3,
       "kind": "surface",
@@ -1187,6 +1887,206 @@
       "branch": null,
       "last_commit": null,
       "docs_ref": "openapi#listBookings",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.post-bookings-confirm",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.booking-core",
+      "label": "POST /bookings/confirm",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "openapi#confirmBooking",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.post-bookings-hold",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.booking-core",
+      "label": "POST /bookings/hold",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "openapi#createHold",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.get-bookings-booking-id",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.booking-core",
+      "label": "GET /bookings/{booking_id}",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "openapi#getBooking",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.post-bookings-booking-id-cancel",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.booking-core",
+      "label": "POST /bookings/{booking_id}/cancel",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "openapi#cancelBooking",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.post-bookings-booking-id-move",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.booking-core",
+      "label": "POST /bookings/{booking_id}/move",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "openapi#moveBooking",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.post-internal-availability-check",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.availability",
+      "label": "POST /internal/availability/check",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "openapi#internalAvailabilityCheck",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.post-internal-bookings-confirm",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.booking-core",
+      "label": "POST /internal/bookings/confirm",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "openapi#internalConfirmBooking",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.post-internal-holds",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.booking-core",
+      "label": "POST /internal/holds",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "openapi#internalCreateHold",
       "surfaces": [],
       "meta": null,
       "summary": null,
@@ -1246,11 +2146,236 @@
       }
     },
     {
+      "id": "caney.surface.post-quotes",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.pricing",
+      "label": "POST /quotes",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "openapi#computeQuote",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
       "id": "crm.surface.api-access-token-comments",
       "level": 3,
       "kind": "surface",
       "parentId": "crm.partner-rooms",
       "label": "/api/access/[token]/comments",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-access-token-heartbeat",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.partner-rooms",
+      "label": "/api/access/[token]/heartbeat",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-access-token-identify",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.partner-rooms",
+      "label": "/api/access/[token]/identify",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-access-token-messages",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.partner-rooms",
+      "label": "/api/access/[token]/messages",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-access-token-next-steps-stepid",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.partner-rooms",
+      "label": "/api/access/[token]/next-steps/[stepId]",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-access-token-sign",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.partner-rooms",
+      "label": "/api/access/[token]/sign",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-access-token-sign-requestid-doc",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.partner-rooms",
+      "label": "/api/access/[token]/sign/[requestId]/doc",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-access-token-unlock",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.partner-rooms",
+      "label": "/api/access/[token]/unlock",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-access-token-upload",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.partner-rooms",
+      "label": "/api/access/[token]/upload",
       "system": "crm",
       "source": "openapi",
       "hosted_by": null,
@@ -1321,11 +2446,261 @@
       }
     },
     {
+      "id": "crm.surface.api-brain-health",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.intelligence",
+      "label": "/api/brain/health",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-brain-search",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.intelligence",
+      "label": "/api/brain/search",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
       "id": "crm.surface.api-capture-action-items",
       "level": 3,
       "kind": "surface",
       "parentId": "crm.overlord",
       "label": "/api/capture/action-items",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-capture-action-items-id",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.overlord",
+      "label": "/api/capture/action-items/[id]",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-capture-download",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.capture",
+      "label": "/api/capture/download",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-capture-files-id-view",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.capture",
+      "label": "/api/capture/files/[id]/view",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-capture-files-finalize",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.capture",
+      "label": "/api/capture/files/finalize",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-capture-files-sign",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.capture",
+      "label": "/api/capture/files/sign",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-capture-live-token",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.capture",
+      "label": "/api/capture/live-token",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-capture-lobs",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.capture",
+      "label": "/api/capture/lobs",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-capture-lobs-id-files",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.capture",
+      "label": "/api/capture/lobs/[id]/files",
       "system": "crm",
       "source": "openapi",
       "hosted_by": null,
@@ -1376,6 +2751,1156 @@
       "kind": "surface",
       "parentId": "crm.research",
       "label": "/api/capture/notes",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-capture-notifications",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.capture",
+      "label": "/api/capture/notifications",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-capture-notifications-id",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.capture",
+      "label": "/api/capture/notifications/[id]",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-capture-ping",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.capture",
+      "label": "/api/capture/ping",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-capture-posts",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.capture",
+      "label": "/api/capture/posts",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-capture-projects",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.projects",
+      "label": "/api/capture/projects",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-capture-reactions",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.capture",
+      "label": "/api/capture/reactions",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-capture-sessions",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.capture",
+      "label": "/api/capture/sessions",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-capture-sessions-id",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.capture",
+      "label": "/api/capture/sessions/[id]",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-capture-sessions-id-chunks-seq",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.capture",
+      "label": "/api/capture/sessions/[id]/chunks/[seq]",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-capture-sessions-id-finalize",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.capture",
+      "label": "/api/capture/sessions/[id]/finalize",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-capture-settings",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.capture",
+      "label": "/api/capture/settings",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-capture-tokens",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.capture",
+      "label": "/api/capture/tokens",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-capture-tokens-id",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.capture",
+      "label": "/api/capture/tokens/[id]",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-contact-logo-contactid",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.contacts",
+      "label": "/api/contact-logo/[contactId]",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-cron-email-sync",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.email",
+      "label": "/api/cron/email-sync",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-cron-nudges",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.reminders",
+      "label": "/api/cron/nudges",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-cron-pre-meeting",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.meetings",
+      "label": "/api/cron/pre-meeting",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-cron-reminders",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.reminders",
+      "label": "/api/cron/reminders",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-dashboard-ai-actions",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.intelligence",
+      "label": "/api/dashboard/ai-actions",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-email-attachments-attachmentid",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.email",
+      "label": "/api/email/attachments/[attachmentId]",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-email-graph-webhook",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.email",
+      "label": "/api/email/graph/webhook",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-equity-advisor",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.treasury",
+      "label": "/api/equity/advisor",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-export-contacts",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.contacts",
+      "label": "/api/export/contacts",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-export-projects",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.projects",
+      "label": "/api/export/projects",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-materials-id-view",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.projects",
+      "label": "/api/materials/[id]/view",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-mcp",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.intelligence",
+      "label": "/api/mcp",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-mcp-oauth-authorize",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.intelligence",
+      "label": "/api/mcp/oauth/authorize",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-mcp-oauth-register",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.intelligence",
+      "label": "/api/mcp/oauth/register",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-mcp-oauth-token",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.intelligence",
+      "label": "/api/mcp/oauth/token",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-mcp-well-known-oauth-authorization-server",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.intelligence",
+      "label": "/api/mcp/well-known/oauth-authorization-server",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-mcp-well-known-oauth-protected-resource",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.intelligence",
+      "label": "/api/mcp/well-known/oauth-protected-resource",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-meetings-id-notes",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.meetings",
+      "label": "/api/meetings/[id]/notes",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-overlord-sync",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.overlord",
+      "label": "/api/overlord/sync",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-partner-uploads-id-download",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.partner-rooms",
+      "label": "/api/partner-uploads/[id]/download",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-postmark-inbound",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.email",
+      "label": "/api/postmark/inbound",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-research-id",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.research",
+      "label": "/api/research/[id]",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-research-sync",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.research",
+      "label": "/api/research/sync",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-room-hero-roomid",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.partner-rooms",
+      "label": "/api/room-hero/[roomId]",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-room-items-roomid",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.partner-rooms",
+      "label": "/api/room-items/[roomId]",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-voice-call",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.capture",
+      "label": "/api/voice/call",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-voice-live-token",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.capture",
+      "label": "/api/voice/live-token",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-voice-quick-contact",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.capture",
+      "label": "/api/voice/quick-contact",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-voice-quote",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.capture",
+      "label": "/api/voice/quote",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-voice-recording-id",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.meetings",
+      "label": "/api/voice/recording/[id]",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-voice-recording-id-audio",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.meetings",
+      "label": "/api/voice/recording/[id]/audio",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-voice-transcribe",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.capture",
+      "label": "/api/voice/transcribe",
       "system": "crm",
       "source": "openapi",
       "hosted_by": null,
@@ -1937,6 +4462,1631 @@
       "branch": null,
       "last_commit": null,
       "docs_ref": "APP/backend/alembic/versions",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.scip.channel-init",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.booking-core",
+      "label": "api/channel/__init__.py",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "api/channel/__init__.py",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.entity.channels",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "caney.channels",
+      "label": "channels",
+      "system": "caney",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "scip:db/models.py",
+      "surfaces": [],
+      "meta": "Channel",
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.scip.internal-data-deletion",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.messaging",
+      "label": "api/internal/data_deletion.py",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "api/internal/data_deletion.py",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.entity.conversations",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "caney.messaging",
+      "label": "conversations",
+      "system": "caney",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "scip:db/models.py",
+      "surfaces": [],
+      "meta": "Conversation",
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.entity.guests",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "caney.auth",
+      "label": "guests",
+      "system": "caney",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "scip:db/models.py",
+      "surfaces": [],
+      "meta": "Guest",
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.entity.messages",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "caney.messaging",
+      "label": "messages",
+      "system": "caney",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "scip:db/models.py",
+      "surfaces": [],
+      "meta": "Message",
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.scip.v1-admin-bookings",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.booking-core",
+      "label": "api/v1/admin_bookings.py",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "api/v1/admin_bookings.py",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.entity.booking_lines",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "caney.booking-core",
+      "label": "booking_lines",
+      "system": "caney",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "scip:db/models.py",
+      "surfaces": [],
+      "meta": "BookingLine",
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.entity.booking_refunds",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "caney.booking-core",
+      "label": "booking_refunds",
+      "system": "caney",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "scip:db/models.py",
+      "surfaces": [],
+      "meta": "BookingRefund",
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.entity.payments",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "caney.booking-core",
+      "label": "payments",
+      "system": "caney",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "scip:db/models.py",
+      "surfaces": [],
+      "meta": "Payment",
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.scip.v1-admin",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.auth",
+      "label": "api/v1/admin.py",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "api/v1/admin.py",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.entity.tenants",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "caney.auth",
+      "label": "tenants",
+      "system": "caney",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "scip:db/models.py",
+      "surfaces": [],
+      "meta": "Tenant",
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.entity.users",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "caney.auth",
+      "label": "users",
+      "system": "caney",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "scip:db/models.py",
+      "surfaces": [],
+      "meta": "User",
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.scip.v1-auth",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.auth",
+      "label": "api/v1/auth.py",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "api/v1/auth.py",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.entity.onboarding_sessions",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "caney.auth",
+      "label": "onboarding_sessions",
+      "system": "caney",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "scip:db/models.py",
+      "surfaces": [],
+      "meta": "OnboardingSession",
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.entity.onboarding_tokens",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "caney.auth",
+      "label": "onboarding_tokens",
+      "system": "caney",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "scip:db/models.py",
+      "surfaces": [],
+      "meta": "OnboardingToken",
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.entity.properties",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "caney.properties",
+      "label": "properties",
+      "system": "caney",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "scip:db/models.py",
+      "surfaces": [],
+      "meta": "Property",
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.scip.v1-availability",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.availability",
+      "label": "api/v1/availability.py",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "api/v1/availability.py",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.scip.v1-bookings",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.booking-core",
+      "label": "api/v1/bookings.py",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "api/v1/bookings.py",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.scip.v1-cancellations",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.auth",
+      "label": "api/v1/cancellations.py",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "api/v1/cancellations.py",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.entity.cancellation_exceptions",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "caney.auth",
+      "label": "cancellation_exceptions",
+      "system": "caney",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "scip:db/models.py",
+      "surfaces": [],
+      "meta": "CancellationException",
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.scip.v1-channel-reservations",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.booking-core",
+      "label": "api/v1/channel_reservations.py",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "api/v1/channel_reservations.py",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.entity.rooms",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "caney.properties",
+      "label": "rooms",
+      "system": "caney",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "scip:db/models.py",
+      "surfaces": [],
+      "meta": "Room",
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.scip.v1-channels",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.channels",
+      "label": "api/v1/channels.py",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "api/v1/channels.py",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.entity.branded_page_requests",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "caney.channels",
+      "label": "branded_page_requests",
+      "system": "caney",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "scip:db/models.py",
+      "surfaces": [],
+      "meta": "BrandedPageRequest",
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.entity.channel_outbox",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "caney.channels",
+      "label": "channel_outbox",
+      "system": "caney",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "scip:db/models.py",
+      "surfaces": [],
+      "meta": "ChannelOutbox",
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.entity.channel_sync_log",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "caney.channels",
+      "label": "channel_sync_log",
+      "system": "caney",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "scip:db/models.py",
+      "surfaces": [],
+      "meta": "ChannelSyncLog",
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.scip.v1-discount-codes",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.auth",
+      "label": "api/v1/discount_codes.py",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "api/v1/discount_codes.py",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.entity.discount_codes",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "caney.auth",
+      "label": "discount_codes",
+      "system": "caney",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "scip:db/models.py",
+      "surfaces": [],
+      "meta": "DiscountCode",
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.scip.v1-experiences",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.booking-core",
+      "label": "api/v1/experiences.py",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "api/v1/experiences.py",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.entity.experience_bookings",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "caney.booking-core",
+      "label": "experience_bookings",
+      "system": "caney",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "scip:db/models.py",
+      "surfaces": [],
+      "meta": "ExperienceBooking",
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.entity.experiences",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "caney.auth",
+      "label": "experiences",
+      "system": "caney",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "scip:db/models.py",
+      "surfaces": [],
+      "meta": "Experience",
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.scip.v1-guests",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.auth",
+      "label": "api/v1/guests.py",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "api/v1/guests.py",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.scip.v1-invoices",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.payments",
+      "label": "api/v1/invoices.py",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "api/v1/invoices.py",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.entity.invoice_line_items",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "caney.payments",
+      "label": "invoice_line_items",
+      "system": "caney",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "scip:db/models.py",
+      "surfaces": [],
+      "meta": "InvoiceLineItem",
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.scip.v1-notification-settings",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.messaging",
+      "label": "api/v1/notification_settings.py",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "api/v1/notification_settings.py",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.entity.memberships",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "caney.messaging",
+      "label": "memberships",
+      "system": "caney",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "scip:db/models.py",
+      "surfaces": [],
+      "meta": "Membership",
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.scip.v1-policies",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.properties",
+      "label": "api/v1/policies.py",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "api/v1/policies.py",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.entity.policy_rules",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "caney.properties",
+      "label": "policy_rules",
+      "system": "caney",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "scip:db/models.py",
+      "surfaces": [],
+      "meta": "PolicyRule",
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.scip.v1-portal",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.booking-core",
+      "label": "api/v1/portal.py",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "api/v1/portal.py",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.entity.folio_charges",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "caney.payments",
+      "label": "folio_charges",
+      "system": "caney",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "scip:db/models.py",
+      "surfaces": [],
+      "meta": "FolioCharge",
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.entity.folios",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "caney.payments",
+      "label": "folios",
+      "system": "caney",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "scip:db/models.py",
+      "surfaces": [],
+      "meta": "Folio",
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.entity.guest_auto_login_tokens",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "caney.auth",
+      "label": "guest_auto_login_tokens",
+      "system": "caney",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "scip:db/models.py",
+      "surfaces": [],
+      "meta": "GuestAutoLoginToken",
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.entity.guest_magic_links",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "caney.auth",
+      "label": "guest_magic_links",
+      "system": "caney",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "scip:db/models.py",
+      "surfaces": [],
+      "meta": "GuestMagicLink",
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.entity.guest_otp_tokens",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "caney.auth",
+      "label": "guest_otp_tokens",
+      "system": "caney",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "scip:db/models.py",
+      "surfaces": [],
+      "meta": "GuestOtpToken",
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.entity.guest_refresh_sessions",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "caney.auth",
+      "label": "guest_refresh_sessions",
+      "system": "caney",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "scip:db/models.py",
+      "surfaces": [],
+      "meta": "GuestRefreshSession",
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.scip.v1-pricing-grid",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.pricing",
+      "label": "api/v1/pricing_grid.py",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "api/v1/pricing_grid.py",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.entity.season_ranges",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "caney.pricing",
+      "label": "season_ranges",
+      "system": "caney",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "scip:db/models.py",
+      "surfaces": [],
+      "meta": "SeasonRange",
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.scip.v1-staff",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.auth",
+      "label": "api/v1/staff.py",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "api/v1/staff.py",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.entity.audit_events",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "caney.auth",
+      "label": "audit_events",
+      "system": "caney",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "scip:db/models.py",
+      "surfaces": [],
+      "meta": "AuditEvent",
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.entity.auth_refresh_sessions",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "caney.auth",
+      "label": "auth_refresh_sessions",
+      "system": "caney",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "scip:db/models.py",
+      "surfaces": [],
+      "meta": "AuthRefreshSession",
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.entity.billing_invoices",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "caney.payments",
+      "label": "billing_invoices",
+      "system": "caney",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "scip:db/models.py",
+      "surfaces": [],
+      "meta": "BillingInvoice",
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.entity.event_outbox",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "caney.auth",
+      "label": "event_outbox",
+      "system": "caney",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "scip:db/models.py",
+      "surfaces": [],
+      "meta": "EventOutbox",
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.entity.inventory_items",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "caney.auth",
+      "label": "inventory_items",
+      "system": "caney",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "scip:db/models.py",
+      "surfaces": [],
+      "meta": "InventoryItem",
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.entity.occupancy_classes",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "caney.auth",
+      "label": "occupancy_classes",
+      "system": "caney",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "scip:db/models.py",
+      "surfaces": [],
+      "meta": "OccupancyClass",
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.entity.occupancy_rates",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "caney.auth",
+      "label": "occupancy_rates",
+      "system": "caney",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "scip:db/models.py",
+      "surfaces": [],
+      "meta": "OccupancyRate",
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.entity.pricing_rules",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "caney.pricing",
+      "label": "pricing_rules",
+      "system": "caney",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "scip:db/models.py",
+      "surfaces": [],
+      "meta": "PricingRule",
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.entity.reconciliation_queue",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "caney.auth",
+      "label": "reconciliation_queue",
+      "system": "caney",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "scip:db/models.py",
+      "surfaces": [],
+      "meta": "ReconciliationQueueEntry",
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.entity.review_decisions",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "caney.auth",
+      "label": "review_decisions",
+      "system": "caney",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "scip:db/models.py",
+      "surfaces": [],
+      "meta": "ReviewDecision",
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.entity.room_types",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "caney.properties",
+      "label": "room_types",
+      "system": "caney",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "scip:db/models.py",
+      "surfaces": [],
+      "meta": "RoomType",
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.entity.seasons",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "caney.auth",
+      "label": "seasons",
+      "system": "caney",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "scip:db/models.py",
+      "surfaces": [],
+      "meta": "Season",
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.entity.subscription_plans",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "caney.auth",
+      "label": "subscription_plans",
+      "system": "caney",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "scip:db/models.py",
+      "surfaces": [],
+      "meta": "SubscriptionPlan",
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.entity.subscriptions",
+      "level": 3,
+      "kind": "entity",
+      "parentId": "caney.auth",
+      "label": "subscriptions",
+      "system": "caney",
+      "source": "migrations",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "scip:db/models.py",
+      "surfaces": [],
+      "meta": "Subscription",
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.scip.v1-subscriptions",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.auth",
+      "label": "api/v1/subscriptions.py",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "api/v1/subscriptions.py",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "caney.surface.scip.v1-tracking",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "caney.auth",
+      "label": "api/v1/tracking.py",
+      "system": "caney",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "api/v1/tracking.py",
       "surfaces": [],
       "meta": null,
       "summary": null,
@@ -3044,6 +7194,48 @@
       "contract_status": "live"
     },
     {
+      "id": "contains.vav.surface.get-api-holds-id",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "vav",
+        "domain": "vav.booking"
+      },
+      "to": {
+        "system": "vav",
+        "domain": "vav.surface.get-api-holds-id"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.vav.surface.delete-api-holds-id",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "vav",
+        "domain": "vav.booking"
+      },
+      "to": {
+        "system": "vav",
+        "domain": "vav.surface.delete-api-holds-id"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.vav.surface.post-api-holds-id-extend",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "vav",
+        "domain": "vav.booking"
+      },
+      "to": {
+        "system": "vav",
+        "domain": "vav.surface.post-api-holds-id-extend"
+      },
+      "contract_status": "live"
+    },
+    {
       "id": "contains.vav.surface.get-api-listings-slug-availability",
       "kind": "contains",
       "subtype": null,
@@ -3054,6 +7246,20 @@
       "to": {
         "system": "vav",
         "domain": "vav.surface.get-api-listings-slug-availability"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.vav.surface.get-api-listings-slug-pms-availability",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "vav",
+        "domain": "vav.marketplace"
+      },
+      "to": {
+        "system": "vav",
+        "domain": "vav.surface.get-api-listings-slug-pms-availability"
       },
       "contract_status": "live"
     },
@@ -3072,6 +7278,34 @@
       "contract_status": "live"
     },
     {
+      "id": "contains.vav.surface.post-api-pms-webhook-caneyclouds",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "vav",
+        "domain": "vav.pms-integration"
+      },
+      "to": {
+        "system": "vav",
+        "domain": "vav.surface.post-api-pms-webhook-caneyclouds"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.vav.surface.post-api-quotes",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "vav",
+        "domain": "vav.booking"
+      },
+      "to": {
+        "system": "vav",
+        "domain": "vav.surface.post-api-quotes"
+      },
+      "contract_status": "live"
+    },
+    {
       "id": "contains.caney.surface.get-accounting-accountant-access-tokens",
       "kind": "contains",
       "subtype": null,
@@ -3082,6 +7316,300 @@
       "to": {
         "system": "caney",
         "domain": "caney.surface.get-accounting-accountant-access-tokens"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.caney.surface.post-accounting-accountant-access-tokens",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "caney",
+        "domain": "caney.accounting"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.surface.post-accounting-accountant-access-tokens"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.caney.surface.delete-accounting-accountant-access-tokens-token",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "caney",
+        "domain": "caney.accounting"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.surface.delete-accounting-accountant-access-tokens-token"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.caney.surface.get-accounting-chart",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "caney",
+        "domain": "caney.accounting"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.surface.get-accounting-chart"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.caney.surface.post-accounting-chart",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "caney",
+        "domain": "caney.accounting"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.surface.post-accounting-chart"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.caney.surface.get-accounting-dashboard",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "caney",
+        "domain": "caney.accounting"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.surface.get-accounting-dashboard"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.caney.surface.get-accounting-exceptions",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "caney",
+        "domain": "caney.accounting"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.surface.get-accounting-exceptions"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.caney.surface.post-accounting-exceptions-exception-id-waive",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "caney",
+        "domain": "caney.accounting"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.surface.post-accounting-exceptions-exception-id-waive"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.caney.surface.get-accounting-export-profiles",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "caney",
+        "domain": "caney.accounting"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.surface.get-accounting-export-profiles"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.caney.surface.post-accounting-export-profiles",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "caney",
+        "domain": "caney.accounting"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.surface.post-accounting-export-profiles"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.caney.surface.post-accounting-exports",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "caney",
+        "domain": "caney.accounting"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.surface.post-accounting-exports"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.caney.surface.get-accounting-exports-job-id",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "caney",
+        "domain": "caney.accounting"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.surface.get-accounting-exports-job-id"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.caney.surface.get-accounting-journal-entries",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "caney",
+        "domain": "caney.accounting"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.surface.get-accounting-journal-entries"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.caney.surface.get-accounting-mapping",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "caney",
+        "domain": "caney.accounting"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.surface.get-accounting-mapping"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.caney.surface.post-accounting-mapping",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "caney",
+        "domain": "caney.accounting"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.surface.post-accounting-mapping"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.caney.surface.get-accounting-periods",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "caney",
+        "domain": "caney.accounting"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.surface.get-accounting-periods"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.caney.surface.post-accounting-periods-period-id-close",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "caney",
+        "domain": "caney.accounting"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.surface.post-accounting-periods-period-id-close"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.caney.surface.post-accounting-periods-period-id-reopen",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "caney",
+        "domain": "caney.accounting"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.surface.post-accounting-periods-period-id-reopen"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.caney.surface.get-accounting-posting-templates",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "caney",
+        "domain": "caney.accounting"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.surface.get-accounting-posting-templates"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.caney.surface.post-accounting-posting-templates",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "caney",
+        "domain": "caney.accounting"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.surface.post-accounting-posting-templates"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.caney.surface.get-accounting-source-events",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "caney",
+        "domain": "caney.accounting"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.surface.get-accounting-source-events"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.caney.surface.post-accounting-source-events",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "caney",
+        "domain": "caney.accounting"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.surface.post-accounting-source-events"
       },
       "contract_status": "live"
     },
@@ -3100,6 +7628,20 @@
       "contract_status": "live"
     },
     {
+      "id": "contains.caney.surface.post-availability-block",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "caney",
+        "domain": "caney.availability"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.surface.post-availability-block"
+      },
+      "contract_status": "live"
+    },
+    {
       "id": "contains.caney.surface.get-bookings",
       "kind": "contains",
       "subtype": null,
@@ -3110,6 +7652,118 @@
       "to": {
         "system": "caney",
         "domain": "caney.surface.get-bookings"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.caney.surface.post-bookings-confirm",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "caney",
+        "domain": "caney.booking-core"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.surface.post-bookings-confirm"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.caney.surface.post-bookings-hold",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "caney",
+        "domain": "caney.booking-core"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.surface.post-bookings-hold"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.caney.surface.get-bookings-booking-id",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "caney",
+        "domain": "caney.booking-core"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.surface.get-bookings-booking-id"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.caney.surface.post-bookings-booking-id-cancel",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "caney",
+        "domain": "caney.booking-core"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.surface.post-bookings-booking-id-cancel"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.caney.surface.post-bookings-booking-id-move",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "caney",
+        "domain": "caney.booking-core"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.surface.post-bookings-booking-id-move"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.caney.surface.post-internal-availability-check",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "caney",
+        "domain": "caney.availability"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.surface.post-internal-availability-check"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.caney.surface.post-internal-bookings-confirm",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "caney",
+        "domain": "caney.booking-core"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.surface.post-internal-bookings-confirm"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.caney.surface.post-internal-holds",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "caney",
+        "domain": "caney.booking-core"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.surface.post-internal-holds"
       },
       "contract_status": "live"
     },
@@ -3142,6 +7796,20 @@
       "contract_status": "live"
     },
     {
+      "id": "contains.caney.surface.post-quotes",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "caney",
+        "domain": "caney.pricing"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.surface.post-quotes"
+      },
+      "contract_status": "live"
+    },
+    {
       "id": "contains.crm.surface.api-access-token-comments",
       "kind": "contains",
       "subtype": null,
@@ -3152,6 +7820,118 @@
       "to": {
         "system": "crm",
         "domain": "crm.surface.api-access-token-comments"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-access-token-heartbeat",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.partner-rooms"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-access-token-heartbeat"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-access-token-identify",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.partner-rooms"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-access-token-identify"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-access-token-messages",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.partner-rooms"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-access-token-messages"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-access-token-next-steps-stepid",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.partner-rooms"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-access-token-next-steps-stepid"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-access-token-sign",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.partner-rooms"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-access-token-sign"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-access-token-sign-requestid-doc",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.partner-rooms"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-access-token-sign-requestid-doc"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-access-token-unlock",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.partner-rooms"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-access-token-unlock"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-access-token-upload",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.partner-rooms"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-access-token-upload"
       },
       "contract_status": "live"
     },
@@ -3184,6 +7964,34 @@
       "contract_status": "live"
     },
     {
+      "id": "contains.crm.surface.api-brain-health",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.intelligence"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-brain-health"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-brain-search",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.intelligence"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-brain-search"
+      },
+      "contract_status": "live"
+    },
+    {
       "id": "contains.crm.surface.api-capture-action-items",
       "kind": "contains",
       "subtype": null,
@@ -3194,6 +8002,118 @@
       "to": {
         "system": "crm",
         "domain": "crm.surface.api-capture-action-items"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-capture-action-items-id",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.overlord"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-capture-action-items-id"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-capture-download",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.capture"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-capture-download"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-capture-files-id-view",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.capture"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-capture-files-id-view"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-capture-files-finalize",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.capture"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-capture-files-finalize"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-capture-files-sign",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.capture"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-capture-files-sign"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-capture-live-token",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.capture"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-capture-live-token"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-capture-lobs",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.capture"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-capture-lobs"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-capture-lobs-id-files",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.capture"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-capture-lobs-id-files"
       },
       "contract_status": "live"
     },
@@ -3222,6 +8142,650 @@
       "to": {
         "system": "crm",
         "domain": "crm.surface.api-capture-notes"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-capture-notifications",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.capture"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-capture-notifications"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-capture-notifications-id",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.capture"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-capture-notifications-id"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-capture-ping",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.capture"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-capture-ping"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-capture-posts",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.capture"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-capture-posts"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-capture-projects",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.projects"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-capture-projects"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-capture-reactions",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.capture"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-capture-reactions"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-capture-sessions",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.capture"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-capture-sessions"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-capture-sessions-id",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.capture"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-capture-sessions-id"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-capture-sessions-id-chunks-seq",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.capture"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-capture-sessions-id-chunks-seq"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-capture-sessions-id-finalize",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.capture"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-capture-sessions-id-finalize"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-capture-settings",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.capture"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-capture-settings"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-capture-tokens",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.capture"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-capture-tokens"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-capture-tokens-id",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.capture"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-capture-tokens-id"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-contact-logo-contactid",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.contacts"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-contact-logo-contactid"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-cron-email-sync",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.email"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-cron-email-sync"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-cron-nudges",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.reminders"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-cron-nudges"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-cron-pre-meeting",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.meetings"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-cron-pre-meeting"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-cron-reminders",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.reminders"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-cron-reminders"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-dashboard-ai-actions",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.intelligence"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-dashboard-ai-actions"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-email-attachments-attachmentid",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.email"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-email-attachments-attachmentid"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-email-graph-webhook",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.email"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-email-graph-webhook"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-equity-advisor",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.treasury"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-equity-advisor"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-export-contacts",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.contacts"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-export-contacts"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-export-projects",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.projects"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-export-projects"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-materials-id-view",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.projects"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-materials-id-view"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-mcp",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.intelligence"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-mcp"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-mcp-oauth-authorize",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.intelligence"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-mcp-oauth-authorize"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-mcp-oauth-register",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.intelligence"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-mcp-oauth-register"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-mcp-oauth-token",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.intelligence"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-mcp-oauth-token"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-mcp-well-known-oauth-authorization-server",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.intelligence"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-mcp-well-known-oauth-authorization-server"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-mcp-well-known-oauth-protected-resource",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.intelligence"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-mcp-well-known-oauth-protected-resource"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-meetings-id-notes",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.meetings"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-meetings-id-notes"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-overlord-sync",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.overlord"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-overlord-sync"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-partner-uploads-id-download",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.partner-rooms"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-partner-uploads-id-download"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-postmark-inbound",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.email"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-postmark-inbound"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-research-id",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.research"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-research-id"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-research-sync",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.research"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-research-sync"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-room-hero-roomid",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.partner-rooms"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-room-hero-roomid"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-room-items-roomid",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.partner-rooms"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-room-items-roomid"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-voice-call",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.capture"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-voice-call"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-voice-live-token",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.capture"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-voice-live-token"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-voice-quick-contact",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.capture"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-voice-quick-contact"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-voice-quote",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.capture"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-voice-quote"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-voice-recording-id",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.meetings"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-voice-recording-id"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-voice-recording-id-audio",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.meetings"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-voice-recording-id-audio"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-voice-transcribe",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.capture"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-voice-transcribe"
       },
       "contract_status": "live"
     },
@@ -3268,44 +8832,58 @@
       "contract_status": "live"
     },
     {
-      "id": "rw.caney.surface.get-availability.caney.entity.availability",
+      "id": "rw.vav.surface.get-api-holds-id.vav.entity.pms_holds",
       "kind": "reads_writes",
       "subtype": "reads",
       "from": {
-        "system": "caney",
-        "domain": "caney.surface.get-availability"
+        "system": "vav",
+        "domain": "vav.surface.get-api-holds-id"
       },
       "to": {
-        "system": "caney",
-        "domain": "caney.entity.availability"
+        "system": "vav",
+        "domain": "vav.entity.pms_holds"
       },
       "contract_status": "live"
     },
     {
-      "id": "rw.caney.surface.get-bookings.caney.entity.bookings",
+      "id": "rw.vav.surface.delete-api-holds-id.vav.entity.pms_holds",
       "kind": "reads_writes",
-      "subtype": "reads",
+      "subtype": "writes",
       "from": {
-        "system": "caney",
-        "domain": "caney.surface.get-bookings"
+        "system": "vav",
+        "domain": "vav.surface.delete-api-holds-id"
       },
       "to": {
-        "system": "caney",
-        "domain": "caney.entity.bookings"
+        "system": "vav",
+        "domain": "vav.entity.pms_holds"
       },
       "contract_status": "live"
     },
     {
-      "id": "rw.caney.surface.post-internal-quotes-compute.caney.entity.rate_plans",
+      "id": "rw.vav.surface.post-api-holds-id-extend.vav.entity.pms_holds",
       "kind": "reads_writes",
-      "subtype": "reads",
+      "subtype": "writes",
       "from": {
-        "system": "caney",
-        "domain": "caney.surface.post-internal-quotes-compute"
+        "system": "vav",
+        "domain": "vav.surface.post-api-holds-id-extend"
       },
       "to": {
-        "system": "caney",
-        "domain": "caney.entity.rate_plans"
+        "system": "vav",
+        "domain": "vav.entity.pms_holds"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.vav.surface.post-api-quotes.vav.entity.quotes",
+      "kind": "reads_writes",
+      "subtype": "writes",
+      "from": {
+        "system": "vav",
+        "domain": "vav.surface.post-api-quotes"
+      },
+      "to": {
+        "system": "vav",
+        "domain": "vav.entity.quotes"
       },
       "contract_status": "live"
     },
@@ -3320,6 +8898,1560 @@
       "to": {
         "system": "crm",
         "domain": "crm.entity.partner_rooms"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.crm.surface.api-access-token-heartbeat.crm.entity.partner_rooms",
+      "kind": "reads_writes",
+      "subtype": "writes",
+      "from": {
+        "system": "crm",
+        "domain": "crm.surface.api-access-token-heartbeat"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.entity.partner_rooms"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.crm.surface.api-access-token-identify.crm.entity.partner_rooms",
+      "kind": "reads_writes",
+      "subtype": "writes",
+      "from": {
+        "system": "crm",
+        "domain": "crm.surface.api-access-token-identify"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.entity.partner_rooms"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.crm.surface.api-access-token-messages.crm.entity.partner_rooms",
+      "kind": "reads_writes",
+      "subtype": "writes",
+      "from": {
+        "system": "crm",
+        "domain": "crm.surface.api-access-token-messages"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.entity.partner_rooms"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.crm.surface.api-access-token-next-steps-stepid.crm.entity.partner_rooms",
+      "kind": "reads_writes",
+      "subtype": "writes",
+      "from": {
+        "system": "crm",
+        "domain": "crm.surface.api-access-token-next-steps-stepid"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.entity.partner_rooms"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.crm.surface.api-access-token-sign.crm.entity.partner_rooms",
+      "kind": "reads_writes",
+      "subtype": "writes",
+      "from": {
+        "system": "crm",
+        "domain": "crm.surface.api-access-token-sign"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.entity.partner_rooms"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.crm.surface.api-access-token-sign-requestid-doc.crm.entity.partner_rooms",
+      "kind": "reads_writes",
+      "subtype": "writes",
+      "from": {
+        "system": "crm",
+        "domain": "crm.surface.api-access-token-sign-requestid-doc"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.entity.partner_rooms"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.crm.surface.api-access-token-unlock.crm.entity.partner_rooms",
+      "kind": "reads_writes",
+      "subtype": "writes",
+      "from": {
+        "system": "crm",
+        "domain": "crm.surface.api-access-token-unlock"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.entity.partner_rooms"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.crm.surface.api-access-token-upload.crm.entity.partner_rooms",
+      "kind": "reads_writes",
+      "subtype": "writes",
+      "from": {
+        "system": "crm",
+        "domain": "crm.surface.api-access-token-upload"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.entity.partner_rooms"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.crm.surface.api-capture-projects.crm.entity.projects",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "crm",
+        "domain": "crm.surface.api-capture-projects"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.entity.projects"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.crm.surface.api-contact-logo-contactid.crm.entity.contacts",
+      "kind": "reads_writes",
+      "subtype": "writes",
+      "from": {
+        "system": "crm",
+        "domain": "crm.surface.api-contact-logo-contactid"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.entity.contacts"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.crm.surface.api-cron-reminders.crm.entity.reminders",
+      "kind": "reads_writes",
+      "subtype": "writes",
+      "from": {
+        "system": "crm",
+        "domain": "crm.surface.api-cron-reminders"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.entity.reminders"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.crm.surface.api-email-attachments-attachmentid.crm.entity.email_threads",
+      "kind": "reads_writes",
+      "subtype": "writes",
+      "from": {
+        "system": "crm",
+        "domain": "crm.surface.api-email-attachments-attachmentid"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.entity.email_threads"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.crm.surface.api-export-contacts.crm.entity.contacts",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "crm",
+        "domain": "crm.surface.api-export-contacts"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.entity.contacts"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.crm.surface.api-export-projects.crm.entity.projects",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "crm",
+        "domain": "crm.surface.api-export-projects"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.entity.projects"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.crm.surface.api-materials-id-view.crm.entity.projects",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "crm",
+        "domain": "crm.surface.api-materials-id-view"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.entity.projects"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.crm.surface.api-mcp.crm.entity.mcp_oauth_clients",
+      "kind": "reads_writes",
+      "subtype": "writes",
+      "from": {
+        "system": "crm",
+        "domain": "crm.surface.api-mcp"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.entity.mcp_oauth_clients"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.crm.surface.api-mcp-oauth-authorize.crm.entity.mcp_oauth_clients",
+      "kind": "reads_writes",
+      "subtype": "writes",
+      "from": {
+        "system": "crm",
+        "domain": "crm.surface.api-mcp-oauth-authorize"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.entity.mcp_oauth_clients"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.crm.surface.api-mcp-oauth-register.crm.entity.mcp_oauth_clients",
+      "kind": "reads_writes",
+      "subtype": "writes",
+      "from": {
+        "system": "crm",
+        "domain": "crm.surface.api-mcp-oauth-register"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.entity.mcp_oauth_clients"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.crm.surface.api-mcp-oauth-token.crm.entity.mcp_oauth_clients",
+      "kind": "reads_writes",
+      "subtype": "writes",
+      "from": {
+        "system": "crm",
+        "domain": "crm.surface.api-mcp-oauth-token"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.entity.mcp_oauth_clients"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.crm.surface.api-meetings-id-notes.crm.entity.meetings",
+      "kind": "reads_writes",
+      "subtype": "writes",
+      "from": {
+        "system": "crm",
+        "domain": "crm.surface.api-meetings-id-notes"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.entity.meetings"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.crm.surface.api-overlord-sync.crm.entity.overlord_tasks",
+      "kind": "reads_writes",
+      "subtype": "writes",
+      "from": {
+        "system": "crm",
+        "domain": "crm.surface.api-overlord-sync"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.entity.overlord_tasks"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.crm.surface.api-research-id.crm.entity.research_notes",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "crm",
+        "domain": "crm.surface.api-research-id"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.entity.research_notes"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.crm.surface.api-research-sync.crm.entity.research_notes",
+      "kind": "reads_writes",
+      "subtype": "writes",
+      "from": {
+        "system": "crm",
+        "domain": "crm.surface.api-research-sync"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.entity.research_notes"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.crm.surface.api-room-hero-roomid.crm.entity.partner_rooms",
+      "kind": "reads_writes",
+      "subtype": "writes",
+      "from": {
+        "system": "crm",
+        "domain": "crm.surface.api-room-hero-roomid"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.entity.partner_rooms"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.crm.surface.api-room-items-roomid.crm.entity.partner_rooms",
+      "kind": "reads_writes",
+      "subtype": "writes",
+      "from": {
+        "system": "crm",
+        "domain": "crm.surface.api-room-items-roomid"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.entity.partner_rooms"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.crm.surface.api-voice-recording-id.crm.entity.meetings",
+      "kind": "reads_writes",
+      "subtype": "writes",
+      "from": {
+        "system": "crm",
+        "domain": "crm.surface.api-voice-recording-id"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.entity.meetings"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.channel-init.bookings",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.channel-init"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.bookings"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.channel-init.channels",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.channel-init"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.channels"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.internal-data-deletion.conversations",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.internal-data-deletion"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.conversations"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.internal-data-deletion.guests",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.internal-data-deletion"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.guests"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.internal-data-deletion.messages",
+      "kind": "reads_writes",
+      "subtype": "writes",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.internal-data-deletion"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.messages"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-admin-bookings.booking_lines",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-admin-bookings"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.booking_lines"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-admin-bookings.booking_refunds",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-admin-bookings"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.booking_refunds"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-admin-bookings.bookings",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-admin-bookings"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.bookings"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-admin-bookings.guests",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-admin-bookings"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.guests"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-admin-bookings.invoices",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-admin-bookings"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.invoices"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-admin-bookings.payments",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-admin-bookings"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.payments"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-admin.tenants",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-admin"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.tenants"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-admin.users",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-admin"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.users"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-auth.onboarding_sessions",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-auth"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.onboarding_sessions"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-auth.onboarding_tokens",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-auth"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.onboarding_tokens"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-auth.properties",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-auth"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.properties"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-auth.users",
+      "kind": "reads_writes",
+      "subtype": "writes",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-auth"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.users"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-availability.availability",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-availability"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.availability"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-bookings.bookings",
+      "kind": "reads_writes",
+      "subtype": "writes",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-bookings"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.bookings"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-bookings.guests",
+      "kind": "reads_writes",
+      "subtype": "writes",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-bookings"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.guests"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-cancellations.cancellation_exceptions",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-cancellations"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.cancellation_exceptions"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-channel-reservations.booking_lines",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-channel-reservations"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.booking_lines"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-channel-reservations.bookings",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-channel-reservations"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.bookings"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-channel-reservations.channels",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-channel-reservations"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.channels"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-channel-reservations.guests",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-channel-reservations"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.guests"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-channel-reservations.properties",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-channel-reservations"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.properties"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-channel-reservations.rooms",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-channel-reservations"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.rooms"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-channels.branded_page_requests",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-channels"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.branded_page_requests"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-channels.channel_outbox",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-channels"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.channel_outbox"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-channels.channel_sync_log",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-channels"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.channel_sync_log"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-channels.properties",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-channels"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.properties"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-discount-codes.discount_codes",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-discount-codes"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.discount_codes"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-experiences.experience_bookings",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-experiences"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.experience_bookings"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-experiences.experiences",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-experiences"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.experiences"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-guests.guests",
+      "kind": "reads_writes",
+      "subtype": "writes",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-guests"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.guests"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-invoices.invoice_line_items",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-invoices"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.invoice_line_items"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-invoices.invoices",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-invoices"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.invoices"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-notification-settings.memberships",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-notification-settings"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.memberships"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-notification-settings.users",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-notification-settings"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.users"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-policies.policy_rules",
+      "kind": "reads_writes",
+      "subtype": "writes",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-policies"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.policy_rules"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-policies.properties",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-policies"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.properties"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-portal.booking_lines",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-portal"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.booking_lines"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-portal.bookings",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-portal"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.bookings"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-portal.folio_charges",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-portal"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.folio_charges"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-portal.folios",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-portal"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.folios"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-portal.guest_auto_login_tokens",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-portal"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.guest_auto_login_tokens"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-portal.guest_magic_links",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-portal"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.guest_magic_links"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-portal.guest_otp_tokens",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-portal"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.guest_otp_tokens"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-portal.guest_refresh_sessions",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-portal"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.guest_refresh_sessions"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-portal.guests",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-portal"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.guests"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-portal.payments",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-portal"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.payments"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-portal.properties",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-portal"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.properties"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-portal.rooms",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-portal"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.rooms"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-pricing-grid.season_ranges",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-pricing-grid"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.season_ranges"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-staff.audit_events",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-staff"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.audit_events"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-staff.auth_refresh_sessions",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-staff"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.auth_refresh_sessions"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-staff.billing_invoices",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-staff"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.billing_invoices"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-staff.bookings",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-staff"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.bookings"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-staff.channel_outbox",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-staff"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.channel_outbox"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-staff.channel_sync_log",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-staff"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.channel_sync_log"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-staff.channels",
+      "kind": "reads_writes",
+      "subtype": "writes",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-staff"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.channels"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-staff.event_outbox",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-staff"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.event_outbox"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-staff.inventory_items",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-staff"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.inventory_items"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-staff.memberships",
+      "kind": "reads_writes",
+      "subtype": "writes",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-staff"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.memberships"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-staff.occupancy_classes",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-staff"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.occupancy_classes"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-staff.occupancy_rates",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-staff"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.occupancy_rates"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-staff.onboarding_sessions",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-staff"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.onboarding_sessions"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-staff.onboarding_tokens",
+      "kind": "reads_writes",
+      "subtype": "writes",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-staff"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.onboarding_tokens"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-staff.payments",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-staff"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.payments"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-staff.pricing_rules",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-staff"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.pricing_rules"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-staff.properties",
+      "kind": "reads_writes",
+      "subtype": "writes",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-staff"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.properties"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-staff.rate_plans",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-staff"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.rate_plans"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-staff.reconciliation_queue",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-staff"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.reconciliation_queue"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-staff.review_decisions",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-staff"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.review_decisions"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-staff.room_types",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-staff"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.room_types"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-staff.rooms",
+      "kind": "reads_writes",
+      "subtype": "writes",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-staff"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.rooms"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-staff.season_ranges",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-staff"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.season_ranges"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-staff.seasons",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-staff"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.seasons"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-staff.subscription_plans",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-staff"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.subscription_plans"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-staff.subscriptions",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-staff"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.subscriptions"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-staff.tenants",
+      "kind": "reads_writes",
+      "subtype": "writes",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-staff"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.tenants"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-staff.users",
+      "kind": "reads_writes",
+      "subtype": "writes",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-staff"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.users"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-subscriptions.subscription_plans",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-subscriptions"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.subscription_plans"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-subscriptions.subscriptions",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-subscriptions"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.subscriptions"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "rw.scip.v1-tracking.onboarding_sessions",
+      "kind": "reads_writes",
+      "subtype": "reads",
+      "from": {
+        "system": "caney",
+        "domain": "caney.surface.scip.v1-tracking"
+      },
+      "to": {
+        "system": "caney",
+        "domain": "caney.entity.onboarding_sessions"
       },
       "contract_status": "live"
     },
@@ -3340,7 +10472,7 @@
       "contract_status": "live",
       "route": "POST /api/pms/webhook/caneyclouds (HMAC-SHA256)",
       "contract_ref": "VZ_Tourism_Project/docs/pms-integration/05-api/openapi.yaml",
-      "contract_hash": null,
+      "contract_hash": "a1368c6c786081d5",
       "breaks": [
         "VAV availability mirror goes stale",
         "overselling risk if ARI not synced",
@@ -3364,7 +10496,7 @@
       "contract_status": "live",
       "route": "VAV_SUPABASE_* service-role read",
       "contract_ref": "AGB-CRM/lib/platforms/status.server.ts",
-      "contract_hash": null,
+      "contract_hash": "03237aa50c3a4bab",
       "breaks": [
         "CRM platform status widget blanks",
         "research notes lose live VAV linkage"
@@ -3387,7 +10519,7 @@
       "contract_status": "live",
       "route": "posada onboarding intake (FF_ONBOARDING, dark behind flag)",
       "contract_ref": "AGB-CRM/lib/onboarding/intake-contract.ts",
-      "contract_hash": null,
+      "contract_hash": "abcd49ec168284a9",
       "breaks": [
         "new posadas don't provision in PMS",
         "operator live round-trip blocked until FF_ONBOARDING=1"
@@ -3410,7 +10542,7 @@
       "contract_status": "live",
       "route": "MCP client → CRM guest CRM tools",
       "contract_ref": "tour-pms-main/.../mcp_registry.py",
-      "contract_hash": null,
+      "contract_hash": "955f2d5676b486c4",
       "breaks": [
         "agent loses guest-history context",
         "duplicate contact creation"
@@ -3433,7 +10565,7 @@
       "contract_status": "live",
       "route": "POST /api/overlord/sync",
       "contract_ref": "AGB-CRM/docs/VAV-CaneyCloud-CRM-sync-status.md",
-      "contract_hash": null,
+      "contract_hash": "39cd6a19988fe47b",
       "breaks": [
         "portfolio status drifts from the real task board",
         "initiative/milestone nodes go stale"
@@ -3638,7 +10770,7 @@
       "contract_status": "live",
       "route": "GET /api/v1/platform/release-mode (X-Restaurant-Id)",
       "contract_ref": "caneycloud-restaurant/MODULE-INTEGRATION.md",
-      "contract_hash": null,
+      "contract_hash": "6b6c09ab07512d8d",
       "breaks": [
         "restaurant nav item disappears from CaneyCloud host",
         "tenant scoping (X-Restaurant-Id) breaks → cross-tenant leak",

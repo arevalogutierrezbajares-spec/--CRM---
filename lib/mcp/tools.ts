@@ -26,6 +26,8 @@ export const MCP_TOOL_NAMES = [
   "read_todo_board",
   "meeting_brief",
   "list_reminders",
+  // Living Brain rebuild-guard
+  "brain_search",
   // Write / upload
   "create_contact",
   "add_channel",

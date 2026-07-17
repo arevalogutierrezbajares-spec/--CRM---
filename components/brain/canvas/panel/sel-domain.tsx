@@ -30,20 +30,23 @@ export function SelDomain({ node }: { node: BrainNode }) {
   const { graph, actions } = useBrain();
   const accent = systemAccent(node.system);
   const cluster = isClusterNode(node);
+  const clusterKind = cluster && isClusterNode(node) ? node.clusterKind ?? "roadmap" : null;
 
-  // Cross-system interchanges whose endpoint matches this domain id.
-  const domainSlug = node.id.includes(".") ? node.id.split(".").slice(1).join(".") : node.id;
+  // Cross-system interchanges whose endpoint matches this domain id
+  // (full dotted id — artifact stores domain as full node id).
   const links = graph.edges.filter(
     (e) =>
       e.kind === "interchange" &&
-      ((e.from.system === node.system && e.from.domain === domainSlug) ||
-        (e.to.system === node.system && e.to.domain === domainSlug)),
+      (e.from.domain === node.id || e.to.domain === node.id),
   );
 
-  // Real surface (L3) children, if extracted; else fall back to node.surfaces.
+  // Real surface/entity (L3) children, if extracted; else fall back to node.surfaces.
   const surfaceNodes = childrenOf(graph, node.id).filter((n) => n.level === 3);
   const surfaceStrings = node.surfaces ?? [];
-  const fog = node.state === "needed" && surfaceNodes.length === 0 && surfaceStrings.length === 0;
+  const fog =
+    !cluster &&
+    surfaceNodes.length === 0 &&
+    surfaceStrings.length === 0;
 
   const fn = node.fn as Fn | null;
   const repoUrl = repoUrlFor(node.system, surfaceStrings[0] ?? null);
@@ -51,7 +54,15 @@ export function SelDomain({ node }: { node: BrainNode }) {
   return (
     <>
       <div className="d-head">
-        <span className="d-kind">{cluster ? "Roadmap cluster" : "Domain"}</span>
+        <span className="d-kind">
+          {clusterKind === "overflow"
+            ? "Overflow cluster"
+            : clusterKind === "portal"
+              ? "Portal"
+              : cluster
+                ? "Roadmap cluster"
+                : "Domain"}
+        </span>
         <h2 className="d-title">
           <span className="tdot" style={{ background: accent }} />
           {node.label}
@@ -84,10 +95,25 @@ export function SelDomain({ node }: { node: BrainNode }) {
       </div>
 
       <div className="d-scroll">
+        {/* Empty domain (no L3 yet) */}
+        {fog ? (
+          <section className="d-sec">
+            <h5>Surfaces</h5>
+            <p className="d-route" style={{ opacity: 0.7 }}>
+              No route/entity surfaces under this domain yet — fog of war. Search
+              the Brain or expand inventory after the next regen.
+            </p>
+          </section>
+        ) : null}
+
         {/* Cluster: list collapsed members */}
         {cluster && isClusterNode(node) ? (
           <section className="d-sec" style={{ borderBottom: "none" }}>
-            <h5>Roadmap · {node.clusterMembers.length} needed</h5>
+            <h5>
+              {clusterKind === "overflow"
+                ? `Hidden · ${node.clusterMembers.length} more`
+                : `Roadmap · ${node.clusterMembers.length} needed`}
+            </h5>
             <div className="mini">
               {node.clusterMembers.map((id) => {
                 const m = nodeById(graph, id);
@@ -142,7 +168,7 @@ export function SelDomain({ node }: { node: BrainNode }) {
                 <h5>Cross-system links · {links.length}</h5>
                 {links.map((e) => {
                   const planned = e.contract_status === "planned";
-                  const outward = e.from.system === node.system && e.from.domain === domainSlug;
+                  const outward = e.from.domain === node.id;
                   const other = outward ? e.to.system : e.from.system;
                   return (
                     <button

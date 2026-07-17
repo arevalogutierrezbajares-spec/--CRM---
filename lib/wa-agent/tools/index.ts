@@ -52,6 +52,7 @@ import { createStorefrontRequest } from "./create-storefront-request";
 import { listStorefrontQueue } from "./list-storefront-queue";
 import { generateStorefrontDraft } from "./generate-storefront-draft";
 import { getStorefrontPreviewLink } from "./get-storefront-preview-link";
+import { brainSearch } from "./brain-search";
 
 export const TOOLS: Record<string, ToolEntry> = {
   find_contact: findContact,
@@ -100,6 +101,8 @@ export const TOOLS: Record<string, ToolEntry> = {
   list_storefront_queue: listStorefrontQueue,
   generate_storefront_draft: generateStorefrontDraft,
   get_storefront_preview_link: getStorefrontPreviewLink,
+  // Living Brain — rebuild-guard (deterministic, no LLM)
+  brain_search: brainSearch,
 };
 
 export const TOOL_NAMES = Object.keys(TOOLS);

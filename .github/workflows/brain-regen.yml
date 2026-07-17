@@ -1,0 +1,105 @@
+# THE BRAIN — multi-repo structural graph regeneration.
+#
+# Derives lib/brain/generated/brain-graph.json from sibling source repos
+# (VAV, CaneyCloud, AGB-CRM, restaurants) with ZERO LLM calls.
+# Commits the artifact when it changes so /brain stays ≤1 commit behind.
+#
+# Secrets (prefer one org token with read access to all three sibling repos):
+#   BRAIN_MULTI_REPO_TOKEN  — preferred (read-only)
+#   CANEY_REPO_TOKEN        — fallback for Caney (existing scip job)
+#   VAV_REPO_TOKEN          — optional override for VAV
+#   RESTAURANTS_REPO_TOKEN  — optional override for restaurants
+#
+# Infinite-loop guard: skips when the actor is brain-bot.
+
+name: brain-regen
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    # Daily 07:00 UTC — catches sibling-repo deploys that don't touch CRM
+    - cron: "0 7 * * *"
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - "lib/**"
+      - "db/**"
+      - "scripts/brain/**"
+      - "package.json"
+      - ".github/workflows/brain-regen.yml"
+      # Do NOT path-filter only brain-graph.json or we loop forever
+
+permissions:
+  contents: write
+
+concurrency:
+  group: brain-regen
+  cancel-in-progress: true
+
+jobs:
+  regen:
+    if: github.actor != 'brain-bot'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout AGB-CRM
+        uses: actions/checkout@v4
+        with:
+          path: agb-crm
+          token: ${{ secrets.BRAIN_MULTI_REPO_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Checkout VAV
+        uses: actions/checkout@v4
+        with:
+          repository: arevalogutierrezbajares-spec/VZ_Tourism_Project
+          token: ${{ secrets.BRAIN_MULTI_REPO_TOKEN || secrets.VAV_REPO_TOKEN || secrets.CANEY_REPO_TOKEN }}
+          path: vav
+        continue-on-error: true
+
+      - name: Checkout CaneyCloud
+        uses: actions/checkout@v4
+        with:
+          repository: arevalogutierrezbajares-spec/cloud-pms-main
+          token: ${{ secrets.BRAIN_MULTI_REPO_TOKEN || secrets.CANEY_REPO_TOKEN }}
+          path: caney
+        continue-on-error: true
+
+      - name: Checkout Caney Restaurants
+        uses: actions/checkout@v4
+        with:
+          repository: arevalogutierrezbajares-spec/caneycloud-restaurant
+          token: ${{ secrets.BRAIN_MULTI_REPO_TOKEN || secrets.RESTAURANTS_REPO_TOKEN || secrets.CANEY_REPO_TOKEN }}
+          path: restaurants
+        continue-on-error: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install deps
+        working-directory: agb-crm
+        run: npm i -g pnpm && pnpm install --frozen-lockfile
+
+      - name: Build brain graph (deterministic, no LLM)
+        working-directory: agb-crm
+        env:
+          BRAIN_ROOT_CRM: ${{ github.workspace }}/agb-crm
+          BRAIN_ROOT_VAV: ${{ github.workspace }}/vav
+          BRAIN_ROOT_CANEY: ${{ github.workspace }}/caney
+          BRAIN_ROOT_RESTAURANTS: ${{ github.workspace }}/restaurants
+          # Use committed SCIP report for precise Caney edges (no 29MB index)
+          BRAIN_SCIP: "1"
+        run: pnpm brain:build ci
+
+      - name: Commit graph if changed
+        working-directory: agb-crm
+        run: |
+          git config user.name "brain-bot"
+          git config user.email "brain-bot@users.noreply.github.com"
+          git add lib/brain/generated/brain-graph.json lib/brain/generated/snapshots/ || true
+          if git diff --cached --quiet; then
+            echo "brain-graph unchanged — nothing to commit"
+          else
+            git commit -m "chore(brain): regenerate portfolio graph [skip ci]"
+            git push
+          fi

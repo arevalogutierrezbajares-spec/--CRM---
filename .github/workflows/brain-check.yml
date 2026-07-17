@@ -1,0 +1,63 @@
+# THE BRAIN — PR staleness gate.
+#
+# Fails when lib/brain/generated/brain-graph.json is older than --max-age days
+# OR (when sibling checkouts succeed) when recorded SHAs drift from live HEADs.
+#
+# When sibling tokens are missing, SHA checks are skipped (graceful) but
+# --max-age still fails a long-stale committed artifact.
+
+name: brain-check
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout AGB-CRM
+        uses: actions/checkout@v4
+        with:
+          path: agb-crm
+
+      - name: Checkout VAV (optional)
+        uses: actions/checkout@v4
+        with:
+          repository: arevalogutierrezbajares-spec/VZ_Tourism_Project
+          token: ${{ secrets.BRAIN_MULTI_REPO_TOKEN || secrets.VAV_REPO_TOKEN || secrets.CANEY_REPO_TOKEN }}
+          path: vav
+        continue-on-error: true
+
+      - name: Checkout CaneyCloud (optional)
+        uses: actions/checkout@v4
+        with:
+          repository: arevalogutierrezbajares-spec/cloud-pms-main
+          token: ${{ secrets.BRAIN_MULTI_REPO_TOKEN || secrets.CANEY_REPO_TOKEN }}
+          path: caney
+        continue-on-error: true
+
+      - name: Checkout Restaurants (optional)
+        uses: actions/checkout@v4
+        with:
+          repository: arevalogutierrezbajares-spec/caneycloud-restaurant
+          token: ${{ secrets.BRAIN_MULTI_REPO_TOKEN || secrets.RESTAURANTS_REPO_TOKEN || secrets.CANEY_REPO_TOKEN }}
+          path: restaurants
+        continue-on-error: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Freshness check
+        working-directory: agb-crm
+        env:
+          BRAIN_ROOT_CRM: ${{ github.workspace }}/agb-crm
+          BRAIN_ROOT_VAV: ${{ github.workspace }}/vav
+          BRAIN_ROOT_CANEY: ${{ github.workspace }}/caney
+          BRAIN_ROOT_RESTAURANTS: ${{ github.workspace }}/restaurants
+        run: node scripts/brain/check-staleness.mjs --max-age 14

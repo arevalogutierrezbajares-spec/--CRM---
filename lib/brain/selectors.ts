@@ -47,17 +47,29 @@ export interface BreadcrumbItem {
   level: NodeLevel;
 }
 
-/** A synthesized roadmap-cluster pseudo-node (FR-NAV-7). Not in the artifact. */
+/** Synthetic cluster kinds: roadmap (needed) or overflow (NODE_CAP rest). */
+export type ClusterKind = "roadmap" | "overflow" | "portal";
+
+/** A synthesized cluster / portal pseudo-node. Not in the artifact. */
 export interface ClusterNode extends BrainNode {
   /** Marks this as a synthetic cluster — renderer draws the hatched variant. */
   isCluster: true;
-  /** Real node ids collapsed inside this cluster. */
+  /** Real node ids collapsed inside this cluster (empty for portal). */
   clusterMembers: string[];
+  /** roadmap = needed siblings · overflow = cap remainder · portal = other system */
+  clusterKind?: ClusterKind;
+  /** Portal only: the remote system this interchange points to. */
+  portalSystem?: System;
 }
 
-/** Type guard for cluster pseudo-nodes. */
+/** Type guard for cluster / portal pseudo-nodes. */
 export function isClusterNode(n: BrainNode): n is ClusterNode {
   return (n as ClusterNode).isCluster === true;
+}
+
+/** Portal chip for L1 focus+context interchange threads. */
+export function isPortalNode(n: BrainNode): n is ClusterNode {
+  return isClusterNode(n) && n.clusterKind === "portal";
 }
 
 /** Direct children of a node id (by parentId). Pure, order = artifact order. */
@@ -182,6 +194,7 @@ export function clusterNeeded(
     summary: null,
     pos: first.pos,
     isCluster: true,
+    clusterKind: "roadmap",
     clusterMembers: needed.map((n) => n.id),
   };
   return [...kept, cluster];
@@ -190,6 +203,88 @@ export function clusterNeeded(
 /** Cap a node list to NODE_CAP, preserving order (NFR-SCALE-2). */
 export function capNodes<T>(nodes: T[], cap = NODE_CAP): T[] {
   return nodes.length <= cap ? nodes : nodes.slice(0, cap);
+}
+
+/**
+ * Cap siblings with an expandable overflow cluster (instead of silent drop).
+ * Priority ids (e.g. endpoints of reads_writes edges) are kept first so
+ * micro-wiring stays visible under dense domains.
+ */
+export function capWithOverflow(
+  siblings: BrainNode[],
+  parentId: string,
+  opts: {
+    cap?: number;
+    priorityIds?: Set<string>;
+    expanded?: boolean;
+  } = {},
+): BrainNode[] {
+  const cap = opts.cap ?? NODE_CAP;
+  if (opts.expanded || siblings.length <= cap) return siblings;
+
+  const priority = opts.priorityIds ?? new Set<string>();
+  const sorted = [...siblings].sort((a, b) => {
+    const ap = priority.has(a.id) ? 0 : 1;
+    const bp = priority.has(b.id) ? 0 : 1;
+    if (ap !== bp) return ap - bp;
+    // Prefer surfaces over entities for scannability when both unprioritized.
+    if (a.kind !== b.kind) {
+      if (a.kind === "surface") return -1;
+      if (b.kind === "surface") return 1;
+    }
+    return a.id.localeCompare(b.id);
+  });
+
+  // Leave one slot for the overflow chip.
+  const keep = Math.max(1, cap - 1);
+  const kept = sorted.slice(0, keep);
+  const rest = sorted.slice(keep);
+  if (rest.length === 0) return kept;
+
+  const first = rest[0];
+  const cluster: ClusterNode = {
+    id: `${parentId}.__overflow`,
+    level: first.level,
+    kind: first.kind === "entity" ? "entity" : "surface",
+    parentId: first.parentId,
+    label: `+${rest.length} more`,
+    system: first.system,
+    source: first.source,
+    hosted_by: first.hosted_by,
+    fn: null,
+    state: "doing",
+    liveness: null,
+    size: "md",
+    owner: null,
+    branch: null,
+    last_commit: null,
+    docs_ref: null,
+    surfaces: [],
+    meta: null,
+    summary: null,
+    pos: first.pos,
+    isCluster: true,
+    clusterKind: "overflow",
+    clusterMembers: rest.map((n) => n.id),
+  };
+  return [...kept, cluster];
+}
+
+/** Node ids that participate in reads_writes / calls under a parent domain. */
+export function relationalPriorityIds(
+  graph: BrainGraph,
+  parentId: string,
+): Set<string> {
+  const childIds = new Set(
+    graph.nodes.filter((n) => n.parentId === parentId).map((n) => n.id),
+  );
+  const priority = new Set<string>();
+  for (const e of graph.edges) {
+    if (e.kind !== "reads_writes" && e.kind !== "calls") continue;
+    if (childIds.has(e.from.domain)) priority.add(e.from.domain);
+    if (childIds.has(e.to.domain)) priority.add(e.to.domain);
+  }
+  return priority;
 }
 
 /**
@@ -293,14 +388,61 @@ function layoutAround(
 }
 
 /**
+ * Portal pseudo-nodes for L1 focus+context: each other system that the focused
+ * system has a LIVE interchange with becomes a chip at the periphery so threads
+ * can anchor without requiring the remote domain to be on screen.
+ */
+function portalNodesForSystem(
+  graph: BrainGraph,
+  focusSystem: System,
+): ClusterNode[] {
+  const others = new Set<System>();
+  for (const e of graph.edges) {
+    if (e.kind !== "interchange" || e.contract_status !== "live") continue;
+    if (e.from.system === e.to.system) continue; // internal — no portal
+    if (e.from.system === focusSystem) others.add(e.to.system);
+    if (e.to.system === focusSystem) others.add(e.from.system);
+  }
+  return [...others].sort().map((sys) => {
+    const portal: ClusterNode = {
+      id: `${focusSystem}.__portal.${sys}`,
+      level: 2,
+      kind: "domain",
+      parentId: focusSystem,
+      label: `→ ${sys}`,
+      system: focusSystem,
+      source: "openapi",
+      hosted_by: null,
+      fn: null,
+      state: "doing",
+      liveness: null,
+      size: "sm",
+      owner: null,
+      branch: null,
+      last_commit: null,
+      docs_ref: null,
+      surfaces: [],
+      meta: `Cross-system link to ${sys}`,
+      summary: null,
+      pos: { x: 0, y: 0 },
+      isCluster: true,
+      clusterKind: "portal",
+      portalSystem: sys,
+      clusterMembers: [],
+    };
+    return portal;
+  });
+}
+
+/**
  * The set of nodes visible at the current view. PURE.
  *
  * - L0 system axis  → the system (L1) hub nodes (portfolio overview).
  * - L0 function axis → the function pseudo-set is handled by the renderer from
  *   graph.functions; here we return [] (functions aren't BrainNodes).
- * - L1 system axis  → the focused system's domains (clustered + capped).
+ * - L1 system axis  → the focused system's domains (clustered + capped) + portals.
  * - L1 function axis→ the focused function's member domains.
- * - L2             → the focused domain's surfaces.
+ * - L2             → the focused domain's surfaces (overflow-clustered).
  */
 export function visibleNodes(graph: BrainGraph, q: VisibleQuery): BrainNode[] {
   const expanded = new Set(q.expandedClusters ?? []);
@@ -325,7 +467,9 @@ export function visibleNodes(graph: BrainGraph, q: VisibleQuery): BrainNode[] {
       // No focused function → fall back to the function root (defensive).
       if (!q.focusFn) return capNodes(functionNodes(graph));
       const members = domainsOfFn(graph, q.focusFn);
-      return capNodes(layoutGrid(members));
+      return capWithOverflow(layoutGrid(members), `fn.${q.focusFn}`, {
+        expanded: expanded.has(`fn.${q.focusFn}.__overflow`),
+      });
     }
     if (!q.focusSystemId) return [];
     const systemHubId = `${q.focusSystemId}`;
@@ -338,17 +482,29 @@ export function visibleNodes(graph: BrainGraph, q: VisibleQuery): BrainNode[] {
       systemHubId,
       expanded.has(`${systemHubId}.__roadmap`),
     );
-    return layoutAround(hub, capNodes(clustered));
+    // Portals for cross-system interchange threads (focus+context).
+    const portals = portalNodesForSystem(graph, q.focusSystemId);
+    // Cap domains first (leave headroom for portals), then append portals.
+    const domainCap = Math.max(8, NODE_CAP - portals.length);
+    const cappedDomains = capWithOverflow(clustered, systemHubId, {
+      cap: domainCap,
+      expanded: expanded.has(`${systemHubId}.__overflow`),
+    });
+    return layoutAround(hub, [...cappedDomains, ...portals]);
   }
 
   // L2 (and L3 fallthrough): the focused domain AT CENTER + its surfaces fanned
-  // around it (every L3 surface is authored at (0,0), so the ring layout is what
-  // stops them stacking into one pile).
+  // around it. Priority keeps reads_writes endpoints when capping; overflow
+  // cluster replaces silent truncation under full inventory.
   if (q.focusDomainId) {
     const domain = graph.nodes.find((n) => n.id === q.focusDomainId);
-    const surfaces = capNodes(
-      childrenOf(graph, q.focusDomainId).filter((n) => n.level === 3),
+    const children = childrenOf(graph, q.focusDomainId).filter(
+      (n) => n.level === 3,
     );
+    const surfaces = capWithOverflow(children, q.focusDomainId, {
+      priorityIds: relationalPriorityIds(graph, q.focusDomainId),
+      expanded: expanded.has(`${q.focusDomainId}.__overflow`),
+    });
     return layoutAround(domain, surfaces);
   }
   return [];
@@ -366,12 +522,35 @@ export function visibleNodes(graph: BrainGraph, q: VisibleQuery): BrainNode[] {
  * Both `visibleEdges` (membership filter) and every lens (RF edge mapping) go
  * through this one helper so the two can never disagree again (perf-04 dedup).
  */
+/**
+ * Resolve RF endpoints for an edge at a given altitude.
+ *
+ * Optional `focusSystem` (L1) rewrites the remote interchange endpoint to a
+ * portal chip id (`{focus}.__portal.{other}`) so threads can render without
+ * the remote domain being on screen.
+ */
 export function renderedEndpoints(
   e: BrainEdge,
   level: NodeLevel,
+  focusSystem?: System | null,
 ): { source: string; target: string } {
   if (e.kind === "interchange" && level === 0) {
     return { source: e.from.system, target: e.to.system };
+  }
+  if (e.kind === "interchange" && level === 1 && focusSystem) {
+    // Local domain stays; remote side becomes the portal chip.
+    if (e.from.system === focusSystem && e.to.system !== focusSystem) {
+      return {
+        source: e.from.domain,
+        target: `${focusSystem}.__portal.${e.to.system}`,
+      };
+    }
+    if (e.to.system === focusSystem && e.from.system !== focusSystem) {
+      return {
+        source: `${focusSystem}.__portal.${e.from.system}`,
+        target: e.to.domain,
+      };
+    }
   }
   return { source: e.from.domain, target: e.to.domain };
 }
@@ -408,9 +587,14 @@ export function visibleEdges(graph: BrainGraph, q: VisibleQuery): BrainEdge[] {
   if (q.axis === "function") return [];
 
   if (q.level === 0) {
-    // Only LIVE interchanges render as stations in v0 (planned excluded).
+    // LIVE cross-system interchanges only. Same-system (e.g. crm→crm overlord)
+    // would self-loop on the hub and get dropped by React Flow — exclude them.
+    // Planned edges stay off the station layer (panel lists them).
     return graph.edges.filter(
-      (e) => e.kind === "interchange" && e.contract_status === "live",
+      (e) =>
+        e.kind === "interchange" &&
+        e.contract_status === "live" &&
+        e.from.system !== e.to.system,
     );
   }
 
@@ -420,31 +604,63 @@ export function visibleEdges(graph: BrainGraph, q: VisibleQuery): BrainEdge[] {
 
   const out: BrainEdge[] = [];
 
-  // Hub→child spokes (the "linked when you zoom in" fan).
+  // Hub→child spokes (the "linked when you zoom in" fan). Skip portal chips —
+  // they get real interchange edges instead of structural contains.
   if (centerId && visibleIds.has(centerId)) {
     for (const n of visible) {
       if (n.id === centerId) continue;
+      if (isPortalNode(n)) continue;
       out.push(spokeEdge(centerId, n));
     }
   }
 
   // Real relational edges that span two on-screen nodes — cross-system
-  // interchanges, plus the micro-level reads_writes (route→table) and calls
-  // (service→service) links once the surface-edges extractor emits them
-  // (scripts/brain/extractors/surface-edges.mjs). Membership-checked through the
-  // SAME endpoint resolver the renderer uses, so nothing can dangle. This makes
-  // the canvas render real micro-links the instant the data lands — no further
-  // render work needed (see docs/brain-surface-edges-plan.md).
+  // interchanges (rewritten to portal chips at L1), plus micro-level
+  // reads_writes / calls. Membership-checked through the SAME endpoint
+  // resolver the renderer uses, so nothing can dangle.
   const RELATIONAL = new Set(["interchange", "reads_writes", "calls"]);
   for (const e of graph.edges) {
     if (!RELATIONAL.has(e.kind)) continue;
-    const { source, target } = renderedEndpoints(e, q.level);
+    // Planned interchanges only appear in the panel — portal chips are live-only,
+    // so rewriting a planned edge to a missing portal would dangle.
+    if (e.kind === "interchange" && e.contract_status !== "live") continue;
+    let { source, target } = renderedEndpoints(
+      e,
+      q.level,
+      q.focusSystemId ?? null,
+    );
+    // L1 interchange: if the local domain was capped off-screen, anchor the
+    // thread to the system hub so the portal still shows a real link.
+    if (
+      e.kind === "interchange" &&
+      q.level === 1 &&
+      centerId &&
+      visibleIds.has(centerId)
+    ) {
+      if (!visibleIds.has(source) && visibleIds.has(target)) source = centerId;
+      if (!visibleIds.has(target) && visibleIds.has(source)) target = centerId;
+    }
     if (
       source !== target &&
       visibleIds.has(source) &&
       visibleIds.has(target)
     ) {
-      out.push(e);
+      // When we rewrote endpoints for hub fallback, the RF mapper still uses
+      // renderedEndpoints — so push a thin clone with domain fields remapped
+      // to the actual RF source/target ids (portal/hub).
+      if (
+        e.kind === "interchange" &&
+        q.level === 1 &&
+        (source === centerId || target === centerId)
+      ) {
+        out.push({
+          ...e,
+          from: { ...e.from, domain: source },
+          to: { ...e.to, domain: target },
+        });
+      } else {
+        out.push(e);
+      }
     }
   }
 

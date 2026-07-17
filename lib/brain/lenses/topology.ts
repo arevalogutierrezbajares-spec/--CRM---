@@ -9,7 +9,11 @@
  */
 
 import type { BrainGraph } from "../types";
-import { isClusterNode, visibleNodes, type VisibleQuery } from "../selectors";
+import {
+  isClusterNode,
+  visibleNodes,
+  type VisibleQuery,
+} from "../selectors";
 import type { LensResult, RFNode } from "./types";
 import { nodeTypeFor } from "./navigation";
 import { mapEdges } from "./shared";
@@ -18,17 +22,25 @@ import { mapEdges } from "./shared";
 const NON_XLINK_EMPHASIS = 0.32;
 
 export function topologyLens(graph: BrainGraph, q: VisibleQuery): LensResult {
-  // A node "has an xlink" if it participates in any interchange edge endpoint.
+  // Systems + domains that own a live interchange (or are portal chips).
   const xlinkSystems = new Set<string>();
+  const xlinkDomains = new Set<string>();
   for (const e of graph.edges) {
-    if (e.kind === "interchange") {
-      xlinkSystems.add(e.from.system);
-      xlinkSystems.add(e.to.system);
-    }
+    if (e.kind !== "interchange" || e.contract_status === "planned") continue;
+    xlinkSystems.add(e.from.system);
+    xlinkSystems.add(e.to.system);
+    xlinkDomains.add(e.from.domain);
+    xlinkDomains.add(e.to.domain);
   }
 
   const nodes: RFNode[] = visibleNodes(graph, q).map((n) => {
-    const hasXlink = n.system != null && xlinkSystems.has(n.system);
+    const isPortal = isClusterNode(n) && n.clusterKind === "portal";
+    const hasXlink =
+      isPortal ||
+      (n.level <= 1 && n.system != null && xlinkSystems.has(n.system)) ||
+      xlinkDomains.has(n.id) ||
+      // Hub at L1 always stays lit (anchor for threads).
+      (q.level === 1 && n.id === q.focusSystemId);
     return {
       id: n.id,
       type: nodeTypeFor(n.level, isClusterNode(n)),
@@ -47,7 +59,8 @@ export function topologyLens(graph: BrainGraph, q: VisibleQuery): LensResult {
     graph,
     q,
     "topology",
-    (e) => e.kind !== "interchange",
+    // Dim structural spokes; keep interchanges + micro-wiring bright.
+    (e) => e.kind === "contains",
   );
 
   return { nodes, edges };

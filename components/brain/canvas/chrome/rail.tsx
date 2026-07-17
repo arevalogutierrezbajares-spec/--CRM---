@@ -51,8 +51,10 @@ const LENSES: LensDef[] = [
   { key: "navigation", label: "Navigation", icon: "🗺", sub: "drill the map", enabled: true },
   { key: "state", label: "State", icon: "🌳", sub: "built / wip / needed", enabled: true },
   { key: "function", label: "Function overlay", icon: "🗂", sub: "recolor by capability", enabled: true },
-  { key: "topology", label: "Topology", icon: "🚇", sub: "v1 — wiring", enabled: false, disabledHint: "Topology lens — coming in v1" },
-  { key: "liveness", label: "Liveness", icon: "🧠", sub: "v2 — health", enabled: false, disabledHint: "Liveness lens — coming in v2" },
+  // Topology is live: dims non-linked nodes, keeps interchange threads bright.
+  { key: "topology", label: "Topology", icon: "🚇", sub: "cross-system wiring", enabled: true },
+  // Liveness stays gated until runtime telemetry populates node.liveness.
+  { key: "liveness", label: "Liveness", icon: "🧠", sub: "v2 — telemetry", enabled: false, disabledHint: "Liveness lens — needs runtime telemetry (v2)" },
 ];
 
 export function Rail() {

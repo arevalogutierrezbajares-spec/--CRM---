@@ -24,12 +24,20 @@ export function mapEdges(
   dimFn: (e: BrainEdge) => boolean,
 ): RFEdge[] {
   return visibleEdges(graph, q).map((e) => {
-    const { source, target } = renderedEndpoints(e, q.level);
+    const { source, target } = renderedEndpoints(
+      e,
+      q.level,
+      q.focusSystemId ?? null,
+    );
+    // At L0, interchanges are subway stations. At L1+, they are bowed threads
+    // (spoke type) into portal chips — station pins only work at portfolio.
+    const type =
+      e.kind === "interchange" && q.level === 0 ? "station" : "spoke";
     return {
       id: e.id,
       source,
       target,
-      type: e.kind === "interchange" ? "station" : "spoke",
+      type,
       data: { edge: e, lens, dimmed: dimFn(e) },
     };
   });
