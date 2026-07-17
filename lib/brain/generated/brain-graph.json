@@ -1,10 +1,10 @@
 {
   "version": "1.1",
-  "generatedAt": "2026-07-17T07:14:02.427Z",
+  "generatedAt": "2026-07-17T07:14:35.581Z",
   "commit": {
     "vav": "2b53b2126",
     "caney": "b7ca5479",
-    "crm": "1a7de9e",
+    "crm": "c7803a0",
     "restaurants": "fa515d1",
     "academy": null
   },
@@ -12092,13 +12092,12 @@
         "domain": "vav.identity"
       },
       "purpose": "CRM reads VAV platform/user state via service-role for portfolio intelligence",
-      "health": "warn",
+      "health": "ok",
       "contract_status": "live",
       "route": "VAV_SUPABASE_* service-role read",
       "contract_ref": "AGB-CRM/lib/platforms/status.server.ts",
       "contract_hash": "e8e309880f216f17",
       "breaks": [
-        "contract changed (03237aa50c3a4bab → e8e309880f216f17)",
         "CRM platform status widget blanks",
         "research notes lose live VAV linkage"
       ]
