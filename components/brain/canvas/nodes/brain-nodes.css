@@ -33,6 +33,16 @@
   box-shadow: var(--shadow-med), var(--gleam);
 }
 
+/* Focused domain at L2 — optical center of the ring; no re-drill on click. */
+.brain-root .nd.center .chip {
+  border-color: var(--accent, var(--line-2));
+  box-shadow: var(--shadow-med), var(--gleam);
+  transform: scale(1.04);
+}
+.brain-root .nd.center:hover .chip {
+  transform: scale(1.04) translateY(-2px);
+}
+
 /* Status icon glyph — fixed width so chips align regardless of glyph. */
 .brain-root .nd .chip .si {
   font-family: var(--mono);

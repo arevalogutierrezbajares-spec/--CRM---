@@ -70,9 +70,20 @@ export default function HubNode({ data, selected }: NodeProps) {
   const pct = hubPercent(d);
   const glyph = STATE_GLYPH[node.state];
   const label = STATE_LABEL[node.state];
-  const isCenter = view.focusSystemId === node.id && view.level >= 1;
+  const isCenter =
+    (view.focusSystemId === node.id ||
+      (view.axis === "function" &&
+        view.focusFn != null &&
+        node.id === `fn.${view.focusFn}`)) &&
+    view.level >= 1;
 
   const drill = () => {
+    // Already the focused hub: select for the detail panel — do not re-drill
+    // (that would append a duplicate path segment and re-fit needlessly).
+    if (isCenter) {
+      actions.select(node.id);
+      return;
+    }
     // By-Function axis root → drill into a function (its member domains across
     // all systems). Otherwise L0 → L1: drill from a system hub into the system.
     if (view.axis === "function" && view.level === 0) {
@@ -110,7 +121,7 @@ export default function HubNode({ data, selected }: NodeProps) {
       onKeyDown={onKeyDown}
       aria-label={`${node.label} — ${label}, ${pct}% built${
         childCount ? `, contains ${childCount} domains` : ""
-      }. Drill in.`}
+      }. ${isCenter ? "Selected. Esc zooms out." : "Drill in."}`}
       style={
         {
           display: "flex",

@@ -160,6 +160,28 @@
   background: rgba(13, 15, 21, 0.55);
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
+  transition:
+    opacity 0.25s var(--ease),
+    color 0.15s var(--ease),
+    background-color 0.15s var(--ease),
+    transform 0.12s var(--ease),
+    border-color 0.15s var(--ease);
+}
+.brain-root .glass-back:hover {
+  color: var(--ink);
+  background: rgba(28, 27, 23, 0.75);
+  border-color: var(--line-2);
+}
+.brain-root .glass-back:active {
+  transform: scale(0.96);
+}
+@media (prefers-reduced-motion: reduce) {
+  .brain-root .glass-back {
+    transition: opacity 0.25s var(--ease);
+  }
+  .brain-root .glass-back:active {
+    transform: none;
+  }
 }
 .brain-root .glass-thread {
   background: rgba(13, 15, 21, 0.85);
@@ -359,6 +381,50 @@
   --xy-controls-button-color-hover-default: var(--ink);
   --xy-controls-button-border-color-default: var(--line);
   --xy-attribution-background-color-default: transparent;
+}
+
+/* Zoom controls — professional glass stack, ≥40px hit targets, clear of minimap */
+.brain-root .brain-zoom-controls {
+  margin: 0 14px 14px 0 !important;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--line-2);
+  box-shadow: var(--shadow-med), var(--gleam);
+  background: rgba(28, 27, 23, 0.72);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  backdrop-filter: blur(14px) saturate(160%);
+}
+.brain-root .brain-zoom-controls .react-flow__controls-button {
+  width: 40px;
+  height: 40px;
+  border-bottom: 1px solid var(--line) !important;
+  background: transparent !important;
+  transition:
+    background-color 0.15s var(--ease),
+    color 0.15s var(--ease),
+    transform 0.12s var(--ease);
+}
+.brain-root .brain-zoom-controls .react-flow__controls-button:last-child {
+  border-bottom: none !important;
+}
+.brain-root .brain-zoom-controls .react-flow__controls-button:hover {
+  background: var(--panel-s) !important;
+  color: var(--ink) !important;
+}
+.brain-root .brain-zoom-controls .react-flow__controls-button:active {
+  transform: scale(0.96);
+}
+.brain-root .brain-zoom-controls .react-flow__controls-button svg {
+  max-width: 14px;
+  max-height: 14px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .brain-root .brain-zoom-controls .react-flow__controls-button {
+    transition: none;
+  }
+  .brain-root .brain-zoom-controls .react-flow__controls-button:active {
+    transform: none;
+  }
 }
 
 /* Our custom nodes are bare wrappers — strip React Flow's default node chrome.

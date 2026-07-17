@@ -27,8 +27,10 @@ import "./brain-nodes.css";
 
 export default function DomainNode({ data, selected }: NodeProps) {
   const d = data as unknown as RFNodeData;
-  const { graph, actions } = useBrain();
+  const { graph, actions, view } = useBrain();
   const node = d.node;
+  const isFocus =
+    view.focusDomainId === node.id && view.level >= 2;
 
   // Interchange endpoints store full node ids (e.g. "crm.projects"), not slugs.
   const isXlink = graph.edges.some(
@@ -56,6 +58,11 @@ export default function DomainNode({ data, selected }: NodeProps) {
       : STATE_LABEL[node.state];
 
   const drill = () => {
+    // Focused center domain: open detail, don't re-drill (path duplicate + jolt).
+    if (isFocus) {
+      actions.select(node.id);
+      return;
+    }
     actions.drillInto({
       nodeId: node.id,
       level: 2,
@@ -73,7 +80,7 @@ export default function DomainNode({ data, selected }: NodeProps) {
   return (
     <button
       type="button"
-      className={`nd brain-spawn${selected ? " sel" : ""}`}
+      className={`nd brain-spawn${selected ? " sel" : ""}${isFocus ? " center" : ""}`}
       data-state={node.state}
       data-size={node.size}
       data-xlink={isXlink ? "1" : undefined}
@@ -90,7 +97,9 @@ export default function DomainNode({ data, selected }: NodeProps) {
           : emph?.kind === "orphan"
             ? ", blind spot — no mapped data-flow"
             : ""
-      }. ${surfaceCount} surfaces.`}
+      }. ${surfaceCount} surfaces. ${
+        isFocus ? "Selected. Esc zooms out." : "Drill in."
+      }`}
       style={
         {
           // --accent drives the chip border-color on hover + selection (brain.css).

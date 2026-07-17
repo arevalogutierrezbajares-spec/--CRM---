@@ -22,7 +22,14 @@
 import "@xyflow/react/dist/style.css";
 import "./brain.css";
 
-import { useCallback, useEffect, useMemo, useRef, type CSSProperties } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 import {
   Background,
   BackgroundVariant,
@@ -39,6 +46,12 @@ import {
 } from "@xyflow/react";
 import { useReducedMotion } from "framer-motion";
 import { resolveOverlaps } from "@/lib/brain/layout/resolve-overlaps";
+import {
+  BRAIN_MAX_ZOOM,
+  BRAIN_MIN_ZOOM,
+  brainFitViewOptions,
+  type BrainFitMode,
+} from "@/lib/brain/camera";
 
 import { graph as defaultGraph } from "@/lib/brain/data/graph";
 import type { BrainGraph } from "@/lib/brain/types";
@@ -138,6 +151,25 @@ export function CanvasInner() {
   const reduceMotion = useReducedMotion();
   const rf = useReactFlow();
   const graphWrapRef = useRef<HTMLDivElement>(null);
+  /** True after the user pans/zooms freehand — stop auto-refit from stealing framing. */
+  const userCamRef = useRef(false);
+  /** True while a programmatic fitView animation is in flight. */
+  const settlingRef = useRef(false);
+  const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const settleCamera = useCallback(
+    (mode: BrainFitMode = "layout", nodeCount = 0) => {
+      userCamRef.current = false;
+      settlingRef.current = true;
+      if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
+      const opts = brainFitViewOptions(mode, reduceMotion, nodeCount);
+      rf.fitView(opts);
+      settleTimerRef.current = setTimeout(() => {
+        settlingRef.current = false;
+      }, opts.duration + 80);
+    },
+    [rf, reduceMotion],
+  );
 
   // Re-derive the visible graph through the active lens. Pure + synchronous —
   // memoized so React Flow only re-renders when an input actually changes.
@@ -275,6 +307,8 @@ export function CanvasInner() {
 
   // Once React Flow has measured the chips, separate overlaps and do ONE fitView.
   // Retries if DOM dims are incomplete (font/paint race) — never stuck on seed.
+  // Double-rAF after position patch so fitView measures post-commit geometry
+  // (single rAF races React setState and leaves the graph optically off-center).
   useEffect(() => {
     if (!nodesInitialized || resolvedSigRef.current === layoutSig) return;
     const wrap = graphWrapRef.current;
@@ -283,6 +317,7 @@ export function CanvasInner() {
     let attempts = 0;
     const maxAttempts = 8;
     let raf = 0;
+    let raf2 = 0;
 
     const run = () => {
       if (cancelled) return;
@@ -332,29 +367,22 @@ export function CanvasInner() {
       setDisplayNodes((cur) =>
         cur.map((n) => (resolved[n.id] ? { ...n, position: resolved[n.id] } : n)),
       );
-      // Single camera settle after layout (no altitude race).
-      requestAnimationFrame(() => {
-        if (cancelled) return;
-        const pad = measured.length > 16 ? 0.14 : 0.1;
-        rf.fitView({
-          padding: pad,
-          maxZoom: 1.7,
-          duration: reduceMotion ? 0 : 420,
+      // Wait for React commit + browser layout before measuring for the camera.
+      raf = requestAnimationFrame(() => {
+        raf2 = requestAnimationFrame(() => {
+          if (cancelled) return;
+          settleCamera("layout", measured.length);
         });
-        if (wrap && !wrap.contains(document.activeElement)) {
-          wrap
-            .querySelector<HTMLElement>(".react-flow__node button")
-            ?.focus({ preventScroll: true });
-        }
       });
     };
     raf = requestAnimationFrame(run);
     return () => {
       cancelled = true;
       cancelAnimationFrame(raf);
+      cancelAnimationFrame(raf2);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodesInitialized, layoutSig, reduceMotion]);
+  }, [nodesInitialized, layoutSig, settleCamera]);
 
   // Esc: clear selection → go up. Don't steal from inputs/dialogs.
   useEffect(() => {
@@ -385,6 +413,29 @@ export function CanvasInner() {
     if (view.selection != null) actions.clear();
   }, [actions, view.selection]);
 
+  // Double-click empty canvas → re-center the full graph (professional map habit).
+  // Ignore double-clicks on nodes, controls, or other chrome buttons.
+  const onPaneDoubleClick = useCallback(
+    (e: ReactMouseEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (
+        t?.closest?.(
+          ".react-flow__node, .react-flow__controls, .react-flow__edge, button, a, input, textarea",
+        )
+      ) {
+        return;
+      }
+      e.preventDefault();
+      settleCamera("manual", displayNodes.length);
+    },
+    [settleCamera, displayNodes.length],
+  );
+
+  // Freehand pan/zoom marks the camera as user-owned so resize won't yank it.
+  const onMoveStart = useCallback(() => {
+    if (!settlingRef.current) userCamRef.current = true;
+  }, []);
+
   // Plain-language altitude for the screen-reader live region.
   const altitudeLabel =
     view.level === 0
@@ -393,27 +444,43 @@ export function CanvasInner() {
         : "Portfolio"
       : view.focusDomainId ?? view.focusSystemId ?? `Level ${view.level}`;
 
-  // Re-fit when the canvas itself resizes (the app sidebar collapses, the window
-  // resizes, the detail panel mounts/unmounts). Without this the graph drifts
-  // off-center with no recovery until the next drill (scale-05). Debounced via
-  // rAF so a drag-resize doesn't thrash fitView.
+  // Re-fit when the canvas itself resizes (app sidebar collapse, window resize).
+  // Skip while the user is free-framing — they can double-click or hit Controls
+  // fit to recover. Only auto-settle after a meaningful size change.
   useEffect(() => {
     const wrap = graphWrapRef.current;
     if (!wrap || typeof ResizeObserver === "undefined") return;
     let raf = 0;
+    let lastW = wrap.clientWidth;
+    let lastH = wrap.clientHeight;
     const ro = new ResizeObserver(() => {
       cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() =>
-        rf.fitView({ padding: 0.1, maxZoom: 1.7, duration: reduceMotion ? 0 : 240 }),
-      );
+      raf = requestAnimationFrame(() => {
+        const w = wrap.clientWidth;
+        const h = wrap.clientHeight;
+        const dw = Math.abs(w - lastW);
+        const dh = Math.abs(h - lastH);
+        lastW = w;
+        lastH = h;
+        // Ignore sub-pixel / scrollbar noise.
+        if (dw < 24 && dh < 24) return;
+        // Preserve intentional pan/zoom until the next drill (layout settle).
+        if (userCamRef.current) return;
+        settleCamera("resize", displayNodes.length);
+      });
     });
     ro.observe(wrap);
     return () => {
       cancelAnimationFrame(raf);
       ro.disconnect();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reduceMotion]);
+  }, [settleCamera, displayNodes.length]);
+
+  useEffect(() => {
+    return () => {
+      if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
+    };
+  }, []);
 
   // Edges are decorative for screen readers — React Flow otherwise exposes every
   // path as role="img" with a machine id label ("Edge from <id> to <id>"), so a
@@ -475,7 +542,7 @@ export function CanvasInner() {
           ref={graphWrapRef}
           tabIndex={-1}
           role="region"
-          aria-label="Architecture graph. Tab to nodes, Enter to drill, Esc to go back. Pinch or use zoom controls."
+          aria-label="Architecture graph. Tab to nodes, Enter to drill, Esc to go back. Pinch, scroll, or use zoom controls. Double-click empty space to re-center."
           style={{ position: "absolute", inset: 0, outline: "none" }}
         >
           <ReactFlow
@@ -486,9 +553,11 @@ export function CanvasInner() {
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             onPaneClick={onPaneClick}
+            onDoubleClick={onPaneDoubleClick}
+            onMoveStart={onMoveStart}
             fitView={false}
-            minZoom={0.2}
-            maxZoom={1.6}
+            minZoom={BRAIN_MIN_ZOOM}
+            maxZoom={BRAIN_MAX_ZOOM}
             proOptions={{ hideAttribution: true }}
             nodesDraggable={false}
             nodesConnectable={false}
@@ -497,6 +566,9 @@ export function CanvasInner() {
             disableKeyboardA11y
             elementsSelectable
             panOnScroll
+            zoomOnDoubleClick={false}
+            panOnDrag
+            selectionOnDrag={false}
             data-lens={view.lens}
           >
             <Background variant={BackgroundVariant.Dots} gap={42} size={1} />
@@ -506,6 +578,11 @@ export function CanvasInner() {
               showInteractive={false}
               position="bottom-right"
               aria-label="Zoom and fit controls"
+              fitViewOptions={brainFitViewOptions("manual", reduceMotion, displayNodes.length)}
+              onFitView={() => {
+                userCamRef.current = false;
+              }}
+              className="brain-zoom-controls"
             />
           </ReactFlow>
         </div>

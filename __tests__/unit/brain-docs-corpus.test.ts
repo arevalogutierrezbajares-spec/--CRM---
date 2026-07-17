@@ -125,8 +125,10 @@ symptoms: email sync, postmark, schema_migrations
         path: "docs/brain-ops.md",
       },
     ];
-    /** @type {Record<string, { summary: string|null, docs_ref: string, rank: number }>} */
-    const joins = {};
+    const joins: Record<
+      string,
+      { summary: string | null; docs_ref: string; rank: number }
+    > = {};
     for (const rec of docs) {
       const rank = docTypeJoinRank(rec.doc_type);
       if (rank <= 0) continue;
@@ -142,11 +144,18 @@ symptoms: email sync, postmark, schema_migrations
     expect(joins.crm.docs_ref).toBe("docs/brain-ops.md");
     expect(joins.crm.summary).toContain("operate Brain");
     // FM alone must not paint
-    const joinsFmOnly = {};
+    const joinsFmOnly: Record<
+      string,
+      { summary: string; docs_ref: string; rank: number }
+    > = {};
     for (const rec of docs.filter((d) => d.doc_type === "failure-mode")) {
       const rank = docTypeJoinRank(rec.doc_type);
       if (rank <= 0) continue;
-      joinsFmOnly[rec.brain_node] = { summary: rec.summary, docs_ref: rec.path, rank };
+      joinsFmOnly[rec.brain_node] = {
+        summary: rec.summary,
+        docs_ref: rec.path,
+        rank,
+      };
     }
     expect(joinsFmOnly.crm).toBeUndefined();
   });

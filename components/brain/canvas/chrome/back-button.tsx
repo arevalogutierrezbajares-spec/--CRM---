@@ -33,7 +33,8 @@ export function BackButton() {
         display: "flex",
         alignItems: "center",
         gap: 8,
-        padding: "6px 12px",
+        minHeight: 36,
+        padding: "6px 14px",
         borderRadius: 20,
         border: "1px solid var(--line-2)",
         fontFamily: "var(--mono)",
@@ -44,7 +45,6 @@ export function BackButton() {
         cursor: visible ? "pointer" : "default",
         opacity: visible ? 1 : 0,
         pointerEvents: visible ? "auto" : "none",
-        transition: "opacity .25s var(--ease)",
         boxShadow: "var(--shadow-low), var(--gleam)",
       }}
     >
