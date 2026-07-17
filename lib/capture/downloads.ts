@@ -52,7 +52,7 @@ export async function getHelperDownloadUrl(
   const { data, error } = await supabase.storage
     .from(DOWNLOADS_BUCKET)
     .createSignedUrl(release.objectPath, ttlSecs, {
-      download: "AGBCaptureHelper.zip",
+      download: "AGB-AI.zip",
     });
   if (error || !data?.signedUrl) return null;
   return { url: data.signedUrl, release };

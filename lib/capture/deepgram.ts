@@ -230,28 +230,50 @@ export async function transcribeDualChannelBytes(opts: {
   // Meetings default to diarize so multi-person room mixes get SPEAKER_xx labels
   // when local free worker is not used.
   const diarize = opts.diarize ?? !!opts.inPersonMeeting;
-  let resp: Response;
-  try {
-    resp = await fetch(
-      `https://api.deepgram.com/v1/listen?${deepgramParams({ diarize })}`,
-      {
+  // Node undici is happier with a real Buffer body than a bare Uint8Array for
+  // multi-MB POSTs (fewer flaky "fetch failed" / EPIPE on longish bodies).
+  const body =
+    typeof Buffer !== "undefined"
+      ? Buffer.from(opts.wav.buffer, opts.wav.byteOffset, opts.wav.byteLength)
+      : opts.wav;
+  const url = `https://api.deepgram.com/v1/listen?${deepgramParams({ diarize })}`;
+  // Transient TLS/EPIPE flakes on flaky networks — same class of failure the
+  // Mac Helper sees on chunk upload. Retry a few times before failing finalize.
+  const delaysMs = [0, 800, 2000, 5000];
+  let lastError = "unknown";
+  for (let attempt = 0; attempt < delaysMs.length; attempt++) {
+    if (delaysMs[attempt]! > 0) {
+      await new Promise((r) => setTimeout(r, delaysMs[attempt]));
+    }
+    let resp: Response;
+    try {
+      resp = await fetch(url, {
         method: "POST",
         headers: { Authorization: `Token ${key}`, "Content-Type": "audio/wav" },
-        body: opts.wav as unknown as BodyInit,
-      },
-    );
-  } catch (e) {
-    return { ok: false, error: `Deepgram unreachable: ${String(e)}` };
+        body: body as unknown as BodyInit,
+      });
+    } catch (e) {
+      lastError = `Deepgram unreachable: ${String(e)}`;
+      continue;
+    }
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => "");
+      // 5xx is worth retrying; 4xx (bad request / auth) is not.
+      if (resp.status >= 500) {
+        lastError = `Deepgram ${resp.status}: ${text.slice(0, 300)}`;
+        continue;
+      }
+      return { ok: false, error: `Deepgram ${resp.status}: ${text.slice(0, 300)}` };
+    }
+    const json = (await resp.json().catch(() => null)) as Parameters<
+      typeof parseDeepgram
+    >[0];
+    return parseDeepgram(json, opts.durationSecs, {
+      inPersonMeeting: opts.inPersonMeeting,
+      diarize,
+    });
   }
-  if (!resp.ok) {
-    const body = await resp.text().catch(() => "");
-    return { ok: false, error: `Deepgram ${resp.status}: ${body.slice(0, 300)}` };
-  }
-  const json = (await resp.json().catch(() => null)) as Parameters<typeof parseDeepgram>[0];
-  return parseDeepgram(json, opts.durationSecs, {
-    inPersonMeeting: opts.inPersonMeeting,
-    diarize,
-  });
+  return { ok: false, error: lastError };
 }
 
 /**

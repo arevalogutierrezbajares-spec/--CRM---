@@ -33,19 +33,19 @@ export function CallCaptureConfig({
       </p>
 
       {/* 1 — Download */}
-      <Step n={1} title="Download the Mac Helper">
+      <Step n={1} title="Download AGB AI (Mac Helper)">
         {download ? (
           <div className="space-y-2">
             <a
               href="/api/capture/download"
               className="inline-flex items-center gap-2 rounded-md bg-[var(--primary)] px-4 py-2 text-sm font-medium text-[var(--primary-foreground)] hover:opacity-90"
             >
-              <Download className="h-4 w-4" /> Download AGBCaptureHelper
+              <Download className="h-4 w-4" /> Download AGB AI
             </a>
             <p className="text-xs text-[var(--muted-foreground)]">
               Version {download.version} ·{" "}
               {(download.bytes / 1024 / 1024).toFixed(1)} MB · macOS 14+ (Apple
-              Silicon &amp; Intel).
+              Silicon &amp; Intel). Saves as <code>AGB-AI.zip</code>.
             </p>
           </div>
         ) : (
@@ -60,14 +60,15 @@ export function CallCaptureConfig({
       <Step n={2} title="Install & grant permissions (once)">
         <ol className="list-decimal space-y-2 pl-5 text-sm leading-relaxed">
           <li>
-            Unzip and move <strong>AGBCaptureHelper.app</strong> to your
-            Applications folder.
+            Unzip and move <strong>AGB AI.app</strong> to your Applications
+            folder (replace any older <code>AGBCaptureHelper.app</code> if
+            present).
           </li>
           <li>
             <strong>First open:</strong> right-click the app → <strong>Open</strong>{" "}
             → <strong>Open anyway</strong>. (It&apos;s internally signed, so macOS
             asks the first time.) It runs in the menu bar with a small floating
-            <em> AGB Capture</em> panel — no Dock icon.
+            panel — no Dock icon.
           </li>
           <li>
             Grant <strong>Microphone</strong> and{" "}

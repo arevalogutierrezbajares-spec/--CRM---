@@ -12,15 +12,44 @@
  * call fits. Dual-channel attribution lives in the transcript; playback is mono.
  */
 import "server-only";
-import lamejs from "@breezystack/lamejs";
+import { createRequire } from "node:module";
+import { readFileSync } from "node:fs";
+import * as lamejsNs from "@breezystack/lamejs";
 import { CAPTURE_SAMPLE_RATE } from "./constants";
 
-// The package's ESM build (what Next/vitest load) exposes Mp3Encoder on the
-// default export; guard against an extra interop wrapper just in case.
-const Mp3Encoder =
-  (lamejs as unknown as { Mp3Encoder?: typeof lamejs.Mp3Encoder }).Mp3Encoder ??
-  (lamejs as unknown as { default?: { Mp3Encoder: typeof lamejs.Mp3Encoder } }).default
-    ?.Mp3Encoder;
+// @breezystack/lamejs export shape varies by loader:
+//   - Next / node ESM: named + default both carry Mp3Encoder
+//   - tsx CJS interop: the package's IIFE "require" build exports nothing
+//     useful — fall back to evaluating the IIFE source (it assigns `lamejs`).
+type Mp3EncoderCtor = new (
+  channels: number,
+  sampleRate: number,
+  kbps: number,
+) => { encodeBuffer: (mono: Int16Array) => Uint8Array; flush: () => Uint8Array };
+type LameMod = { Mp3Encoder?: Mp3EncoderCtor; default?: LameMod };
+
+function resolveMp3Encoder(): Mp3EncoderCtor | undefined {
+  const root = lamejsNs as unknown as LameMod;
+  const fromNs = root.Mp3Encoder ?? root.default?.Mp3Encoder;
+  if (fromNs) return fromNs;
+  try {
+    const require = createRequire(import.meta.url);
+    const resolved = require.resolve("@breezystack/lamejs");
+    if (resolved.endsWith("iife.js") || resolved.endsWith("lamejs.iife.js")) {
+      const code = readFileSync(resolved, "utf8");
+      // IIFE file: `var lamejs = function (G1) { … return G1 }({});`
+      const lame = new Function(`${code}; return typeof lamejs !== "undefined" ? lamejs : null;`)() as
+        | LameMod
+        | null;
+      return lame?.Mp3Encoder ?? lame?.default?.Mp3Encoder;
+    }
+  } catch {
+    // keep undefined — throw below with a clear message
+  }
+  return undefined;
+}
+
+const Mp3Encoder = resolveMp3Encoder();
 
 if (!Mp3Encoder) {
   throw new Error(
@@ -38,7 +67,7 @@ export function estimatedMp3Bytes(durationSecs: number): number {
 }
 
 export class Mp3StreamEncoder {
-  private readonly enc: InstanceType<typeof lamejs.Mp3Encoder>;
+  private readonly enc: InstanceType<NonNullable<typeof Mp3Encoder>>;
   private readonly parts: Uint8Array[] = [];
   private total = 0;
 

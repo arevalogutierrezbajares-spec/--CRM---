@@ -29,7 +29,7 @@ async function main() {
 
   const bytes = readFileSync(zipPath);
   const sha256 = createHash("sha256").update(bytes).digest("hex");
-  const objectPath = `macos-helper/AGBCaptureHelper-${version}.zip`;
+  const objectPath = `macos-helper/AGB-AI-${version}.zip`;
 
   // Ensure the private bucket exists (idempotent).
   await supabase.storage.createBucket(DOWNLOADS_BUCKET, { public: false }).catch(() => {});
@@ -55,13 +55,26 @@ async function main() {
     .upload(HELPER_MANIFEST_PATH, Buffer.from(JSON.stringify(manifest, null, 2)), {
       contentType: "application/json",
       upsert: true,
+      cacheControl: "0",
     });
   if (man.error) {
     console.error("manifest upload failed:", man.error.message);
     process.exit(1);
   }
 
-  console.log(`✓ published Helper ${version} (${(bytes.length / 1024 / 1024).toFixed(1)} MB)`);
+  // Read-back so a silent CDN/stale miss can't leave cofounders on an old build.
+  const check = await supabase.storage.from(DOWNLOADS_BUCKET).download(HELPER_MANIFEST_PATH);
+  if (check.error || !check.data) {
+    console.error("manifest read-back failed:", check.error?.message ?? "empty");
+    process.exit(1);
+  }
+  const read = JSON.parse(await check.data.text()) as { version?: string; objectPath?: string };
+  if (read.version !== version || read.objectPath !== objectPath) {
+    console.error("manifest read-back mismatch:", read);
+    process.exit(1);
+  }
+
+  console.log(`✓ published AGB AI ${version} (${(bytes.length / 1024 / 1024).toFixed(1)} MB)`);
   console.log(`  object: ${DOWNLOADS_BUCKET}/${objectPath}`);
   console.log(`  sha256: ${sha256}`);
   console.log("  cofounders can now download it from Settings → Configurations → Call Capture.");

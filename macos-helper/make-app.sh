@@ -21,7 +21,8 @@ cd "$(dirname "$0")"
 APP_NAME="AGBCaptureHelper"
 DISPLAY_NAME="AGB AI"
 BUNDLE_ID="com.agb.capture-helper"
-VERSION="1.0.0"
+# Keep in sync with Sources/CaptureCore/AudioConstants.swift helperVersion.
+VERSION="1.1.0"
 APP_DIR="$PWD/$DISPLAY_NAME.app"
 # Remove legacy bundle name so we don't leave two helpers around.
 LEGACY_APP_DIR="$PWD/AGBCaptureHelper.app"
@@ -77,6 +78,7 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
     <key>CFBundleShortVersionString</key>     <string>$VERSION</string>
     <key>CFBundleVersion</key>                <string>$VERSION</string>
     <key>LSMinimumSystemVersion</key>         <string>14.0</string>
+    <key>LSUIElement</key>                    <true/>
     <key>NSMicrophoneUsageDescription</key>
     <string>AGB AI records your side of calls (with your explicit per-call consent) to file them into your CRM.</string>
     <key>NSAudioCaptureUsageDescription</key>

@@ -48,10 +48,13 @@ cd ~/AGB-CRM && bash scripts/e2e/make-call-audio.sh /tmp/call.wav   # synth bili
 Key Mac Helper files: `AudioEngine.swift` (capture: L=mic AVAudioEngine, R=ProcessAudioTap→SCStream fallback), `ProcessAudioTap.swift` (FaceTime fix), `LiveTranscriptStreamer.swift` (live captions), `CallEndMonitor.swift` (auto-end), `ControlWindow.swift` (floating button), `CaptureAPIClient.swift` + `UploadQueueWorker.swift` (upload). CRM: `lib/capture/*`, `app/api/capture/*`.
 
 ## Cofounder distribution
-- Page: **`/capture`** — download button, install/permission steps, token minting.
+- Page: **Settings → Configurations → Call Capture** — download button, install/permission steps, token minting. (Old `/capture` route retired into Settings.)
+- Product name: **AGB AI.app** (download file `AGB-AI.zip`). Binary id stays `com.agb.capture-helper` / `AGBCaptureHelper` for TCC continuity.
 - Publish a build for cofounders: `bash macos-helper/scripts/release.sh [version]` (build → sign → zip → upload to the `agb-downloads` bucket; the page serves it via a signed URL).
-- Cofounders: download → right-click Open (Gatekeeper, self-signed) → grant Mic + Screen&System-Audio Recording → mint a token at `/capture` → paste into the Helper's Configure… → record.
+- **Current published:** `1.1.0` (2026-07-16) — AGB AI rebrand, icon, intro cinema, `LSUIElement`, meeting multi-speaker path. Replaced stale `2026.06.11` `AGBCaptureHelper` zip that cofounders were still downloading.
+- Cofounders: download → unzip **AGB AI.app** → Applications → right-click Open (Gatekeeper, self-signed) → grant Mic + Screen&System-Audio Recording → mint a token in Settings → Call Capture → paste into Configure… → record.
 - ⚠ Each cofounder's machine grants permissions once. For TCC persistence across (rare) rebuilds on their machine they'd run `setup-signing.sh`, but since they download a stable binary they won't rebuild — a one-time grant is enough.
+- ⚠ **Upload SSL flakiness** on some networks (`bad MAC` / "secure connection cannot be made") — environmental; audio stays on disk and retries. Not a download-bucket issue.
 
 ## Test notes (add yours here)
 - 2026-06-11: WhatsApp/video both-sides capture ✅; live transcript ✅; FaceTime far-side pending a completed real-call test (process tap confirmed starting).

@@ -34,9 +34,9 @@ beforeEach(() => {
 });
 
 describe("[unit] transcribeWindowed — memory-bounded long-call transcription", () => {
-  it("splits chunks into windows bounded by TRANSCRIBE_WINDOW_BYTES (32 MB)", async () => {
-    // 40 chunks × 2 MB = 80 MB → 3 windows of ≤ 32 MB (16 + 16 + 8).
-    const chunks = Array.from({ length: 40 }, () => chunk(2 * 1024 * 1024));
+  it("splits chunks into windows bounded by TRANSCRIBE_WINDOW_BYTES (8 MB)", async () => {
+    // 20 chunks × 2 MB = 40 MB → 5 windows of ≤ 8 MB (4 + 4 + 4 + 4 + 4).
+    const chunks = Array.from({ length: 20 }, () => chunk(2 * 1024 * 1024));
 
     // Each window assembles to a WAV whose PCM = 60 s of audio (arbitrary,
     // constant so offset math is easy to assert).
@@ -62,16 +62,17 @@ describe("[unit] transcribeWindowed — memory-bounded long-call transcription",
     expect(out.ok).toBe(true);
     if (!out.ok) return;
 
-    // 3 windows → 3 assemble calls, 3 deepgram calls.
-    expect(assembleMock).toHaveBeenCalledTimes(3);
-    expect(transcribeBytesMock).toHaveBeenCalledTimes(3);
+    // 5 windows → 5 assemble calls, 5 deepgram calls.
+    expect(assembleMock).toHaveBeenCalledTimes(5);
+    expect(transcribeBytesMock).toHaveBeenCalledTimes(5);
 
-    // First assemble window got 16 chunks (16×2 MB = 32 MB exactly).
-    expect((assembleMock.mock.calls[0][0] as ChunkEntry[]).length).toBe(16);
+    // First assemble window got 4 chunks (4×2 MB = 8 MB exactly).
+    expect((assembleMock.mock.calls[0][0] as ChunkEntry[]).length).toBe(4);
   });
 
   it("offsets utterance timestamps by cumulative window duration", async () => {
-    const chunks = Array.from({ length: 32 }, () => chunk(2 * 1024 * 1024)); // 2 windows
+    // 8 chunks × 2 MB = 16 MB → 2 windows of 4 chunks under the 8 MB cap.
+    const chunks = Array.from({ length: 8 }, () => chunk(2 * 1024 * 1024));
     const oneMinPcm = 60 * BYTES_PER_SEC;
     assembleMock.mockResolvedValue({
       ok: true,
@@ -146,7 +147,7 @@ describe("[unit] transcribeWindowed — memory-bounded long-call transcription",
   });
 
   it("keeps zero-size-listing chunks bounded by count (nominal 2 MB each)", async () => {
-    // 20 chunks reported as size 0 → nominal 2 MB → 1 window holds 16, then 4.
+    // 20 chunks reported as size 0 → nominal 2 MB → 5 windows of 4 under the 8 MB cap.
     const chunks = Array.from({ length: 20 }, () => chunk(0));
     assembleMock.mockResolvedValue({
       ok: true,
@@ -160,6 +161,6 @@ describe("[unit] transcribeWindowed — memory-bounded long-call transcription",
 
     const out = await transcribeWindowed(chunks, FMT);
     expect(out.ok).toBe(true);
-    expect(assembleMock).toHaveBeenCalledTimes(2); // 16 + 4
+    expect(assembleMock).toHaveBeenCalledTimes(5); // 4+4+4+4+4
   });
 });

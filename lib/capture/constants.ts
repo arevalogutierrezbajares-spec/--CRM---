@@ -34,11 +34,14 @@ export const FINALIZE_LEASE_MINUTES = 20;
  * Max raw bytes assembled into RAM at once during transcription. The finalize
  * pipeline transcribes long calls in windows of ≤ this size instead of
  * buffering the whole call — peak RAM is one window, not the entire call, so
- * finalize can never OOM regardless of call length (a 77-min call is ~295 MB;
- * one window is ~32 MB). Chunks are 30 s ≈ 1.9 MB, so a window holds ~16
- * chunks ≈ 8 min.
+ * finalize can never OOM regardless of call length (a 77-min call is ~295 MB).
+ *
+ * Kept at 8 MB (~4×30 s chunks ≈ 2 min) rather than 32 MB: larger Deepgram
+ * request bodies (~12–15 MB+) hit intermittent TLS/EPIPE failures on flaky
+ * networks (the same class of SSL flake the Mac Helper sees on chunk upload).
+ * More windows = more Deepgram calls, but finalize completes reliably.
  */
-export const TRANSCRIBE_WINDOW_BYTES = 32 * 1024 * 1024;
+export const TRANSCRIBE_WINDOW_BYTES = 8 * 1024 * 1024;
 
 /**
  * Best-effort audio playback is stored only when the whole assembled WAV fits
