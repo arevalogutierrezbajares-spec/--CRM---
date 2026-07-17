@@ -1,25 +1,25 @@
 "use client";
 
 /**
- * THE BRAIN — left rail (FR-AXIS-1,2 · FR-LENS-1,2,5 · FR-PRESET-1,2).
+ * THE BRAIN — left rail (CRM-native chrome).
  *
- * The control surface. Sections:
- *  - View   : By System / By Function axis toggle      → actions.setAxis
- *  - Lenses : Navigation / State (active) + Topology / Liveness (disabled v0)
- *             + Function overlay                        → actions.setLens
- *  - Audience: Investor / Agent / Operator preset       → actions.setPreset
- *  - Legends: status double-encoding · system colors · the 7 function colors
- *             (default-collapsed; Insights lives under the same fold)
- *
- * Every control wires to a provider action; nothing here holds its own state
- * except the Legends open/closed toggle. Disabled lenses are real
- * <button disabled> with a tooltip explaining "v2" so the affordance is
- * discoverable but inert (degrade-safe).
+ * Search lives here (primary), not floating over the graph.
+ * Lucide icons · Inter section labels · collapsed legends.
  */
 
 import { useState } from "react";
+import {
+  Activity,
+  ChevronDown,
+  ChevronRight,
+  GitBranch,
+  Layers,
+  Map,
+  Network,
+  type LucideIcon,
+} from "lucide-react";
 import { useBrain } from "@/components/brain/canvas/graph-provider";
-import { SearchTrigger } from "@/components/brain/canvas/chrome/search-trigger";
+import { BrainSearch } from "@/components/brain/canvas/chrome/brain-search";
 import { Insights } from "@/components/brain/canvas/chrome/insights";
 import { getPreset, PRESET_LIST } from "@/lib/brain/presets";
 import { FUNCS, FN_COLOR } from "@/lib/brain/functions";
@@ -43,21 +43,49 @@ const STATE_VAR: Record<NodeState, string> = {
 interface LensDef {
   key: LensKey;
   label: string;
-  icon: string;
+  Icon: LucideIcon;
   sub: string;
   enabled: boolean;
-  /** Tooltip shown for disabled (scaffolded) lenses. */
   disabledHint?: string;
 }
 
 const LENSES: LensDef[] = [
-  { key: "navigation", label: "Navigation", icon: "🗺", sub: "drill the map", enabled: true },
-  { key: "state", label: "State", icon: "🌳", sub: "built / wip / needed", enabled: true },
-  { key: "function", label: "Function overlay", icon: "🗂", sub: "recolor by capability", enabled: true },
-  // Topology is live: dims non-linked nodes, keeps interchange threads bright.
-  { key: "topology", label: "Topology", icon: "🚇", sub: "cross-system wiring", enabled: true },
-  // Liveness stays gated until runtime telemetry populates node.liveness.
-  { key: "liveness", label: "Liveness", icon: "🧠", sub: "v2 — telemetry", enabled: false, disabledHint: "Liveness lens — needs runtime telemetry (v2)" },
+  {
+    key: "navigation",
+    label: "Navigation",
+    Icon: Map,
+    sub: "drill the map",
+    enabled: true,
+  },
+  {
+    key: "state",
+    label: "State",
+    Icon: GitBranch,
+    sub: "built / wip / needed",
+    enabled: true,
+  },
+  {
+    key: "function",
+    label: "Function overlay",
+    Icon: Layers,
+    sub: "recolor by capability",
+    enabled: true,
+  },
+  {
+    key: "topology",
+    label: "Topology",
+    Icon: Network,
+    sub: "cross-system wiring",
+    enabled: true,
+  },
+  {
+    key: "liveness",
+    label: "Liveness",
+    Icon: Activity,
+    sub: "v2 — telemetry",
+    enabled: false,
+    disabledHint: "Liveness lens — needs runtime telemetry (v2)",
+  },
 ];
 
 export function Rail() {
@@ -65,23 +93,9 @@ export function Rail() {
   const [legendsOpen, setLegendsOpen] = useState(false);
 
   return (
-    <aside
-      className="brain-rail"
-      aria-label="Brain controls"
-      style={{
-        flexShrink: 0,
-        height: "100%",
-        overflowY: "auto",
-        padding: "16px 13px",
-        borderRight: "1px solid var(--line)",
-        background:
-          "linear-gradient(180deg,rgba(255,255,255,.015),transparent 38%)",
-      }}
-    >
-      {/* ── Search (discoverable jump palette · also ⌘⇧K / `/`) ───────── */}
-      <SearchTrigger />
+    <aside className="brain-rail" aria-label="Brain controls">
+      <BrainSearch variant="rail" />
 
-      {/* ── View / axis ───────────────────────────────────────────────── */}
       <Section title="View">
         <Segmented
           ariaLabel="Reading axis"
@@ -94,11 +108,11 @@ export function Rail() {
         />
       </Section>
 
-      {/* ── Lenses ────────────────────────────────────────────────────── */}
       <Section title="Lenses">
-        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        <div className="brain-rail__stack">
           {LENSES.map((l) => {
             const active = view.lens === l.key;
+            const Icon = l.Icon;
             return (
               <button
                 key={l.key}
@@ -107,40 +121,14 @@ export function Rail() {
                 aria-pressed={active}
                 title={l.enabled ? l.sub : (l.disabledHint ?? l.sub)}
                 onClick={() => l.enabled && actions.setLens(l.key)}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 9,
-                  width: "100%",
-                  textAlign: "left",
-                  padding: "8px 9px",
-                  borderRadius: 9,
-                  border: `1px solid ${active ? "var(--line-2)" : "transparent"}`,
-                  background: active ? "var(--panel-s)" : "transparent",
-                  color: !l.enabled
-                    ? "var(--ink-faint)"
-                    : active
-                      ? "var(--ink)"
-                      : "var(--ink-dim)",
-                  cursor: l.enabled ? "pointer" : "not-allowed",
-                  opacity: l.enabled ? 1 : 0.5,
-                  transition: "background .18s var(--ease), color .18s var(--ease)",
-                }}
+                className={`brain-rail__lens${active ? " is-active" : ""}${
+                  !l.enabled ? " is-disabled" : ""
+                }`}
               >
-                <span aria-hidden="true" style={{ fontSize: 14, lineHeight: 1 }}>
-                  {l.icon}
-                </span>
-                <span style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
-                  <span style={{ fontSize: 12, fontWeight: 500 }}>{l.label}</span>
-                  <span
-                    style={{
-                      fontFamily: "var(--mono)",
-                      fontSize: 11,
-                      color: "var(--ink-faint)",
-                    }}
-                  >
-                    {l.sub}
-                  </span>
+                <Icon size={16} strokeWidth={2} aria-hidden />
+                <span className="brain-rail__lens-text">
+                  <span className="brain-rail__lens-label">{l.label}</span>
+                  <span className="brain-rail__lens-sub">{l.sub}</span>
                 </span>
               </button>
             );
@@ -148,56 +136,33 @@ export function Rail() {
         </div>
       </Section>
 
-      {/* ── Audience / preset ─────────────────────────────────────────── */}
       <Section title="Audience">
         <Segmented
           ariaLabel="Audience preset"
           options={PRESET_LIST.map((p) => ({ value: p.id, label: p.label }))}
           value={view.preset}
-          onChange={(v) => actions.setPreset(v as (typeof PRESET_LIST)[number]["id"])}
+          onChange={(v) =>
+            actions.setPreset(v as (typeof PRESET_LIST)[number]["id"])
+          }
         />
         {getPreset(view.preset).badge ? (
-          <p
-            style={{
-              margin: "6px 2px 0",
-              fontFamily: "var(--mono)",
-              fontSize: 11,
-              color: "var(--ink-faint)",
-              letterSpacing: "0.04em",
-            }}
-          >
-            {getPreset(view.preset).badge}
-          </p>
+          <p className="brain-rail__badge">{getPreset(view.preset).badge}</p>
         ) : null}
       </Section>
 
-      {/* ── Legends (default collapsed) + Insights ───────────────────── */}
-      <section style={{ marginBottom: 20 }}>
+      <section className="brain-rail__legends">
         <button
           type="button"
           aria-expanded={legendsOpen}
           onClick={() => setLegendsOpen((o) => !o)}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            width: "100%",
-            margin: "2px 0 9px",
-            padding: "2px 4px",
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            fontFamily: "var(--mono)",
-            fontSize: 11,
-            letterSpacing: ".14em",
-            textTransform: "uppercase",
-            color: "var(--ink-faint)",
-          }}
+          className="brain-rail__legends-toggle"
         >
           <span>Legends</span>
-          <span aria-hidden="true" style={{ fontSize: 10, opacity: 0.7 }}>
-            {legendsOpen ? "▾" : "▸"}
-          </span>
+          {legendsOpen ? (
+            <ChevronDown size={14} aria-hidden />
+          ) : (
+            <ChevronRight size={14} aria-hidden />
+          )}
         </button>
 
         {legendsOpen ? (
@@ -207,7 +172,7 @@ export function Rail() {
             </Section>
 
             <Section title="Status">
-              <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+              <div className="brain-rail__stack">
                 {(["done", "doing", "needed"] as NodeState[]).map((s) => (
                   <LegendRow
                     key={s}
@@ -216,28 +181,24 @@ export function Rail() {
                     label={STATE_LABEL[s]}
                   />
                 ))}
-                <LegendRow glyph="⇄" glyphColor="var(--warn)" label="CROSS-SYSTEM LINK" />
+                <LegendRow
+                  glyph="⇄"
+                  glyphColor="var(--warn)"
+                  label="CROSS-SYSTEM LINK"
+                />
               </div>
             </Section>
 
             <Section title="Systems">
-              <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+              <div className="brain-rail__stack">
                 {(Object.keys(SYSTEM_ACCENT) as System[]).map((sys) => (
-                  <div
-                    key={sys}
-                    style={{ display: "flex", alignItems: "center", gap: 8 }}
-                  >
+                  <div key={sys} className="brain-rail__swatch-row">
                     <span
-                      aria-hidden="true"
-                      style={{
-                        width: 10,
-                        height: 10,
-                        borderRadius: 3,
-                        background: SYSTEM_ACCENT[sys],
-                        flexShrink: 0,
-                      }}
+                      aria-hidden
+                      className="brain-rail__swatch"
+                      style={{ background: SYSTEM_ACCENT[sys] }}
                     />
-                    <span style={{ fontSize: 11, color: "var(--ink-dim)" }}>
+                    <span className="brain-rail__swatch-label">
                       {SYSTEM_LABEL[sys]}
                     </span>
                   </div>
@@ -246,25 +207,15 @@ export function Rail() {
             </Section>
 
             <Section title="Functions">
-              <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+              <div className="brain-rail__stack">
                 {FUNCS.map((f) => (
-                  <div
-                    key={f.id}
-                    style={{ display: "flex", alignItems: "center", gap: 8 }}
-                  >
+                  <div key={f.id} className="brain-rail__swatch-row">
                     <span
-                      aria-hidden="true"
-                      style={{
-                        width: 10,
-                        height: 10,
-                        borderRadius: 3,
-                        background: FN_COLOR[f.id],
-                        flexShrink: 0,
-                      }}
+                      aria-hidden
+                      className="brain-rail__swatch"
+                      style={{ background: FN_COLOR[f.id] }}
                     />
-                    <span style={{ fontSize: 11, color: "var(--ink-dim)" }}>
-                      {f.name}
-                    </span>
+                    <span className="brain-rail__swatch-label">{f.name}</span>
                   </div>
                 ))}
               </div>
@@ -276,8 +227,6 @@ export function Rail() {
   );
 }
 
-/* ── Building blocks ─────────────────────────────────────────────────── */
-
 function Section({
   title,
   children,
@@ -286,19 +235,8 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section style={{ marginBottom: 20 }}>
-      <h4
-        style={{
-          margin: "2px 4px 9px",
-          fontFamily: "var(--mono)",
-          fontSize: 11,
-          letterSpacing: ".14em",
-          textTransform: "uppercase",
-          color: "var(--ink-faint)",
-        }}
-      >
-        {title}
-      </h4>
+    <section className="brain-rail__section">
+      <h3 className="brain-rail__section-title">{title}</h3>
       {children}
     </section>
   );
@@ -316,41 +254,16 @@ function Segmented({
   onChange: (v: string) => void;
 }) {
   return (
-    <div
-      role="group"
-      aria-label={ariaLabel}
-      style={{
-        display: "flex",
-        gap: 3,
-        padding: 3,
-        borderRadius: 10,
-        background: "rgba(255,255,255,.035)",
-        border: "1px solid var(--line-2)",
-        boxShadow: "var(--gleam)",
-      }}
-    >
+    <div className="brain-rail__seg" role="group" aria-label={ariaLabel}>
       {options.map((o) => {
-        const active = o.value === value;
+        const active = value === o.value;
         return (
           <button
             key={o.value}
             type="button"
             aria-pressed={active}
             onClick={() => onChange(o.value)}
-            style={{
-              flex: 1,
-              padding: "5px 6px",
-              borderRadius: 7,
-              border: "none",
-              background: active ? "var(--panel-s)" : "transparent",
-              color: active ? "var(--ink)" : "var(--ink-dim)",
-              fontFamily: "var(--mono)",
-              fontSize: 11,
-              letterSpacing: ".03em",
-              textTransform: "uppercase",
-              cursor: "pointer",
-              transition: "background .18s var(--ease), color .18s var(--ease)",
-            }}
+            className={`brain-rail__seg-btn${active ? " is-active" : ""}`}
           >
             {o.label}
           </button>
@@ -370,31 +283,20 @@ function LegendRow({
   label: string;
 }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+    <div className="brain-rail__swatch-row">
       <span
-        aria-hidden="true"
+        aria-hidden
         style={{
-          width: 13,
+          width: 14,
           textAlign: "center",
+          color: glyphColor,
           fontFamily: "var(--mono)",
           fontSize: 11,
-          fontWeight: 600,
-          color: glyphColor,
-          flexShrink: 0,
         }}
       >
         {glyph}
       </span>
-      <span
-        style={{
-          fontFamily: "var(--mono)",
-          fontSize: 11,
-          letterSpacing: ".06em",
-          color: "var(--ink-dim)",
-        }}
-      >
-        {label}
-      </span>
+      <span className="brain-rail__swatch-label">{label}</span>
     </div>
   );
 }

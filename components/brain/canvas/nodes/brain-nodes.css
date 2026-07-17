@@ -48,8 +48,10 @@
   max-width: 220px;
 }
 .brain-root .nd .chip .t {
-  font-family: var(--mono);
+  /* Domain/system titles — Inter (CRM UI), not mono */
+  font-family: var(--body);
   font-size: var(--t-body);
+  font-weight: 500;
   color: var(--ink);
   white-space: nowrap;
   max-width: 160px;
@@ -124,7 +126,7 @@
   position: absolute;
   right: -7px;
   top: -7px;
-  font-size: 9px;
+  font-size: 11px;
   color: var(--warn);
   background: var(--bg);
   border: 1px solid var(--line-2);

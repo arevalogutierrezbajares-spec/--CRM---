@@ -6,6 +6,7 @@
  */
 
 import { useMemo } from "react";
+import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import { graph, isGenerated } from "@/lib/brain/data/graph";
 
 function ageLabel(iso: string, nowMs: number): { text: string; stale: boolean } {
@@ -46,14 +47,20 @@ export function FreshnessBadge() {
         borderRadius: 999,
         border: `1px solid ${stale ? "rgba(212,160,64,.45)" : "var(--line)"}`,
         background: stale ? "rgba(212,160,64,.08)" : "rgba(255,255,255,.03)",
-        fontFamily: "var(--font-mono, ui-monospace, monospace)",
-        fontSize: 10,
-        letterSpacing: "0.04em",
+        fontFamily: "var(--body)",
+        fontSize: 11,
+        letterSpacing: "0.02em",
         color: stale ? "var(--doing, #d4a040)" : "var(--ink-dim)",
         maxWidth: "100%",
       }}
     >
-      <span aria-hidden>{stale ? "⚠" : "◎"}</span>
+      <span aria-hidden style={{ display: "inline-flex" }}>
+        {stale ? (
+          <AlertTriangle size={12} strokeWidth={2} />
+        ) : (
+          <CheckCircle2 size={12} strokeWidth={2} />
+        )}
+      </span>
       <span>
         Graph {text}
         {!isGenerated ? " · SAMPLE" : ""}

@@ -74,7 +74,6 @@ import { ExternalsCluster } from "./chrome/externals-cluster";
 import { BrainCommandPalette } from "./chrome/command-palette";
 import { FreshnessBadge } from "./chrome/freshness-badge";
 import { CompletenessStrip } from "./chrome/completeness-strip";
-import { RebuildGuardCenter } from "./chrome/rebuild-guard-center";
 import { DetailPanel } from "./panel/detail-panel";
 import { EmptyState } from "./states/empty-state";
 
@@ -519,7 +518,6 @@ function CanvasInner() {
           <FreshnessBadge />
           <CompletenessStrip />
         </div>
-        <RebuildGuardCenter />
         <ExternalsCluster />
         <Minimap />
         <Coachmark />
