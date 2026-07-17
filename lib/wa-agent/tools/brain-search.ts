@@ -11,16 +11,19 @@ export const brainSearch: ToolEntry = {
     name: "brain_search",
     description:
       "Search the Living Brain portfolio map (VAV, CaneyCloud, AGB-CRM, Restaurants, Academy) " +
-      "for existing systems, domains, API surfaces, entities, or cross-system interchanges. " +
-      "Use BEFORE inventing a new route or capability. If matches is empty and safeToBuild is true, " +
-      "nothing similar exists in the graph. Returns ranked hits with id/kind/path — no AI cost.",
+      "for systems, domains, API surfaces, entities, cross-system interchanges (wires), " +
+      "and documentation (kind doc/adr — runbooks, ADRs, requirements). " +
+      "Use BEFORE inventing a new route or capability, and at the start of RCA. " +
+      "Hit kinds: system|domain|surface|entity|interchange|doc|adr. " +
+      "After a hit, call brain_neighborhood(id) then brain_doc_get for docs_ref paths. " +
+      "If matches is empty, verify synonyms/typos before building — do not invent surfaces. Deterministic, no AI cost.",
     input_schema: {
       type: "object",
       properties: {
         query: {
           type: "string",
           description:
-            "What to look for, e.g. 'booking webhook', '/api/holds', 'posada onboarding', 'ix1'.",
+            "What to look for, e.g. 'booking webhook', '/api/holds', 'posada onboarding', 'brain ops', 'ix3'.",
         },
         limit: {
           type: "number",
@@ -48,10 +51,17 @@ export const brainSearch: ToolEntry = {
         matchCount: result.matches.length,
         safeToBuild: result.safeToBuild,
         message: result.safeToBuild
-          ? `No match for "${query}" — safe to build (nothing similar in the Brain graph).`
-          : `Found ${result.matches.length} match(es) for "${query}". Reuse or extend before building new.`,
+          ? `No indexed match for "${query}" — verify before building (typos/synonyms may not appear).`
+          : `Found ${result.matches.length} match(es) for "${query}". Reuse or extend; call brain_neighborhood on architecture ids.`,
         matches: result.matches,
         graphGeneratedAt: graph.generatedAt,
+        nextSteps: result.safeToBuild
+          ? ["Verify manually", "Try alternate query tokens", "brain_freshness"]
+          : [
+              "brain_neighborhood on primary architecture id",
+              "brain_doc_get for doc/adr hits or docs_ref",
+              "brain_rca_pack for full investigation pack",
+            ],
       },
     };
   },

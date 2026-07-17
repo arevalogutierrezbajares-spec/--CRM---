@@ -53,6 +53,12 @@ import { listStorefrontQueue } from "./list-storefront-queue";
 import { generateStorefrontDraft } from "./generate-storefront-draft";
 import { getStorefrontPreviewLink } from "./get-storefront-preview-link";
 import { brainSearch } from "./brain-search";
+import { brainNeighborhood } from "./brain-neighborhood";
+import { brainDocGet } from "./brain-doc-get";
+import { brainFreshnessTool } from "./brain-freshness";
+import { brainRcaPack } from "./brain-rca-pack";
+import { brainRemediationGate } from "./brain-remediation-gate";
+import { brainCorrelateError } from "./brain-correlate-error";
 
 export const TOOLS: Record<string, ToolEntry> = {
   find_contact: findContact,
@@ -101,8 +107,14 @@ export const TOOLS: Record<string, ToolEntry> = {
   list_storefront_queue: listStorefrontQueue,
   generate_storefront_draft: generateStorefrontDraft,
   get_storefront_preview_link: getStorefrontPreviewLink,
-  // Living Brain — rebuild-guard (deterministic, no LLM)
+  // Living Brain — rebuild-guard + RCA tools (deterministic, no LLM)
   brain_search: brainSearch,
+  brain_neighborhood: brainNeighborhood,
+  brain_doc_get: brainDocGet,
+  brain_freshness: brainFreshnessTool,
+  brain_rca_pack: brainRcaPack,
+  brain_remediation_gate: brainRemediationGate,
+  brain_correlate_error: brainCorrelateError,
 };
 
 export const TOOL_NAMES = Object.keys(TOOLS);

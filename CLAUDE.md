@@ -35,21 +35,22 @@ pnpm brain:check     # fail if graph stale / SHA drift
 
 ## THE BRAIN + documentation (agents)
 
-The living architecture map lives at `/brain`. Structure and **markdown docs under `docs/**`** are derived into `lib/brain/generated/brain-graph.json` by `pnpm brain:build` (no LLM in the pipeline).
+See **[AGENTS.md](./AGENTS.md)** for Investigation / Remediation modes and tool table.
+
+The living architecture map lives at `/brain`. Structure and **markdown docs under `docs/`** are derived into `lib/brain/generated/brain-graph.json` by `pnpm brain:build` (no LLM in the pipeline).
 
 | Resource | Path |
 |----------|------|
 | Agent docs index | `docs/llms.txt` |
 | Ops runbook | `docs/brain-ops.md` |
-| Search API (pure) | `searchBrain()` in `lib/brain/search.ts` |
-| Doc frontmatter contract | `brain_node`, `type`, `summary`, `title`, `system` on markdown |
+| Pure APIs | `lib/brain/search.ts`, `neighborhood.ts`, `doc-get.ts`, `rca-pack.ts` |
+| Agent tools | `brain_search`, `brain_neighborhood`, `brain_doc_get`, `brain_freshness`, `brain_rca_pack`, `brain_remediation_gate`, `brain_correlate_error` |
 
-### RCA / “does it already exist?”
+### RCA (mandatory tool order)
 
-1. Call rebuild-guard search (`searchBrain(graph, query)` or the `/brain` search field). Hits may be `system` / `domain` / `surface` / `entity` / `interchange` / **`doc` / `adr`**.
-2. For doc hits, open `docs_ref` (repo-relative path). For architecture hits, use `summary` + `docs_ref` when present.
-3. Cross-system issues: inspect `interchange` edges and any `documents` edges linking runbooks/ADRs.
-4. Cite node ids and doc paths. If search is empty, **verify before building** (typos/synonyms may not appear)—do not invent surfaces.
+1. `brain_search` / `brain_rca_pack`
+2. `brain_neighborhood` on architecture ids
+3. `brain_doc_get` for docs
+4. Cite node ids + paths; verify before building if empty
 
-Prefer `docs/llms.txt` over freeform walking the whole tree when starting an investigation.
 

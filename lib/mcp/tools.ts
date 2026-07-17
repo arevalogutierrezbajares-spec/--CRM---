@@ -26,8 +26,14 @@ export const MCP_TOOL_NAMES = [
   "read_todo_board",
   "meeting_brief",
   "list_reminders",
-  // Living Brain rebuild-guard
+  // Living Brain rebuild-guard + RCA
   "brain_search",
+  "brain_neighborhood",
+  "brain_doc_get",
+  "brain_freshness",
+  "brain_rca_pack",
+  "brain_remediation_gate",
+  "brain_correlate_error",
   // Write / upload
   "create_contact",
   "add_channel",

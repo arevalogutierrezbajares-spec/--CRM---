@@ -40,17 +40,31 @@
 - [VAV ↔ CaneyCloud ↔ CRM sync status](VAV-CaneyCloud-CRM-sync-status.md)
 - [Integration close-loop checklist](checklists/INTEGRATION-CLOSE-LOOP-CRM-CC-VAV.md)
 
-## RCA / agent usage
+## RCA / agent tools
 
-When diagnosing an incident or “does this already exist?”:
+Skills: [investigate](skills/investigate.md) · [remediate](skills/remediate.md)
 
-1. Search the Brain (`/brain` rebuild-guard or `searchBrain(graph, query)`).
-2. Prefer hits of kind `doc` / `adr` and architecture nodes with `docs_ref` / `summary`.
-3. Open the linked markdown path under `docs/` (paths are stored on doc nodes as `docs_ref`).
-4. For cross-system issues, inspect interchange edges (kind `interchange`) and follow `documents` edges from related docs.
-5. Cite `brain_node` ids and doc paths in the write-up; do not invent surfaces that search returns as empty (verify before building).
+| Tool | Purpose |
+|------|---------|
+| `brain_search` | Locate systems, surfaces, wires, **docs/adr** |
+| `brain_neighborhood` | Blast radius + linked docs |
+| `brain_doc_get` | Read `docs/**` body safely |
+| `brain_freshness` | Graph age + SHAs |
+| `brain_rca_pack` | One-shot investigation pack |
+| `brain_remediation_gate` | Soft pre-PR citation/tests checklist |
+| `brain_correlate_error` | Offline route/error → node map |
+
+Failure-mode seeds: [docs/RCA/failure-modes/](RCA/failure-modes/)
+
+When diagnosing:
+
+1. `brain_search` / `brain_rca_pack`
+2. `brain_neighborhood` on architecture ids
+3. `brain_doc_get` for runbooks/ADRs/FMs
+4. Cite node ids + doc paths; never invent surfaces on empty search
 
 ## Corpus model (Phase 1)
+
 
 Markdown under `docs/**` is scanned on `pnpm brain:build`. Optional YAML frontmatter:
 
