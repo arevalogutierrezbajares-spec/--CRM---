@@ -94,7 +94,7 @@ export function Rail() {
 
   return (
     <aside className="brain-rail" aria-label="Brain controls">
-      <BrainSearch variant="rail" />
+      <BrainSearch />
 
       <Section title="View">
         <Segmented

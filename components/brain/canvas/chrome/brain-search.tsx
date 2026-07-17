@@ -3,8 +3,9 @@
 /**
  * THE BRAIN — unified rebuild-guard search (CRM-native).
  *
- * Primary: left rail field (never floating center of the graph).
- * Mobile / TopBar: focus via `brain:focus-search` event or variant="topbar".
+ * Primary: left rail field inside GraphProvider (never floating center).
+ * TopBar chip is a separate component (brain-topbar-actions) — it cannot
+ * call useBrain(); it only fires `brain:focus-search`.
  * One `/` handler. Lucide Search. Inter UI + mono paths only in hits.
  */
 
@@ -62,9 +63,7 @@ const KIND_META: Record<
   interchange: { label: "Wire", Icon: Cable },
 };
 
-type Variant = "rail" | "topbar";
-
-export function BrainSearch({ variant = "rail" }: { variant?: Variant }) {
+export function BrainSearch() {
   const { graph, view, actions } = useBrain();
   const inputRef = useRef<HTMLInputElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -94,7 +93,6 @@ export function BrainSearch({ variant = "rail" }: { variant?: Variant }) {
 
   // Single `/` handler for the brain map (only when not typing elsewhere).
   useEffect(() => {
-    if (variant !== "rail") return;
     function onSlash(e: globalThis.KeyboardEvent) {
       if (e.key !== "/" || e.metaKey || e.ctrlKey || e.altKey) return;
       const t = e.target as HTMLElement | null;
@@ -115,7 +113,7 @@ export function BrainSearch({ variant = "rail" }: { variant?: Variant }) {
     }
     window.addEventListener("keydown", onSlash, true);
     return () => window.removeEventListener("keydown", onSlash, true);
-  }, [variant]);
+  }, []);
 
   const result = useMemo(
     () => (query.trim() ? searchBrain(graph, query, 8) : null),
@@ -194,22 +192,6 @@ export function BrainSearch({ variant = "rail" }: { variant?: Variant }) {
   const showSafe = result && result.safeToBuild && query.trim().length >= 2;
   const showHits = result && result.matches.length > 0;
   const showPanel = focused || Boolean(query.trim()) || sheetOpen;
-
-  if (variant === "topbar") {
-    return (
-      <button
-        type="button"
-        className="brain-search-chip"
-        onClick={() => focusBrainSearch()}
-        aria-label="Search portfolio map"
-        title="Search map (/)"
-      >
-        <Search size={14} strokeWidth={2} aria-hidden />
-        <span className="brain-search-chip__label">Search map</span>
-        <kbd className="brain-search-chip__kbd">/</kbd>
-      </button>
-    );
-  }
 
   return (
     <div
