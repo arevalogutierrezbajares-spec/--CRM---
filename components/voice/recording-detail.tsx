@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -11,7 +11,9 @@ import {
   Clock,
   Headphones,
   Loader2,
+  Pause,
   Pencil,
+  Play,
   Trash2,
   X,
 } from "lucide-react";
@@ -72,18 +74,48 @@ const FLAG_COPY: Record<string, string> = {
     "The participants' side is near-silent — system audio may not have been captured.",
 };
 
-function extractClusters(utterances: Utterance[] | null): string[] {
+/** The diarization cluster id (SPEAKER_xx) an utterance belongs to, or null. */
+function clusterOf(u: Utterance): string | null {
+  if (u.diarizationId?.startsWith("SPEAKER_")) return u.diarizationId;
+  if (u.speaker.startsWith("SPEAKER_")) return u.speaker;
+  const m = (u.diarizationId ?? u.speaker).match(/(SPEAKER_\d+)/);
+  return m ? m[1] : null;
+}
+
+type ClusterInfo = {
+  id: string;
+  turns: number;
+  talkSecs: number;
+  /** Text of this cluster's first turn — a hint for who it is. */
+  firstText: string;
+  /** Longest turn — the clearest snippet to play back for identification. */
+  sample: { start: number; end: number } | null;
+};
+
+/** Per-cluster stats to help identify each voice, sorted by most talk time. */
+function extractClusters(utterances: Utterance[] | null): ClusterInfo[] {
   if (!utterances?.length) return [];
-  const set = new Set<string>();
+  const byId = new Map<string, ClusterInfo>();
   for (const u of utterances) {
-    if (u.diarizationId?.startsWith("SPEAKER_")) set.add(u.diarizationId);
-    else if (u.speaker.startsWith("SPEAKER_")) set.add(u.speaker);
-    else {
-      const m = u.speaker.match(/(SPEAKER_\d+)/);
-      if (m) set.add(m[1]);
+    const id = clusterOf(u);
+    if (!id) continue;
+    const dur = Math.max(0, u.end - u.start);
+    const info =
+      byId.get(id) ??
+      ({ id, turns: 0, talkSecs: 0, firstText: u.text, sample: null } as ClusterInfo);
+    info.turns += 1;
+    info.talkSecs += dur;
+    if (!info.sample || dur > info.sample.end - info.sample.start) {
+      info.sample = { start: u.start, end: u.end };
     }
+    byId.set(id, info);
   }
-  return [...set].sort();
+  return [...byId.values()].sort((a, b) => b.talkSecs - a.talkSecs);
+}
+
+function fmtDur(secs: number): string {
+  if (secs < 60) return `${Math.round(secs)}s`;
+  return `${Math.round(secs / 60)}m`;
 }
 
 function labelForUtterance(
@@ -115,6 +147,39 @@ export function RecordingDetail({ id }: { id: string }) {
   const [deleting, setDeleting] = useState(false);
   const [mapDraft, setMapDraft] = useState<Record<string, string>>({});
   const [refiling, setRefiling] = useState(false);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const snippetStop = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [playingCluster, setPlayingCluster] = useState<string | null>(null);
+
+  /** Play ~6s of a cluster's clearest turn so you can identify the voice. */
+  function playSnippet(clusterId: string, start: number, end: number) {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (snippetStop.current) clearTimeout(snippetStop.current);
+    if (playingCluster === clusterId) {
+      audio.pause();
+      setPlayingCluster(null);
+      return;
+    }
+    const span = Math.min(6, Math.max(2, end - start));
+    const seekAndPlay = () => {
+      audio.currentTime = start;
+      void audio.play();
+      setPlayingCluster(clusterId);
+      snippetStop.current = setTimeout(() => {
+        audio.pause();
+        setPlayingCluster(null);
+      }, span * 1000);
+    };
+    if (audio.readyState >= 1) seekAndPlay();
+    else audio.addEventListener("loadedmetadata", seekAndPlay, { once: true });
+  }
+
+  useEffect(() => {
+    return () => {
+      if (snippetStop.current) clearTimeout(snippetStop.current);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -181,6 +246,17 @@ export function RecordingDetail({ id }: { id: string }) {
   const participantLabel = rec.contactName ?? "Participant";
   const clusters = extractClusters(rec.utterances);
   const speakerMap = rec.speakerMap ?? {};
+  // Names to offer as one-tap fills: the known participants on this call plus
+  // any names already assigned to other clusters.
+  const nameSuggestions = Array.from(
+    new Set(
+      [
+        isMeeting ? null : founderLabel,
+        rec.contactName,
+        ...Object.values(mapDraft),
+      ].filter((s): s is string => !!s && s.trim().length > 0),
+    ),
+  );
 
   return (
     <div className="space-y-6">
@@ -297,7 +373,7 @@ export function RecordingDetail({ id }: { id: string }) {
         </div>
         {rec.hasAudio ? (
           <>
-            <audio controls preload="none" className="w-full" src={`/api/voice/recording/${rec.id}/audio`} />
+            <audio ref={audioRef} controls preload="none" className="w-full" src={`/api/voice/recording/${rec.id}/audio`} />
             {rec.audioPurgeAt && (
               <p className="mt-2 text-xs text-[var(--muted-foreground)]">
                 Audio auto-deletes on {fmtDate(rec.audioPurgeAt)} per the retention
@@ -348,25 +424,80 @@ export function RecordingDetail({ id }: { id: string }) {
             Speakers
           </div>
           <p className="text-xs text-[var(--muted-foreground)]">
-            Map diarization clusters to real names so notes and CRM show who said what.
+            Give each detected voice a name so notes and CRM show who said what.
+            {rec.hasAudio ? " Tap ▶ to hear a voice, then name it." : null}
           </p>
-          <div className="space-y-2">
-            {clusters.map((id) => (
-              <div key={id} className="flex items-center gap-2">
-                <span className="w-24 shrink-0 font-mono text-[11px] text-[var(--muted-foreground)]">
-                  {id}
-                </span>
-                <input
-                  value={mapDraft[id] ?? ""}
-                  onChange={(e) =>
-                    setMapDraft((m) => ({ ...m, [id]: e.target.value }))
-                  }
-                  placeholder="e.g. Carlos"
-                  className="min-w-0 flex-1 rounded-md border border-[var(--border)] bg-transparent px-2 py-1.5 text-sm"
-                  maxLength={120}
-                />
-              </div>
+          <datalist id="speaker-name-suggestions">
+            {nameSuggestions.map((n) => (
+              <option key={n} value={n} />
             ))}
+          </datalist>
+          <div className="space-y-3">
+            {clusters.map((c, i) => {
+              const assigned = (mapDraft[c.id] ?? "").trim();
+              const chips = nameSuggestions.filter((n) => n !== assigned);
+              return (
+                <div
+                  key={c.id}
+                  className="rounded-md border border-[var(--border)] p-2.5 space-y-2"
+                >
+                  <div className="flex items-center gap-2">
+                    {rec.hasAudio && c.sample && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          playSnippet(c.id, c.sample!.start, c.sample!.end)
+                        }
+                        className="flex h-7 w-7 flex-none items-center justify-center rounded-full border border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--muted)]/40"
+                        aria-label={
+                          playingCluster === c.id ? "Pause snippet" : "Play a snippet of this voice"
+                        }
+                      >
+                        {playingCluster === c.id ? (
+                          <Pause className="h-3.5 w-3.5" />
+                        ) : (
+                          <Play className="h-3.5 w-3.5" />
+                        )}
+                      </button>
+                    )}
+                    <input
+                      value={mapDraft[c.id] ?? ""}
+                      onChange={(e) =>
+                        setMapDraft((m) => ({ ...m, [c.id]: e.target.value }))
+                      }
+                      list="speaker-name-suggestions"
+                      placeholder={`Voice ${i + 1} — name (e.g. Carlos)`}
+                      className="min-w-0 flex-1 rounded-md border border-[var(--border)] bg-transparent px-2 py-1.5 text-sm"
+                      maxLength={120}
+                    />
+                    <span className="flex-none font-mono text-[10px] text-[var(--muted-foreground)]">
+                      {c.turns} turn{c.turns === 1 ? "" : "s"} · {fmtDur(c.talkSecs)}
+                    </span>
+                  </div>
+                  {chips.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1.5 pl-9">
+                      {chips.map((n) => (
+                        <button
+                          key={n}
+                          type="button"
+                          onClick={() =>
+                            setMapDraft((m) => ({ ...m, [c.id]: n }))
+                          }
+                          className="rounded-full border border-[var(--border)] px-2 py-0.5 text-[11px] text-[var(--muted-foreground)] hover:bg-[var(--muted)]/40 hover:text-[var(--foreground)]"
+                        >
+                          {n}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {c.firstText && (
+                    <p className="pl-9 text-[11px] italic text-[var(--muted-foreground)] line-clamp-2">
+                      “{c.firstText}”
+                    </p>
+                  )}
+                </div>
+              );
+            })}
           </div>
           <div className="flex flex-wrap gap-2">
             <Button
