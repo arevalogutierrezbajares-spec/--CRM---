@@ -558,6 +558,12 @@ final class ControlWindow: NSObject {
                 subLabel?.stringValue = "\(who) · \(elapsed)"
                 headerStateLabel?.stringValue = participant.map { "Meet · \($0) · \(elapsed)" }
                     ?? "Meeting · \(elapsed)"
+            } else if kind.isAcousticMixed {
+                titleLabel?.stringValue = "Speakerphone"
+                let who = participant.map { "Call with \($0)" } ?? "Speakerphone (room mic)"
+                subLabel?.stringValue = "\(who) · \(elapsed)"
+                headerStateLabel?.stringValue = participant.map { "Spkr · \($0) · \(elapsed)" }
+                    ?? "Speakerphone · \(elapsed)"
             } else {
                 titleLabel?.stringValue = "Recording"
                 let who = participant.map { "Talking with \($0)" } ?? "Unlabeled"

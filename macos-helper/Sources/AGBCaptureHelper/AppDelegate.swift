@@ -96,6 +96,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var activeCaptureKind: CaptureKind = .call
     private var labelParticipantMenuItem: NSMenuItem?
     private var startMeetingMenuItem: NSMenuItem?
+    private var startSpeakerMenuItem: NSMenuItem?
 
     private let log = HelperLog.shared
 
@@ -384,8 +385,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.prompt.show(sourceApp: self.detectedSourceApp,
                                  capSeconds: cap,
                                  bufferedSeconds: { [weak engine] in engine?.preRollSeconds ?? 0 })
-                // Auto-dismiss the prompt if the call ends unanswered.
-                self.detector.watchForCallEnd()
+                // Auto-dismiss the prompt if the call ends unanswered. Detection
+                // only fires because an app took the mic, so a peer is a fact here.
+                self.detector.watchForCallEnd(peerAlreadyObserved: true)
             } catch {
                 self.captureUnavailable("Could not start capture: \(error.localizedDescription)\n\n\(PermissionsManager.statusReport())")
             }
@@ -407,7 +409,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             activeSpooler = spooler
             engine.promoteToRecording(spooler: spooler)
             state = .recording
-            detector.watchForCallEnd()
+            // Affirmed from detection: a peer app is holding the mic by definition.
+            detector.watchForCallEnd(peerAlreadyObserved: true)
             beginRecordingSession(engine: engine, participant: name, kind: .call)
             worker?.kick() // chunks upload incrementally during the call
             log.info("recording affirmed (source: \(detectedSourceApp ?? "unknown"), participant: \(name ?? "unlabeled"))", category: "app")
@@ -674,6 +677,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// External device on speakerphone (phone, handset, another laptop): mic
+    /// only, with input gain, since the far side arrives acoustically.
+    @objc private func startSpeakerRecordingTapped() {
+        switch state {
+        case .idle, .uploading, .error:
+            manualStart(kind: .speaker)
+        default:
+            break
+        }
+    }
+
     /// FR-CALL-TRG-4: manual start, independent of detection.
     /// - Parameter kind: `.call` = mic+system; `.meeting` = in-person room (mic only).
     private func manualStart(kind: CaptureKind) {
@@ -697,15 +711,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.activeCaptureKind = kind
                 let spooler = try store.createSession(
                     startedAt: Date(),
-                    sourceApp: kind.isMeeting ? CaptureKind.sourceAppMeeting : nil,
+                    sourceApp: kind.defaultSourceApp(detected: nil),
                     captureKind: kind
                 )
                 try spooler.setContactName(nil)
                 self.activeSpooler = spooler
                 engine.promoteToRecording(spooler: spooler)
                 self.state = .recording
-                if kind == .call {
-                    self.detector.watchForCallEnd()
+                // Manual start carries no evidence that the call is on this Mac,
+                // so the watch stays inert until a peer app actually takes the
+                // mic. Without this, a speakerphone session auto-finalized ~5 s in.
+                if kind.peerMicUsageIsMeaningful {
+                    self.detector.watchForCallEnd(peerAlreadyObserved: false, graceSeconds: 15)
                 }
                 self.beginRecordingSession(engine: engine, participant: nil, kind: kind)
                 self.worker?.kick()
@@ -1026,6 +1043,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         startMeetingMenuItem = meet
         menu.addItem(meet)
 
+        let speaker = makeItem("Start Speakerphone Recording…", #selector(startSpeakerRecordingTapped), "k")
+        startSpeakerMenuItem = speaker
+        menu.addItem(speaker)
+
         let stop = makeItem("Stop Recording", #selector(stopRecordingTapped), "s")
         stopMenuItem = stop
         menu.addItem(stop)
@@ -1100,6 +1121,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let isCapturing = (state == .recording || state == .paused)
         startMenuItem?.isEnabled = !isCapturing
         startMeetingMenuItem?.isEnabled = !isCapturing && state != .detected
+        startSpeakerMenuItem?.isEnabled = !isCapturing && state != .detected
         stopMenuItem?.isEnabled = isCapturing
         pauseMenuItem?.isEnabled = isCapturing
         pauseMenuItem?.title = (state == .paused) ? "Resume" : "Pause"

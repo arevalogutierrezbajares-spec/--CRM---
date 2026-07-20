@@ -36,7 +36,7 @@ public final class SpoolStore {
         let dir = rootURL.appendingPathComponent("session-\(localId)", isDirectory: true)
         try HelperPaths.ensureDirectory(dir)
         let kind = captureKind
-        let app = kind.isMeeting ? CaptureKind.sourceAppMeeting : sourceApp
+        let app = kind.defaultSourceApp(detected: sourceApp)
         let manifest = SessionManifest(sessionLocalId: localId,
                                        startedAt: startedAt,
                                        sourceApp: app,

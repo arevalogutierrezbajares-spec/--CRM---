@@ -262,6 +262,11 @@ final class LiveTranscriptStreamer: NSObject {
         let channel = result.channelIndex?.first ?? 0
         queue.async { [weak self] in
             guard let self else { return }
+            // Mic-only kinds (meeting, speakerphone): R is silence by design, so
+            // any ch1 result is bleed or noise rather than the far side. Mirrors
+            // OnDeviceTranscriber.emit — without it a phantom "Remote:" line can
+            // appear mid-call.
+            if !self.captureKind.capturesSystemAudio, channel != 0 { return }
             let speaker = Self.label(forChannel: channel,
                                      participantName: self.participantName,
                                      kind: self.captureKind)

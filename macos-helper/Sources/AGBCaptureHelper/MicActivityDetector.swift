@@ -44,6 +44,11 @@ final class MicActivityDetector {
     private let endQuietSeconds: TimeInterval = 5
     private var runningSince: Date?
     private var quietSince: Date?
+    /// Whether another process has been observed holding the mic during the
+    /// current call-end watch. Gates auto-finalize — see `evaluateCallEnd`.
+    private var sawPeerMicUser = false
+    private var watchStartedAt: Date?
+    private var watchGraceSeconds: TimeInterval = 0
 
     private lazy var defaultDeviceListener: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
         self?.queue.async { self?.rebindDefaultDevice() }
@@ -105,7 +110,19 @@ final class MicActivityDetector {
     /// effective on 14.4+ where per-process input state is observable;
     /// otherwise a no-op (manual stop still works; the prompt falls back to
     /// PromptPolicy's safety cap).
-    func watchForCallEnd() {
+    ///
+    /// - Parameters:
+    ///   - peerAlreadyObserved: whether another process was *already* seen
+    ///     holding the mic (true on the detection/prompt path, which only fires
+    ///     because an app took the mic). When false, this watch cannot end the
+    ///     session until a peer appears and then leaves — see `evaluateCallEnd`.
+    ///   - graceSeconds: minimum watch age before an end can be declared, so a
+    ///     session can never auto-finalize in its first seconds.
+    /// Defaults are the *safe* values: a caller that says nothing gets a watch
+    /// that cannot fire until it has seen a peer take the mic. Defaulting
+    /// `peerAlreadyObserved` to true would make the 5-second speakerphone
+    /// auto-finalize the silent fallback for every future call site.
+    func watchForCallEnd(peerAlreadyObserved: Bool = false, graceSeconds: TimeInterval = 0) {
         queue.async { [weak self] in
             guard let self else { return }
             guard #available(macOS 14.4, *) else { return }
@@ -113,8 +130,14 @@ final class MicActivityDetector {
             self.waitingForQuiet = false
             self.watchingForEnd = true
             self.quietSince = nil
+            self.sawPeerMicUser = peerAlreadyObserved
+            self.watchStartedAt = Date()
+            self.watchGraceSeconds = graceSeconds
             self.startPolling()
-            HelperLog.shared.info("watching for call end (process objects)", category: "detect")
+            HelperLog.shared.info(
+                "watching for call end (process objects; peerObserved=\(peerAlreadyObserved), grace=\(Int(graceSeconds))s)",
+                category: "detect"
+            )
         }
     }
 
@@ -197,18 +220,41 @@ final class MicActivityDetector {
     private func evaluateCallEnd() {
         guard #available(macOS 14.4, *) else { return }
         let othersRunning = Self.processesRunningInput(excludingPID: ProcessInfo.processInfo.processIdentifier)
-        if othersRunning.isEmpty {
-            if quietSince == nil { quietSince = Date() }
-            if let since = quietSince, Date().timeIntervalSince(since) >= endQuietSeconds {
-                watchingForEnd = false
-                stopPolling()
-                HelperLog.shared.info("no other process using mic for \(Int(endQuietSeconds))s — call likely ended", category: "detect")
-                DispatchQueue.main.async { [weak self] in
-                    self?.onCallLikelyEnded?()
-                }
+
+        guard othersRunning.isEmpty else {
+            if !sawPeerMicUser {
+                sawPeerMicUser = true
+                HelperLog.shared.info("peer mic user observed — call-end watch now live", category: "detect")
             }
-        } else {
             quietSince = nil
+            return
+        }
+
+        // A session where no other process was *ever* seen holding the mic is
+        // not evidence of a call that ended — it is a call that was never on
+        // this Mac (phone on speakerphone, desk handset, another laptop). Firing
+        // here auto-finalized speakerphone sessions ~5 s after they started.
+        guard sawPeerMicUser else {
+            quietSince = nil
+            return
+        }
+
+        // The quiet timer accumulates during the grace window — grace gates the
+        // *firing*, not the measurement. Returning early here instead would
+        // serialize the two, so a call that ended at t=8s could not finalize
+        // until grace+endQuiet=20s, well past the FR-CALL-TRG-5 5 s budget.
+        if quietSince == nil { quietSince = Date() }
+        let graceElapsed = watchStartedAt.map {
+            Date().timeIntervalSince($0) >= watchGraceSeconds
+        } ?? true
+        if graceElapsed,
+           let since = quietSince, Date().timeIntervalSince(since) >= endQuietSeconds {
+            watchingForEnd = false
+            stopPolling()
+            HelperLog.shared.info("no other process using mic for \(Int(endQuietSeconds))s — call likely ended", category: "detect")
+            DispatchQueue.main.async { [weak self] in
+                self?.onCallLikelyEnded?()
+            }
         }
     }
 

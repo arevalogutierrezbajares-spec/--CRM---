@@ -249,9 +249,12 @@ public final class UploadQueueWorker {
         snap = spooler.snapshot
         guard snap.readyToFinalize else { return }
 
-        // Meetings: try free local STT+diarize before finalize (D2/D3).
+        // Mic-only kinds (meeting, speakerphone): try free local STT+diarize
+        // before finalize (D2/D3). Both put all speech on L, which is exactly
+        // what MonoWavAssembler.assembleLeftChannel expects — and local Whisper
+        // diarization is the only way to separate speakers on a mixed channel.
         var precomputed: CaptureAPIClient.FinalizeBody.PrecomputedTranscript? = nil
-        if snap.kind.isMeeting {
+        if !snap.kind.capturesSystemAudio {
             precomputed = tryLocalTranscribe(spooler: spooler)
         }
 
