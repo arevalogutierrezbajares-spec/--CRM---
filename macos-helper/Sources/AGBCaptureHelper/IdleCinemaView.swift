@@ -218,13 +218,20 @@ final class IdleCinemaView: NSView {
             }
         }
 
-        // 2) SPM resource bundle (swift build / tests)
+        // 2) SPM resource bundle (swift build / tests). Only consulted when the
+        // app bundle didn't already supply the clips: referencing Bundle.module
+        // triggers a fatalError if the generated resource bundle isn't beside the
+        // executable (which is the case for a packaged .app — its clips live in
+        // Contents/Resources/intro, loaded by step 1). Touching Bundle.module on
+        // that happy path crash-loops the app on launch, so guard it.
         #if SWIFT_PACKAGE
-        let spm = Bundle.module
-        for n in names {
-            if let u = spm.url(forResource: n, withExtension: "mp4", subdirectory: "Resources/intro")
-                ?? spm.url(forResource: n, withExtension: "mp4", subdirectory: "intro") {
-                if !urls.contains(u) { urls.append(u) }
+        if urls.isEmpty {
+            let spm = Bundle.module
+            for n in names {
+                if let u = spm.url(forResource: n, withExtension: "mp4", subdirectory: "Resources/intro")
+                    ?? spm.url(forResource: n, withExtension: "mp4", subdirectory: "intro") {
+                    if !urls.contains(u) { urls.append(u) }
+                }
             }
         }
         #endif
