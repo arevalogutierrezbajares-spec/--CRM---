@@ -53,6 +53,19 @@ type DeepgramUtterance = {
   speaker?: number;
 };
 
+type DeepgramWord = {
+  word?: string;
+  punctuated_word?: string;
+  start?: number;
+  end?: number;
+  speaker?: number;
+};
+
+type DeepgramChannel = {
+  detected_language?: string;
+  alternatives?: { words?: DeepgramWord[] }[];
+};
+
 function fmtTs(secs: number): string {
   const m = Math.floor(secs / 60);
   const s = Math.floor(secs % 60);
@@ -169,19 +182,77 @@ function mapDeepgramSpeaker(
   };
 }
 
+/**
+ * Rebuild speaker-attributed turns from Deepgram's *word-level* diarization
+ * labels, segmenting on every speaker change.
+ *
+ * Why not use `results.utterances[].speaker`? Deepgram's utterance segmenter
+ * merges consecutive turns that lack a clear pause into ONE utterance and stamps
+ * it a single speaker — silently discarding the correct per-word diarization. On
+ * real multi-person speakerphone calls (rapid, barely-gapped turns) this
+ * collapsed every voice into SPEAKER_00, so the whole "who said what" feature
+ * never worked. Word-level labels are unaffected: re-segmenting on them recovers
+ * the individual voices. Verified against a 2-speaker sample where utterances
+ * returned 1 speaker but words returned [0,1].
+ */
+function buildTurnsFromWords(
+  channels: DeepgramChannel[],
+  opts?: { mixedAcoustic?: boolean; diarize?: boolean },
+): Utterance[] {
+  const turns: Utterance[] = [];
+  channels.forEach((chan, chIdx) => {
+    const words = chan.alternatives?.[0]?.words ?? [];
+    let cur: { speaker: number; start: number; end: number; parts: string[] } | null = null;
+    const flush = () => {
+      if (!cur) return;
+      const text = cur.parts.join(" ").trim();
+      if (text) {
+        const mapped = mapDeepgramSpeaker({ channel: chIdx, speaker: cur.speaker }, opts);
+        turns.push({
+          speaker: mapped.speaker,
+          diarizationId: mapped.diarizationId,
+          channel: chIdx,
+          start: cur.start,
+          end: cur.end,
+          text,
+        });
+      }
+      cur = null;
+    };
+    for (const w of words) {
+      const spk = typeof w.speaker === "number" ? w.speaker : 0;
+      const token = (w.punctuated_word ?? w.word ?? "").trim();
+      if (!token) continue;
+      if (!cur || cur.speaker !== spk) {
+        flush();
+        cur = { speaker: spk, start: w.start ?? 0, end: w.end ?? w.start ?? 0, parts: [token] };
+      } else {
+        cur.end = w.end ?? cur.end;
+        cur.parts.push(token);
+      }
+    }
+    flush();
+  });
+  return turns.sort((a, b) => a.start - b.start);
+}
+
 function parseDeepgram(
   json: {
     results?: {
       utterances?: DeepgramUtterance[];
-      channels?: { detected_language?: string }[];
+      channels?: DeepgramChannel[];
     };
   } | null,
   durationSecs: number,
   opts?: { mixedAcoustic?: boolean; diarize?: boolean },
 ): { ok: true; result: TranscriptionResult } | { ok: false; error: string } {
   if (!json?.results) return { ok: false, error: "Deepgram: empty results" };
+  const channels = Array.isArray(json.results.channels) ? json.results.channels : [];
+
+  // Utterance-level turns — the channel-attributed path (call sides) and the
+  // fallback when word-level data is unavailable.
   const raw = Array.isArray(json.results.utterances) ? json.results.utterances : [];
-  const utterances: Utterance[] = raw
+  const utteranceTurns: Utterance[] = raw
     .filter((u) => (u.transcript ?? "").trim().length > 0)
     .map((u) => {
       const sp = mapDeepgramSpeaker(u, opts);
@@ -195,6 +266,16 @@ function parseDeepgram(
       };
     })
     .sort((a, b) => a.start - b.start);
+
+  // When diarizing (mixed-acoustic multi-person mixes), prefer word-level
+  // segmentation — utterance-level speaker labels collapse rapid turns into a
+  // single speaker (see buildTurnsFromWords). Fall back to utterance turns if
+  // the response carried no word-level data.
+  let utterances = utteranceTurns;
+  if (opts?.diarize) {
+    const wordTurns = buildTurnsFromWords(channels, opts);
+    if (wordTurns.length > 0) utterances = wordTurns;
+  }
 
   const labels: DialogueLabels = {
     founder: opts?.mixedAcoustic ? "Room" : "Founder",
