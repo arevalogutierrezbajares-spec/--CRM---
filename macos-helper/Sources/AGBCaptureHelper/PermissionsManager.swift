@@ -61,8 +61,8 @@ enum PermissionsManager {
             problems.append(microphoneInstructions)
         }
 
-        // Meeting mode is mic-only (room audio). Skip system-audio gate.
-        if kind == .call, !screenRecordingGranted() {
+        // Mic-only kinds (meeting, speakerphone) never tap system audio.
+        if kind.capturesSystemAudio, !screenRecordingGranted() {
             // First call shows the OS prompt; permission applies after relaunch.
             requestScreenRecording()
             problems.append(screenRecordingInstructions)

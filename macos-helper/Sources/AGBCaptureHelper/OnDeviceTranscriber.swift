@@ -199,8 +199,8 @@ final class OnDeviceTranscriber: NSObject, LiveTranscribing {
 
     private func emit(channel: Int, text: String, isFinal: Bool) {
         // Always called on `queue` — read participantName here (same serial queue).
-        // Meeting mode: only the mic channel carries room speech (R is silence).
-        if captureKind.isMeeting, channel != 0 { return }
+        // Mic-only kinds: only the mic channel carries speech (R is silence).
+        if !captureKind.capturesSystemAudio, channel != 0 { return }
         let speaker = LiveTranscriptStreamer.label(forChannel: channel,
                                                    participantName: participantName,
                                                    kind: captureKind)

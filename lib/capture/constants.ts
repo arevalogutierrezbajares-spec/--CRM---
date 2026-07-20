@@ -86,3 +86,31 @@ export function assembledMp3ObjectPath(
 ): string {
   return `${workspaceId}/calls/${recordingId}.mp3`;
 }
+
+/** CRM sourceApp value the Mac Helper sets for in-person room recordings. */
+export const SOURCE_APP_IN_PERSON_MEETING = "In-Person Meeting";
+/** CRM sourceApp value the Mac Helper sets for speakerphone recordings. */
+export const SOURCE_APP_SPEAKERPHONE = "Speakerphone";
+
+export function isInPersonMeetingSource(sourceApp: string | null | undefined): boolean {
+  return (sourceApp ?? "").trim() === SOURCE_APP_IN_PERSON_MEETING;
+}
+
+export function isSpeakerphoneSource(sourceApp: string | null | undefined): boolean {
+  return (sourceApp ?? "").trim() === SOURCE_APP_SPEAKERPHONE;
+}
+
+/**
+ * Whether every speaker reached the mic acoustically and is mixed onto the left
+ * channel — an in-person room, or an external device on speakerphone.
+ *
+ * This is the *acoustic* question, deliberately separate from the *wording*
+ * question `isInPersonMeetingSource` answers (a speakerphone session is still a
+ * "Call", not a "Meeting"). It matters because channel identity carries no
+ * speaker information in these captures: without diarization every participant
+ * collapses into the single channel-derived "founder" label, which is exactly
+ * what happened to speakerphone recordings before this existed.
+ */
+export function isMixedAcousticSource(sourceApp: string | null | undefined): boolean {
+  return isInPersonMeetingSource(sourceApp) || isSpeakerphoneSource(sourceApp);
+}

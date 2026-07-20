@@ -68,11 +68,17 @@ final class ControlWindow: NSObject {
     // Confirmation flash state (compact).
     private var confirming = false
     private var offerAddActions = false
+    /// Last applied mode — lets the primary button offer a capture-kind chooser
+    /// while idle without the caller having to tell it the state twice.
+    private var currentMode: Mode = .idle(label: "")
     private var pendingMode: Mode?
     private var confirmTimer: Timer?
     private var pendingOpenURL: URL?
 
     var onToggle: (() -> Void)?
+    /// Fired when the founder picks a capture kind from the idle start menu.
+    /// When nil the primary button falls back to the plain `onToggle` behavior.
+    var onStartKind: ((CaptureKind) -> Void)?
     var onConfigure: (() -> Void)?
     var onToggleTranscript: (() -> Void)?
     /// Mid-call: founder wants to set/edit the far-side participant name.
@@ -490,7 +496,59 @@ final class ControlWindow: NSObject {
             onAddActions?()
             return
         }
+        // Idle: offer the capture kind instead of silently assuming an on-Mac
+        // call. The panel is the primary surface, and a kind that only existed
+        // in the menu bar was effectively invisible — worse, picking the wrong
+        // one records a speakerphone call with no input gain and no
+        // diarization, which fails silently as "(no speech detected)".
+        if case .idle = currentMode, onStartKind != nil {
+            presentCaptureKindMenu()
+            return
+        }
         onToggle?()
+    }
+
+    /// Menu of capture kinds, anchored under whichever start button was hit.
+    private func presentCaptureKindMenu() {
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+        let kinds: [(CaptureKind, String, String)] = [
+            (.call, "Call on this Mac", "WhatsApp, Zoom, FaceTime — mic + system audio"),
+            (.speaker, "Speakerphone", "Phone or handset on speaker — room mic, gain boosted"),
+            (.meeting, "In-person meeting", "Everyone in the room — room mic only"),
+        ]
+        for (kind, title, subtitle) in kinds {
+            let item = NSMenuItem(title: title, action: #selector(startKindTapped(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = kind.rawValue
+            item.isEnabled = true
+            let attr = NSMutableAttributedString(
+                string: title + "\n",
+                attributes: [.font: NSFont.systemFont(ofSize: 13, weight: .medium)]
+            )
+            attr.append(NSAttributedString(
+                string: subtitle,
+                attributes: [
+                    .font: NSFont.systemFont(ofSize: 11),
+                    .foregroundColor: NSColor.secondaryLabelColor,
+                ]
+            ))
+            item.attributedTitle = attr
+            menu.addItem(item)
+        }
+        let anchor = (headerButton?.window != nil && headerButton?.isHidden == false)
+            ? headerButton : button
+        if let anchor {
+            menu.popUp(positioning: nil,
+                       at: NSPoint(x: 0, y: anchor.bounds.height + 4),
+                       in: anchor)
+        }
+    }
+
+    @objc private func startKindTapped(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String,
+              let kind = CaptureKind(rawValue: raw) else { return }
+        onStartKind?(kind)
     }
     @objc private func configureTapped() { onConfigure?() }
     @objc private func transcriptTapped() { onToggleTranscript?() }
@@ -525,6 +583,7 @@ final class ControlWindow: NSObject {
     /// Apply a mode to whichever container is on screen (compact + expanded
     /// header share the same recorder state).
     private func applyMode(_ mode: Mode) {
+        currentMode = mode
         switch mode {
         case .idle(let label):
             if !expanded { setCinemaLayout(true, animated: true) }
@@ -558,6 +617,12 @@ final class ControlWindow: NSObject {
                 subLabel?.stringValue = "\(who) · \(elapsed)"
                 headerStateLabel?.stringValue = participant.map { "Meet · \($0) · \(elapsed)" }
                     ?? "Meeting · \(elapsed)"
+            } else if kind.isAcousticMixed {
+                titleLabel?.stringValue = "Speakerphone"
+                let who = participant.map { "Call with \($0)" } ?? "Speakerphone (room mic)"
+                subLabel?.stringValue = "\(who) · \(elapsed)"
+                headerStateLabel?.stringValue = participant.map { "Spkr · \($0) · \(elapsed)" }
+                    ?? "Speakerphone · \(elapsed)"
             } else {
                 titleLabel?.stringValue = "Recording"
                 let who = participant.map { "Talking with \($0)" } ?? "Unlabeled"

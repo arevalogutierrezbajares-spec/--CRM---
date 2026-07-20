@@ -105,7 +105,7 @@ export function buildDialogue(
 export function detectSilentChannels(
   utterances: Utterance[],
   durationSecs: number,
-  opts?: { inPersonMeeting?: boolean },
+  opts?: { mixedAcoustic?: boolean },
 ): string[] {
   const speech = [0, 0];
   const count = [0, 0];
@@ -120,8 +120,9 @@ export function detectSilentChannels(
     count[ch] === 0 || (speech[ch] < floor && count[1 - ch] >= 3);
   if (durationSecs >= 20) {
     if (suspicious(0)) flags.push(FLAG_FOUNDER_SILENT);
-    // In-person meetings are mic-only (R channel intentionally silent).
-    if (suspicious(1) && !opts?.inPersonMeeting) {
+    // Mixed-acoustic captures (in-person room, speakerphone) are mic-only:
+    // the R channel is silent by design, so never flag it as suspect.
+    if (suspicious(1) && !opts?.mixedAcoustic) {
       flags.push(FLAG_PARTICIPANT_SILENT);
     }
   }
@@ -138,14 +139,16 @@ function deepgramParams(opts?: { diarize?: boolean }): URLSearchParams {
     utterances: "true",
     mip_opt_out: "true",
   });
-  // Diarization within each channel (needed for in-person room mixes on ch0).
+  // Diarization within each channel. Required for mixed-acoustic captures,
+  // where every speaker shares ch0 and channel identity carries no speaker
+  // information at all.
   if (opts?.diarize) p.set("diarize", "true");
   return p;
 }
 
 function mapDeepgramSpeaker(
   u: DeepgramUtterance,
-  opts?: { inPersonMeeting?: boolean; diarize?: boolean },
+  opts?: { mixedAcoustic?: boolean; diarize?: boolean },
 ): { speaker: string; diarizationId?: string } {
   const ch = u.channel ?? 0;
   const hasDiarize =
@@ -154,7 +157,7 @@ function mapDeepgramSpeaker(
   if (hasDiarize) {
     const id = `SPEAKER_${String(u.speaker).padStart(2, "0")}`;
     // On calls, still prefix with side so founder channel clusters ≠ remote.
-    if (!opts?.inPersonMeeting) {
+    if (!opts?.mixedAcoustic) {
       const side = ch === FOUNDER_CHANNEL ? "founder" : "participant";
       return { speaker: `${side}:${id}`, diarizationId: id };
     }
@@ -174,7 +177,7 @@ function parseDeepgram(
     };
   } | null,
   durationSecs: number,
-  opts?: { inPersonMeeting?: boolean; diarize?: boolean },
+  opts?: { mixedAcoustic?: boolean; diarize?: boolean },
 ): { ok: true; result: TranscriptionResult } | { ok: false; error: string } {
   if (!json?.results) return { ok: false, error: "Deepgram: empty results" };
   const raw = Array.isArray(json.results.utterances) ? json.results.utterances : [];
@@ -194,7 +197,7 @@ function parseDeepgram(
     .sort((a, b) => a.start - b.start);
 
   const labels: DialogueLabels = {
-    founder: opts?.inPersonMeeting ? "Room" : "Founder",
+    founder: opts?.mixedAcoustic ? "Room" : "Founder",
     participant: "Participant",
   };
 
@@ -218,7 +221,7 @@ function parseDeepgram(
 export async function transcribeDualChannelBytes(opts: {
   wav: Uint8Array;
   durationSecs: number;
-  inPersonMeeting?: boolean;
+  mixedAcoustic?: boolean;
   /** Enable speaker diarization (paid Deepgram). Prefer free local worker for meetings. */
   diarize?: boolean;
 }): Promise<
@@ -227,9 +230,10 @@ export async function transcribeDualChannelBytes(opts: {
 > {
   const key = process.env.DEEPGRAM_API_KEY;
   if (!key) return { ok: false, error: "DEEPGRAM_API_KEY not set" };
-  // Meetings default to diarize so multi-person room mixes get SPEAKER_xx labels
-  // when local free worker is not used.
-  const diarize = opts.diarize ?? !!opts.inPersonMeeting;
+  // Mixed-acoustic captures default to diarize so multi-person mixes get
+  // SPEAKER_xx labels when the free local worker is not used. Without it every
+  // speaker collapses into a single channel-derived label.
+  const diarize = opts.diarize ?? !!opts.mixedAcoustic;
   // Node undici is happier with a real Buffer body than a bare Uint8Array for
   // multi-MB POSTs (fewer flaky "fetch failed" / EPIPE on longish bodies).
   const body =
@@ -269,7 +273,7 @@ export async function transcribeDualChannelBytes(opts: {
       typeof parseDeepgram
     >[0];
     return parseDeepgram(json, opts.durationSecs, {
-      inPersonMeeting: opts.inPersonMeeting,
+      mixedAcoustic: opts.mixedAcoustic,
       diarize,
     });
   }
@@ -283,7 +287,7 @@ export async function transcribeDualChannelBytes(opts: {
 export async function transcribeDualChannel(opts: {
   audioUrl: string;
   durationSecs: number;
-  inPersonMeeting?: boolean;
+  mixedAcoustic?: boolean;
   diarize?: boolean;
 }): Promise<
   | { ok: true; result: TranscriptionResult }
@@ -291,7 +295,7 @@ export async function transcribeDualChannel(opts: {
 > {
   const key = process.env.DEEPGRAM_API_KEY;
   if (!key) return { ok: false, error: "DEEPGRAM_API_KEY not set" };
-  const diarize = opts.diarize ?? !!opts.inPersonMeeting;
+  const diarize = opts.diarize ?? !!opts.mixedAcoustic;
 
   let resp: Response;
   try {
@@ -316,7 +320,7 @@ export async function transcribeDualChannel(opts: {
 
   const json = (await resp.json().catch(() => null)) as Parameters<typeof parseDeepgram>[0];
   return parseDeepgram(json, opts.durationSecs, {
-    inPersonMeeting: opts.inPersonMeeting,
+    mixedAcoustic: opts.mixedAcoustic,
     diarize,
   });
 }

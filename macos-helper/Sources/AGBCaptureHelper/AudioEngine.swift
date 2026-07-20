@@ -58,6 +58,8 @@ final class AudioEngine: NSObject {
 
     private let ring = RingBuffer(capacity: AudioConstants.preRollBytes)
     private let interleaver = StereoInterleaver()
+    /// Input gain for acoustically-mixed kinds (speakerphone). Unity elsewhere.
+    private let micGain = MicGain()
     private let queue = DispatchQueue(label: "com.agb.capture-helper.audio", qos: .userInitiated)
 
     private var avEngine: AVAudioEngine?
@@ -86,16 +88,25 @@ final class AudioEngine: NSObject {
     private var spoolFailureReported = false
     /// Periodic levels log so speakers-only tests can confirm system(R) is live.
     private var levelsTickCount = 0
-    /// Call (mic+system) vs in-person meeting (mic only).
-    private(set) var captureKind: CaptureKind = .call
-
     private let stateLock = NSLock()
     private var _mode: Mode = .stopped
+    private var _captureKind: CaptureKind = .call
     private var spooler: ChunkSpooler?
 
     private(set) var mode: Mode {
         get { stateLock.lock(); defer { stateLock.unlock() }; return _mode }
         set { stateLock.lock(); _mode = newValue; stateLock.unlock() }
+    }
+
+    /// Call (mic+system) vs mic-only kinds (meeting, speakerphone).
+    ///
+    /// Lock-protected like `mode`: written on the main actor in `startPreroll`,
+    /// but read from the Core Audio IOProc thread in `appendMicChannel` to
+    /// decide whether input gain applies. Every other cross-thread field in this
+    /// class goes through `stateLock`; this one must not be the exception.
+    private(set) var captureKind: CaptureKind {
+        get { stateLock.lock(); defer { stateLock.unlock() }; return _captureKind }
+        set { stateLock.lock(); _captureKind = newValue; stateLock.unlock() }
     }
 
     /// Mono 16 kHz Int16, interleaved-irrelevant (1 ch).
@@ -121,13 +132,14 @@ final class AudioEngine: NSObject {
         guard mode == .stopped else { return }
         captureKind = kind
         silenceMeter.reset()
+        micGain.reset()
         interleaver.reset()
         ring.clear()
         spoolFailureReported = false
         mode = .preroll
 
         try startMicEngine()
-        if kind == .call {
+        if kind.capturesSystemAudio {
             try await startSystemAudioSource()
             installDefaultOutputObserver()
             let route = OutputRoute.currentDefaultOutput()
@@ -136,9 +148,12 @@ final class AudioEngine: NSObject {
                 category: "audio"
             )
         } else {
-            // In-person: no system-audio path. Stereo interleaver pads R with silence.
+            // Mic-only kinds: no system-audio path. Stereo interleaver pads R
+            // with silence. Speakerphone additionally runs input gain, since the
+            // far side arrives acoustically at ~−46 dBFS.
             HelperLog.shared.info(
-                "engine started (preroll, meeting) — mic-only room capture; system audio not tapped",
+                "engine started (preroll, \(kind.rawValue)) — mic-only capture; system audio not tapped"
+                    + (kind.isAcousticMixed ? "; input gain enabled" : ""),
                 category: "audio"
             )
         }
@@ -268,7 +283,7 @@ final class AudioEngine: NSObject {
         let hal = MicHALCapture()
         hal.onMicPCM = { [weak self] pcm in
             guard let self, self.mode != .stopped else { return }
-            self.interleaver.appendMic(pcm)
+            self.appendMicChannel(pcm)
         }
         hal.onFatalError = { [weak self] message in
             HelperLog.shared.warn("mic-hal fatal: \(message) — falling back to AVAudioEngine", category: "audio")
@@ -392,8 +407,18 @@ final class AudioEngine: NSObject {
         if let mono = convert(buffer: buffer,
                               converter: &micConverter,
                               cachedInputFormat: &micConverterInputFormat) {
-            interleaver.appendMic(mono)
+            appendMicChannel(mono)
         }
+    }
+
+    /// Single entry point for the mic (L) channel. Applies input gain for
+    /// acoustically-mixed kinds (speakerphone), where the far side reaches the
+    /// mic through air at roughly −46 dBFS. Both mic paths — Core Audio HAL and
+    /// the AVAudioEngine fallback — route through here so gain can never apply
+    /// to one and not the other.
+    private func appendMicChannel(_ monoPCM16: Data) {
+        let pcm = captureKind.isAcousticMixed ? micGain.apply(monoPCM16) : monoPCM16
+        interleaver.appendMic(pcm)
     }
 
     // MARK: - System audio path (→ 16 kHz mono Int16 → R channel)
