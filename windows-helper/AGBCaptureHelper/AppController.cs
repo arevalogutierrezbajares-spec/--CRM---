@@ -220,7 +220,8 @@ public sealed class AppController : IDisposable
             engine.PromoteToRecording(spooler);
             BeginRecordingWatchdog();
             State = HelperState.Recording;
-            _detector.WatchForCallEnd();
+            // Affirmed from detection: a peer app is holding the mic by definition.
+            _detector.WatchForCallEnd(peerAlreadyObserved: true);
             _worker?.Kick(); // chunks upload incrementally during the call
             _log.Info($"recording affirmed (source: {_detectedSourceApp ?? "unknown"})", category: "app");
         }
@@ -301,7 +302,10 @@ public sealed class AppController : IDisposable
             engine.PromoteToRecording(spooler);
             BeginRecordingWatchdog();
             State = HelperState.Recording;
-            _detector.WatchForCallEnd();
+            // Manual start carries no evidence that the call is on this machine,
+            // so the watch stays inert until a peer app actually captures.
+            // Without this, a speakerphone session auto-finalized ~5s in.
+            _detector.WatchForCallEnd(peerAlreadyObserved: false, grace: TimeSpan.FromSeconds(15));
             _worker?.Kick();
             _log.Info("manual recording started", category: "app");
         }

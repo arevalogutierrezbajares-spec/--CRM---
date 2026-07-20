@@ -39,6 +39,13 @@ public sealed class MicActivityDetector : IDisposable
     private static readonly TimeSpan EndQuietSeconds = TimeSpan.FromSeconds(5);
     private DateTimeOffset? _runningSince;
     private DateTimeOffset? _quietSince;
+    /// <summary>
+    /// Whether another process has been observed capturing during the current
+    /// call-end watch. Gates auto-finalize — see <see cref="EvaluateCallEnd"/>.
+    /// </summary>
+    private bool _sawPeerCapturer;
+    private DateTimeOffset? _watchStartedAt;
+    private TimeSpan _watchGrace = TimeSpan.Zero;
 
     private readonly int _ownPid = Environment.ProcessId;
 
@@ -73,16 +80,33 @@ public sealed class MicActivityDetector : IDisposable
     /// While recording, watch for the *other* app releasing the mic so the
     /// capture can auto-finalize (FR-CALL-TRG-5).
     /// </summary>
-    public void WatchForCallEnd()
+    /// <param name="peerAlreadyObserved">
+    /// Whether another process was <em>already</em> seen capturing (true on the
+    /// detection path, which only fires because an app took the mic). When
+    /// false, this watch cannot end the session until a peer appears and then
+    /// leaves — see <see cref="EvaluateCallEnd"/>. Defaults to the safe value:
+    /// defaulting to true would make the speakerphone auto-finalize the silent
+    /// fallback for every future call site.
+    /// </param>
+    /// <param name="grace">
+    /// Minimum watch age before an end may be declared, so a session can never
+    /// auto-finalize in its first seconds.
+    /// </param>
+    public void WatchForCallEnd(bool peerAlreadyObserved = false, TimeSpan grace = default)
     {
         lock (_gate)
         {
             _armed = false;
             _watchingForEnd = true;
             _quietSince = null;
+            _sawPeerCapturer = peerAlreadyObserved;
+            _watchStartedAt = DateTimeOffset.UtcNow;
+            _watchGrace = grace;
             StartPolling();
         }
-        HelperLog.Shared.Info("watching for call end (capture sessions)", category: "detect");
+        HelperLog.Shared.Info(
+            $"watching for call end (capture sessions; peerObserved={peerAlreadyObserved}, grace={(int)grace.TotalSeconds}s)",
+            category: "detect");
     }
 
     // ----------------------------------------------------------- Polling + evaluation
@@ -142,25 +166,45 @@ public sealed class MicActivityDetector : IDisposable
     private void EvaluateCallEnd()
     {
         var others = ProcessesCapturing(excludingPid: _ownPid);
-        if (others.Count == 0)
+        if (others.Count > 0)
         {
-            _quietSince ??= DateTimeOffset.UtcNow;
-            if (DateTimeOffset.UtcNow - _quietSince >= EndQuietSeconds)
+            if (!_sawPeerCapturer)
             {
-                lock (_gate)
-                {
-                    _watchingForEnd = false;
-                    StopPolling();
-                }
-                HelperLog.Shared.Info(
-                    $"no other process using mic for {(int)EndQuietSeconds.TotalSeconds}s — call likely ended",
-                    category: "detect");
-                OnCallLikelyEnded?.Invoke();
+                _sawPeerCapturer = true;
+                HelperLog.Shared.Info("peer capturer observed — call-end watch now live", category: "detect");
             }
+            _quietSince = null;
+            return;
         }
-        else
+
+        // A session where no other process was *ever* seen capturing is not
+        // evidence of a call that ended — it is a call that was never on this
+        // machine (phone on speakerphone, desk handset, another laptop). Firing
+        // here auto-finalized speakerphone sessions ~5s after they started.
+        if (!_sawPeerCapturer)
         {
             _quietSince = null;
+            return;
+        }
+
+        // The quiet timer accumulates during the grace window — grace gates the
+        // *firing*, not the measurement. Returning early here instead would
+        // serialize the two, so a call that ended at t=8s could not finalize
+        // until grace+EndQuiet, well past the FR-CALL-TRG-5 5s budget.
+        _quietSince ??= DateTimeOffset.UtcNow;
+        bool graceElapsed = _watchStartedAt is null
+            || DateTimeOffset.UtcNow - _watchStartedAt.Value >= _watchGrace;
+        if (graceElapsed && DateTimeOffset.UtcNow - _quietSince >= EndQuietSeconds)
+        {
+            lock (_gate)
+            {
+                _watchingForEnd = false;
+                StopPolling();
+            }
+            HelperLog.Shared.Info(
+                $"no other process using mic for {(int)EndQuietSeconds.TotalSeconds}s — call likely ended",
+                category: "detect");
+            OnCallLikelyEnded?.Invoke();
         }
     }
 
