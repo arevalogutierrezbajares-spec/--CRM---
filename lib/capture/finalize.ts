@@ -28,6 +28,8 @@ import {
   WAV_HEADER_BYTES,
   TRANSCRIBE_WINDOW_BYTES,
   STORE_AUDIO_MAX_BYTES,
+  isInPersonMeetingSource,
+  isMixedAcousticSource,
 } from "./constants";
 import { Mp3StreamEncoder, estimatedMp3Bytes } from "./mp3";
 import {
@@ -51,7 +53,7 @@ import { fileCallTranscript, type FileCallResult } from "./file-call";
 export async function transcribeWindowed(
   chunks: ChunkEntry[],
   fmt: { sampleRate: number; channels: number },
-  opts: { encodeMp3?: boolean; inPersonMeeting?: boolean } = {},
+  opts: { encodeMp3?: boolean; mixedAcoustic?: boolean } = {},
 ): Promise<
   | { ok: true; result: TranscriptionResult; durationSecs: number; mp3: Uint8Array | null }
   | { ok: false; status: number; error: string }
@@ -97,7 +99,7 @@ export async function transcribeWindowed(
     const txr = await transcribeDualChannelBytes({
       wav: asm.wav,
       durationSecs: Math.round(winDurationSecs),
-      inPersonMeeting: opts.inPersonMeeting,
+      mixedAcoustic: opts.mixedAcoustic,
     });
     if (!txr.ok) return { ok: false, status: 502, error: txr.error };
     if (language === null) language = txr.result.language;
@@ -113,7 +115,7 @@ export async function transcribeWindowed(
 
   const durationSecs = Math.round(totalDataBytes / bytesPerSec);
   merged.sort((a, b) => a.start - b.start);
-  const room = !!opts.inPersonMeeting;
+  const room = !!opts.mixedAcoustic;
   return {
     ok: true,
     durationSecs,
@@ -127,18 +129,22 @@ export async function transcribeWindowed(
       language: language ?? "multi",
       // Silence detection must run over the WHOLE call, not per window.
       suspectFlags: detectSilentChannels(merged, durationSecs, {
-        inPersonMeeting: room,
+        mixedAcoustic: room,
       }),
     },
   };
 }
 
-/** CRM sourceApp value the Mac Helper sets for in-person room recordings. */
-export const SOURCE_APP_IN_PERSON_MEETING = "In-Person Meeting";
-
-export function isInPersonMeetingSource(sourceApp: string | null | undefined): boolean {
-  return (sourceApp ?? "").trim() === SOURCE_APP_IN_PERSON_MEETING;
-}
+// Capture-source predicates live in constants.ts (dependency-free, so unit
+// tests can import them without pulling in the db layer). Re-exported here
+// because callers already import them from this module.
+export {
+  SOURCE_APP_IN_PERSON_MEETING,
+  SOURCE_APP_SPEAKERPHONE,
+  isInPersonMeetingSource,
+  isSpeakerphoneSource,
+  isMixedAcousticSource,
+} from "./constants";
 
 export type FinalizeOutcome =
   | {
@@ -218,6 +224,10 @@ export async function finalizeSession(opts: {
   const totalBytes = chunks.reduce((n, c) => n + Math.max(c.size, 0), 0);
   const fmt = { sampleRate: CAPTURE_SAMPLE_RATE, channels: CAPTURE_CHANNELS };
   const inPersonMeeting = isInPersonMeetingSource(session.sourceApp);
+  // Acoustic shape, not wording: in-person rooms AND speakerphone captures put
+  // every speaker on ch0, so channel identity means nothing and diarization is
+  // the only thing that can tell participants apart.
+  const mixedAcoustic = isMixedAcousticSource(session.sourceApp);
 
   // Audio is always transcribed, but only persisted when the workspace opts in.
   // Transcript-only mode skips the bucket upload entirely (and the MP3 encode),
@@ -262,7 +272,7 @@ export async function finalizeSession(opts: {
       }),
       language: pre.language ? String(pre.language).slice(0, 32) : "multi",
       suspectFlags: detectSilentChannels(utterances, durationSecs ?? 0, {
-        inPersonMeeting,
+        mixedAcoustic,
       }),
     };
     // Still try to store audio for playback when size allows.
@@ -296,11 +306,11 @@ export async function finalizeSession(opts: {
     const tx = await transcribeDualChannelBytes({
       wav: asm.wav,
       durationSecs: durationSecs ?? 0,
-      inPersonMeeting,
+      mixedAcoustic,
     });
     if (!tx.ok) return fail(502, tx.error);
     txResult = tx.result;
-    transcriptEngine = inPersonMeeting ? "deepgram+diarize" : "deepgram";
+    transcriptEngine = mixedAcoustic ? "deepgram+diarize" : "deepgram";
 
     // Store the audio best-effort for playback (FR-CALL-ACC-3), unless the
     // workspace is transcript-only. If storage rejects it we keep transcript +
@@ -327,12 +337,12 @@ export async function finalizeSession(opts: {
       storeCallAudio && estimatedMp3Bytes(estDurationSecs) <= STORE_AUDIO_MAX_BYTES;
     const w = await transcribeWindowed(chunks, fmt, {
       encodeMp3: wantMp3,
-      inPersonMeeting,
+      mixedAcoustic,
     });
     if (!w.ok) return fail(w.status, w.error);
     txResult = w.result;
     durationSecs = w.durationSecs || opts.durationSecs || null;
-    transcriptEngine = inPersonMeeting ? "deepgram+diarize" : "deepgram";
+    transcriptEngine = mixedAcoustic ? "deepgram+diarize" : "deepgram";
 
     if (storeCallAudio && w.mp3 && w.mp3.length <= STORE_AUDIO_MAX_BYTES) {
       audioPath = assembledMp3ObjectPath(workspaceId, session.id);
@@ -363,7 +373,7 @@ export async function finalizeSession(opts: {
     : (opts.contactName ?? "").trim() || "Participant";
   // If contactName is set and only one cluster appears, map SPEAKER_00 → name.
   const speakerMap: Record<string, string> = {};
-  if (inPersonMeeting && (opts.contactName ?? "").trim()) {
+  if (mixedAcoustic && (opts.contactName ?? "").trim()) {
     const name = (opts.contactName ?? "").trim();
     const clusters = [
       ...new Set(

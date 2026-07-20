@@ -127,6 +127,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Always-on-screen Start/Stop control (notch-proof, hotkey-independent).
         controlWindow.onToggle = { [weak self] in self?.hotKeyToggled() }
+        controlWindow.onStartKind = { [weak self] kind in self?.startKindFromPanel(kind) }
         controlWindow.onConfigure = { [weak self] in self?.configureTapped() }
         controlWindow.onToggleTranscript = { [weak self] in self?.liveWindow.toggle() }
         controlWindow.onOpenTownHall = { [weak self] in self?.townHallOpened() }
@@ -672,6 +673,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         switch state {
         case .idle, .uploading, .error:
             manualStart(kind: .meeting)
+        default:
+            break
+        }
+    }
+
+    /// Capture kind chosen from the control panel's idle start menu.
+    private func startKindFromPanel(_ kind: CaptureKind) {
+        switch state {
+        case .detected:
+            // A call was already detected; honor the existing affirm path.
+            prompt.dismissPanel()
+            affirmRecording()
+        case .idle, .uploading, .error:
+            manualStart(kind: kind)
         default:
             break
         }

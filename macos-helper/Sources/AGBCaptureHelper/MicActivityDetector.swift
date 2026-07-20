@@ -47,6 +47,11 @@ final class MicActivityDetector {
     /// Whether another process has been observed holding the mic during the
     /// current call-end watch. Gates auto-finalize — see `evaluateCallEnd`.
     private var sawPeerMicUser = false
+    /// When the current *continuous* run of peer mic usage began. Reset the
+    /// moment the peer disappears, so brief probes never accumulate.
+    private var peerSeenSince: Date?
+    /// How long a peer must hold the mic before it counts as a real call.
+    private let peerConfirmSeconds: TimeInterval = 4
     private var watchStartedAt: Date?
     private var watchGraceSeconds: TimeInterval = 0
 
@@ -131,6 +136,7 @@ final class MicActivityDetector {
             self.watchingForEnd = true
             self.quietSince = nil
             self.sawPeerMicUser = peerAlreadyObserved
+            self.peerSeenSince = nil
             self.watchStartedAt = Date()
             self.watchGraceSeconds = graceSeconds
             self.startPolling()
@@ -222,13 +228,28 @@ final class MicActivityDetector {
         let othersRunning = Self.processesRunningInput(excludingPID: ProcessInfo.processInfo.processIdentifier)
 
         guard othersRunning.isEmpty else {
+            // A peer must hold the mic *continuously* for peerConfirmSeconds
+            // before it counts as "the call is on this Mac". A single poll tick
+            // is not a call: Siri, a browser tab probing devices, or a Control
+            // Centre glance all open the mic for well under a second. Counting
+            // one of those armed the watch mid-session, and the release 1 s
+            // later auto-finalized a live 54 s recording.
             if !sawPeerMicUser {
-                sawPeerMicUser = true
-                HelperLog.shared.info("peer mic user observed — call-end watch now live", category: "detect")
+                if peerSeenSince == nil { peerSeenSince = Date() }
+                if let since = peerSeenSince,
+                   Date().timeIntervalSince(since) >= peerConfirmSeconds {
+                    sawPeerMicUser = true
+                    HelperLog.shared.info(
+                        "peer mic user held \(Int(peerConfirmSeconds))s — call-end watch now live",
+                        category: "detect"
+                    )
+                }
             }
             quietSince = nil
             return
         }
+        // Peer gone: a transient grab must not accumulate toward confirmation.
+        peerSeenSince = nil
 
         // A session where no other process was *ever* seen holding the mic is
         // not evidence of a call that ended — it is a call that was never on
