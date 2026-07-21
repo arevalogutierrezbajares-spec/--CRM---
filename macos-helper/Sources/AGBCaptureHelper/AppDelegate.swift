@@ -88,6 +88,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let detector = MicActivityDetector()
     private let prompt = PromptController()
     private var hotKey: GlobalHotKey?
+    /// ⌘⇧K — flag the current moment as important while recording (FEATURE 3).
+    private var highlightHotKey: GlobalHotKey?
     private var detectedSourceApp: String?
     /// Far-side person name for this recording (never source app). Feeds live
     /// captions + spool contactName → CRM finalize (FR-CALL-ATT-3).
@@ -124,6 +126,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         wireDetectorAndPrompt()
         hotKey = GlobalHotKey()
         hotKey?.onPressed = { [weak self] in self?.hotKeyToggled() }
+        // FEATURE 3: ⌘⇧K flags the current moment while recording. Best-effort —
+        // registration failing just means no global shortcut; the ★ button works.
+        highlightHotKey = GlobalHotKey(id: 2, keyCode: GlobalHotKey.highlightKeyCode)
+        highlightHotKey?.onPressed = { [weak self] in self?.dropHighlight(note: nil) }
 
         // Always-on-screen Start/Stop control (notch-proof, hotkey-independent).
         controlWindow.onToggle = { [weak self] in self?.hotKeyToggled() }
@@ -131,6 +137,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controlWindow.onConfigure = { [weak self] in self?.configureTapped() }
         controlWindow.onToggleTranscript = { [weak self] in self?.liveWindow.toggle() }
         controlWindow.onOpenTownHall = { [weak self] in self?.townHallOpened() }
+        // ★ button on the live-transcript window flags the current moment.
+        liveWindow.onHighlight = { [weak self] in self?.dropHighlight(note: nil) }
         configureTownHall()
         controlWindow.show()
 
@@ -551,6 +559,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         stopLiveTimer()
         if liveWindow.isVisible {
             liveWindow.setStatus("■ Recording ended — filing the call…")
+        }
+    }
+
+    /// FEATURE 3: flag the current moment as important (⌘⇧K or the ★ button).
+    /// Best-effort and fully decoupled from capture: it only appends a
+    /// time-anchored marker to the crash-safe manifest and confirms in the live
+    /// window. A no-op unless a session is actively recording/paused.
+    private func dropHighlight(note: String?) {
+        guard state == .recording || state == .paused,
+              let spooler = activeSpooler else {
+            return
+        }
+        // Anchor to the AUDIO timeline, not wall-clock: the spool (and thus the
+        // server's utterance timestamps) is backdated by up to 60 s of pre-roll,
+        // so `Date() - recordingStartedAt` would land the flag up to a minute too
+        // early. `appendedSeconds` is exactly the position utterances are stamped
+        // against (and O(1), so it never contends the capture path).
+        let tSecs = spooler.appendedSeconds
+        do {
+            let count = try spooler.addHighlight(tSecs: tSecs, note: note)
+            liveWindow.flashHighlight(atSecs: tSecs, note: note, count: count)
+            log.info("highlight #\(count) flagged @\(Int(tSecs))s", category: "app")
+        } catch {
+            log.warn("highlight failed: \(error.localizedDescription)", category: "app")
         }
     }
 

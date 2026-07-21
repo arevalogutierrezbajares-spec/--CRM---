@@ -38,6 +38,24 @@ public struct SessionManifest: Codable, Equatable {
     /// Chunk size in seconds used for this session (30 in production;
     /// overridable in simulate mode). Persisted so reopen chunks identically.
     public var chunkSeconds: Int
+    /// Live-flagged "important moments" the operator marked during the call
+    /// (hotkey / ★ button). Time-anchored to the recording; ride the finalize
+    /// payload so the CRM brief can surface them. Optional so older manifests
+    /// (no key) still decode — a missing key defaults to nil, never a corrupt
+    /// manifest. Crash-safe: persisted like every other field.
+    public var highlights: [Highlight]?
+
+    /// One operator-flagged moment: seconds from recording start + optional note.
+    public struct Highlight: Codable, Equatable {
+        /// Elapsed seconds from `startedAt` when the operator flagged the moment.
+        public var tSecs: Double
+        /// Optional free-text the operator typed with the flag (nil = bare star).
+        public var note: String?
+        public init(tSecs: Double, note: String? = nil) {
+            self.tSecs = tSecs
+            self.note = note
+        }
+    }
 
     public init(sessionLocalId: String,
                 serverSessionId: String? = nil,
@@ -51,7 +69,8 @@ public struct SessionManifest: Codable, Equatable {
                 endedAt: Date? = nil,
                 durationSecs: Int? = nil,
                 partial: Bool = false,
-                chunkSeconds: Int = AudioConstants.chunkSeconds) {
+                chunkSeconds: Int = AudioConstants.chunkSeconds,
+                highlights: [Highlight]? = nil) {
         self.sessionLocalId = sessionLocalId
         self.serverSessionId = serverSessionId
         self.startedAt = ISO8601.string(from: startedAt)
@@ -65,6 +84,7 @@ public struct SessionManifest: Codable, Equatable {
         self.durationSecs = durationSecs
         self.partial = partial
         self.chunkSeconds = chunkSeconds
+        self.highlights = highlights
     }
 
     public var startedAtDate: Date? { ISO8601.date(from: startedAt) }

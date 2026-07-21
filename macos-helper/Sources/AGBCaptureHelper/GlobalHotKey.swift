@@ -11,10 +11,19 @@ final class GlobalHotKey {
 
     private var hotKeyRef: EventHotKeyRef?
     private var eventHandlerRef: EventHandlerRef?
+    private let id: UInt32
     private static let signature: OSType = 0x41474243 // 'AGBC'
 
-    init?(keyCode: UInt32 = UInt32(kVK_ANSI_R),
+    /// ⌘⇧K — flag the current moment while recording (highlights, FEATURE 3).
+    public static let highlightKeyCode = UInt32(kVK_ANSI_K)
+
+    /// `id` disambiguates multiple registered hotkeys: each instance installs its
+    /// own app-target handler that fires for ANY matching-signature hotkey, so the
+    /// handler must filter by id or every key would fire every callback.
+    init?(id: UInt32 = 1,
+          keyCode: UInt32 = UInt32(kVK_ANSI_R),
           modifiers: UInt32 = UInt32(cmdKey | shiftKey)) {
+        self.id = id
         var eventType = EventTypeSpec(
             eventClass: OSType(kEventClassKeyboard),
             eventKind: UInt32(kEventHotKeyPressed)
@@ -35,8 +44,19 @@ final class GlobalHotKey {
                     nil,
                     &hotKeyID
                 )
-                guard status == noErr, hotKeyID.signature == GlobalHotKey.signature else { return noErr }
+                guard status == noErr, hotKeyID.signature == GlobalHotKey.signature else {
+                    return OSStatus(eventNotHandledErr)
+                }
                 let instance = Unmanaged<GlobalHotKey>.fromOpaque(userData).takeUnretainedValue()
+                // Every GlobalHotKey installs its OWN handler on the shared app
+                // event target, so BOTH handlers fire for EITHER hotkey. Carbon
+                // stops walking the handler chain as soon as one returns noErr —
+                // so a non-matching handler MUST return eventNotHandledErr, or it
+                // would swallow the sibling's key (e.g. the ⌘⇧K handler eating
+                // ⌘⇧R). Only the id-owning handler returns noErr.
+                guard hotKeyID.id == instance.id else {
+                    return OSStatus(eventNotHandledErr)
+                }
                 DispatchQueue.main.async {
                     instance.onPressed?()
                 }
@@ -49,7 +69,7 @@ final class GlobalHotKey {
         )
         guard installStatus == noErr else { return nil }
 
-        let hotKeyID = EventHotKeyID(signature: Self.signature, id: 1)
+        let hotKeyID = EventHotKeyID(signature: Self.signature, id: id)
         let registerStatus = RegisterEventHotKey(
             keyCode,
             modifiers,
@@ -64,7 +84,7 @@ final class GlobalHotKey {
             }
             return nil
         }
-        HelperLog.shared.info("global hotkey registered (⌘⇧R)", category: "hotkey")
+        HelperLog.shared.info("global hotkey registered (id \(id), keyCode \(keyCode))", category: "hotkey")
     }
 
     deinit {

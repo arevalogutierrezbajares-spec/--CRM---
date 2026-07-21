@@ -12,6 +12,7 @@ import {
   isUuid,
   MAX_TOTAL_CHUNKS,
   parsePrecomputedTranscript,
+  parseHighlights,
 } from "@/lib/capture/validate";
 import { FINALIZE_LEASE_MINUTES } from "@/lib/capture/constants";
 
@@ -42,6 +43,7 @@ export async function POST(
     partial?: boolean;
     contactName?: string | null;
     precomputedTranscript?: unknown;
+    highlights?: unknown;
   } | null;
   if (!body || !Number.isInteger(body.totalChunks) || body.totalChunks! < 1) {
     return NextResponse.json(
@@ -122,6 +124,7 @@ export async function POST(
 
   const endedAt = body.endedAt ? new Date(body.endedAt) : new Date();
   const precomputed = parsePrecomputedTranscript(body.precomputedTranscript);
+  const highlights = parseHighlights(body.highlights);
   const outcome = await finalizeSession({
     session,
     founderLabel: identity.displayName?.split(/\s+/)[0] ?? "Founder",
@@ -132,6 +135,7 @@ export async function POST(
     partial: body.partial === true,
     contactName: body.contactName ?? null,
     precomputedTranscript: precomputed,
+    highlights,
   });
 
   if (!outcome.ok) {

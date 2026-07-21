@@ -98,6 +98,16 @@ public final class ChunkSpooler {
         return Double(fileBytes + pending.count) / Double(AudioConstants.bytesPerSecond)
     }
 
+    /// Current audio-timeline position in seconds, from the O(1) in-memory byte
+    /// counter — no disk enumeration, so it holds the shared lock only for
+    /// nanoseconds and never contends the capture path (unlike `spooledSeconds`).
+    /// Includes pre-roll (it's flushed through `append`), matching the timeline
+    /// the server stamps utterances against. Used to time-anchor live highlights.
+    public var appendedSeconds: Double {
+        lock.lock(); defer { lock.unlock() }
+        return Double(appendedBytes) / Double(AudioConstants.bytesPerSecond)
+    }
+
     public func chunkURL(seq: Int) -> URL {
         directory.appendingPathComponent(Self.chunkFileName(seq: seq))
     }
@@ -196,6 +206,25 @@ public final class ChunkSpooler {
         let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines)
         manifestStorage.contactName = (trimmed?.isEmpty == false) ? trimmed : nil
         try persistManifest()
+    }
+
+    /// Append an operator-flagged "important moment" (hotkey / ★ button).
+    /// Time-anchored to the recording; persisted to disk so a mid-call crash
+    /// still finalizes with the flags. Empty/whitespace notes store as nil.
+    /// Returns the running highlight count (for live UI feedback).
+    @discardableResult
+    public func addHighlight(tSecs: Double, note: String? = nil) throws -> Int {
+        lock.lock(); defer { lock.unlock() }
+        let trimmed = note?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let highlight = SessionManifest.Highlight(
+            tSecs: max(0, tSecs),
+            note: (trimmed?.isEmpty == false) ? trimmed : nil
+        )
+        var current = manifestStorage.highlights ?? []
+        current.append(highlight)
+        manifestStorage.highlights = current
+        try persistManifest()
+        return current.count
     }
 
     /// Mark the call ended. Duration is derived from spooled bytes unless given.

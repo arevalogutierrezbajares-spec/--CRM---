@@ -264,7 +264,8 @@ public final class UploadQueueWorker {
             totalChunks: snap.seqsWritten.count,
             partial: snap.partial,
             contactName: snap.contactName,
-            precomputedTranscript: precomputed
+            precomputedTranscript: precomputed,
+            highlights: snap.highlights ?? []
         )
 
         let finalize = try await client.finalizeRecovering(
