@@ -40,6 +40,56 @@ import {
   type TranscriptionResult,
 } from "./deepgram";
 import { fileCallTranscript, type FileCallResult } from "./file-call";
+import type { Highlight } from "./validate";
+
+/** A highlight resolved to the words spoken at that moment. */
+export type FlaggedMoment = { atSec: number; quote: string; note: string | null };
+
+/**
+ * A flag whose nearest utterance is more than this far away isn't backed by
+ * real audio at that time — the tail was dropped "off the record", or the flag
+ * sits past the transcript. Beyond it we keep the timestamp + note but emit no
+ * quote, rather than misattributing a distant line as "what was said here".
+ * ~one 30 s chunk.
+ */
+export const MAX_HIGHLIGHT_MATCH_GAP_SECS = 30;
+
+/**
+ * Map each operator-flagged moment onto the transcript: the utterance covering
+ * that time (or the nearest one within {@link MAX_HIGHLIGHT_MATCH_GAP_SECS})
+ * supplies the quoted words, so the brief can show what was actually said — not
+ * just a timestamp. Robust to empty transcripts and dropped audio (quote = "").
+ */
+export function resolveHighlights(
+  highlights: Highlight[],
+  utterances: Utterance[],
+): FlaggedMoment[] {
+  if (highlights.length === 0) return [];
+  return highlights.map((h) => {
+    let quote = "";
+    if (utterances.length > 0) {
+      let best = utterances[0];
+      let bestDist = Infinity;
+      for (const u of utterances) {
+        const dist =
+          h.tSecs >= u.start && h.tSecs <= u.end
+            ? 0
+            : Math.min(Math.abs(u.start - h.tSecs), Math.abs(u.end - h.tSecs));
+        if (dist < bestDist) {
+          bestDist = dist;
+          best = u;
+          if (dist === 0) break;
+        }
+      }
+      // Only quote when the flag actually lands near real audio; a distant
+      // nearest-match means the backing audio is gone, so don't misquote it.
+      if (bestDist <= MAX_HIGHLIGHT_MATCH_GAP_SECS) {
+        quote = best.text.trim().slice(0, 200);
+      }
+    }
+    return { atSec: h.tSecs, quote, note: h.note };
+  });
+}
 
 /**
  * Memory-bounded transcription for long calls: group chunks into windows of
@@ -172,6 +222,8 @@ export async function finalizeSession(opts: {
   contactName?: string | null;
   /** Local free STT+diarize result from the Mac Helper — skips Deepgram. */
   precomputedTranscript?: PrecomputedTranscript | null;
+  /** Operator-flagged "important moments" (time-anchored) — steer the brief. */
+  highlights?: Highlight[];
 }): Promise<FinalizeOutcome> {
   const { session } = opts;
   const workspaceId = session.workspaceId;
@@ -430,6 +482,7 @@ export async function finalizeSession(opts: {
       attributed: true,
       founderLabel,
       inPersonMeeting,
+      flaggedMoments: resolveHighlights(opts.highlights ?? [], txResult.utterances),
       spendRoute: "capture:finalize:file",
     });
   } catch (e) {

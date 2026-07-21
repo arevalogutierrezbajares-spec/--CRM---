@@ -21,6 +21,35 @@ export const MAX_TOTAL_CHUNKS = 5000;
 export const MAX_PRECOMPUTED_UTTERANCES = 5000;
 export const MAX_PRECOMPUTED_TEXT_CHARS = 8000;
 
+/** Cap operator-flagged highlights so a helper can't DoS finalize. */
+export const MAX_HIGHLIGHTS = 500;
+export const MAX_HIGHLIGHT_NOTE_CHARS = 500;
+
+export type Highlight = { tSecs: number; note: string | null };
+
+/**
+ * Validate helper-supplied "flagged moments". Returns [] for anything unusable
+ * (never throws — highlights are advisory and must never fail a finalize).
+ * Sorted by time so the brief lists them in call order.
+ */
+export function parseHighlights(raw: unknown): Highlight[] {
+  if (!Array.isArray(raw) || raw.length === 0) return [];
+  const out: Highlight[] = [];
+  for (const item of raw.slice(0, MAX_HIGHLIGHTS)) {
+    if (!item || typeof item !== "object") continue;
+    const o = item as Record<string, unknown>;
+    const t = typeof o.tSecs === "number" ? o.tSecs : Number(o.tSecs);
+    if (!Number.isFinite(t) || t < 0) continue;
+    const rawNote = o.note == null ? "" : String(o.note).trim();
+    out.push({
+      tSecs: Math.min(t, 24 * 3600),
+      note: rawNote ? rawNote.slice(0, MAX_HIGHLIGHT_NOTE_CHARS) : null,
+    });
+  }
+  out.sort((a, b) => a.tSecs - b.tSecs);
+  return out;
+}
+
 export type PrecomputedUtteranceIn = {
   speaker?: unknown;
   diarizationId?: unknown;

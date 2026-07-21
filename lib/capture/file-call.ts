@@ -101,9 +101,41 @@ export async function fileCallTranscript(opts: {
   founderLabel?: string;
   /** In-person room capture (mic-only) — use meeting filing prompt. */
   inPersonMeeting?: boolean;
+  /**
+   * Operator-flagged "important moments" (⌘⇧K / ★ during the call), each
+   * resolved to the words spoken then. Steers the brief and is guaranteed into
+   * it verbatim under "★ Flagged moments" so a live flag is never lost.
+   */
+  flaggedMoments?: { atSec: number; quote: string; note: string | null }[];
   spendRoute?: string;
 }): Promise<FileCallResult> {
   const transcript = opts.transcript;
+  const flagged = opts.flaggedMoments ?? [];
+
+  // mm:ss (or h:mm:ss) for a moment offset, for the brief + prompt steering.
+  const clock = (sec: number) => {
+    const s = Math.max(0, Math.round(sec));
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const ss = s % 60;
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return h > 0 ? `${h}:${pad(m)}:${pad(ss)}` : `${m}:${pad(ss)}`;
+  };
+  const flaggedLines = flagged.map((f) => {
+    const quote = f.quote ? ` "${f.quote}"` : "";
+    const note = f.note ? ` — ${f.note}` : "";
+    return `- [${clock(f.atSec)}]${quote}${note}`;
+  });
+  // Verbatim block prepended to the brief so flags survive even if the model
+  // omits them. Also fed to the model so its analysis reflects them.
+  const flaggedBlock =
+    flaggedLines.length > 0
+      ? `**★ Flagged moments** (marked live by the operator):\n${flaggedLines.join("\n")}\n\n`
+      : "";
+  const flaggedSteer =
+    flaggedLines.length > 0
+      ? `\n\nOPERATOR-FLAGGED MOMENTS — the operator marked these live as the most important points of the call. They are already listed at the top of the brief under "★ Flagged moments"; do NOT repeat them verbatim, but make sure your Key points / Decisions clearly reflect their significance:\n${flaggedLines.join("\n")}`
+      : "";
 
   let title = opts.inPersonMeeting ? "Meeting" : "Call";
   let brief = "";
@@ -138,7 +170,10 @@ export async function fileCallTranscript(opts: {
       trackUsage: true,
     },
     messages: [
-      { role: "user", content: `${preamble}${transcript.slice(0, 24000)}` },
+      {
+        role: "user",
+        content: `${preamble}${transcript.slice(0, 24000)}${flaggedSteer}`,
+      },
     ],
   });
 
@@ -161,7 +196,7 @@ export async function fileCallTranscript(opts: {
       model: "claude-haiku-4-5",
       system:
         "Summarize this call transcript as a short Markdown brief starting with '**TL;DR:**'. Only include sections with real content. Same language as the transcript.",
-      prompt: transcript.slice(0, 24000),
+      prompt: `${transcript.slice(0, 24000)}${flaggedSteer}`,
       maxTokens: 800,
       spend: {
         workspaceId: opts.workspaceId,
@@ -176,6 +211,11 @@ export async function fileCallTranscript(opts: {
     });
     if (chat.ok) brief = chat.text;
   }
+
+  // Guarantee the operator's live flags into the brief verbatim, at the top —
+  // the model is steered by them but may summarize them away; these are the
+  // moments the operator explicitly cared about, so they must survive.
+  if (flaggedBlock) brief = `${flaggedBlock}${brief}`.trim();
 
   // Create action items (linked back to the recording for provenance). One
   // batched insert rather than N round-trips.

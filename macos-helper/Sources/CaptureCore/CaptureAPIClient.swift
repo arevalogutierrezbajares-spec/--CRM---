@@ -84,6 +84,9 @@ public final class CaptureAPIClient {
         public let contactName: String?
         /// Local free STT+diarize payload (skips Deepgram when present).
         public let precomputedTranscript: PrecomputedTranscript?
+        /// Operator-flagged "important moments" (time-anchored). Omitted from the
+        /// wire when empty. Server maps them onto the transcript + steers the brief.
+        public let highlights: [SessionManifest.Highlight]
 
         public struct PrecomputedTranscript: Encodable {
             public let language: String?
@@ -127,24 +130,28 @@ public final class CaptureAPIClient {
 
         public init(endedAt: Date, durationSecs: Int, totalChunks: Int,
                     partial: Bool, contactName: String? = nil,
-                    precomputedTranscript: PrecomputedTranscript? = nil) {
+                    precomputedTranscript: PrecomputedTranscript? = nil,
+                    highlights: [SessionManifest.Highlight] = []) {
             self.endedAt = ISO8601.string(from: endedAt)
             self.durationSecs = durationSecs
             self.totalChunks = totalChunks
             self.partial = partial
             self.contactName = contactName
             self.precomputedTranscript = precomputedTranscript
+            self.highlights = highlights
         }
 
         public init(endedAtISO: String, durationSecs: Int, totalChunks: Int,
                     partial: Bool, contactName: String? = nil,
-                    precomputedTranscript: PrecomputedTranscript? = nil) {
+                    precomputedTranscript: PrecomputedTranscript? = nil,
+                    highlights: [SessionManifest.Highlight] = []) {
             self.endedAt = endedAtISO
             self.durationSecs = durationSecs
             self.totalChunks = totalChunks
             self.partial = partial
             self.contactName = contactName
             self.precomputedTranscript = precomputedTranscript
+            self.highlights = highlights
         }
 
         public func encode(to encoder: Encoder) throws {
@@ -160,6 +167,9 @@ public final class CaptureAPIClient {
             }
             if let precomputedTranscript {
                 try c.encode(precomputedTranscript, forKey: .init("precomputedTranscript"))
+            }
+            if !highlights.isEmpty {
+                try c.encode(highlights, forKey: .init("highlights"))
             }
         }
     }

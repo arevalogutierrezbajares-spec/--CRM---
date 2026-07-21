@@ -233,5 +233,26 @@ import Testing
         #expect(manifest.contactName == nil)
         #expect(manifest.sourceApp == "Zoom")
         #expect(manifest.sessionLocalId == "legacy")
+        // A manifest with no `highlights` key must still decode (not corrupt).
+        #expect(manifest.highlights == nil)
+    }
+
+    @Test func addHighlightPersistsOrdersAndSurvivesReopen() throws {
+        var spooler: ChunkSpooler? = try makeSpooler(chunkSeconds: 1)
+        #expect(try spooler?.addHighlight(tSecs: 42.5, note: "  key ask  ") == 1)
+        // Whitespace-only note stores as nil; negative time clamps to 0.
+        #expect(try spooler?.addHighlight(tSecs: -3, note: "   ") == 2)
+
+        let live = spooler?.snapshot.highlights
+        #expect(live?.count == 2)
+        #expect(live?[0].tSecs == 42.5)
+        #expect(live?[0].note == "key ask")
+        #expect(live?[1].tSecs == 0)
+        #expect(live?[1].note == nil)
+        spooler = nil
+
+        let reopened = try ChunkSpooler(openingDirectory: tempDir)
+        #expect(reopened.snapshot.highlights?.count == 2)
+        #expect(reopened.snapshot.highlights?[0].note == "key ask")
     }
 }
