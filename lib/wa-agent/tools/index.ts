@@ -59,6 +59,13 @@ import { brainFreshnessTool } from "./brain-freshness";
 import { brainRcaPack } from "./brain-rca-pack";
 import { brainRemediationGate } from "./brain-remediation-gate";
 import { brainCorrelateError } from "./brain-correlate-error";
+// Presentations — search, upload, link lookup, and comment pickup
+import { searchDocumentsTool } from "./search-documents";
+import { uploadPresentation } from "./upload-presentation";
+import { listPresentationsTool } from "./list-presentations";
+import { getPresentationLink } from "./get-presentation-link";
+import { listPresentationCommentsTool } from "./list-presentation-comments";
+import { resolvePresentationCommentTool } from "./resolve-presentation-comment";
 
 export const TOOLS: Record<string, ToolEntry> = {
   find_contact: findContact,
@@ -115,6 +122,13 @@ export const TOOLS: Record<string, ToolEntry> = {
   brain_rca_pack: brainRcaPack,
   brain_remediation_gate: brainRemediationGate,
   brain_correlate_error: brainCorrelateError,
+  // Presentations
+  search_documents: searchDocumentsTool,
+  upload_presentation: uploadPresentation,
+  list_presentations: listPresentationsTool,
+  get_presentation_link: getPresentationLink,
+  list_presentation_comments: listPresentationCommentsTool,
+  resolve_presentation_comment: resolvePresentationCommentTool,
 };
 
 export const TOOL_NAMES = Object.keys(TOOLS);

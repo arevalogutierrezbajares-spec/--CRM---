@@ -29,6 +29,8 @@ export default async function PublicPresentationPage(props: { params: Params }) 
     <PresentationPlayer
       presentationId={pres.id}
       slides={pres.slides}
+      kind={pres.kind}
+      slideMap={pres.slideMap}
       initialComments={comments.map((c) => ({
         ...c,
         createdAt: c.createdAt.toISOString(),

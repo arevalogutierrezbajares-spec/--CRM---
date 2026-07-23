@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import type { Slide } from "@/lib/presentations/types";
+import type { PresentationKind, SlideMapEntry } from "@/db/queries/presentations";
 import {
   addCommentAction,
   addCommentByTokenAction,
@@ -41,6 +42,8 @@ export function PresentationPlayer({
   allowComments,
   backHref,
   shareSlot,
+  kind = "structured",
+  slideMap = [],
 }: {
   presentationId: string;
   slides: Slide[];
@@ -50,6 +53,8 @@ export function PresentationPlayer({
   allowComments: boolean;
   backHref?: string;
   shareSlot?: React.ReactNode;
+  kind?: PresentationKind;
+  slideMap?: SlideMapEntry[];
 }) {
   const [index, setIndex] = useState(0);
   const [comments, setComments] = useState<PlayerComment[]>(initialComments);
@@ -61,8 +66,27 @@ export function PresentationPlayer({
   const [saving, setSaving] = useState(false);
   const stageRef = useRef<HTMLDivElement>(null);
 
-  const count = slides.length;
-  const slide = slides[index];
+  // 'html' decks are rendered as a single document in a sandboxed <iframe>;
+  // the nav/comment rail is driven by slideMap (anchor id/label pairs)
+  // instead of the structured Slide[] array. Kept as thin normalization on
+  // top of the existing index/slide-id logic below — the structured render
+  // path (SlideView) is untouched.
+  const isHtml = kind === "html";
+  const navItems = useMemo(
+    () =>
+      isHtml
+        ? slideMap.map((m) => ({ id: m.slideId, label: m.label }))
+        : slides.map((s) => ({ id: s.id, label: s.title || s.eyebrow || s.id })),
+    [isHtml, slideMap, slides],
+  );
+  const htmlSrc =
+    mode === "internal"
+      ? `/presentations/${presentationId}/html`
+      : `/p/${token}/html`;
+
+  const count = navItems.length;
+  const slide = isHtml ? undefined : slides[index];
+  const activeSlideId = isHtml ? navItems[index]?.id : slide?.id;
 
   // External commenters identify themselves once; remember it locally.
   useEffect(() => {
@@ -105,12 +129,12 @@ export function PresentationPlayer({
   }, [go, index, draft, openId]);
 
   const slideComments = useMemo(
-    () => comments.filter((c) => c.slideId === slide?.id),
-    [comments, slide?.id],
+    () => comments.filter((c) => c.slideId === activeSlideId),
+    [comments, activeSlideId],
   );
 
   function onStageClick(e: React.MouseEvent) {
-    if (!commentMode || !slide) return;
+    if (!commentMode || !activeSlideId) return;
     const el = stageRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
@@ -118,7 +142,7 @@ export function PresentationPlayer({
     const yPct = (e.clientY - rect.top) / rect.height;
     if (xPct < 0 || xPct > 1 || yPct < 0 || yPct > 1) return;
     setOpenId(null);
-    setDraft({ slideId: slide.id, xPct, yPct });
+    setDraft({ slideId: activeSlideId, xPct, yPct });
     setDraftBody("");
   }
 
@@ -189,7 +213,7 @@ export function PresentationPlayer({
     }
   }
 
-  if (count === 0 || !slide) {
+  if (count === 0 || !activeSlideId || (!isHtml && !slide)) {
     return (
       <div className="flex h-dvh items-center justify-center bg-black text-white/60">
         This presentation has no slides yet.
@@ -247,7 +271,24 @@ export function PresentationPlayer({
             commentMode ? "cursor-crosshair" : ""
           }`}
         >
-          <SlideView slide={slide} />
+          {isHtml ? (
+            <>
+              <iframe
+                key={presentationId}
+                src={`${htmlSrc}#${encodeURIComponent(activeSlideId)}`}
+                sandbox="allow-scripts allow-popups allow-forms"
+                title="Presentation"
+                className="h-full w-full border-0 bg-white"
+              />
+              {/* Iframe content is a separate browsing context and swallows
+                  clicks before they reach onStageClick — an invisible layer
+                  intercepts placement clicks only while comment mode is on,
+                  so normal deck interaction (links, scroll) is unaffected. */}
+              {commentMode && <div className="absolute inset-0 z-10" />}
+            </>
+          ) : (
+            <SlideView slide={slide!} />
+          )}
 
           {/* Existing pins */}
           {slideComments.map((c, i) => {
@@ -281,7 +322,7 @@ export function PresentationPlayer({
           })}
 
           {/* Draft pin + composer */}
-          {draft && draft.slideId === slide.id && (
+          {draft && draft.slideId === activeSlideId && (
             <div
               style={{ left: `${draft.xPct * 100}%`, top: `${draft.yPct * 100}%` }}
               className="absolute z-30 -translate-x-1/2"
@@ -331,7 +372,7 @@ export function PresentationPlayer({
           )}
 
           {/* Open comment popover */}
-          {openComment && openComment.slideId === slide.id && (
+          {openComment && openComment.slideId === activeSlideId && (
             <div
               style={{
                 left: `${openComment.xPct * 100}%`,
@@ -412,7 +453,7 @@ export function PresentationPlayer({
 
       {/* Progress dots */}
       <div className="flex items-center justify-center gap-1.5 pb-3">
-        {slides.map((s, i) => {
+        {navItems.map((s, i) => {
           const n = comments.filter(
             (c) => c.slideId === s.id && !c.resolvedAt,
           ).length;
@@ -421,7 +462,7 @@ export function PresentationPlayer({
               key={s.id}
               type="button"
               onClick={() => go(i)}
-              aria-label={`Slide ${i + 1}`}
+              aria-label={s.label || `Slide ${i + 1}`}
               className="group relative p-1"
             >
               <span

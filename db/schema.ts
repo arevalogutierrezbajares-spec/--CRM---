@@ -343,6 +343,19 @@ export const pitchFeedbackDeliveryStatus = pgEnum(
   ["pending", "sent", "failed", "copied", "manual"],
 );
 
+// FR-DOC/presentations: 'structured' = existing JSON Slide[] flow (slides
+// col); 'html' = uploaded deck (htmlUrl + slideMap).
+export const presentationKind = pgEnum("presentation_kind", [
+  "structured",
+  "html",
+]);
+// Team-only by default; 'public' opts the row into the /p/[token] route.
+// Independent of shareEnabled — BOTH must be true to serve publicly.
+export const presentationVisibility = pgEnum("presentation_visibility", [
+  "team",
+  "public",
+]);
+
 export type PitchFeedbackPromptSnapshot = {
   key: string;
   label: string;
@@ -1555,6 +1568,20 @@ export const presentations = pgTable("presentations", {
   subtitle: text("subtitle"),
   // Slide[] — see lib/presentations/types.ts for the shape.
   slides: jsonb("slides").$type<unknown[]>().notNull().default([]),
+  // Discriminator: 'structured' = existing JSON Slide[] flow (slides col);
+  // 'html' = uploaded deck (htmlUrl + slideMap).
+  kind: presentationKind("kind").notNull().default("structured"),
+  // For kind='html' ONLY: Supabase Storage OBJECT PATH of the uploaded deck
+  // (NOT a public URL — despite the name it holds a storagePath, same
+  // convention as project_links.storage_path, so the proxy reuses
+  // createSignedDownloadUrl()). Null for structured.
+  htmlUrl: text("html_url"),
+  // For kind='html' ONLY: auto-detected slide anchors, JSON array of
+  // {slideId,label}. Null/[] for structured (slides col drives those).
+  slideMap: jsonb("slide_map").$type<{ slideId: string; label: string }[]>(),
+  // Team-only by default; 'public' opts the row into the /p/[token] route.
+  // Independent of shareEnabled — BOTH must be true to serve publicly.
+  visibility: presentationVisibility("visibility").notNull().default("team"),
   // Optional link back to a line of business / project for context.
   lobId: uuid("lob_id").references(() => linesOfBusiness.id, {
     onDelete: "set null",
