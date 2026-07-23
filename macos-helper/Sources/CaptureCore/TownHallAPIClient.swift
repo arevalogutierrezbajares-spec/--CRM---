@@ -19,6 +19,8 @@ extension CaptureAPIClient {
     private struct PostsResponse: Decodable { let posts: [Post] }
     private struct PostResponse: Decodable { let post: Post }
     private struct ActionItemsResponse: Decodable { let actionItems: [ActionItem] }
+    private struct RecordingsResponse: Decodable { let recordings: [CallRecordingSummary] }
+    private struct RecordingResponse: Decodable { let recording: CallRecordingDetail }
     private struct NotificationsResponse: Decodable {
         let unreadCount: Int
         let notifications: [THNotification]
@@ -175,6 +177,20 @@ extension CaptureAPIClient {
             method: "POST",
             body: CreateNoteBody(body: body, lobId: lobId)
         )
+    }
+
+    // MARK: - Filed calls
+
+    /// Recent filed call recordings, newest first. `/api/capture/recordings`.
+    public func getRecordings(limit: Int = 30) async throws -> [CallRecordingSummary] {
+        try await getDecoding(RecordingsResponse.self,
+                              path: "/api/capture/recordings?limit=\(limit)").recordings
+    }
+
+    /// Full detail (brief + speaker-attributed transcript) for one filed call.
+    public func getRecording(id: String) async throws -> CallRecordingDetail {
+        try await getDecoding(RecordingResponse.self,
+                              path: "/api/capture/recordings/\(id)").recording
     }
 
     // MARK: - Notifications

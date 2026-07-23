@@ -50,6 +50,21 @@ if arguments.contains("--install-login") || arguments.contains("--uninstall-logi
 }
 
 // Default: menu-bar app.
+// Single-instance guard (2026-07-13 RCA Finding 3): a relaunch while an old
+// instance was still alive produced two engines — the new one detected the old
+// one's audio as "mic activity" and recorded a parallel duplicate session with
+// interleaved spool writes. If another instance already owns this bundle id,
+// surface it and bow out instead.
+if let bundleID = Bundle.main.bundleIdentifier {
+    let others = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
+        .filter { $0.processIdentifier != ProcessInfo.processInfo.processIdentifier }
+    if let existing = others.first {
+        FileHandle.standardError.write(Data(
+            "AGB AI is already running (pid \(existing.processIdentifier)) — activating it and exiting.\n".utf8))
+        existing.activate()
+        exit(0)
+    }
+}
 let app = NSApplication.shared
 let delegate = AppDelegate()
 app.delegate = delegate

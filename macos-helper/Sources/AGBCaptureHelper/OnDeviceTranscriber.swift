@@ -48,12 +48,31 @@ final class OnDeviceTranscriber: NSObject, LiveTranscribing {
         let recognizer: SFSpeechRecognizer
         var request: SFSpeechAudioBufferRecognitionRequest?
         var task: SFSpeechRecognitionTask?
+        /// Consecutive error-driven restarts with no result in between. A healthy
+        /// rotation (the ~1-minute task ceiling, after results) resets this.
+        var consecutiveFailures = 0
+        /// When the current task was started — used to tell a broken engine
+        /// (task dies in well under a second) from normal lifecycle errors (a
+        /// silent channel's ~1-minute no-speech timeout also arrives as an
+        /// error, and must never count as a failure).
+        var taskStartedAt = Date.distantPast
         init(index: Int, recognizer: SFSpeechRecognizer) {
             self.index = index
             self.recognizer = recognizer
         }
     }
     private var channels: [Channel] = []
+
+    /// A task that errors out after living at least this long is treated as
+    /// normal Speech-framework lifecycle, not an engine failure.
+    static let healthyTaskLifetime: TimeInterval = 10
+
+    /// Max consecutive error-driven restarts per channel before the engine
+    /// declares itself unavailable. With `retryDelay` backoff this spans ~15 s —
+    /// long enough to ride out a transient, short enough that the caller can
+    /// fall back to the cloud engine early in the call.
+    static let maxConsecutiveFailures = 6
+
 
     // The recorder's canonical wire format: 16 kHz mono PCM16 (one per channel).
     private let monoFormat = AVAudioFormat(
@@ -150,22 +169,31 @@ final class OnDeviceTranscriber: NSObject, LiveTranscribing {
         req.requiresOnDeviceRecognition = true
         if #available(macOS 13, *) { req.addsPunctuation = true }
         ch.request = req
+        ch.taskStartedAt = Date()
         ch.task = ch.recognizer.recognitionTask(with: req) { [weak self, weak ch] result, error in
             guard let self, let ch else { return }
             if let result {
                 let text = result.bestTranscription.formattedString
-                if !text.isEmpty { self.emit(channel: ch.index, text: text, isFinal: result.isFinal) }
-                if result.isFinal { self.rotate(ch) }
-            } else if error != nil {
-                // ~1-minute cutoff or a transient error — restart this channel.
-                self.rotate(ch)
+                if !text.isEmpty {
+                    self.queue.async { ch.consecutiveFailures = 0 }
+                    self.emit(channel: ch.index, text: text, isFinal: result.isFinal)
+                }
+                if result.isFinal { self.rotate(ch, afterError: false) }
+            } else if let error {
+                // ~1-minute cutoff or a real failure — restart with backoff so a
+                // permanently-broken recognizer can't spin us in a hot loop.
+                self.rotate(ch, afterError: true, message: error.localizedDescription)
             }
         }
     }
 
     /// Restart a channel's request/task so transcription continues past the
     /// framework's ~1-minute per-task ceiling. Idempotent + serialized.
-    private func rotate(_ ch: Channel) {
+    /// Error-driven restarts back off exponentially and, after
+    /// `maxConsecutiveFailures`, flip the whole engine to `.unavailable` (the
+    /// AppDelegate then swaps in the cloud engine unless the user chose
+    /// local-only).
+    private func rotate(_ ch: Channel, afterError: Bool, message: String? = nil) {
         queue.async { [weak self] in
             guard let self, !self.closed, self.started else { return }
             guard ch.task != nil || ch.request != nil else { return } // already rotated
@@ -173,7 +201,45 @@ final class OnDeviceTranscriber: NSObject, LiveTranscribing {
             ch.task?.cancel()
             ch.request = nil
             ch.task = nil
-            self.startTask(for: ch)
+
+            // Long-lived tasks that error are normal lifecycle (no-speech
+            // timeout / task ceiling) — rotate immediately, health intact.
+            let lifetime = Date().timeIntervalSince(ch.taskStartedAt)
+            guard afterError, lifetime < Self.healthyTaskLifetime else {
+                ch.consecutiveFailures = 0
+                self.startTask(for: ch)
+                return
+            }
+
+            ch.consecutiveFailures += 1
+            if ch.consecutiveFailures >= Self.maxConsecutiveFailures {
+                HelperLog.shared.warn(
+                    "on-device transcription ch\(ch.index) failed \(ch.consecutiveFailures)× in a row"
+                        + " (last: \(message ?? "unknown")) — giving up on this engine",
+                    category: "live"
+                )
+                self.started = false
+                for other in self.channels {
+                    other.request?.endAudio()
+                    other.task?.cancel()
+                    other.request = nil
+                    other.task = nil
+                }
+                self.setStatus(.unavailable("On-device transcription is failing on this Mac"))
+                return
+            }
+
+            let delay = LiveBackoff.onDeviceRetryDelay(consecutiveFailures: ch.consecutiveFailures)
+            HelperLog.shared.warn(
+                "on-device transcription ch\(ch.index) error (\(message ?? "unknown")) — "
+                    + "restart \(ch.consecutiveFailures)/\(Self.maxConsecutiveFailures) in \(delay)s",
+                category: "live"
+            )
+            self.queue.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let self, !self.closed, self.started else { return }
+                guard ch.task == nil, ch.request == nil else { return }
+                self.startTask(for: ch)
+            }
         }
     }
 

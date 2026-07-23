@@ -19,9 +19,13 @@ final class LiveTranscriptStreamer: NSObject {
         case idle
         case connecting
         case live
+        /// The stream dropped (network hiccup, TLS corruption, Deepgram close)
+        /// and the engine is re-opening it with backoff. Recording unaffected.
+        case reconnecting(attempt: Int)
         /// Best-effort path gave up; recording continues unaffected.
         case unavailable(String)
     }
+
 
     /// Deepgram channel index → speaker label. ch0 = mic (founder / room), ch1 = system.
     static func label(forChannel index: Int,
@@ -66,6 +70,11 @@ final class LiveTranscriptStreamer: NSObject {
     private var opened = false
     private var pendingBeforeOpen: [Data] = []
     private(set) var status: Status = .idle
+    /// Consecutive failed opens since the last successful message (queue-only).
+    private var reconnectAttempts = 0
+    /// True while a reconnect is scheduled/minting, so overlapping failures
+    /// (receive-loop error + send errors) collapse into one attempt.
+    private var reconnectPending = false
 
     init(config: HelperConfig, participantName: String? = nil, captureKind: CaptureKind = .call) {
         self.config = config
@@ -224,6 +233,7 @@ final class LiveTranscriptStreamer: NSObject {
                 case .success(let message):
                     if !self.opened {
                         self.opened = true
+                        self.reconnectAttempts = 0
                         self.setStatus(.live)
                         self.flushPending(task: task)
                     }
@@ -233,10 +243,50 @@ final class LiveTranscriptStreamer: NSObject {
                     self.receiveLoop(task: task)
                 case .failure(let error):
                     HelperLog.shared.warn("live transcript socket closed: \(error.localizedDescription)", category: "live")
-                    if !self.closed {
-                        self.setStatus(.unavailable("Live transcript unavailable"))
-                    }
                     self.task = nil
+                    self.opened = false
+                    self.scheduleReconnect()
+                }
+            }
+        }
+    }
+
+    /// Re-open the stream after a mid-call drop. Must run on `queue`. Mints a
+    /// fresh token every time (the grant is short-lived) and retries for as
+    /// long as the recording lasts — `stop()` is the only way out. While a
+    /// reconnect waits, `send(pcm:)` keeps buffering up to its small pre-open
+    /// window so a quick blip loses little or nothing in the live view.
+    private func scheduleReconnect() {
+        guard !closed, !reconnectPending else { return }
+        reconnectPending = true
+        reconnectAttempts += 1
+        let delay = LiveBackoff.reconnectDelay(attempt: reconnectAttempts)
+        setStatus(.reconnecting(attempt: reconnectAttempts))
+        HelperLog.shared.info(
+            "live transcript reconnecting in \(Int(delay))s (attempt \(reconnectAttempts))",
+            category: "live"
+        )
+        queue.asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard let self, !self.closed else { return }
+            Task { [weak self] in
+                guard let self else { return }
+                do {
+                    let token = try await self.fetchToken()
+                    self.queue.async { [weak self] in
+                        guard let self, !self.closed else { return }
+                        self.reconnectPending = false
+                        self.openSocket(token: token)
+                    }
+                } catch {
+                    HelperLog.shared.warn(
+                        "live transcript reconnect token failed: \(error.localizedDescription)",
+                        category: "live"
+                    )
+                    self.queue.async { [weak self] in
+                        guard let self, !self.closed else { return }
+                        self.reconnectPending = false
+                        self.scheduleReconnect()
+                    }
                 }
             }
         }

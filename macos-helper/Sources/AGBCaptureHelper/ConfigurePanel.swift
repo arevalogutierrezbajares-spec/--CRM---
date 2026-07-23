@@ -12,9 +12,7 @@ final class ConfigurePanel {
     private let keepAudioLocalCheck = NSButton(
         checkboxWithTitle: "Keep call audio on this Mac (don’t store in CRM)",
         target: nil, action: nil)
-    private let onDeviceLiveCheck = NSButton(
-        checkboxWithTitle: "On-device live transcript (Apple, private — no cloud)",
-        target: nil, action: nil)
+    private let liveEnginePopup = NSPopUpButton(frame: .zero, pullsDown: false)
     private let localSTTCheck = NSButton(
         checkboxWithTitle: "Local free STT + diarization for meetings (skip Deepgram when available)",
         target: nil, action: nil)
@@ -43,7 +41,13 @@ final class ConfigurePanel {
         neverPromptField.placeholderString = "Dictation, SuperWhisper (comma-separated)"
         neverPromptField.stringValue = config.neverPromptApps.joined(separator: ", ")
         keepAudioLocalCheck.state = config.keepAudioLocal ? .on : .off
-        onDeviceLiveCheck.state = config.liveTranscriptOnDevice ? .on : .off
+        liveEnginePopup.removeAllItems()
+        for choice in LiveEngineChoice.allCases {
+            liveEnginePopup.addItem(withTitle: choice.displayName)
+        }
+        if let idx = LiveEngineChoice.allCases.firstIndex(of: config.liveTranscriptEngine) {
+            liveEnginePopup.selectItem(at: idx)
+        }
         localSTTCheck.state = config.localTranscribeEnabled ? .on : .off
         modelField.placeholderString = "small"
         modelField.stringValue = config.localTranscribeModel
@@ -74,8 +78,10 @@ final class ConfigurePanel {
             field.translatesAutoresizingMaskIntoConstraints = false
             field.widthAnchor.constraint(greaterThanOrEqualToConstant: 340).isActive = true
         }
-        backendPopup.translatesAutoresizingMaskIntoConstraints = false
-        backendPopup.widthAnchor.constraint(greaterThanOrEqualToConstant: 340).isActive = true
+        for popup in [backendPopup, liveEnginePopup] {
+            popup.translatesAutoresizingMaskIntoConstraints = false
+            popup.widthAnchor.constraint(greaterThanOrEqualToConstant: 340).isActive = true
+        }
 
         func row(_ label: String, _ field: NSView) -> NSStackView {
             let l = NSTextField(labelWithString: label)
@@ -113,11 +119,17 @@ final class ConfigurePanel {
         meetingHint.font = .systemFont(ofSize: 11)
         meetingHint.textColor = .secondaryLabelColor
 
+        let engineHint = NSTextField(wrappingLabelWithString:
+            "Auto starts on-device (private, free) and switches to the cloud mid-call if it fails. The filed transcript always uses the server pipeline either way.")
+        engineHint.font = .systemFont(ofSize: 11)
+        engineHint.textColor = .secondaryLabelColor
+
         let stack = NSStackView(views: [
             row("CRM base URL", urlField),
             row("Capture token", tokenField),
             row("Never-prompt apps", neverPromptField),
-            onDeviceLiveCheck,
+            row("Live transcript engine", liveEnginePopup),
+            engineHint,
             keepAudioLocalCheck,
             audioHint,
             localSTTCheck,
@@ -167,7 +179,9 @@ final class ConfigurePanel {
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
         updated.keepAudioLocal = keepAudioLocalCheck.state == .on
-        updated.liveTranscriptOnDevice = onDeviceLiveCheck.state == .on
+        let engineIdx = max(0, min(liveEnginePopup.indexOfSelectedItem, LiveEngineChoice.allCases.count - 1))
+        updated.liveTranscriptEngine = LiveEngineChoice.allCases[engineIdx]
+        updated.liveTranscriptOnDevice = updated.liveTranscriptEngine != .cloud
         updated.localTranscribeEnabled = localSTTCheck.state == .on
         let idx = max(0, backendPopup.indexOfSelectedItem)
         updated.localTranscribeBackend = Self.backendChoices[min(idx, Self.backendChoices.count - 1)].value
