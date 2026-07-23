@@ -1,5 +1,25 @@
 import Foundation
 
+/// Which engine powers the live transcript window.
+///  • `auto`  — on-device first (private, free); if it fails mid-call the helper
+///    switches to the cloud engine automatically and keeps going.
+///  • `local` — Apple on-device only; never sends live audio to the cloud, even
+///    if the engine fails (the filed transcript is unaffected either way).
+///  • `cloud` — Deepgram streaming via the CRM-minted token.
+public enum LiveEngineChoice: String, Codable, CaseIterable {
+    case auto
+    case local
+    case cloud
+
+    public var displayName: String {
+        switch self {
+        case .auto: return "Auto — on-device, cloud fallback"
+        case .local: return "On-device only (Apple, private)"
+        case .cloud: return "Cloud (Deepgram)"
+        }
+    }
+}
+
 /// Helper configuration, persisted as JSON at
 /// `~/Library/Application Support/AGBCaptureHelper/config.json` (mode 0600).
 ///
@@ -40,7 +60,14 @@ public struct HelperConfig: Codable, Equatable {
     /// Use Apple's on-device speech recognition for the live transcript (free,
     /// private, offline, no Deepgram token) instead of the cloud stream.
     /// Default true. Falls back to the cloud engine when false.
+    /// LEGACY — superseded by `liveTranscriptEngine`; kept so old config.json
+    /// files (and any external tooling that flips this bool) still work.
     public var liveTranscriptOnDevice: Bool
+
+    /// Live-transcript engine selection (auto | local | cloud). When the key is
+    /// absent from config.json, derived from the legacy `liveTranscriptOnDevice`
+    /// bool if that was explicitly set, else `auto`.
+    public var liveTranscriptEngine: LiveEngineChoice
 
     // MARK: - Local audio archive (transcript-only mode)
 
@@ -72,6 +99,7 @@ public struct HelperConfig: Codable, Equatable {
                 liveTranscript: Bool = true,
                 liveTranscriptAutoShow: Bool = true,
                 liveTranscriptOnDevice: Bool = true,
+                liveTranscriptEngine: LiveEngineChoice = .auto,
                 keepAudioLocal: Bool = false,
                 localTranscribeEnabled: Bool = true,
                 localTranscribeBackend: String = "auto",
@@ -88,6 +116,7 @@ public struct HelperConfig: Codable, Equatable {
         self.liveTranscript = liveTranscript
         self.liveTranscriptAutoShow = liveTranscriptAutoShow
         self.liveTranscriptOnDevice = liveTranscriptOnDevice
+        self.liveTranscriptEngine = liveTranscriptEngine
         self.keepAudioLocal = keepAudioLocal
         self.localTranscribeEnabled = localTranscribeEnabled
         self.localTranscribeBackend = localTranscribeBackend
@@ -116,7 +145,19 @@ public struct HelperConfig: Codable, Equatable {
         maxRecordingSeconds = maxDur > 0 ? maxDur : HelperConfig.defaultMaxRecordingSeconds
         liveTranscript = (try? c.decodeIfPresent(Bool.self, forKey: .liveTranscript)) ?? true
         liveTranscriptAutoShow = (try? c.decodeIfPresent(Bool.self, forKey: .liveTranscriptAutoShow)) ?? true
-        liveTranscriptOnDevice = (try? c.decodeIfPresent(Bool.self, forKey: .liveTranscriptOnDevice)) ?? true
+        let legacyOnDevice = try? c.decodeIfPresent(Bool.self, forKey: .liveTranscriptOnDevice)
+        liveTranscriptOnDevice = legacyOnDevice ?? true
+        // Engine choice: explicit key wins; else honor a legacy explicit bool
+        // (true → local, false → cloud) so an existing setup keeps its behavior;
+        // else default to auto (on-device with automatic cloud fallback).
+        if let raw = try? c.decodeIfPresent(String.self, forKey: .liveTranscriptEngine),
+           let choice = LiveEngineChoice(rawValue: raw) {
+            liveTranscriptEngine = choice
+        } else if let legacy = legacyOnDevice {
+            liveTranscriptEngine = legacy ? .local : .cloud
+        } else {
+            liveTranscriptEngine = .auto
+        }
         keepAudioLocal = (try? c.decodeIfPresent(Bool.self, forKey: .keepAudioLocal)) ?? false
         localTranscribeEnabled = (try? c.decodeIfPresent(Bool.self, forKey: .localTranscribeEnabled)) ?? true
         localTranscribeBackend = (try? c.decodeIfPresent(String.self, forKey: .localTranscribeBackend)) ?? "auto"

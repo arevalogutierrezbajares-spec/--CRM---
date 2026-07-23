@@ -65,6 +65,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// FEATURE 2: live-transcript floating window + Deepgram stream.
     private let liveWindow = LiveTranscriptWindow()
     private var liveStreamer: LiveTranscribing?
+    /// One engine swap max per recording: when the on-device engine dies the
+    /// cloud engine takes over (unless the user chose local-only). Guards
+    /// against ping-ponging between two broken engines.
+    private var liveEngineFellBack = false
+    /// Submenu of `LiveEngineChoice` items, so checkmarks can track config.
+    private var liveEngineMenu: NSMenu?
 
     /// Always-visible floating Start/Stop control — works regardless of the
     /// menu-bar icon hiding behind the notch or a swallowed global hotkey.
@@ -535,15 +541,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if cfg.liveTranscript {
             liveWindow.reset()
             if cfg.liveTranscriptAutoShow { liveWindow.show() }
-            // On-device (Apple) by default — private, free, no token; cloud as a
-            // fallback. Both emit the same Line type, so the window is agnostic.
-            let engine: LiveTranscribing = cfg.liveTranscriptOnDevice
-                ? OnDeviceTranscriber(participantName: participant, captureKind: kind)
-                : LiveTranscriptStreamer(config: cfg, participantName: participant, captureKind: kind)
+            liveEngineFellBack = false
+            // Engine per the user's choice (menu-bar → Live Transcript Engine).
+            // auto/local start on-device (private, free, no token); auto swaps to
+            // the cloud engine mid-call if on-device dies (handleLiveStatus).
+            // Both emit the same Line type, so the window is agnostic.
+            let engine: LiveTranscribing
+            switch cfg.liveTranscriptEngine {
+            case .cloud:
+                engine = LiveTranscriptStreamer(config: cfg, participantName: participant, captureKind: kind)
+            case .local, .auto:
+                engine = OnDeviceTranscriber(participantName: participant, captureKind: kind)
+            }
             engine.onStatus = { [weak self] status in self?.handleLiveStatus(status) }
             engine.onLine = { [weak self] line in self?.liveWindow.append(line: line) }
             liveStreamer = engine
             engine.start()
+            log.info("live transcript engine: \(cfg.liveTranscriptEngine.rawValue) → \(engine is OnDeviceTranscriber ? "on-device" : "cloud")", category: "live")
         }
 
         startLiveTimer()
@@ -593,11 +607,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             liveWindow.setStatus("● Recording — connecting live transcript…")
         case .live:
             liveWindow.setStatus(liveStatusLine())
+        case .reconnecting:
+            // 2026-07-22 RCA: when the live view silently froze mid-call the
+            // operator stop/started the recording five times, splitting one call
+            // into five CRM records. Say exactly what's happening instead.
+            liveWindow.setStatus("⟳ Live transcript reconnecting — recording is safe, keep talking…")
         case .unavailable(let message):
-            liveWindow.setUnavailable(message)
+            if !fallBackToCloudLiveEngine(reason: message) {
+                liveWindow.setUnavailable(message)
+            }
         case .idle:
             break
         }
+    }
+
+    /// Swap a dead on-device engine for the cloud engine mid-call. At most once
+    /// per recording, never when the user chose local-only (privacy), and only
+    /// while actually capturing. Returns false when ineligible (caller shows
+    /// the plain unavailable banner instead).
+    private func fallBackToCloudLiveEngine(reason: String) -> Bool {
+        guard !liveEngineFellBack,
+              liveStreamer is OnDeviceTranscriber,
+              config.liveTranscriptEngine != .local,
+              config.isComplete,
+              state == .recording || state == .paused else { return false }
+        liveEngineFellBack = true
+        liveStreamer?.stop()
+        let cloud = LiveTranscriptStreamer(config: config,
+                                           participantName: activeParticipantName,
+                                           captureKind: activeCaptureKind)
+        cloud.onStatus = { [weak self] status in self?.handleLiveStatus(status) }
+        cloud.onLine = { [weak self] line in self?.liveWindow.append(line: line) }
+        liveStreamer = cloud
+        cloud.start()
+        log.warn("on-device live engine gave up (\(reason)) — switched to cloud engine mid-call", category: "live")
+        liveWindow.setStatus("⟳ Switched to cloud live transcript — recording unaffected")
+        return true
     }
 
     private func startLiveTimer() {
@@ -643,7 +688,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func liveStatusLine() -> String {
-        "● Recording \(elapsedString()) — live"
+        let engineLabel = liveStreamer is OnDeviceTranscriber ? "on-device" : "cloud"
+        return "● Recording \(elapsedString()) — live (\(engineLabel))"
     }
 
     // MARK: - Notifications (auto-end)
@@ -1117,6 +1163,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let liveItem = makeItem("Show live transcript", #selector(toggleLiveTranscriptTapped), "t")
         liveTranscriptMenuItem = liveItem
         menu.addItem(liveItem)
+
+        // Live-engine picker: Auto / On-device / Cloud, persisted to config.
+        // Applies from the next recording (mid-call, auto-fallback handles it).
+        let engineParent = NSMenuItem(title: "Live Transcript Engine", action: nil, keyEquivalent: "")
+        let engineMenu = NSMenu()
+        for choice in LiveEngineChoice.allCases {
+            let item = NSMenuItem(title: choice.displayName,
+                                  action: #selector(liveEngineChoiceTapped(_:)),
+                                  keyEquivalent: "")
+            item.target = self
+            item.representedObject = choice.rawValue
+            engineMenu.addItem(item)
+        }
+        engineParent.submenu = engineMenu
+        liveEngineMenu = engineMenu
+        menu.addItem(engineParent)
+        updateLiveEngineMenu()
         menu.addItem(makeItem("Test Connection", #selector(testConnectionTapped), ""))
         menu.addItem(makeItem("Configure…", #selector(configureTapped), ","))
         menu.addItem(makeItem("Diagnostics", #selector(diagnosticsTapped), "d"))
@@ -1132,6 +1195,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let item = NSMenuItem(title: title, action: action, keyEquivalent: key)
         item.target = self
         return item
+    }
+
+    /// Checkmark the engine submenu item matching the persisted choice.
+    private func updateLiveEngineMenu() {
+        let current = HelperConfig.effective().liveTranscriptEngine
+        liveEngineMenu?.items.forEach { item in
+            item.state = (item.representedObject as? String) == current.rawValue ? .on : .off
+        }
+    }
+
+    @objc private func liveEngineChoiceTapped(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String,
+              let choice = LiveEngineChoice(rawValue: raw) else { return }
+        var cfg = HelperConfig.effective()
+        cfg.liveTranscriptEngine = choice
+        // Keep the legacy bool coherent for anything still reading it.
+        cfg.liveTranscriptOnDevice = (choice != .cloud)
+        do {
+            try cfg.save()
+            config = cfg
+            log.info("live transcript engine set to \(choice.rawValue)", category: "live")
+        } catch {
+            lastError = "Couldn't save engine choice: \(error.localizedDescription)"
+        }
+        updateLiveEngineMenu()
     }
 
     private func refreshUI() {

@@ -6,10 +6,11 @@ import CaptureCore
 final class TownHallPane: NSView {
 
     enum Section: String, CaseIterable {
-        case feed, notifications, actionItems, files, notes
+        case feed, calls, notifications, actionItems, files, notes
         var title: String {
             switch self {
             case .feed: return "Feed"
+            case .calls: return "Calls"
             case .notifications: return "Notifications"
             case .actionItems: return "Action Items"
             case .files: return "Files"
@@ -19,6 +20,7 @@ final class TownHallPane: NSView {
         var symbol: String {
             switch self {
             case .feed: return "bubble.left.and.bubble.right.fill"
+            case .calls: return "waveform"
             case .notifications: return "bell.fill"
             case .actionItems: return "checklist"
             case .files: return "folder.fill"
@@ -29,6 +31,7 @@ final class TownHallPane: NSView {
         var crmPath: String {
             switch self {
             case .feed: return "/town-hall"
+            case .calls: return "/meetings"
             case .notifications: return "/inbox"
             case .actionItems: return "/dashboard"
             case .files: return "/town-hall"
@@ -48,11 +51,12 @@ final class TownHallPane: NSView {
     var onUnreadChange: ((Int) -> Void)?
 
     private let feed = FeedSectionView()
+    private let calls = CallsSectionView()
     private let notifications = NotificationsSectionView()
     private let actionItems = ActionItemsSectionView()
     private let files = FilesSectionView()
     private let notes = NotesSectionView()
-    private var sectionViews: [TownHallSectionView] { [feed, notifications, actionItems, files, notes] }
+    private var sectionViews: [TownHallSectionView] { [feed, calls, notifications, actionItems, files, notes] }
 
     private var navItems: [Section: SidebarItem] = [:]
     private let contentContainer = NSView()
@@ -199,6 +203,7 @@ final class TownHallPane: NSView {
     private func sectionView(_ s: Section) -> TownHallSectionView {
         switch s {
         case .feed: return feed
+        case .calls: return calls
         case .notifications: return notifications
         case .actionItems: return actionItems
         case .files: return files

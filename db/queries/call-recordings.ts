@@ -24,6 +24,10 @@ export type CallRecordingListItem = {
   sourceApp: string | null;
   partial: boolean;
   suspectFlags: string[];
+  // Speaker surface for participant chips (capture recordings browser):
+  // display-name map + distinct utterance speaker labels (diarizationId|speaker).
+  speakerMap: Record<string, string> | null;
+  utteranceSpeakers: string[];
 };
 
 /**
@@ -150,17 +154,23 @@ export async function listCallRecordings(opts: {
       sourceApp: callRecordings.sourceApp,
       partial: callRecordings.partial,
       suspectFlags: callRecordings.suspectFlags,
+      speakerMap: callRecordings.speakerMap,
+      utterances: callRecordings.utterances,
     })
     .from(callRecordings)
     .leftJoin(contacts, eq(contacts.id, callRecordings.contactId))
     .where(eq(callRecordings.workspaceId, opts.workspaceId))
     .orderBy(desc(callRecordings.createdAt))
     .limit(opts.limit ?? 25);
-  return rows.map(({ transcript, audioPath, suspectFlags, ...r }) => ({
+  return rows.map(({ transcript, audioPath, suspectFlags, utterances, ...r }) => ({
     ...r,
     transcriptChars: transcript.length,
     hasAudio: Boolean(audioPath),
     suspectFlags: suspectFlags ?? [],
+    speakerMap: r.speakerMap ?? null,
+    utteranceSpeakers: [
+      ...new Set((utterances ?? []).map((u) => u.diarizationId ?? u.speaker)),
+    ],
   }));
 }
 
