@@ -23,8 +23,8 @@ describe("parseHighlights", () => {
         { tSecs: 3, note: "" },
       ]),
     ).toEqual([
-      { tSecs: 3, note: null },
-      { tSecs: 12.5, note: "key ask" },
+      { tSecs: 3, note: null, themeKey: null },
+      { tSecs: 12.5, note: "key ask", themeKey: null },
     ]);
   });
 
@@ -41,12 +41,12 @@ describe("parseHighlights", () => {
         { tSecs: "x" },
         { tSecs: 10 },
       ]),
-    ).toEqual([{ tSecs: 10, note: null }]);
+    ).toEqual([{ tSecs: 10, note: null, themeKey: null }]);
   });
 
   it("coerces numeric-string tSecs", () => {
     expect(parseHighlights([{ tSecs: "7.5", note: "ok" }])).toEqual([
-      { tSecs: 7.5, note: "ok" },
+      { tSecs: 7.5, note: "ok", themeKey: null },
     ]);
   });
 
@@ -72,7 +72,12 @@ describe("resolveHighlights", () => {
 
   it("quotes the utterance covering the flagged time", () => {
     const [m] = resolveHighlights([{ tSecs: 8, note: "money" }], utterances);
-    expect(m).toEqual({ atSec: 8, quote: "The budget is forty thousand", note: "money" });
+    expect(m).toEqual({
+      atSec: 8,
+      quote: "The budget is forty thousand",
+      note: "money",
+      themeKey: null,
+    });
   });
 
   it("falls back to the nearest utterance when the time lands in a gap", () => {
@@ -84,7 +89,7 @@ describe("resolveHighlights", () => {
 
   it("is robust to an empty transcript (quote = '')", () => {
     expect(resolveHighlights([{ tSecs: 3, note: "x" }], [])).toEqual([
-      { atSec: 3, quote: "", note: "x" },
+      { atSec: 3, quote: "", note: "x", themeKey: null },
     ]);
   });
 
@@ -93,7 +98,9 @@ describe("resolveHighlights", () => {
     // Keep the timestamp + note; never misattribute the last surviving line.
     expect(
       resolveHighlights([{ tSecs: 500, note: "flagged before I dropped the tail" }], utterances),
-    ).toEqual([{ atSec: 500, quote: "", note: "flagged before I dropped the tail" }]);
+    ).toEqual([
+      { atSec: 500, quote: "", note: "flagged before I dropped the tail", themeKey: null },
+    ]);
   });
 
   it("returns [] when there are no highlights", () => {

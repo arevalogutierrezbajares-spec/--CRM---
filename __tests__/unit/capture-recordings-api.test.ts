@@ -223,6 +223,9 @@ describe("[unit] GET /api/capture/recordings/[id]", () => {
       language: "es",
       actionItemCount: 2,
       meetingId: "00000000-0000-4000-8000-00000000eeee",
+      // El Cuaderno: null for legacy recordings without a themed doc.
+      themedDoc: null,
+      agenda: null,
     });
   });
 

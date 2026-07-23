@@ -51,9 +51,13 @@ public struct SessionManifest: Codable, Equatable {
         public var tSecs: Double
         /// Optional free-text the operator typed with the flag (nil = bare star).
         public var note: String?
-        public init(tSecs: Double, note: String? = nil) {
+        /// Operator's #theme tag (slug) — buckets the flag under that theme in
+        /// the filed document. Nil = unfiled (the inbox).
+        public var themeKey: String?
+        public init(tSecs: Double, note: String? = nil, themeKey: String? = nil) {
             self.tSecs = tSecs
             self.note = note
+            self.themeKey = themeKey
         }
     }
 
@@ -66,9 +70,26 @@ public struct SessionManifest: Codable, Equatable {
     public struct Note: Codable, Equatable {
         public var tSecs: Double
         public var text: String
-        public init(tSecs: Double, text: String) {
+        /// Operator's #theme tag (slug). Nil = unfiled (the inbox).
+        public var themeKey: String?
+        public init(tSecs: Double, text: String, themeKey: String? = nil) {
             self.tSecs = tSecs
             self.text = text
+            self.themeKey = themeKey
+        }
+    }
+
+    /// The operator's pre-call "original list" (El Cuaderno agenda). Each item
+    /// seeds a theme; items with no tagged evidence file as GAPS. Crash-safe.
+    public var agenda: [AgendaItem]?
+
+    /// One agenda item: stable slug key + display label.
+    public struct AgendaItem: Codable, Equatable {
+        public var key: String
+        public var label: String
+        public init(key: String, label: String) {
+            self.key = key
+            self.label = label
         }
     }
 

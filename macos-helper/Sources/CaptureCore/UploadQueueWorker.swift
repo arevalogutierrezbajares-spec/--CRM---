@@ -267,7 +267,9 @@ public final class UploadQueueWorker {
             precomputedTranscript: precomputed,
             highlights: snap.highlights ?? [],
             notes: snap.notes ?? [],
-            terms: snap.terms ?? []
+            terms: snap.terms ?? [],
+            agenda: snap.agenda ?? [],
+            themes: Self.themeDefs(for: snap)
         )
 
         let finalize = try await client.finalizeRecovering(
@@ -362,5 +364,27 @@ public final class UploadQueueWorker {
 
     private func emitState(_ state: WorkerState) {
         onStateChange?(state)
+    }
+}
+
+
+extension UploadQueueWorker {
+    /// Theme definitions for the wire: every agenda item seeds a theme
+    /// (agenda:true) and every distinct #tag on markers adds a live theme
+    /// (label de-slugged). The server buckets evidence by these keys.
+    static func themeDefs(for snap: SessionManifest) -> [CaptureAPIClient.FinalizeBody.ThemeDef] {
+        var defs: [CaptureAPIClient.FinalizeBody.ThemeDef] = []
+        var seen = Set<String>()
+        for item in snap.agenda ?? [] where !item.key.isEmpty {
+            guard seen.insert(item.key).inserted else { continue }
+            defs.append(.init(key: item.key, label: item.label, agenda: true))
+        }
+        let markerKeys = (snap.notes ?? []).compactMap(\.themeKey)
+            + (snap.highlights ?? []).compactMap(\.themeKey)
+        for key in markerKeys where !key.isEmpty {
+            guard seen.insert(key).inserted else { continue }
+            defs.append(.init(key: key, label: ThemeTags.label(fromSlug: key), agenda: false))
+        }
+        return defs
     }
 }

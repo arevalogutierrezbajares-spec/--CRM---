@@ -27,7 +27,7 @@ final class LiveTranscriptWindow: NSObject {
     private enum Item {
         case line(LiveTranscriptStreamer.Line)
         case highlight(t: TimeInterval, note: String?)
-        case note(t: TimeInterval, text: String)
+        case note(t: TimeInterval, text: String, themeKey: String?)
     }
     private var items: [Item] = []
     private var interimByChannel: [Int: LiveTranscriptStreamer.Line] = [:]
@@ -252,9 +252,10 @@ final class LiveTranscriptWindow: NSObject {
 
     /// Show a typed ✎ note inline (append order = chronological) and confirm in
     /// the banner. Cosmetic only — persistence happens in the AppDelegate.
-    func flashNote(atSecs: TimeInterval, text: String, count: Int) {
-        items.append(.note(t: atSecs, text: text))
-        setStatus("✎ Noted \(Self.clock(atSecs)) — \(count) this call")
+    func flashNote(atSecs: TimeInterval, text: String, themeKey: String? = nil, count: Int) {
+        items.append(.note(t: atSecs, text: text, themeKey: themeKey))
+        let chip = themeKey.map { "  #\($0)" } ?? ""
+        setStatus("✎ Noted \(Self.clock(atSecs))\(chip) — \(count) this call")
         render()
     }
 
@@ -359,13 +360,29 @@ final class LiveTranscriptWindow: NSObject {
             storage?.append(marker)
         }
 
-        func appendNote(t: TimeInterval, text: String) {
-            let marker = NSAttributedString(
-                string: "✎ \(Self.clock(t))  \(text)\n",
-                attributes: [.font: speakerFont, .foregroundColor: NSColor.systemTeal,
-                             .paragraphStyle: para]
-            )
-            storage?.append(marker)
+        func appendNote(t: TimeInterval, text: String, themeKey: String?) {
+            // Third Voice: the operator's typed note renders as his own gold
+            // speaker turn, a peer of the blue/green voice channels.
+            let gold = NSColor(calibratedRed: 0.83, green: 0.66, blue: 0.33, alpha: 1)
+            let line = NSMutableAttributedString()
+            line.append(NSAttributedString(string: "You ✎  ", attributes: [
+                .font: speakerFont, .foregroundColor: gold, .paragraphStyle: para,
+            ]))
+            line.append(NSAttributedString(string: "\(Self.clock(t))  ", attributes: [
+                .font: NSFont.monospacedSystemFont(ofSize: 10.5, weight: .regular),
+                .foregroundColor: NSColor.tertiaryLabelColor, .paragraphStyle: para,
+            ]))
+            line.append(NSAttributedString(string: text, attributes: [
+                .font: baseFont, .foregroundColor: gold, .paragraphStyle: para,
+            ]))
+            if let themeKey {
+                line.append(NSAttributedString(string: "  #\(themeKey)", attributes: [
+                    .font: NSFont.monospacedSystemFont(ofSize: 10.5, weight: .medium),
+                    .foregroundColor: gold.withAlphaComponent(0.7), .paragraphStyle: para,
+                ]))
+            }
+            line.append(NSAttributedString(string: "\n"))
+            storage?.append(line)
         }
 
         if items.isEmpty && interimByChannel.isEmpty {
@@ -379,7 +396,7 @@ final class LiveTranscriptWindow: NSObject {
                 switch item {
                 case .line(let line): appendLine(line, interim: false)
                 case .highlight(let t, let note): appendHighlight(t: t, note: note)
-                case .note(let t, let text): appendNote(t: t, text: text)
+                case .note(let t, let text, let themeKey): appendNote(t: t, text: text, themeKey: themeKey)
                 }
             }
             // Interim tails (one per active channel) shown greyed at the bottom.

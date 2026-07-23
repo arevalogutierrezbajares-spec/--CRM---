@@ -10,8 +10,10 @@ import CaptureCore
 ///       [--chunk-secs 30] [--source-app SimApp] [--no-detect]
 ///       [--simulate-crash-after N]   upload N chunks then exit 2, no finalize
 ///       [--abandon]                  upload 2 chunks then DELETE the session
-///       [--note "SECS:text"]…        Call Desk note at SECS (repeatable)
+///       [--note "SECS:text"]…        Call Desk note at SECS (repeatable;
+///                                    #tags parse into themeKey like the UI)
 ///       [--term "wrong=right"]…      term correction; "right" alone = hint
+///       [--agenda "Item;Item;…"]     pre-call agenda (semicolon-separated)
 ///
 /// Config: config.json, overridden by env AGB_CRM_URL / AGB_CRM_TOKEN.
 /// Exit codes: 0 success, 1 failure, 2 simulated crash.
@@ -27,6 +29,8 @@ enum SimulatedEngine {
         var notes: [(Double, String)] = []
         /// Term corrections to inject: (wrong?, right).
         var terms: [(String?, String)] = []
+        /// Agenda labels to inject (semicolon-separated on the CLI).
+        var agenda: [String] = []
     }
 
     static func run(arguments: [String]) -> Int32 {
@@ -103,6 +107,10 @@ enum SimulatedEngine {
                 options.terms.append((nil, raw))
             }
         }
+        if let raw = value(after: "--agenda") {
+            options.agenda = raw.split(separator: ";").map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty }
+        }
         // --no-detect is accepted for parity with real mode; simulate never detects.
         return options
     }
@@ -173,9 +181,19 @@ enum SimulatedEngine {
                 offset = end
             }
             try spooler.flush()
+            if !options.agenda.isEmpty {
+                let items = options.agenda.compactMap { label -> SessionManifest.AgendaItem? in
+                    let key = ThemeTags.slugify(label)
+                    return key.isEmpty ? nil : SessionManifest.AgendaItem(key: key, label: label)
+                }
+                try spooler.setAgenda(items)
+                info("agenda: \(items.map(\.key).joined(separator: ", "))")
+            }
             for (secs, text) in options.notes {
-                _ = try spooler.addNote(tSecs: secs, text: text)
-                info("note @\(secs)s: \(text)")
+                let parsed = ThemeTags.parse(text)
+                let body = parsed.text.isEmpty ? text : parsed.text
+                _ = try spooler.addNote(tSecs: secs, text: body, themeKey: parsed.tags.first)
+                info("note @\(secs)s: \(body)\(parsed.tags.first.map { " #\($0)" } ?? "")")
             }
             for (wrong, right) in options.terms {
                 _ = try spooler.addTermCorrection(wrong: wrong, right: right)

@@ -91,5 +91,8 @@ export function serializeRecordingDetail(
     language: row.language,
     actionItemCount: row.actionItemCount,
     meetingId: row.meetingId,
+    // El Cuaderno: themed document + agenda (null for legacy recordings).
+    themedDoc: row.themedDoc ?? null,
+    agenda: row.agenda ?? null,
   };
 }
