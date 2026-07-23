@@ -227,6 +227,43 @@ public final class ChunkSpooler {
         return current.count
     }
 
+    /// Append a live typed note (Call Desk composer / ⌘⇧N). Time-anchored and
+    /// persisted to disk like highlights, so a mid-call crash still finalizes
+    /// with the notes. Returns the running note count for live UI feedback;
+    /// empty/whitespace text is a no-op (returns current count).
+    @discardableResult
+    public func addNote(tSecs: Double, text: String) throws -> Int {
+        lock.lock(); defer { lock.unlock() }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        var current = manifestStorage.notes ?? []
+        guard !trimmed.isEmpty else { return current.count }
+        current.append(SessionManifest.Note(tSecs: max(0, tSecs), text: trimmed))
+        manifestStorage.notes = current
+        try persistManifest()
+        return current.count
+    }
+
+    /// Add a live transcription-term correction ("heard X, it's Y"). Persisted
+    /// like highlights; deduped case-insensitively. Returns the running count.
+    @discardableResult
+    public func addTermCorrection(wrong: String?, right: String) throws -> Int {
+        lock.lock(); defer { lock.unlock() }
+        let r = right.trimmingCharacters(in: .whitespacesAndNewlines)
+        let w = wrong?.trimmingCharacters(in: .whitespacesAndNewlines)
+        var current = manifestStorage.terms ?? []
+        guard !r.isEmpty else { return current.count }
+        let normalizedWrong = (w?.isEmpty == false) ? w : nil
+        let duplicate = current.contains {
+            $0.right.lowercased() == r.lowercased()
+                && ($0.wrong ?? "").lowercased() == (normalizedWrong ?? "").lowercased()
+        }
+        guard !duplicate else { return current.count }
+        current.append(SessionManifest.TermCorrection(wrong: normalizedWrong, right: r))
+        manifestStorage.terms = current
+        try persistManifest()
+        return current.count
+    }
+
     /// Mark the call ended. Duration is derived from spooled bytes unless given.
     public func markEnded(endedAt: Date = Date(), durationSecs: Int? = nil, partial: Bool = false) throws {
         lock.lock(); defer { lock.unlock() }

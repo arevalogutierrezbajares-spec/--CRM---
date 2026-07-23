@@ -163,4 +163,30 @@ describe("[unit] transcribeWindowed — memory-bounded long-call transcription",
     expect(out.ok).toBe(true);
     expect(assembleMock).toHaveBeenCalledTimes(5); // 4+4+4+4+4
   });
+
+  it("threads glossary keyterms through to every window's Deepgram call", async () => {
+    // 8 chunks → 2 windows; both transcription calls must carry the keyterms.
+    const chunks = Array.from({ length: 8 }, () => chunk(2 * 1024 * 1024));
+    assembleMock.mockResolvedValue({
+      ok: true,
+      wav: new Uint8Array(44),
+      dataBytes: BYTES_PER_SEC,
+    });
+    transcribeBytesMock.mockResolvedValue({
+      ok: true,
+      result: { utterances: [], dialogueText: "", language: "multi", suspectFlags: [] },
+    });
+
+    const out = await transcribeWindowed(chunks, FMT, {
+      keyterms: ["Anzoátegui", "PDVSA"],
+    });
+    expect(out.ok).toBe(true);
+    expect(transcribeBytesMock).toHaveBeenCalledTimes(2);
+    for (const call of transcribeBytesMock.mock.calls) {
+      expect((call[0] as { keyterms?: string[] }).keyterms).toEqual([
+        "Anzoátegui",
+        "PDVSA",
+      ]);
+    }
+  });
 });

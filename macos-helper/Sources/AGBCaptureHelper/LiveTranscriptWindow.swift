@@ -16,21 +16,30 @@ final class LiveTranscriptWindow: NSObject {
     private var scrollView: NSScrollView?
     private let statusLabel = NSTextField(labelWithString: "")
     private var highlightButton: NSButton?
+    /// Call Desk composer: type → Enter files a ✎ note; text + ★ files a
+    /// flag WITH that note. Focused globally via ⌘⇧N.
+    private let composer = NSTextField(string: "")
 
-    /// Transcript timeline, in the order it happened: finalized lines and
-    /// operator-flagged ★ markers interleaved. Highlights append "now", so append
-    /// order is chronological. Interim text for each channel is held separately
-    /// and re-rendered live until a final replaces it.
+    /// Transcript timeline, in the order it happened: finalized lines,
+    /// operator-flagged ★ markers, and typed ✎ notes interleaved. Markers
+    /// append "now", so append order is chronological. Interim text for each
+    /// channel is held separately and re-rendered live until a final replaces it.
     private enum Item {
         case line(LiveTranscriptStreamer.Line)
         case highlight(t: TimeInterval, note: String?)
+        case note(t: TimeInterval, text: String)
     }
     private var items: [Item] = []
     private var interimByChannel: [Int: LiveTranscriptStreamer.Line] = [:]
 
-    /// Fired when the operator taps the ★ button to flag the current moment.
-    /// The AppDelegate anchors it to the recording + persists it (crash-safe).
-    var onHighlight: (() -> Void)?
+    /// Fired when the operator taps the ★ button to flag the current moment;
+    /// carries the composer text (nil when empty) as the flag's note. The
+    /// AppDelegate anchors it to the recording + persists it (crash-safe).
+    var onHighlight: ((String?) -> Void)?
+    /// Fired when the operator types a note and hits Enter in the composer.
+    var onNote: ((String) -> Void)?
+    /// Fired by the "✎ Term" button — AppDelegate prompts for heard/correct.
+    var onFixTerm: (() -> Void)?
 
     var isVisible: Bool { panel?.isVisible ?? false }
 
@@ -64,17 +73,28 @@ final class LiveTranscriptWindow: NSObject {
         statusLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
         // ★ "Flag moment" — mirrors the ⌘⇧K global hotkey. Marks the current
-        // point in the call as important; the flag rides through to the CRM brief.
+        // point in the call as important; the flag rides through to the CRM
+        // brief. If the composer holds text, it becomes the flag's note.
         let star = NSButton(title: "★ Flag", target: self, action: #selector(highlightTapped))
         star.bezelStyle = .rounded
         star.controlSize = .small
         star.font = .systemFont(ofSize: 11, weight: .semibold)
         star.contentTintColor = .systemOrange
-        star.toolTip = "Flag this moment as important (⌘⇧K)"
+        star.toolTip = "Flag this moment as important (⌘⇧K). Text in the note box becomes the flag's note."
         star.setContentHuggingPriority(.required, for: .horizontal)
         self.highlightButton = star
 
-        let header = NSStackView(views: [statusLabel, star])
+        // ✎ "Term" — teach the filing pass a correction ("heard X, it's Y")
+        // so the FILED transcript comes back right.
+        let term = NSButton(title: "✎ Term", target: self, action: #selector(fixTermTapped))
+        term.bezelStyle = .rounded
+        term.controlSize = .small
+        term.font = .systemFont(ofSize: 11, weight: .semibold)
+        term.contentTintColor = .systemTeal
+        term.toolTip = "Correct a misheard name/term — fixes the filed transcript"
+        term.setContentHuggingPriority(.required, for: .horizontal)
+
+        let header = NSStackView(views: [statusLabel, term, star])
         header.orientation = .horizontal
         header.alignment = .centerY
         header.spacing = 8
@@ -97,7 +117,19 @@ final class LiveTranscriptWindow: NSObject {
         scroll.documentView = textView
         self.scrollView = scroll
 
-        let stack = NSStackView(views: [header, scroll])
+        // Notes composer, docked under the transcript. Enter = timestamped ✎
+        // note; the panel is non-activating so typing here never steals focus
+        // from the call app unless the operator deliberately clicks / ⌘⇧N.
+        composer.placeholderString = "Note — Enter saves at the current moment  (⌘⇧N)"
+        composer.font = .systemFont(ofSize: 12)
+        composer.bezelStyle = .roundedBezel
+        composer.lineBreakMode = .byTruncatingTail
+        composer.cell?.usesSingleLineMode = true
+        composer.cell?.sendsActionOnEndEditing = false
+        composer.target = self
+        composer.action = #selector(composerSubmitted)
+
+        let stack = NSStackView(views: [header, scroll, composer])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 6
@@ -105,6 +137,7 @@ final class LiveTranscriptWindow: NSObject {
         stack.translatesAutoresizingMaskIntoConstraints = false
         header.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -24).isActive = true
         scroll.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -24).isActive = true
+        composer.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -24).isActive = true
 
         let container = NSView()
         container.addSubview(stack)
@@ -176,7 +209,47 @@ final class LiveTranscriptWindow: NSObject {
     }
 
     @objc private func highlightTapped() {
-        onHighlight?()
+        let text = composer.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        composer.stringValue = ""
+        onHighlight?(text.isEmpty ? nil : text)
+    }
+
+    @objc private func composerSubmitted() {
+        let text = composer.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        composer.stringValue = ""
+        onNote?(text)
+    }
+
+    @objc private func fixTermTapped() {
+        onFixTerm?()
+    }
+
+    /// Show a typed ✎ note inline (append order = chronological) and confirm in
+    /// the banner. Cosmetic only — persistence happens in the AppDelegate.
+    func flashNote(atSecs: TimeInterval, text: String, count: Int) {
+        items.append(.note(t: atSecs, text: text))
+        setStatus("✎ Noted \(Self.clock(atSecs)) — \(count) this call")
+        render()
+    }
+
+    /// Confirm a term correction landed (corrections don't sit on the timeline;
+    /// they apply to the whole filing pass).
+    func flashTerm(wrong: String?, right: String, count: Int) {
+        if let wrong, !wrong.isEmpty {
+            setStatus("✎ Term \(count): “\(wrong)” → “\(right)” at filing")
+        } else {
+            setStatus("✎ Term \(count): “\(right)” hinted to the transcriber")
+        }
+    }
+
+    /// Bring the window up and put the cursor in the note composer (⌘⇧N). The
+    /// panel is non-activating, so the frontmost app keeps focus until the
+    /// field actually becomes first responder here — a deliberate grab.
+    func focusComposer() {
+        show()
+        panel?.makeKey()
+        panel?.makeFirstResponder(composer)
     }
 
     /// mm:ss (or h:mm:ss past an hour) for a moment offset.
@@ -231,6 +304,14 @@ final class LiveTranscriptWindow: NSObject {
             storage?.append(marker)
         }
 
+        func appendNote(t: TimeInterval, text: String) {
+            let marker = NSAttributedString(
+                string: "✎ \(Self.clock(t))  \(text)\n",
+                attributes: [.font: speakerFont, .foregroundColor: NSColor.systemTeal]
+            )
+            storage?.append(marker)
+        }
+
         if items.isEmpty && interimByChannel.isEmpty {
             storage?.append(NSAttributedString(string: "Listening…\n", attributes: [
                 .font: baseFont,
@@ -241,6 +322,7 @@ final class LiveTranscriptWindow: NSObject {
                 switch item {
                 case .line(let line): appendLine(line, interim: false)
                 case .highlight(let t, let note): appendHighlight(t: t, note: note)
+                case .note(let t, let text): appendNote(t: t, text: text)
                 }
             }
             // Interim tails (one per active channel) shown greyed at the bottom.

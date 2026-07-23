@@ -107,10 +107,17 @@ export async function fileCallTranscript(opts: {
    * it verbatim under "★ Flagged moments" so a live flag is never lost.
    */
   flaggedMoments?: { atSec: number; quote: string; note: string | null }[];
+  /**
+   * Operator-typed live notes (Call Desk composer / ⌘⇧N during the call), each
+   * resolved to the words spoken then. Steers the brief and is guaranteed into
+   * it verbatim under "✎ Operator notes" so a live note is never lost.
+   */
+  operatorNotes?: { atSec: number; quote: string; note: string }[];
   spendRoute?: string;
 }): Promise<FileCallResult> {
   const transcript = opts.transcript;
   const flagged = opts.flaggedMoments ?? [];
+  const operatorNotes = opts.operatorNotes ?? [];
 
   // mm:ss (or h:mm:ss) for a moment offset, for the brief + prompt steering.
   const clock = (sec: number) => {
@@ -135,6 +142,21 @@ export async function fileCallTranscript(opts: {
   const flaggedSteer =
     flaggedLines.length > 0
       ? `\n\nOPERATOR-FLAGGED MOMENTS — the operator marked these live as the most important points of the call. They are already listed at the top of the brief under "★ Flagged moments"; do NOT repeat them verbatim, but make sure your Key points / Decisions clearly reflect their significance:\n${flaggedLines.join("\n")}`
+      : "";
+
+  const noteLines = operatorNotes.map((n) => {
+    const quote = n.quote ? ` "${n.quote}"` : "";
+    return `- [${clock(n.atSec)}]${quote} — ${n.note}`;
+  });
+  // Verbatim block prepended to the brief (after flagged moments) so live
+  // notes survive even if the model omits them. Also fed to the model.
+  const notesBlock =
+    noteLines.length > 0
+      ? `**✎ Operator notes** (typed live during the call):\n${noteLines.join("\n")}\n\n`
+      : "";
+  const notesSteer =
+    noteLines.length > 0
+      ? `\n\nOPERATOR LIVE NOTES — the operator typed these notes themselves while the call was happening; they are the operator's own read on what mattered. They are already listed at the top of the brief under "✎ Operator notes"; do NOT repeat them verbatim, but weave their substance into your Key points / Action items:\n${noteLines.join("\n")}`
       : "";
 
   let title = opts.inPersonMeeting ? "Meeting" : "Call";
@@ -172,7 +194,7 @@ export async function fileCallTranscript(opts: {
     messages: [
       {
         role: "user",
-        content: `${preamble}${transcript.slice(0, 24000)}${flaggedSteer}`,
+        content: `${preamble}${transcript.slice(0, 24000)}${flaggedSteer}${notesSteer}`,
       },
     ],
   });
@@ -196,7 +218,7 @@ export async function fileCallTranscript(opts: {
       model: "claude-haiku-4-5",
       system:
         "Summarize this call transcript as a short Markdown brief starting with '**TL;DR:**'. Only include sections with real content. Same language as the transcript.",
-      prompt: `${transcript.slice(0, 24000)}${flaggedSteer}`,
+      prompt: `${transcript.slice(0, 24000)}${flaggedSteer}${notesSteer}`,
       maxTokens: 800,
       spend: {
         workspaceId: opts.workspaceId,
@@ -212,10 +234,13 @@ export async function fileCallTranscript(opts: {
     if (chat.ok) brief = chat.text;
   }
 
-  // Guarantee the operator's live flags into the brief verbatim, at the top —
-  // the model is steered by them but may summarize them away; these are the
-  // moments the operator explicitly cared about, so they must survive.
-  if (flaggedBlock) brief = `${flaggedBlock}${brief}`.trim();
+  // Guarantee the operator's live flags + typed notes into the brief verbatim,
+  // at the top — the model is steered by them but may summarize them away;
+  // these are the moments/notes the operator explicitly cared about, so they
+  // must survive. Order: flagged moments first, operator notes right after.
+  if (flaggedBlock || notesBlock) {
+    brief = `${flaggedBlock}${notesBlock}${brief}`.trim();
+  }
 
   // Create action items (linked back to the recording for provenance). One
   // batched insert rather than N round-trips.

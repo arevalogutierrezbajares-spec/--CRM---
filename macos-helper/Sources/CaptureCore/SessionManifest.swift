@@ -57,6 +57,37 @@ public struct SessionManifest: Codable, Equatable {
         }
     }
 
+    /// Live notes the operator typed during the call (Call Desk composer /
+    /// ⌘⇧N). Time-anchored like highlights; ride finalize into the brief's
+    /// "✎ Operator notes" block. Optional key — older manifests still decode.
+    public var notes: [Note]?
+
+    /// One typed note: seconds from recording start + the text.
+    public struct Note: Codable, Equatable {
+        public var tSecs: Double
+        public var text: String
+        public init(tSecs: Double, text: String) {
+            self.tSecs = tSecs
+            self.text = text
+        }
+    }
+
+    /// Transcription-term corrections the operator added live ("heard X, it's
+    /// Y"). Ride finalize: the server feeds `right` to Deepgram keyterm
+    /// prompting and applies a whole-word `wrong`→`right` post-pass so the
+    /// FILED transcript is fixed (the live view is throwaway by design).
+    public var terms: [TermCorrection]?
+
+    /// One correction: optional misheard form + the correct term.
+    public struct TermCorrection: Codable, Equatable {
+        public var wrong: String?
+        public var right: String
+        public init(wrong: String? = nil, right: String) {
+            self.wrong = wrong
+            self.right = right
+        }
+    }
+
     public init(sessionLocalId: String,
                 serverSessionId: String? = nil,
                 startedAt: Date,

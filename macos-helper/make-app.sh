@@ -22,7 +22,7 @@ APP_NAME="AGBCaptureHelper"
 DISPLAY_NAME="AGB AI"
 BUNDLE_ID="com.agb.capture-helper"
 # Keep in sync with Sources/CaptureCore/AudioConstants.swift helperVersion.
-VERSION="1.1.0"
+VERSION="1.2.0"
 APP_DIR="$PWD/$DISPLAY_NAME.app"
 # Remove legacy bundle name so we don't leave two helpers around.
 LEGACY_APP_DIR="$PWD/AGBCaptureHelper.app"
