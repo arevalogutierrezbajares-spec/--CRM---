@@ -619,6 +619,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func dropNote(text: String) {
         guard state == .recording || state == .paused,
               let spooler = activeSpooler else {
+            // Never eat typed text silently: put it back and say why.
+            liveWindow.restoreComposer(text: text)
+            liveWindow.setStatus("✎ No active recording — note not saved")
             return
         }
         let tSecs = spooler.appendedSeconds
