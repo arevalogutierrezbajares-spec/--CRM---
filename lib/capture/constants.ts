@@ -56,6 +56,17 @@ export const TRANSCRIBE_WINDOW_BYTES = 8 * 1024 * 1024;
  */
 export const STORE_AUDIO_MAX_BYTES = 45 * 1024 * 1024;
 
+/**
+ * A time-anchored marker (flag / live note) whose nearest utterance is more
+ * than this far away isn't backed by real audio at that time — the tail was
+ * dropped "off the record", or the marker sits past the transcript. Beyond it
+ * we keep the timestamp + note but emit no quote, rather than misattributing a
+ * distant line as "what was said here". ~one 30 s chunk. Lives here
+ * (dependency-free) so pure modules (themed-doc.ts) and the finalize pipeline
+ * share the exact same matching rule.
+ */
+export const MAX_HIGHLIGHT_MATCH_GAP_SECS = 30;
+
 /** Suspect flags (FR-CALL-OPS-4). */
 export const FLAG_FOUNDER_SILENT = "founder_channel_silent";
 export const FLAG_PARTICIPANT_SILENT = "participant_channel_silent";

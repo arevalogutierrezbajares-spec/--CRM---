@@ -12,9 +12,11 @@ import {
   isUuid,
   MAX_TOTAL_CHUNKS,
   parsePrecomputedTranscript,
+  parseAgenda,
   parseHighlights,
   parseNotes,
   parseTerms,
+  parseThemes,
 } from "@/lib/capture/validate";
 import { FINALIZE_LEASE_MINUTES } from "@/lib/capture/constants";
 
@@ -48,6 +50,8 @@ export async function POST(
     highlights?: unknown;
     notes?: unknown;
     terms?: unknown;
+    agenda?: unknown;
+    themes?: unknown;
   } | null;
   if (!body || !Number.isInteger(body.totalChunks) || body.totalChunks! < 1) {
     return NextResponse.json(
@@ -131,6 +135,9 @@ export async function POST(
   const highlights = parseHighlights(body.highlights);
   const notes = parseNotes(body.notes);
   const terms = parseTerms(body.terms);
+  // El Cuaderno: agenda + live themes (advisory — absent ⇒ legacy filing).
+  const agenda = parseAgenda(body.agenda);
+  const themes = parseThemes(body.themes);
   const outcome = await finalizeSession({
     session,
     founderLabel: identity.displayName?.split(/\s+/)[0] ?? "Founder",
@@ -144,6 +151,8 @@ export async function POST(
     highlights,
     notes,
     terms,
+    agenda,
+    themes,
   });
 
   if (!outcome.ok) {

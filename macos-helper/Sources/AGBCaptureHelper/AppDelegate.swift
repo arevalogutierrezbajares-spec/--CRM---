@@ -99,6 +99,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// ⌘⇧N — focus the Call Desk note composer while recording.
     private var noteHotKey: GlobalHotKey?
     private var fixTermMenuItem: NSMenuItem?
+    /// Agenda typed before a call starts — applied to the next session's
+    /// spooler (crash-safe from then on). Cleared once attached.
+    private var pendingAgenda: [SessionManifest.AgendaItem] = []
     private var detectedSourceApp: String?
     /// Far-side person name for this recording (never source app). Feeds live
     /// captions + spool contactName → CRM finalize (FR-CALL-ATT-3).
@@ -434,6 +437,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // Person name only — never sourceApp (WhatsApp/Zoom are not speakers).
             let name = activeParticipantName
             try spooler.setContactName(name)
+            if !pendingAgenda.isEmpty {
+                try? spooler.setAgenda(pendingAgenda)
+                pendingAgenda = []
+            }
             activeSpooler = spooler
             engine.promoteToRecording(spooler: spooler)
             state = .recording
@@ -604,10 +611,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // early. `appendedSeconds` is exactly the position utterances are stamped
         // against (and O(1), so it never contends the capture path).
         let tSecs = spooler.appendedSeconds
+        let parsed = note.map(ThemeTags.parse)
+        let body = (parsed?.text.isEmpty == false) ? parsed?.text : note
+        let themeKey = parsed?.tags.first
         do {
-            let count = try spooler.addHighlight(tSecs: tSecs, note: note)
-            liveWindow.flashHighlight(atSecs: tSecs, note: note, count: count)
-            log.info("highlight #\(count) flagged @\(Int(tSecs))s", category: "app")
+            let count = try spooler.addHighlight(tSecs: tSecs, note: body, themeKey: themeKey)
+            liveWindow.flashHighlight(atSecs: tSecs, note: body, count: count)
+            log.info("highlight #\(count) flagged @\(Int(tSecs))s\(themeKey.map { " #\($0)" } ?? "")", category: "app")
         } catch {
             log.warn("highlight failed: \(error.localizedDescription)", category: "app")
         }
@@ -625,10 +635,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         let tSecs = spooler.appendedSeconds
+        let parsed = ThemeTags.parse(text)
+        let body = parsed.text.isEmpty ? text : parsed.text
+        let themeKey = parsed.tags.first
         do {
-            let count = try spooler.addNote(tSecs: tSecs, text: text)
-            liveWindow.flashNote(atSecs: tSecs, text: text, count: count)
-            log.info("note #\(count) @\(Int(tSecs))s", category: "app")
+            let count = try spooler.addNote(tSecs: tSecs, text: body, themeKey: themeKey)
+            liveWindow.flashNote(atSecs: tSecs, text: body, themeKey: themeKey, count: count)
+            log.info("note #\(count) @\(Int(tSecs))s\(themeKey.map { " #\($0)" } ?? "")", category: "app")
         } catch {
             log.warn("note failed: \(error.localizedDescription)", category: "app")
         }
@@ -672,6 +685,47 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } catch {
             log.warn("term correction failed: \(error.localizedDescription)", category: "app")
         }
+    }
+
+    /// El Cuaderno: type the "original list" (one item per line). Before a
+    /// call it's stashed and attached to the next session; mid-call it lands
+    /// on the active spooler (crash-safe). Items seed themes; untouched items
+    /// file as GAPS in the notes doc.
+    @objc private func setAgendaTapped() {
+        let alert = NSAlert()
+        alert.messageText = "Call agenda — your original list"
+        alert.informativeText = "One item per line. Tag notes with #the-item-slug during the call; items with no evidence file as gaps."
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Cancel")
+        let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 300, height: 120))
+        let tv = NSTextView(frame: scroll.bounds)
+        tv.font = .systemFont(ofSize: 12.5)
+        tv.isRichText = false
+        let existing = activeSpooler?.snapshot.agenda ?? (pendingAgenda.isEmpty ? nil : pendingAgenda)
+        tv.string = (existing ?? []).map(\.label).joined(separator: "\n")
+        scroll.documentView = tv
+        scroll.hasVerticalScroller = true
+        alert.accessoryView = scroll
+        DispatchQueue.main.async { tv.window?.makeFirstResponder(tv) }
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let items: [SessionManifest.AgendaItem] = tv.string
+            .split(separator: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+            .prefix(24)
+            .compactMap { label in
+                let key = ThemeTags.slugify(label)
+                return key.isEmpty ? nil : SessionManifest.AgendaItem(key: key, label: label)
+            }
+        if let spooler = activeSpooler, state == .recording || state == .paused {
+            try? spooler.setAgenda(items)
+            liveWindow.setStatus("☰ Agenda set — \(items.count) item\(items.count == 1 ? "" : "s") this call")
+        } else {
+            pendingAgenda = items
+            lastResult = "Agenda staged for the next call (\(items.count) items)"
+        }
+        log.info("agenda set: \(items.count) item(s)", category: "app")
     }
 
     private func handleLiveStatus(_ status: LiveTranscriptStreamer.Status) {
@@ -882,6 +936,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     captureKind: kind
                 )
                 try spooler.setContactName(nil)
+                if !self.pendingAgenda.isEmpty {
+                    try? spooler.setAgenda(self.pendingAgenda)
+                    self.pendingAgenda = []
+                }
                 self.activeSpooler = spooler
                 engine.promoteToRecording(spooler: spooler)
                 self.state = .recording
@@ -1233,6 +1291,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let fixTerm = makeItem("Fix transcript term…", #selector(fixTermTapped), "")
         fixTermMenuItem = fixTerm
         menu.addItem(fixTerm)
+
+        menu.addItem(makeItem("Set call agenda…", #selector(setAgendaTapped), ""))
 
         menu.addItem(.separator())
         let townHallItem = makeItem("Town Hall", #selector(openTownHall), "h")

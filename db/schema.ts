@@ -2840,6 +2840,12 @@ export const callRecordings = pgTable("call_recordings", {
   contactAmbiguous: boolean("contact_ambiguous").notNull().default(false),
   // FR-CALL-OPS-5: true when salvaged from a crashed/incomplete session.
   partial: boolean("partial").notNull().default(false),
+  // El Cuaderno: theme-structured call document (v1 shape, see
+  // lib/capture/themed-doc.ts ThemedDoc). Null for legacy/un-themed calls.
+  themedDoc: jsonb("themed_doc"),
+  // El Cuaderno: the operator's pre-call agenda [{key,label}] as received on
+  // finalize. Null for legacy/un-themed calls.
+  agenda: jsonb("agenda").$type<{ key: string; label: string }[]>(),
   createdBy: uuid("created_by")
     .notNull()
     .references(() => users.id),
@@ -2858,6 +2864,79 @@ export const callRecordingsRelations = relations(callRecordings, ({ one }) => ({
     references: [meetings.id],
   }),
 }));
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EL CUADERNO — capture themes + per-call theme facets
+// The operator's live #theme tags structure the filed call document.
+// `capture_themes` is the durable per-workspace registry (slice 1 writes no
+// rows yet); `call_theme_facets` is the per-call rollup powering cross-call
+// theme queries. Named capture_themes because `themes` already belongs to the
+// work-management module (initiative/milestone theming) above.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const captureThemes = pgTable(
+  "capture_themes",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    projectId: uuid("project_id").references(() => projects.id, {
+      onDelete: "set null",
+    }),
+    label: text("label").notNull(),
+    slug: text("slug").notNull(),
+    color: text("color"),
+    archived: boolean("archived").notNull().default(false),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    // Slug unique per scope: workspace-wide (project null) + per-project.
+    // Two partial indexes because NULLs never collide in a plain unique index.
+    workspaceSlugUniq: uniqueIndex("capture_themes_workspace_slug_uniq")
+      .on(t.workspaceId, t.slug)
+      .where(sql`${t.projectId} is null`),
+    workspaceProjectSlugUniq: uniqueIndex("capture_themes_workspace_project_slug_uniq")
+      .on(t.workspaceId, t.projectId, t.slug)
+      .where(sql`${t.projectId} is not null`),
+  }),
+);
+
+export const callThemeFacets = pgTable(
+  "call_theme_facets",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    callId: uuid("call_id")
+      .notNull()
+      .references(() => callRecordings.id, { onDelete: "cascade" }),
+    // Null in slice 1 (no capture_themes upsert yet).
+    themeId: uuid("theme_id").references(() => captureThemes.id, {
+      onDelete: "cascade",
+    }),
+    label: text("label").notNull(),
+    origin: text("origin").notNull(), // 'agenda' | 'live' | 'ai_suggested_accepted'
+    noteCount: integer("note_count").notNull().default(0),
+    quoteCount: integer("quote_count").notNull().default(0),
+    flagCount: integer("flag_count").notNull().default(0),
+    coverage: text("coverage").notNull(), // 'covered' | 'partial' | 'gap'
+    callDate: timestamp("call_date", { withTimezone: true }).notNull(),
+  },
+  (t) => ({
+    workspaceThemeDateIdx: index("call_theme_facets_workspace_theme_date_idx").on(
+      t.workspaceId,
+      t.themeId,
+      t.callDate,
+    ),
+  }),
+);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CALL CAPTURE (CALL-CAPTURE-MODULE-V1) — macOS Helper sessions + tokens

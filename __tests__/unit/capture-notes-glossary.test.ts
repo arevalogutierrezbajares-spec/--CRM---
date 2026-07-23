@@ -55,7 +55,7 @@ describe("parseNotes", () => {
         { tSecs: 3, text: "   " },
         { tSecs: 4 },
       ]),
-    ).toEqual([{ tSecs: 12.5, text: "follow up on pricing" }]);
+    ).toEqual([{ tSecs: 12.5, text: "follow up on pricing", themeKey: null }]);
   });
 
   it("sorts by time so the brief lists notes in call order", () => {
@@ -75,12 +75,12 @@ describe("parseNotes", () => {
         { tSecs: "x", text: "gone" },
         { tSecs: 1e9, text: "clamped" },
       ]),
-    ).toEqual([{ tSecs: 24 * 3600, text: "clamped" }]);
+    ).toEqual([{ tSecs: 24 * 3600, text: "clamped", themeKey: null }]);
   });
 
   it("coerces numeric-string tSecs", () => {
     expect(parseNotes([{ tSecs: "7.5", text: "ok" }])).toEqual([
-      { tSecs: 7.5, text: "ok" },
+      { tSecs: 7.5, text: "ok", themeKey: null },
     ]);
   });
 
@@ -167,19 +167,22 @@ describe("resolveNotes", () => {
       atSec: 8,
       quote: "The budget is forty thousand",
       note: "budget note",
+      themeKey: null,
     });
   });
 
   it("is robust to an empty transcript (quote = '')", () => {
     expect(resolveNotes([{ tSecs: 3, text: "x" }], [])).toEqual([
-      { atSec: 3, quote: "", note: "x" },
+      { atSec: 3, quote: "", note: "x", themeKey: null },
     ]);
   });
 
   it("drops the quote when the note's audio is gone (gap guard)", () => {
     expect(
       resolveNotes([{ tSecs: 500, text: "typed after tail drop" }], utterances),
-    ).toEqual([{ atSec: 500, quote: "", note: "typed after tail drop" }]);
+    ).toEqual([
+      { atSec: 500, quote: "", note: "typed after tail drop", themeKey: null },
+    ]);
   });
 
   it("returns [] when there are no notes", () => {

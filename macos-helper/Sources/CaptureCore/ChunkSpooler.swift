@@ -213,12 +213,13 @@ public final class ChunkSpooler {
     /// still finalizes with the flags. Empty/whitespace notes store as nil.
     /// Returns the running highlight count (for live UI feedback).
     @discardableResult
-    public func addHighlight(tSecs: Double, note: String? = nil) throws -> Int {
+    public func addHighlight(tSecs: Double, note: String? = nil, themeKey: String? = nil) throws -> Int {
         lock.lock(); defer { lock.unlock() }
         let trimmed = note?.trimmingCharacters(in: .whitespacesAndNewlines)
         let highlight = SessionManifest.Highlight(
             tSecs: max(0, tSecs),
-            note: (trimmed?.isEmpty == false) ? trimmed : nil
+            note: (trimmed?.isEmpty == false) ? trimmed : nil,
+            themeKey: themeKey
         )
         var current = manifestStorage.highlights ?? []
         current.append(highlight)
@@ -232,12 +233,12 @@ public final class ChunkSpooler {
     /// with the notes. Returns the running note count for live UI feedback;
     /// empty/whitespace text is a no-op (returns current count).
     @discardableResult
-    public func addNote(tSecs: Double, text: String) throws -> Int {
+    public func addNote(tSecs: Double, text: String, themeKey: String? = nil) throws -> Int {
         lock.lock(); defer { lock.unlock() }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         var current = manifestStorage.notes ?? []
         guard !trimmed.isEmpty else { return current.count }
-        current.append(SessionManifest.Note(tSecs: max(0, tSecs), text: trimmed))
+        current.append(SessionManifest.Note(tSecs: max(0, tSecs), text: trimmed, themeKey: themeKey))
         manifestStorage.notes = current
         try persistManifest()
         return current.count
@@ -262,6 +263,13 @@ public final class ChunkSpooler {
         manifestStorage.terms = current
         try persistManifest()
         return current.count
+    }
+
+    /// Set/replace the call agenda (El Cuaderno "original list"). Crash-safe.
+    public func setAgenda(_ items: [SessionManifest.AgendaItem]) throws {
+        lock.lock(); defer { lock.unlock() }
+        manifestStorage.agenda = items.isEmpty ? nil : items
+        try persistManifest()
     }
 
     /// Mark the call ended. Duration is derived from spooled bytes unless given.

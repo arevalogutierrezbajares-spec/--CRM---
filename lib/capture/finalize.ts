@@ -28,6 +28,7 @@ import {
   WAV_HEADER_BYTES,
   TRANSCRIBE_WINDOW_BYTES,
   STORE_AUDIO_MAX_BYTES,
+  MAX_HIGHLIGHT_MATCH_GAP_SECS,
   isInPersonMeetingSource,
   isMixedAcousticSource,
 } from "./constants";
@@ -40,22 +41,38 @@ import {
   type TranscriptionResult,
 } from "./deepgram";
 import { fileCallTranscript, type FileCallResult } from "./file-call";
-import type { Highlight, OperatorNote, TermCorrection } from "./validate";
+import { buildThemedDoc, type ThemedDoc } from "./themed-doc";
+import { replaceCallThemeFacets } from "@/db/queries/call-recordings";
+import type {
+  AgendaItem,
+  Highlight,
+  LiveTheme,
+  OperatorNote,
+  TermCorrection,
+} from "./validate";
 
 /** A highlight resolved to the words spoken at that moment. */
-export type FlaggedMoment = { atSec: number; quote: string; note: string | null };
+export type FlaggedMoment = {
+  atSec: number;
+  quote: string;
+  note: string | null;
+  /** El Cuaderno: operator's live #theme tag (validated); null = unfiled. */
+  themeKey: string | null;
+};
 
 /** An operator-typed live note resolved to the words spoken at that moment. */
-export type ResolvedOperatorNote = { atSec: number; quote: string; note: string };
+export type ResolvedOperatorNote = {
+  atSec: number;
+  quote: string;
+  note: string;
+  /** El Cuaderno: operator's live #theme tag (validated); null = unfiled. */
+  themeKey: string | null;
+};
 
-/**
- * A flag whose nearest utterance is more than this far away isn't backed by
- * real audio at that time — the tail was dropped "off the record", or the flag
- * sits past the transcript. Beyond it we keep the timestamp + note but emit no
- * quote, rather than misattributing a distant line as "what was said here".
- * ~one 30 s chunk.
- */
-export const MAX_HIGHLIGHT_MATCH_GAP_SECS = 30;
+// The marker↔utterance matching gap lives in constants.ts (dependency-free, so
+// the pure themed-doc module shares the exact rule). Re-exported here because
+// callers already import it from this module.
+export { MAX_HIGHLIGHT_MATCH_GAP_SECS } from "./constants";
 
 /**
  * The words spoken at a given moment: the utterance covering that time (or the
@@ -99,6 +116,7 @@ export function resolveHighlights(
     atSec: h.tSecs,
     quote: quoteAt(h.tSecs, utterances),
     note: h.note,
+    themeKey: h.themeKey ?? null,
   }));
 }
 
@@ -117,6 +135,7 @@ export function resolveNotes(
     atSec: n.tSecs,
     quote: quoteAt(n.tSecs, utterances),
     note: n.text,
+    themeKey: n.themeKey ?? null,
   }));
 }
 
@@ -310,6 +329,10 @@ export async function finalizeSession(opts: {
   notes?: OperatorNote[];
   /** Live transcription-term corrections — Deepgram keyterms + wrong→right post-pass. */
   terms?: TermCorrection[];
+  /** El Cuaderno: pre-call agenda items (advisory). */
+  agenda?: AgendaItem[];
+  /** El Cuaderno: live theme list — union of agenda-seeded + live-created. */
+  themes?: LiveTheme[];
 }): Promise<FinalizeOutcome> {
   const { session } = opts;
   const workspaceId = session.workspaceId;
@@ -575,7 +598,35 @@ export async function finalizeSession(opts: {
     transcriptEngine,
     suspectFlags: txResult.suspectFlags.length ? txResult.suspectFlags : null,
     partial: opts.partial,
+    agenda: (opts.agenda ?? []).length > 0 ? opts.agenda : null,
   });
+
+  // 5b. El Cuaderno: build the pre-AI themed document from the operator's live
+  // #theme structure. Advisory — any throw here leaves themedDoc null and the
+  // filing below takes the legacy path (a call is never lost to theming).
+  const resolvedFlags = resolveHighlights(opts.highlights ?? [], txResult.utterances);
+  const resolvedNotes = resolveNotes(opts.notes ?? [], txResult.utterances);
+  let themedDoc: ThemedDoc | null = null;
+  if ((opts.themes ?? []).length > 0) {
+    try {
+      themedDoc = buildThemedDoc({
+        themes: opts.themes ?? [],
+        agenda: opts.agenda ?? [],
+        resolvedNotes,
+        resolvedFlags,
+        utterances: txResult.utterances,
+        labels: {
+          founder: founderLabel,
+          participant: participantLabel,
+          speakerMap: Object.keys(speakerMap).length ? speakerMap : undefined,
+        },
+      });
+    } catch (e) {
+      console.warn(
+        `[capture] themed doc build failed for session ${session.id} — legacy filing: ${String(e)}`,
+      );
+    }
+  }
 
   // 6. AI filing (brief/note/action items/contact). A filing failure never
   // loses the call — the row above already exists.
@@ -591,8 +642,10 @@ export async function finalizeSession(opts: {
       attributed: true,
       founderLabel,
       inPersonMeeting,
-      flaggedMoments: resolveHighlights(opts.highlights ?? [], txResult.utterances),
-      operatorNotes: resolveNotes(opts.notes ?? [], txResult.utterances),
+      flaggedMoments: resolvedFlags,
+      operatorNotes: resolvedNotes,
+      themedDoc,
+      utterances: txResult.utterances,
       spendRoute: "capture:finalize:file",
     });
   } catch (e) {
@@ -604,6 +657,7 @@ export async function finalizeSession(opts: {
       contact: null,
       contactAmbiguous: false,
       meetingId: null,
+      themedDoc: null,
     };
     // Session still counts as filed (recording exists); error noted.
     await updateCaptureSession({
@@ -611,6 +665,33 @@ export async function finalizeSession(opts: {
       workspaceId,
       patch: { error: `filing: ${String(e).slice(0, 400)}` },
     });
+  }
+
+  // 6b. El Cuaderno: per-call theme facets (cross-call theme queries). Only
+  // when the themed path actually filed the call (result.themedDoc set — its
+  // jsonb is persisted by the filing itself). Advisory: a facet failure never
+  // fails the finalize. NOTE (slice 1): the themes-table upsert is deliberately
+  // skipped — facets keep theme_id null and are label-keyed until a later
+  // slice makes themes durable.
+  if (result.themedDoc) {
+    try {
+      await replaceCallThemeFacets({
+        workspaceId,
+        callId: recordingId,
+        facets: result.themedDoc.themes.map((t) => ({
+          label: t.label,
+          origin: t.origin,
+          noteCount: t.evidence.filter((e) => e.type === "note").length,
+          quoteCount: t.evidence.filter((e) => e.quote !== "").length,
+          flagCount: t.evidence.filter((e) => e.type === "flag").length,
+          coverage: t.evidence.length > 0 ? ("covered" as const) : ("gap" as const),
+        })),
+      });
+    } catch (e) {
+      console.warn(
+        `[capture] theme facets not stored for session ${session.id}: ${String(e)}`,
+      );
+    }
   }
 
   // 7. Mark filed + clean up chunk objects (assembled file is the artifact).

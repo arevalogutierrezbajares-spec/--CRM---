@@ -1,7 +1,7 @@
 import { and, desc, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 
-const { callRecordings, contacts } = schema;
+const { callRecordings, callThemeFacets, contacts } = schema;
 
 export type CallRecordingRow = typeof callRecordings.$inferSelect;
 
@@ -62,6 +62,8 @@ export async function createCallRecording(input: {
   transcriptEngine?: string | null;
   suspectFlags?: string[] | null;
   partial?: boolean;
+  /** El Cuaderno: operator's pre-call agenda [{key,label}] (durable-first). */
+  agenda?: { key: string; label: string }[] | null;
 }): Promise<string> {
   const [row] = await db
     .insert(callRecordings)
@@ -79,6 +81,7 @@ export async function createCallRecording(input: {
       transcriptEngine: input.transcriptEngine ?? null,
       suspectFlags: input.suspectFlags ?? null,
       partial: input.partial ?? false,
+      agenda: input.agenda ?? null,
       durationSecs: input.durationSecs ?? null,
       language: input.language ?? null,
       title: input.title ?? "Call",
@@ -102,6 +105,8 @@ export async function updateCallRecording(input: {
   speakerMap?: Record<string, string> | null;
   transcriptEngine?: string | null;
   utterances?: CallRecordingRow["utterances"];
+  /** El Cuaderno: completed themed document (jsonb, v1 shape). */
+  themedDoc?: unknown;
 }): Promise<void> {
   const patch: Partial<CallRecordingRow> = {};
   if (input.title !== undefined) patch.title = input.title;
@@ -118,6 +123,7 @@ export async function updateCallRecording(input: {
   if (input.transcriptEngine !== undefined)
     patch.transcriptEngine = input.transcriptEngine;
   if (input.utterances !== undefined) patch.utterances = input.utterances;
+  if (input.themedDoc !== undefined) patch.themedDoc = input.themedDoc;
   if (Object.keys(patch).length === 0) return;
   await db
     .update(callRecordings)
@@ -214,6 +220,64 @@ export async function getContactName(opts: {
     )
     .limit(1);
   return row ?? null;
+}
+
+/** One per-call per-theme rollup row (El Cuaderno Slice 1). */
+export type CallThemeFacetInput = {
+  label: string;
+  origin: "agenda" | "live" | "ai_suggested_accepted";
+  noteCount: number;
+  quoteCount: number;
+  flagCount: number;
+  coverage: "covered" | "partial" | "gap";
+};
+
+/**
+ * Replace the theme facets for a call (idempotent: delete + insert, so a
+ * finalize retry never duplicates rows). call_date is read from the recording
+ * row so facets always carry the true createdAt. Slice 1: theme_id stays null
+ * — the themes-table upsert is deliberately deferred to a later slice, so
+ * facets are label-keyed until then.
+ */
+export async function replaceCallThemeFacets(opts: {
+  workspaceId: string;
+  callId: string;
+  facets: CallThemeFacetInput[];
+}): Promise<void> {
+  const [rec] = await db
+    .select({ createdAt: callRecordings.createdAt })
+    .from(callRecordings)
+    .where(
+      and(
+        eq(callRecordings.id, opts.callId),
+        eq(callRecordings.workspaceId, opts.workspaceId),
+      ),
+    )
+    .limit(1);
+  if (!rec) return;
+  await db
+    .delete(callThemeFacets)
+    .where(
+      and(
+        eq(callThemeFacets.callId, opts.callId),
+        eq(callThemeFacets.workspaceId, opts.workspaceId),
+      ),
+    );
+  if (opts.facets.length === 0) return;
+  await db.insert(callThemeFacets).values(
+    opts.facets.map((f) => ({
+      workspaceId: opts.workspaceId,
+      callId: opts.callId,
+      themeId: null,
+      label: f.label,
+      origin: f.origin,
+      noteCount: f.noteCount,
+      quoteCount: f.quoteCount,
+      flagCount: f.flagCount,
+      coverage: f.coverage,
+      callDate: rec.createdAt,
+    })),
+  );
 }
 
 /** Full recording including transcript (for the detail/expand view). */

@@ -94,6 +94,22 @@ public final class CaptureAPIClient {
         /// to Deepgram keyterms + applies a wrong→right post-pass to the filed
         /// transcript.
         public let terms: [SessionManifest.TermCorrection]
+        /// Pre-call agenda (El Cuaderno). Omitted when empty.
+        public let agenda: [SessionManifest.AgendaItem]
+        /// Theme definitions: agenda-seeded + live-created. Omitted when empty.
+        public let themes: [ThemeDef]
+
+        /// One theme definition on the wire.
+        public struct ThemeDef: Encodable, Equatable {
+            public let key: String
+            public let label: String
+            public let agenda: Bool
+            public init(key: String, label: String, agenda: Bool) {
+                self.key = key
+                self.label = label
+                self.agenda = agenda
+            }
+        }
 
         public struct PrecomputedTranscript: Encodable {
             public let language: String?
@@ -140,7 +156,9 @@ public final class CaptureAPIClient {
                     precomputedTranscript: PrecomputedTranscript? = nil,
                     highlights: [SessionManifest.Highlight] = [],
                     notes: [SessionManifest.Note] = [],
-                    terms: [SessionManifest.TermCorrection] = []) {
+                    terms: [SessionManifest.TermCorrection] = [],
+                    agenda: [SessionManifest.AgendaItem] = [],
+                    themes: [ThemeDef] = []) {
             self.endedAt = ISO8601.string(from: endedAt)
             self.durationSecs = durationSecs
             self.totalChunks = totalChunks
@@ -150,6 +168,8 @@ public final class CaptureAPIClient {
             self.highlights = highlights
             self.notes = notes
             self.terms = terms
+            self.agenda = agenda
+            self.themes = themes
         }
 
         public init(endedAtISO: String, durationSecs: Int, totalChunks: Int,
@@ -157,7 +177,9 @@ public final class CaptureAPIClient {
                     precomputedTranscript: PrecomputedTranscript? = nil,
                     highlights: [SessionManifest.Highlight] = [],
                     notes: [SessionManifest.Note] = [],
-                    terms: [SessionManifest.TermCorrection] = []) {
+                    terms: [SessionManifest.TermCorrection] = [],
+                    agenda: [SessionManifest.AgendaItem] = [],
+                    themes: [ThemeDef] = []) {
             self.endedAt = endedAtISO
             self.durationSecs = durationSecs
             self.totalChunks = totalChunks
@@ -167,6 +189,8 @@ public final class CaptureAPIClient {
             self.highlights = highlights
             self.notes = notes
             self.terms = terms
+            self.agenda = agenda
+            self.themes = themes
         }
 
         public func encode(to encoder: Encoder) throws {
@@ -191,6 +215,12 @@ public final class CaptureAPIClient {
             }
             if !terms.isEmpty {
                 try c.encode(terms, forKey: .init("terms"))
+            }
+            if !agenda.isEmpty {
+                try c.encode(agenda, forKey: .init("agenda"))
+            }
+            if !themes.isEmpty {
+                try c.encode(themes, forKey: .init("themes"))
             }
         }
     }
