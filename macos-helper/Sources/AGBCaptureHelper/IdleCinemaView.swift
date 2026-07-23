@@ -206,7 +206,9 @@ final class IdleCinemaView: NSView {
 
     // MARK: - Clips
 
-    private static func resolveIntroClips() -> [URL] {
+    /// Locate the bundled Venezuela clips (also used by ControlWindow's nature
+    /// record button — Angel Falls idle, Catatumbo thunder while recording).
+    static func resolveIntroClips() -> [URL] {
         let names = ["angel-falls", "canaima", "roraima", "catatumbo"]
         var urls: [URL] = []
 

@@ -49,8 +49,9 @@ final class LiveTranscriptWindow: NSObject {
         guard panel == nil else { return }
 
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 360, height: 300),
-            styleMask: [.nonactivatingPanel, .titled, .closable, .resizable, .utilityWindow],
+            contentRect: NSRect(x: 0, y: 0, width: 380, height: 320),
+            styleMask: [.nonactivatingPanel, .titled, .closable, .resizable,
+                        .utilityWindow, .hudWindow, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
@@ -62,8 +63,12 @@ final class LiveTranscriptWindow: NSObject {
         panel.isMovableByWindowBackground = true
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isReleasedWhenClosed = false
-        panel.minSize = NSSize(width: 260, height: 160)
+        panel.minSize = NSSize(width: 280, height: 180)
         panel.delegate = self
+        // Frosted dark HUD — the same chrome family as the AGB control panel.
+        panel.appearance = NSAppearance(named: .darkAqua)
+        panel.titlebarAppearsTransparent = true
+        panel.titleVisibility = .hidden
 
         // Status banner (recording timer / "unavailable") + scrolling transcript.
         statusLabel.font = .monospacedSystemFont(ofSize: 11, weight: .medium)
@@ -109,7 +114,7 @@ final class LiveTranscriptWindow: NSObject {
         textView.isSelectable = true
         textView.drawsBackground = false
         textView.textContainerInset = NSSize(width: 4, height: 6)
-        textView.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
+        textView.font = .systemFont(ofSize: 12.5)
         textView.autoresizingMask = [.width]
         textView.isVerticallyResizable = true
         textView.isHorizontallyResizable = false
@@ -122,25 +127,44 @@ final class LiveTranscriptWindow: NSObject {
         // from the call app unless the operator deliberately clicks / ⌘⇧N.
         composer.placeholderString = "Note — Enter saves at the current moment  (⌘⇧N)"
         composer.font = .systemFont(ofSize: 12)
-        composer.bezelStyle = .roundedBezel
+        composer.isBezeled = false
+        composer.isBordered = false
+        composer.drawsBackground = false
+        composer.focusRingType = .none
         composer.lineBreakMode = .byTruncatingTail
         composer.cell?.usesSingleLineMode = true
         composer.cell?.sendsActionOnEndEditing = false
         composer.target = self
         composer.action = #selector(composerSubmitted)
         composer.delegate = self
+        // Rounded, subtly-filled field chrome (the Town Hall input look).
+        let composerWell = ComposerWell()
+        composer.translatesAutoresizingMaskIntoConstraints = false
+        composerWell.addSubview(composer)
+        NSLayoutConstraint.activate([
+            composer.leadingAnchor.constraint(equalTo: composerWell.leadingAnchor, constant: 10),
+            composer.trailingAnchor.constraint(equalTo: composerWell.trailingAnchor, constant: -10),
+            composer.centerYAnchor.constraint(equalTo: composerWell.centerYAnchor),
+            composerWell.heightAnchor.constraint(equalToConstant: 30),
+        ])
 
-        let stack = NSStackView(views: [header, scroll, composer])
+        let stack = NSStackView(views: [header, scroll, composerWell])
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 6
-        stack.edgeInsets = NSEdgeInsets(top: 10, left: 12, bottom: 12, right: 12)
+        stack.spacing = 8
+        // Extra top inset clears the transparent titlebar's close button.
+        stack.edgeInsets = NSEdgeInsets(top: 30, left: 14, bottom: 12, right: 14)
         stack.translatesAutoresizingMaskIntoConstraints = false
-        header.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -24).isActive = true
-        scroll.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -24).isActive = true
-        composer.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -24).isActive = true
+        header.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -28).isActive = true
+        scroll.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -28).isActive = true
+        composerWell.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -28).isActive = true
 
-        let container = NSView()
+        // Frosted glass behind everything — content floats on vibrancy, not a
+        // flat opaque panel.
+        let container = NSVisualEffectView()
+        container.material = .hudWindow
+        container.blendingMode = .behindWindow
+        container.state = .active
         container.addSubview(stack)
         NSLayoutConstraint.activate([
             stack.topAnchor.constraint(equalTo: container.topAnchor),
@@ -286,25 +310,40 @@ final class LiveTranscriptWindow: NSObject {
 
     // MARK: - Render
 
+    /// SF Rounded for speaker names — warmer than mono, still crisp on the HUD.
+    private static func roundedFont(ofSize size: CGFloat, weight: NSFont.Weight) -> NSFont {
+        let base = NSFont.systemFont(ofSize: size, weight: weight)
+        guard let descriptor = base.fontDescriptor.withDesign(.rounded),
+              let font = NSFont(descriptor: descriptor, size: size) else { return base }
+        return font
+    }
+
     private func render() {
         guard panel != nil else { return }
         let storage = textView.textStorage
         storage?.beginEditing()
         storage?.setAttributedString(NSAttributedString(string: ""))
 
-        let baseFont = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
-        let speakerFont = NSFont.monospacedSystemFont(ofSize: 12, weight: .semibold)
+        // Proportional body (Otter/Granola-style readability), rounded speaker
+        // labels, breathing room between turns.
+        let baseFont = NSFont.systemFont(ofSize: 12.5)
+        let speakerFont = Self.roundedFont(ofSize: 12.5, weight: .semibold)
+        let para = NSMutableParagraphStyle()
+        para.paragraphSpacing = 5
+        para.lineSpacing = 1
 
         func appendLine(_ line: LiveTranscriptStreamer.Line, interim: Bool) {
             let textColor: NSColor = interim ? .tertiaryLabelColor : .labelColor
             let speakerColor: NSColor = line.channel == 0 ? .systemBlue : .systemGreen
-            let label = NSAttributedString(string: "\(line.speaker): ", attributes: [
+            let label = NSAttributedString(string: "\(line.speaker)  ", attributes: [
                 .font: speakerFont,
                 .foregroundColor: interim ? speakerColor.withAlphaComponent(0.5) : speakerColor,
+                .paragraphStyle: para,
             ])
             let body = NSAttributedString(string: "\(line.text)\n", attributes: [
                 .font: baseFont,
                 .foregroundColor: textColor,
+                .paragraphStyle: para,
             ])
             storage?.append(label)
             storage?.append(body)
@@ -314,7 +353,8 @@ final class LiveTranscriptWindow: NSObject {
             let suffix = note.map { "  \($0)" } ?? ""
             let marker = NSAttributedString(
                 string: "★ \(Self.clock(t)) flagged\(suffix)\n",
-                attributes: [.font: speakerFont, .foregroundColor: NSColor.systemOrange]
+                attributes: [.font: speakerFont, .foregroundColor: NSColor.systemOrange,
+                             .paragraphStyle: para]
             )
             storage?.append(marker)
         }
@@ -322,15 +362,17 @@ final class LiveTranscriptWindow: NSObject {
         func appendNote(t: TimeInterval, text: String) {
             let marker = NSAttributedString(
                 string: "✎ \(Self.clock(t))  \(text)\n",
-                attributes: [.font: speakerFont, .foregroundColor: NSColor.systemTeal]
+                attributes: [.font: speakerFont, .foregroundColor: NSColor.systemTeal,
+                             .paragraphStyle: para]
             )
             storage?.append(marker)
         }
 
         if items.isEmpty && interimByChannel.isEmpty {
-            storage?.append(NSAttributedString(string: "Listening…\n", attributes: [
+            storage?.append(NSAttributedString(string: "Listening — words appear as they're spoken…\n", attributes: [
                 .font: baseFont,
                 .foregroundColor: NSColor.tertiaryLabelColor,
+                .paragraphStyle: para,
             ]))
         } else {
             for item in items {
@@ -369,5 +411,27 @@ extension LiveTranscriptWindow: NSTextFieldDelegate {
         }
         releaseComposerFocus()
         return true
+    }
+}
+
+/// Rounded, subtly-filled well around the borderless note composer — the same
+/// field chrome as the Town Hall inputs, tuned for the dark HUD.
+private final class ComposerWell: NSView {
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        translatesAutoresizingMaskIntoConstraints = false
+        wantsLayer = true
+        layer?.cornerRadius = 8
+    }
+    required init?(coder: NSCoder) { fatalError("unused") }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let r = bounds.insetBy(dx: 0.5, dy: 0.5)
+        let path = NSBezierPath(roundedRect: r, xRadius: 8, yRadius: 8)
+        NSColor.white.withAlphaComponent(0.07).setFill()
+        path.fill()
+        NSColor.white.withAlphaComponent(0.14).setStroke()
+        path.lineWidth = 1
+        path.stroke()
     }
 }
