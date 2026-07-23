@@ -88,6 +88,9 @@ public struct HelperConfig: Codable, Equatable {
     public var localTranscribeCommand: String?
     public var localTranscribeModel: String
     public var localTranscribeTimeoutSecs: Double
+    /// Diarization hint for local STT: at most this many distinct voices on a
+    /// capture (0 = let pyannote decide). Set ~12 for big speakerphone calls.
+    public var localTranscribeMaxSpeakers: Int
 
     public init(crmBaseUrl: String = "",
                 token: String = "",
@@ -105,7 +108,8 @@ public struct HelperConfig: Codable, Equatable {
                 localTranscribeBackend: String = "auto",
                 localTranscribeCommand: String? = nil,
                 localTranscribeModel: String = "small",
-                localTranscribeTimeoutSecs: Double = 1800) {
+                localTranscribeTimeoutSecs: Double = 1800,
+                localTranscribeMaxSpeakers: Int = 0) {
         self.crmBaseUrl = crmBaseUrl
         self.token = token
         self.retentionNote = retentionNote
@@ -123,6 +127,7 @@ public struct HelperConfig: Codable, Equatable {
         self.localTranscribeCommand = localTranscribeCommand
         self.localTranscribeModel = localTranscribeModel
         self.localTranscribeTimeoutSecs = localTranscribeTimeoutSecs
+        self.localTranscribeMaxSpeakers = localTranscribeMaxSpeakers
     }
 
     /// 90 s of two-channel silence ≈ a clearly-ended call, well past any natural pause.
@@ -165,6 +170,8 @@ public struct HelperConfig: Codable, Equatable {
         localTranscribeModel = (try? c.decodeIfPresent(String.self, forKey: .localTranscribeModel)) ?? "small"
         let lt = (try? c.decodeIfPresent(Double.self, forKey: .localTranscribeTimeoutSecs)) ?? 1800
         localTranscribeTimeoutSecs = lt > 0 ? lt : 1800
+        let ms = (try? c.decodeIfPresent(Int.self, forKey: .localTranscribeMaxSpeakers)) ?? 0
+        localTranscribeMaxSpeakers = max(0, ms)
     }
 
     public var isComplete: Bool {

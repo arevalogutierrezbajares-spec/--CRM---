@@ -33,17 +33,22 @@ public enum LocalTranscribeRunner {
         public var model: String
         public var timeoutSecs: TimeInterval
         public var repoRootHint: URL?
+        /// Diarization hint: at most this many distinct voices (0 = no hint).
+        /// Crowded speakerphone calls (10+ people) under-cluster without it.
+        public var maxSpeakers: Int
 
         public init(backend: LocalTranscribeBackendId = .auto,
                     explicitCommand: String? = nil,
                     model: String = "small",
                     timeoutSecs: TimeInterval = 1800,
-                    repoRootHint: URL? = nil) {
+                    repoRootHint: URL? = nil,
+                    maxSpeakers: Int = 0) {
             self.backend = backend
             self.explicitCommand = explicitCommand
             self.model = model
             self.timeoutSecs = timeoutSecs
             self.repoRootHint = repoRootHint
+            self.maxSpeakers = maxSpeakers
         }
     }
 
@@ -95,6 +100,9 @@ public enum LocalTranscribeRunner {
         // Append output path conventions
         if plan.engine == "whisperx" {
             args.append(contentsOf: [wav.path, "-o", outURL.path, "--model", opts.model])
+            if opts.maxSpeakers > 0 {
+                args.append(contentsOf: ["--max-speakers", String(opts.maxSpeakers)])
+            }
             if #available(macOS 14.0, *) {
                 // Prefer mps when script supports it; script falls back to cpu.
                 args.append(contentsOf: ["--device", "mps"])
