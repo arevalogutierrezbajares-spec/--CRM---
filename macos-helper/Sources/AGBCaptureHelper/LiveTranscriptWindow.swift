@@ -128,6 +128,7 @@ final class LiveTranscriptWindow: NSObject {
         composer.cell?.sendsActionOnEndEditing = false
         composer.target = self
         composer.action = #selector(composerSubmitted)
+        composer.delegate = self
 
         let stack = NSStackView(views: [header, scroll, composer])
         stack.orientation = .vertical
@@ -252,6 +253,20 @@ final class LiveTranscriptWindow: NSObject {
         panel?.makeFirstResponder(composer)
     }
 
+    /// Put text back in the composer (a note that couldn't be saved must not
+    /// evaporate — the operator typed it).
+    func restoreComposer(text: String) {
+        composer.stringValue = text
+    }
+
+    /// Esc in the composer: stop editing and hand key status back to the call
+    /// app (order-out + re-order-front releases key without hiding the window).
+    private func releaseComposerFocus() {
+        panel?.makeFirstResponder(nil)
+        panel?.orderOut(nil)
+        panel?.orderFrontRegardless()
+    }
+
     /// mm:ss (or h:mm:ss past an hour) for a moment offset.
     private static func clock(_ secs: TimeInterval) -> String {
         let s = max(0, Int(secs.rounded()))
@@ -342,5 +357,17 @@ extension LiveTranscriptWindow: NSWindowDelegate {
         // Hide rather than destroy; the recording is unaffected either way.
         hide()
         return false
+    }
+}
+
+extension LiveTranscriptWindow: NSTextFieldDelegate {
+    /// Esc in the composer returns focus to the call app (⌘⇧N grabbed it).
+    func control(_ control: NSControl, textView: NSTextView,
+                 doCommandBy commandSelector: Selector) -> Bool {
+        guard control === composer, commandSelector == #selector(NSResponder.cancelOperation(_:)) else {
+            return false
+        }
+        releaseComposerFocus()
+        return true
     }
 }

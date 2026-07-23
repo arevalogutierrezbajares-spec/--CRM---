@@ -10,6 +10,8 @@ import CaptureCore
 ///       [--chunk-secs 30] [--source-app SimApp] [--no-detect]
 ///       [--simulate-crash-after N]   upload N chunks then exit 2, no finalize
 ///       [--abandon]                  upload 2 chunks then DELETE the session
+///       [--note "SECS:text"]…        Call Desk note at SECS (repeatable)
+///       [--term "wrong=right"]…      term correction; "right" alone = hint
 ///
 /// Config: config.json, overridden by env AGB_CRM_URL / AGB_CRM_TOKEN.
 /// Exit codes: 0 success, 1 failure, 2 simulated crash.
@@ -21,6 +23,10 @@ enum SimulatedEngine {
         var sourceApp: String?
         var crashAfter: Int?
         var abandon = false
+        /// Call Desk notes to inject: (tSecs, text). E2E for the notes spine.
+        var notes: [(Double, String)] = []
+        /// Term corrections to inject: (wrong?, right).
+        var terms: [(String?, String)] = []
     }
 
     static func run(arguments: [String]) -> Int32 {
@@ -73,6 +79,30 @@ enum SimulatedEngine {
             options.crashAfter = n
         }
         options.abandon = arguments.contains("--abandon")
+
+        // Repeatable flags: every occurrence's following value.
+        func values(after flag: String) -> [String] {
+            arguments.enumerated().compactMap { i, a in
+                a == flag && i + 1 < arguments.count ? arguments[i + 1] : nil
+            }
+        }
+        for raw in values(after: "--note") {
+            // "SECS:text" — first colon splits.
+            guard let colon = raw.firstIndex(of: ":"),
+                  let secs = Double(raw[..<colon]) else {
+                fail("--note expects \"SECS:text\", got \(raw)")
+                return nil
+            }
+            options.notes.append((secs, String(raw[raw.index(after: colon)...])))
+        }
+        for raw in values(after: "--term") {
+            // "wrong=right" or just "right" (keyterm hint only).
+            if let eq = raw.firstIndex(of: "=") {
+                options.terms.append((String(raw[..<eq]), String(raw[raw.index(after: eq)...])))
+            } else {
+                options.terms.append((nil, raw))
+            }
+        }
         // --no-detect is accepted for parity with real mode; simulate never detects.
         return options
     }
@@ -143,6 +173,14 @@ enum SimulatedEngine {
                 offset = end
             }
             try spooler.flush()
+            for (secs, text) in options.notes {
+                _ = try spooler.addNote(tSecs: secs, text: text)
+                info("note @\(secs)s: \(text)")
+            }
+            for (wrong, right) in options.terms {
+                _ = try spooler.addTermCorrection(wrong: wrong, right: right)
+                info("term: \(wrong ?? "(hint)") → \(right)")
+            }
             try spooler.markEnded(endedAt: Date(), partial: false)
             let snap = spooler.snapshot
             info("spooled \(snap.seqsWritten.count) chunk(s) → \(spooler.directory.path)")
