@@ -1,4 +1,5 @@
 import AppKit
+import AVFoundation
 import QuartzCore
 import CaptureCore
 
@@ -593,10 +594,10 @@ final class ControlWindow: NSObject {
             // Monogram stays visible + breathing on the cinema (setCinemaLayout also configures it).
             logo?.set(color: NSColor.white.withAlphaComponent(0.95), motion: .calm)
             logo?.kick()
-            button?.configure(title: "Start Recording", fill: .systemRed, glyph: .record)
+            button?.configure(title: "Start Recording", fill: PillButton.jungle, glyph: .record, scene: .angelFalls)
             headerLogo?.set(color: .labelColor, motion: .calm)
             headerStateLabel?.stringValue = "Town Hall"
-            headerButton?.configure(title: "Start Recording", fill: .systemRed, glyph: .record)
+            headerButton?.configure(title: "Start Recording", fill: PillButton.jungle, glyph: .record, scene: .angelFalls)
         case .detected:
             if !expanded { setCinemaLayout(true, animated: true) }
             cinema?.setStatus("Call detected — record this call?")
@@ -605,10 +606,10 @@ final class ControlWindow: NSObject {
             // Active equalizer pulse on the monogram when a call is detected.
             logo?.set(color: .systemOrange, motion: .active)
             logo?.kick()
-            button?.configure(title: "Record This Call", fill: .systemRed, glyph: .record)
+            button?.configure(title: "Record This Call", fill: PillButton.jungle, glyph: .record, scene: .angelFalls)
             headerLogo?.set(color: .systemOrange, motion: .active)
             headerStateLabel?.stringValue = "Call detected"
-            headerButton?.configure(title: "Record This Call", fill: .systemRed, glyph: .record)
+            headerButton?.configure(title: "Record This Call", fill: PillButton.jungle, glyph: .record, scene: .angelFalls)
         case .capturing(let elapsed, let participant, let kind):
             if !expanded { setCinemaLayout(false, animated: true) }
             if kind.isMeeting {
@@ -630,10 +631,12 @@ final class ControlWindow: NSObject {
                 headerStateLabel?.stringValue = participant.map { "Rec · \($0) · \(elapsed)" }
                     ?? "Recording · \(elapsed)"
             }
-            logo?.set(color: .systemRed, motion: .active)
-            button?.configure(title: "Stop  ·  \(elapsed)", fill: .controlAccentColor, glyph: .stop)
-            headerLogo?.set(color: .systemRed, motion: .active)
-            headerButton?.configure(title: "Stop · \(elapsed)", fill: .controlAccentColor, glyph: .stop)
+            // Recording = Catatumbo thunder (the ONLY state that gets the storm),
+            // with the monogram in electric indigo instead of alarm red.
+            logo?.set(color: .systemIndigo, motion: .active)
+            button?.configure(title: "Stop  ·  \(elapsed)", fill: PillButton.storm, glyph: .stop, scene: .thunder)
+            headerLogo?.set(color: .systemIndigo, motion: .active)
+            headerButton?.configure(title: "Stop · \(elapsed)", fill: PillButton.storm, glyph: .stop, scene: .thunder)
         }
     }
 
@@ -669,10 +672,10 @@ final class ControlWindow: NSObject {
             subLabel?.stringValue = url != nil
                 ? "\(detail) — tap title to open · or add more actions"
                 : "\(detail) · add follow-ups?"
-            button?.configure(title: "Add actions", fill: .controlAccentColor, glyph: .record)
+            button?.configure(title: "Add actions", fill: .controlAccentColor, glyph: .record, scene: .angelFalls)
         } else {
             subLabel?.stringValue = url != nil ? "\(detail) — tap to open" : detail
-            button?.configure(title: "Start Recording", fill: .systemRed, glyph: .record)
+            button?.configure(title: "Start Recording", fill: PillButton.jungle, glyph: .record, scene: .angelFalls)
         }
         logo?.set(color: warning ? .systemOrange : .systemGreen, motion: .calm)
         confirmOverlay?.isHidden = (url == nil)
@@ -1159,11 +1162,39 @@ private final class LogoView: NSView {
 private final class PillButton: NSButton {
     enum Glyph { case record, stop }
 
-    private var fill: NSColor = .systemRed
+    /// Venezuela nature backdrop: Angel Falls at rest, Catatumbo thunder ONLY
+    /// while recording (the state change itself tells the story — serene falls
+    /// → electric storm). `.none` = plain gradient fill (fallback when the
+    /// bundled clips are missing, e.g. bare-binary runs).
+    enum Scene { case none, angelFalls, thunder }
+
+    private var fill: NSColor = PillButton.jungle
     private var glyph: Glyph = .record
     private var hovering = false
     private var pressed = false
     private static let radius: CGFloat = 10
+
+    /// Fallback fills when the clips are missing: Canaima jungle green at
+    /// rest, Catatumbo storm indigo while recording — never the stock red.
+    static let jungle = NSColor(calibratedRed: 0.07, green: 0.34, blue: 0.27, alpha: 1)
+    static let storm = NSColor(calibratedRed: 0.22, green: 0.20, blue: 0.55, alpha: 1)
+
+    // Nature backdrop machinery (built lazily on first scene).
+    private var scene: Scene = .none
+    private var videoContainer: VideoBackdropView?
+    private var videoLabel: NSTextField?
+    private var queuePlayer: AVQueuePlayer?
+    private var looper: AVPlayerLooper?
+    private var currentClipURL: URL?
+
+    /// Bundled clip URLs by basename ("angel-falls", "catatumbo", …).
+    private static let clips: [String: URL] = {
+        var map = [String: URL]()
+        for url in IdleCinemaView.resolveIntroClips() {
+            map[url.deletingPathExtension().lastPathComponent] = url
+        }
+        return map
+    }()
 
     init(title: String) {
         super.init(frame: .zero)
@@ -1182,12 +1213,159 @@ private final class PillButton: NSButton {
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) unused") }
 
-    func configure(title: String, fill: NSColor, glyph: Glyph) {
+    func configure(title: String, fill: NSColor, glyph: Glyph, scene: Scene = .none) {
         self.title = title
         self.fill = fill
         self.glyph = glyph
         layer?.shadowColor = fill.withAlphaComponent(0.5).cgColor
+        applyScene(scene)
         needsDisplay = true
+    }
+
+    // MARK: - Nature backdrop
+
+    private var videoActive: Bool { scene != .none && currentClipURL != nil }
+
+    private func clipURL(for scene: Scene) -> URL? {
+        switch scene {
+        case .none: return nil
+        case .angelFalls: return Self.clips["angel-falls"]
+        case .thunder: return Self.clips["catatumbo"]
+        }
+    }
+
+    private func applyScene(_ newScene: Scene) {
+        scene = newScene
+        guard let url = clipURL(for: newScene) else {
+            // No clip (scene .none or resources missing) → plain fill.
+            currentClipURL = nil
+            queuePlayer?.pause()
+            videoContainer?.isHidden = true
+            return
+        }
+        buildVideoViewsIfNeeded()
+        videoContainer?.isHidden = false
+        let prefix = glyph == .record ? "\u{25CF}  " : "\u{25A0}  "
+        videoLabel?.stringValue = prefix + title
+        // Night-storm footage is near-black between strikes: give the thunder
+        // scene an indigo base + light scrim so it reads "electric storm", and
+        // let the lightning flashes punch through. Angel Falls is bright and
+        // needs the darker scrim for label legibility.
+        switch newScene {
+        case .thunder:
+            // Screen-blend the night storm over an indigo base: black sky
+            // becomes the pill color and only the LIGHTNING punches through.
+            videoContainer?.setTone(base: PillButton.storm, scrimTop: 0.0,
+                                    scrimBottom: 0.18, screenBlend: true)
+        default:
+            videoContainer?.setTone(base: NSColor.black.withAlphaComponent(0.4),
+                                    scrimTop: 0.30, scrimBottom: 0.52, screenBlend: false)
+        }
+
+        // Idempotent: applyMode re-configures every second while recording
+        // (elapsed ticker) — only touch the player when the clip changes.
+        if currentClipURL != url {
+            currentClipURL = url
+            let player = AVQueuePlayer()
+            player.isMuted = true
+            looper = AVPlayerLooper(player: player, templateItem: AVPlayerItem(url: url))
+            queuePlayer = player
+            videoContainer?.playerLayer.player = player
+        }
+        // Don't burn a decoder on a hidden button (compact vs expanded header).
+        if window == nil || isHiddenOrHasHiddenAncestor {
+            queuePlayer?.pause()
+        } else {
+            queuePlayer?.play()
+        }
+    }
+
+    private func buildVideoViewsIfNeeded() {
+        guard videoContainer == nil else { return }
+
+        let container = VideoBackdropView()
+        container.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(container)
+        videoContainer = container
+
+        // Label as a real NSTextField (AppKit owns redraw — no stale-layer
+        // ghosting from hand-drawn text over video).
+        let label = NSTextField(labelWithString: "")
+        label.font = .systemFont(ofSize: 13.5, weight: .semibold)
+        label.textColor = .white
+        label.alignment = .center
+        label.lineBreakMode = .byTruncatingTail
+        let shadow = NSShadow()
+        shadow.shadowColor = NSColor.black.withAlphaComponent(0.6)
+        shadow.shadowOffset = NSSize(width: 0, height: -0.5)
+        shadow.shadowBlurRadius = 2
+        label.shadow = shadow
+        label.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(label)
+        videoLabel = label
+
+        NSLayoutConstraint.activate([
+            container.topAnchor.constraint(equalTo: topAnchor),
+            container.bottomAnchor.constraint(equalTo: bottomAnchor),
+            container.leadingAnchor.constraint(equalTo: leadingAnchor),
+            container.trailingAnchor.constraint(equalTo: trailingAnchor),
+            label.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+            label.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            label.leadingAnchor.constraint(greaterThanOrEqualTo: container.leadingAnchor, constant: 8),
+        ])
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        // Re-evaluate playback when attached/detached (hidden pills stay paused).
+        applyScene(scene)
+    }
+
+    /// Click-transparent video pill background: AVPlayerLayer + legibility
+    /// scrim + hairline border, all laid out HERE (its own layout pass) so the
+    /// sublayers always match the real bounds.
+    final class VideoBackdropView: NSView {
+        let playerLayer = AVPlayerLayer()
+        private let scrim = CAGradientLayer()
+
+        init() {
+            super.init(frame: .zero)
+            wantsLayer = true
+            layer?.cornerRadius = 10
+            layer?.masksToBounds = true
+            layer?.borderWidth = 1
+            layer?.borderColor = NSColor.white.withAlphaComponent(0.25).cgColor
+            playerLayer.videoGravity = .resizeAspectFill
+            layer?.addSublayer(playerLayer)
+            scrim.startPoint = CGPoint(x: 0.5, y: 1)
+            scrim.endPoint = CGPoint(x: 0.5, y: 0)
+            layer?.addSublayer(scrim)
+            setTone(base: NSColor.black.withAlphaComponent(0.4), scrimTop: 0.30, scrimBottom: 0.52, screenBlend: false)
+        }
+        required init?(coder: NSCoder) { fatalError("unused") }
+
+        /// Scene-tuned backdrop: base color behind the clip, scrim strength,
+        /// and optional screen-blend (dark clip pixels vanish into the base —
+        /// used so the Catatumbo night sky reads indigo, not dead black).
+        func setTone(base: NSColor, scrimTop: CGFloat, scrimBottom: CGFloat, screenBlend: Bool) {
+            layer?.backgroundColor = base.cgColor
+            playerLayer.compositingFilter = screenBlend ? "screenBlendMode" : nil
+            scrim.colors = [
+                NSColor.black.withAlphaComponent(scrimBottom).cgColor,
+                NSColor.black.withAlphaComponent(scrimTop).cgColor,
+            ]
+        }
+
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+        override func layout() {
+            super.layout()
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            playerLayer.frame = bounds
+            scrim.frame = bounds
+            CATransaction.commit()
+        }
     }
 
     override func updateTrackingAreas() {
@@ -1198,15 +1376,27 @@ private final class PillButton: NSButton {
             options: [.activeAlways, .mouseEnteredAndExited, .inVisibleRect],
             owner: self, userInfo: nil))
     }
-    override func mouseEntered(with event: NSEvent) { hovering = true; needsDisplay = true }
-    override func mouseExited(with event: NSEvent) { hovering = false; needsDisplay = true }
+    override func mouseEntered(with event: NSEvent) {
+        hovering = true; needsDisplay = true
+        videoContainer?.animator().alphaValue = 0.92
+    }
+    override func mouseExited(with event: NSEvent) {
+        hovering = false; needsDisplay = true
+        videoContainer?.animator().alphaValue = 1
+    }
     override func mouseDown(with event: NSEvent) {
         pressed = true; needsDisplay = true
+        videoContainer?.alphaValue = 0.8
         super.mouseDown(with: event)   // tracks the press + fires the action on mouse-up
         pressed = false; needsDisplay = true
+        videoContainer?.alphaValue = 1
     }
 
     override func draw(_ dirtyRect: NSRect) {
+        // With a nature clip playing, the video + scrim ARE the background and
+        // PillForegroundView draws the label above them — nothing to do here.
+        guard !videoActive else { return }
+
         let path = NSBezierPath(roundedRect: bounds, xRadius: Self.radius, yRadius: Self.radius)
 
         // Vertical gradient: a touch lighter at the top, slightly deeper at the
