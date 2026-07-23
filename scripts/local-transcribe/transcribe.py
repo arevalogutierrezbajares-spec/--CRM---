@@ -32,7 +32,8 @@ def fmt_speaker(label: str | int | None) -> str:
     return s
 
 
-def run_whisperx(wav: Path, model: str, device: str, language: str | None) -> dict:
+def run_whisperx(wav: Path, model: str, device: str, language: str | None,
+                 min_speakers: int | None = None, max_speakers: int | None = None) -> dict:
     try:
         import whisperx  # type: ignore
     except ImportError as e:
@@ -70,7 +71,14 @@ def run_whisperx(wav: Path, model: str, device: str, language: str | None) -> di
         use_auth_token=True,  # reads HF_TOKEN / huggingface-cli login
         device=device,
     )
-    diarize_segments = diarize_model(audio)
+    # Speaker-count hints dramatically improve clustering on crowded audio
+    # (10+ people on a speakerphone): pyannote otherwise under-clusters.
+    diarize_kwargs = {}
+    if min_speakers:
+        diarize_kwargs["min_speakers"] = min_speakers
+    if max_speakers:
+        diarize_kwargs["max_speakers"] = max_speakers
+    diarize_segments = diarize_model(audio, **diarize_kwargs)
     result = whisperx.assign_word_speakers(diarize_segments, result)
 
     utterances = []
@@ -111,6 +119,10 @@ def main() -> int:
         help="Torch device (default: cpu; mps on Apple Silicon if available)",
     )
     ap.add_argument("--language", default=None, help="Force language code (e.g. en, es)")
+    ap.add_argument("--min-speakers", type=int, default=None,
+                    help="Diarization hint: at least this many speakers")
+    ap.add_argument("--max-speakers", type=int, default=None,
+                    help="Diarization hint: at most this many speakers")
     args = ap.parse_args()
 
     if not args.wav.is_file():
@@ -128,7 +140,8 @@ def main() -> int:
         except Exception:
             device = "cpu"
 
-    out = run_whisperx(args.wav, args.model, device, args.language)
+    out = run_whisperx(args.wav, args.model, device, args.language,
+                       min_speakers=args.min_speakers, max_speakers=args.max_speakers)
     text = json.dumps(out, ensure_ascii=False, indent=2)
     if args.output:
         args.output.write_text(text + "\n", encoding="utf-8")

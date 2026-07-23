@@ -330,7 +330,8 @@ public final class UploadQueueWorker {
                 explicitCommand: cfg.localTranscribeCommand,
                 model: cfg.localTranscribeModel,
                 timeoutSecs: cfg.localTranscribeTimeoutSecs,
-                repoRootHint: URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("AGB-CRM")
+                repoRootHint: URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("AGB-CRM"),
+                maxSpeakers: cfg.localTranscribeMaxSpeakers
             )
             let result = try LocalTranscribeRunner.transcribe(wav: monoURL, opts: opts)
             log.info(
