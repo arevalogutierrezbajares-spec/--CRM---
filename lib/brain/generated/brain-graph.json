@@ -1,10 +1,10 @@
 {
   "version": "1.1",
-  "generatedAt": "2026-07-23T05:49:32.838Z",
+  "generatedAt": "2026-07-23T07:09:57.534Z",
   "commit": {
     "vav": null,
     "caney": null,
-    "crm": "3eee83a",
+    "crm": "1bccebd",
     "restaurants": null,
     "academy": null
   },
@@ -670,7 +670,7 @@
       "last_commit": null,
       "docs_ref": "docs/brain-ops.md",
       "surfaces": [],
-      "meta": "86 routes · 73 pages · 110 tables",
+      "meta": "86 routes · 73 pages · 112 tables",
       "summary": "How the Brain graph is regenerated, checked for staleness, and served on Vercel — multi-repo CI, local roots, and secrets.",
       "pos": {
         "x": 305.6,
