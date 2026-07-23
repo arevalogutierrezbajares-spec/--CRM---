@@ -17,6 +17,9 @@ final class GlobalHotKey {
     /// ⌘⇧K — flag the current moment while recording (highlights, FEATURE 3).
     public static let highlightKeyCode = UInt32(kVK_ANSI_K)
 
+    /// ⌘⇧N — jump into the Call Desk note composer while recording.
+    public static let noteKeyCode = UInt32(kVK_ANSI_N)
+
     /// `id` disambiguates multiple registered hotkeys: each instance installs its
     /// own app-target handler that fires for ANY matching-signature hotkey, so the
     /// handler must filter by id or every key would fire every callback.

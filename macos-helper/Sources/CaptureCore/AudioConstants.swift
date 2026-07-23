@@ -27,5 +27,5 @@ public enum AudioConstants {
     /// Wire protocol version (X-Capture-Protocol header).
     public static let protocolVersion = "1"
 
-    public static let helperVersion = "1.1.0"
+    public static let helperVersion = "1.2.0"
 }

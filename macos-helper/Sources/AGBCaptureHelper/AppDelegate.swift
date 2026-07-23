@@ -96,6 +96,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var hotKey: GlobalHotKey?
     /// ⌘⇧K — flag the current moment as important while recording (FEATURE 3).
     private var highlightHotKey: GlobalHotKey?
+    /// ⌘⇧N — focus the Call Desk note composer while recording.
+    private var noteHotKey: GlobalHotKey?
+    private var fixTermMenuItem: NSMenuItem?
     private var detectedSourceApp: String?
     /// Far-side person name for this recording (never source app). Feeds live
     /// captions + spool contactName → CRM finalize (FR-CALL-ATT-3).
@@ -136,6 +139,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // registration failing just means no global shortcut; the ★ button works.
         highlightHotKey = GlobalHotKey(id: 2, keyCode: GlobalHotKey.highlightKeyCode)
         highlightHotKey?.onPressed = { [weak self] in self?.dropHighlight(note: nil) }
+        // ⌘⇧N jumps into the Call Desk note composer mid-call (Live Notes).
+        noteHotKey = GlobalHotKey(id: 3, keyCode: GlobalHotKey.noteKeyCode)
+        noteHotKey?.onPressed = { [weak self] in
+            guard let self, self.state == .recording || self.state == .paused else { return }
+            self.liveWindow.focusComposer()
+        }
 
         // Always-on-screen Start/Stop control (notch-proof, hotkey-independent).
         controlWindow.onToggle = { [weak self] in self?.hotKeyToggled() }
@@ -143,8 +152,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controlWindow.onConfigure = { [weak self] in self?.configureTapped() }
         controlWindow.onToggleTranscript = { [weak self] in self?.liveWindow.toggle() }
         controlWindow.onOpenTownHall = { [weak self] in self?.townHallOpened() }
-        // ★ button on the live-transcript window flags the current moment.
-        liveWindow.onHighlight = { [weak self] in self?.dropHighlight(note: nil) }
+        // ★ button on the live-transcript window flags the current moment
+        // (composer text, when present, rides as the flag's note).
+        liveWindow.onHighlight = { [weak self] note in self?.dropHighlight(note: note) }
+        // ✎ Call Desk: typed notes + term corrections during the call.
+        liveWindow.onNote = { [weak self] text in self?.dropNote(text: text) }
+        liveWindow.onFixTerm = { [weak self] in self?.fixTermTapped() }
         configureTownHall()
         controlWindow.show()
 
@@ -597,6 +610,64 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             log.info("highlight #\(count) flagged @\(Int(tSecs))s", category: "app")
         } catch {
             log.warn("highlight failed: \(error.localizedDescription)", category: "app")
+        }
+    }
+
+    /// Live Notes: persist a typed note anchored to the audio timeline (same
+    /// crash-safe manifest ride as highlights — see dropHighlight for why the
+    /// anchor is `appendedSeconds`, not wall-clock).
+    private func dropNote(text: String) {
+        guard state == .recording || state == .paused,
+              let spooler = activeSpooler else {
+            return
+        }
+        let tSecs = spooler.appendedSeconds
+        do {
+            let count = try spooler.addNote(tSecs: tSecs, text: text)
+            liveWindow.flashNote(atSecs: tSecs, text: text, count: count)
+            log.info("note #\(count) @\(Int(tSecs))s", category: "app")
+        } catch {
+            log.warn("note failed: \(error.localizedDescription)", category: "app")
+        }
+    }
+
+    /// Live glossary: prompt for a misheard→correct pair and persist it. The
+    /// server feeds `right` to Deepgram keyterms and fixes `wrong`→`right` in
+    /// the FILED transcript (the live view is throwaway by design).
+    @objc private func fixTermTapped() {
+        guard state == .recording || state == .paused,
+              let spooler = activeSpooler else { return }
+        let alert = NSAlert()
+        alert.messageText = "Fix a transcript term"
+        alert.informativeText = "The filed transcript will use the correction. “Heard as” is optional — leave it blank to just teach the transcriber the term."
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "Add")
+        alert.addButton(withTitle: "Cancel")
+        let wrongField = NSTextField(frame: .zero)
+        wrongField.placeholderString = "Heard as (optional) — e.g. Kenny Cloud"
+        let rightField = NSTextField(frame: .zero)
+        rightField.placeholderString = "Correct term — e.g. CaneyCloud"
+        let stack = NSStackView(views: [wrongField, rightField])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 6
+        stack.frame = NSRect(x: 0, y: 0, width: 280, height: 58)
+        for f in [wrongField, rightField] {
+            f.translatesAutoresizingMaskIntoConstraints = false
+            f.widthAnchor.constraint(equalToConstant: 280).isActive = true
+        }
+        alert.accessoryView = stack
+        DispatchQueue.main.async { wrongField.window?.makeFirstResponder(wrongField) }
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let right = rightField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        let wrong = wrongField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !right.isEmpty else { return }
+        do {
+            let count = try spooler.addTermCorrection(wrong: wrong.isEmpty ? nil : wrong, right: right)
+            liveWindow.flashTerm(wrong: wrong.isEmpty ? nil : wrong, right: right, count: count)
+            log.info("term correction #\(count): \(wrong.isEmpty ? "(hint)" : wrong) → \(right)", category: "app")
+        } catch {
+            log.warn("term correction failed: \(error.localizedDescription)", category: "app")
         }
     }
 
@@ -1156,6 +1227,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         labelParticipantMenuItem = labelP
         menu.addItem(labelP)
 
+        let fixTerm = makeItem("Fix transcript term…", #selector(fixTermTapped), "")
+        fixTermMenuItem = fixTerm
+        menu.addItem(fixTerm)
+
         menu.addItem(.separator())
         let townHallItem = makeItem("Town Hall", #selector(openTownHall), "h")
         townHallItem.keyEquivalentModifierMask = [.command, .shift]
@@ -1262,6 +1337,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         pauseMenuItem?.title = (state == .paused) ? "Resume" : "Pause"
         offRecordMenuItem?.isEnabled = isCapturing
         labelParticipantMenuItem?.isEnabled = isCapturing || state == .detected
+        fixTermMenuItem?.isEnabled = isCapturing
         if let name = activeParticipantName, isCapturing || state == .detected {
             labelParticipantMenuItem?.title = activeCaptureKind.isMeeting
                 ? "Label room… (\(name))"

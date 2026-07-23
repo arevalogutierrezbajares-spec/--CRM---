@@ -265,7 +265,9 @@ public final class UploadQueueWorker {
             partial: snap.partial,
             contactName: snap.contactName,
             precomputedTranscript: precomputed,
-            highlights: snap.highlights ?? []
+            highlights: snap.highlights ?? [],
+            notes: snap.notes ?? [],
+            terms: snap.terms ?? []
         )
 
         let finalize = try await client.finalizeRecovering(

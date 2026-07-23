@@ -40,10 +40,13 @@ import {
   type TranscriptionResult,
 } from "./deepgram";
 import { fileCallTranscript, type FileCallResult } from "./file-call";
-import type { Highlight } from "./validate";
+import type { Highlight, OperatorNote, TermCorrection } from "./validate";
 
 /** A highlight resolved to the words spoken at that moment. */
 export type FlaggedMoment = { atSec: number; quote: string; note: string | null };
+
+/** An operator-typed live note resolved to the words spoken at that moment. */
+export type ResolvedOperatorNote = { atSec: number; quote: string; note: string };
 
 /**
  * A flag whose nearest utterance is more than this far away isn't backed by
@@ -53,6 +56,33 @@ export type FlaggedMoment = { atSec: number; quote: string; note: string | null 
  * ~one 30 s chunk.
  */
 export const MAX_HIGHLIGHT_MATCH_GAP_SECS = 30;
+
+/**
+ * The words spoken at a given moment: the utterance covering that time (or the
+ * nearest one within {@link MAX_HIGHLIGHT_MATCH_GAP_SECS}). Returns "" when the
+ * transcript is empty or the moment lands too far from any real audio — a
+ * distant nearest-match means the backing audio is gone, so don't misquote it.
+ * Shared by highlight and live-note resolution so both quote identically.
+ */
+function quoteAt(tSecs: number, utterances: Utterance[]): string {
+  if (utterances.length === 0) return "";
+  let best = utterances[0];
+  let bestDist = Infinity;
+  for (const u of utterances) {
+    const dist =
+      tSecs >= u.start && tSecs <= u.end
+        ? 0
+        : Math.min(Math.abs(u.start - tSecs), Math.abs(u.end - tSecs));
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = u;
+      if (dist === 0) break;
+    }
+  }
+  return bestDist <= MAX_HIGHLIGHT_MATCH_GAP_SECS
+    ? best.text.trim().slice(0, 200)
+    : "";
+}
 
 /**
  * Map each operator-flagged moment onto the transcript: the utterance covering
@@ -65,30 +95,81 @@ export function resolveHighlights(
   utterances: Utterance[],
 ): FlaggedMoment[] {
   if (highlights.length === 0) return [];
-  return highlights.map((h) => {
-    let quote = "";
-    if (utterances.length > 0) {
-      let best = utterances[0];
-      let bestDist = Infinity;
-      for (const u of utterances) {
-        const dist =
-          h.tSecs >= u.start && h.tSecs <= u.end
-            ? 0
-            : Math.min(Math.abs(u.start - h.tSecs), Math.abs(u.end - h.tSecs));
-        if (dist < bestDist) {
-          bestDist = dist;
-          best = u;
-          if (dist === 0) break;
-        }
-      }
-      // Only quote when the flag actually lands near real audio; a distant
-      // nearest-match means the backing audio is gone, so don't misquote it.
-      if (bestDist <= MAX_HIGHLIGHT_MATCH_GAP_SECS) {
-        quote = best.text.trim().slice(0, 200);
-      }
+  return highlights.map((h) => ({
+    atSec: h.tSecs,
+    quote: quoteAt(h.tSecs, utterances),
+    note: h.note,
+  }));
+}
+
+/**
+ * Map each operator-typed live note onto the transcript, exactly like
+ * {@link resolveHighlights}: the same nearest-utterance quote (with the same
+ * {@link MAX_HIGHLIGHT_MATCH_GAP_SECS} guard) shows what was being said as the
+ * operator typed. The note text itself is always kept verbatim.
+ */
+export function resolveNotes(
+  notes: OperatorNote[],
+  utterances: Utterance[],
+): ResolvedOperatorNote[] {
+  if (notes.length === 0) return [];
+  return notes.map((n) => ({
+    atSec: n.tSecs,
+    quote: quoteAt(n.tSecs, utterances),
+    note: n.text,
+  }));
+}
+
+/** Escape a literal string for embedding in a RegExp. */
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Apply live glossary corrections to a transcript: for each term with a
+ * non-empty `wrong`, replace case-insensitive WHOLE-WORD occurrences of
+ * `wrong` (possibly multi-word) with `right` in every utterance's text.
+ * Unicode-aware boundaries (lookarounds on letters/digits/_) so accented
+ * Spanish terms correct cleanly and partial words ("art" in "start") never
+ * mangle. Pure: returns corrected copies + a replacement count; the input
+ * array is never mutated.
+ */
+export function applyTermCorrections(
+  utterances: Utterance[],
+  terms: TermCorrection[],
+): { utterances: Utterance[]; replacements: number } {
+  const rules: { re: RegExp; right: string }[] = [];
+  for (const t of terms) {
+    const wrong = (t.wrong ?? "").trim();
+    if (!wrong || !t.right) continue;
+    try {
+      rules.push({
+        re: new RegExp(
+          `(?<![\\p{L}\\p{N}_])${escapeRegExp(wrong)}(?![\\p{L}\\p{N}_])`,
+          "giu",
+        ),
+        right: t.right,
+      });
+    } catch {
+      // Advisory: an unbuildable pattern must never fail a finalize.
     }
-    return { atSec: h.tSecs, quote, note: h.note };
+  }
+  if (rules.length === 0 || utterances.length === 0) {
+    return { utterances, replacements: 0 };
+  }
+  let replacements = 0;
+  const corrected = utterances.map((u) => {
+    let text = u.text;
+    for (const { re, right } of rules) {
+      // Function replacer: `right` is literal text, never a $-pattern.
+      text = text.replace(re, () => {
+        replacements++;
+        return right;
+      });
+    }
+    return text === u.text ? u : { ...u, text };
   });
+  return { utterances: corrected, replacements };
 }
 
 /**
@@ -103,7 +184,7 @@ export function resolveHighlights(
 export async function transcribeWindowed(
   chunks: ChunkEntry[],
   fmt: { sampleRate: number; channels: number },
-  opts: { encodeMp3?: boolean; mixedAcoustic?: boolean } = {},
+  opts: { encodeMp3?: boolean; mixedAcoustic?: boolean; keyterms?: string[] } = {},
 ): Promise<
   | { ok: true; result: TranscriptionResult; durationSecs: number; mp3: Uint8Array | null }
   | { ok: false; status: number; error: string }
@@ -150,6 +231,7 @@ export async function transcribeWindowed(
       wav: asm.wav,
       durationSecs: Math.round(winDurationSecs),
       mixedAcoustic: opts.mixedAcoustic,
+      keyterms: opts.keyterms,
     });
     if (!txr.ok) return { ok: false, status: 502, error: txr.error };
     if (language === null) language = txr.result.language;
@@ -224,6 +306,10 @@ export async function finalizeSession(opts: {
   precomputedTranscript?: PrecomputedTranscript | null;
   /** Operator-flagged "important moments" (time-anchored) — steer the brief. */
   highlights?: Highlight[];
+  /** Operator-typed live notes (time-anchored) — woven into the brief. */
+  notes?: OperatorNote[];
+  /** Live transcription-term corrections — Deepgram keyterms + wrong→right post-pass. */
+  terms?: TermCorrection[];
 }): Promise<FinalizeOutcome> {
   const { session } = opts;
   const workspaceId = session.workspaceId;
@@ -280,6 +366,9 @@ export async function finalizeSession(opts: {
   // every speaker on ch0, so channel identity means nothing and diarization is
   // the only thing that can tell participants apart.
   const mixedAcoustic = isMixedAcousticSource(session.sourceApp);
+  // Glossary `right` values → nova-3 keyterm prompting, so corrected terms
+  // transcribe right at the source (Deepgram paths only; empty = no-op).
+  const keyterms = (opts.terms ?? []).map((t) => t.right).filter((r) => r.trim());
 
   // Audio is always transcribed, but only persisted when the workspace opts in.
   // Transcript-only mode skips the bucket upload entirely (and the MP3 encode),
@@ -359,6 +448,7 @@ export async function finalizeSession(opts: {
       wav: asm.wav,
       durationSecs: durationSecs ?? 0,
       mixedAcoustic,
+      keyterms: keyterms.length > 0 ? keyterms : undefined,
     });
     if (!tx.ok) return fail(502, tx.error);
     txResult = tx.result;
@@ -390,6 +480,7 @@ export async function finalizeSession(opts: {
     const w = await transcribeWindowed(chunks, fmt, {
       encodeMp3: wantMp3,
       mixedAcoustic,
+      keyterms: keyterms.length > 0 ? keyterms : undefined,
     });
     if (!w.ok) return fail(w.status, w.error);
     txResult = w.result;
@@ -411,6 +502,24 @@ export async function finalizeSession(opts: {
     } else {
       console.warn(
         `[capture] long call session ${session.id} (~${Math.round(totalBytes / 1048576)} MB) transcribed windowed; audio too long to store as MP3 — transcript retained`,
+      );
+    }
+  }
+
+  // Glossary post-pass (BOTH transcription paths — precomputed local STT and
+  // Deepgram converge here): whole-word wrong→right replacement BEFORE the
+  // dialogue text is built and before createCallRecording, so the stored
+  // transcript, utterances jsonb, and brief all see corrected text. Advisory:
+  // a correction failure must never fail a finalize.
+  if ((opts.terms ?? []).length > 0) {
+    try {
+      const fixed = applyTermCorrections(txResult.utterances, opts.terms ?? []);
+      if (fixed.replacements > 0) {
+        txResult = { ...txResult, utterances: fixed.utterances };
+      }
+    } catch (e) {
+      console.warn(
+        `[capture] term corrections skipped for session ${session.id}: ${String(e)}`,
       );
     }
   }
@@ -483,6 +592,7 @@ export async function finalizeSession(opts: {
       founderLabel,
       inPersonMeeting,
       flaggedMoments: resolveHighlights(opts.highlights ?? [], txResult.utterances),
+      operatorNotes: resolveNotes(opts.notes ?? [], txResult.utterances),
       spendRoute: "capture:finalize:file",
     });
   } catch (e) {

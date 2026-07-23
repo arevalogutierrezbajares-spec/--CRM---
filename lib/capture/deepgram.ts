@@ -142,7 +142,10 @@ export function detectSilentChannels(
   return flags;
 }
 
-function deepgramParams(opts?: { diarize?: boolean }): URLSearchParams {
+export function deepgramParams(opts?: {
+  diarize?: boolean;
+  keyterms?: string[];
+}): URLSearchParams {
   const p = new URLSearchParams({
     model: "nova-3",
     language: "multi",
@@ -156,6 +159,12 @@ function deepgramParams(opts?: { diarize?: boolean }): URLSearchParams {
   // where every speaker shares ch0 and channel identity carries no speaker
   // information at all.
   if (opts?.diarize) p.set("diarize", "true");
+  // nova-3 keyterm prompting: one repeated `keyterm` param per term the
+  // operator corrected live, so domain names/jargon transcribe right.
+  for (const term of opts?.keyterms ?? []) {
+    const t = term.trim();
+    if (t) p.append("keyterm", t);
+  }
   return p;
 }
 
@@ -305,6 +314,8 @@ export async function transcribeDualChannelBytes(opts: {
   mixedAcoustic?: boolean;
   /** Enable speaker diarization (paid Deepgram). Prefer free local worker for meetings. */
   diarize?: boolean;
+  /** nova-3 keyterm prompting — operator-corrected terms (glossary `right` values). */
+  keyterms?: string[];
 }): Promise<
   | { ok: true; result: TranscriptionResult }
   | { ok: false; error: string }
@@ -321,7 +332,7 @@ export async function transcribeDualChannelBytes(opts: {
     typeof Buffer !== "undefined"
       ? Buffer.from(opts.wav.buffer, opts.wav.byteOffset, opts.wav.byteLength)
       : opts.wav;
-  const url = `https://api.deepgram.com/v1/listen?${deepgramParams({ diarize })}`;
+  const url = `https://api.deepgram.com/v1/listen?${deepgramParams({ diarize, keyterms: opts.keyterms })}`;
   // Transient TLS/EPIPE flakes on flaky networks — same class of failure the
   // Mac Helper sees on chunk upload. Retry a few times before failing finalize.
   const delaysMs = [0, 800, 2000, 5000];
@@ -370,6 +381,7 @@ export async function transcribeDualChannel(opts: {
   durationSecs: number;
   mixedAcoustic?: boolean;
   diarize?: boolean;
+  keyterms?: string[];
 }): Promise<
   | { ok: true; result: TranscriptionResult }
   | { ok: false; error: string }
@@ -381,7 +393,7 @@ export async function transcribeDualChannel(opts: {
   let resp: Response;
   try {
     resp = await fetch(
-      `https://api.deepgram.com/v1/listen?${deepgramParams({ diarize })}`,
+      `https://api.deepgram.com/v1/listen?${deepgramParams({ diarize, keyterms: opts.keyterms })}`,
       {
         method: "POST",
         headers: {
