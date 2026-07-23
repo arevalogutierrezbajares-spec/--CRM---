@@ -376,6 +376,22 @@ const gateDoc = (evidence: Partial<ThemeEvidence>[] = [{ tSecs: 100 }]): ThemedD
 describe("gateThemeExtractions (cite-gate)", () => {
   const utterances = [u(200, 210, "we agreed on the price")];
 
+  it("drops every bullet aimed at a zero-evidence theme (gaps stay honest)", () => {
+    const doc = gateDoc([]); // pricing theme exists but has NO operator evidence
+    const { aiByTheme, dropped } = gateThemeExtractions(
+      [
+        {
+          key: "pricing",
+          committed: [{ text: "we will review the booking flow", cite_t_secs: 200 }],
+        },
+      ],
+      doc,
+      utterances, // cite is a valid utterance start — must STILL be dropped
+    );
+    expect(aiByTheme.has("pricing")).toBe(false);
+    expect(dropped).toBe(1);
+  });
+
   it("keeps bullets citing theme evidence within ±2s, drops beyond", () => {
     const { aiByTheme, dropped } = gateThemeExtractions(
       [

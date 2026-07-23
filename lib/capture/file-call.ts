@@ -217,8 +217,14 @@ export function gateThemeExtractions(
     const ex = entry as RawThemeExtraction;
     const key = typeof ex.key === "string" ? ex.key : null;
     const theme = key ? themeByKey.get(key) : undefined;
-    if (!key || !theme) {
-      // Invented / unknown theme: every bullet in it is dropped.
+    if (!key || !theme || theme.evidence.length === 0) {
+      // Invented / unknown theme — or a theme with ZERO operator evidence
+      // (an agenda gap): every bullet in it is dropped. The utterance-start
+      // cite escape hatch exists so themes WITH evidence can quote beyond
+      // the marked moments; on an empty theme it let the model paper over
+      // a gap with a topically-unrelated sentence (seen live: a
+      // "booking flow" quote filed under Security review). Gaps must stay
+      // honest — no evidence, no AI voice.
       for (const cat of ["committed", "decided", "open"] as const) {
         const list = (entry as Record<string, unknown>)[cat];
         if (Array.isArray(list)) dropped += list.length;
