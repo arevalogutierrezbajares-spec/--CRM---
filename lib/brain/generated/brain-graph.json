@@ -1,10 +1,10 @@
 {
   "version": "1.1",
-  "generatedAt": "2026-07-23T03:33:21.441Z",
+  "generatedAt": "2026-07-23T05:36:25.911Z",
   "commit": {
     "vav": null,
     "caney": null,
-    "crm": "f17f693",
+    "crm": "584be2b",
     "restaurants": null,
     "academy": null
   },
@@ -670,7 +670,7 @@
       "last_commit": null,
       "docs_ref": "docs/brain-ops.md",
       "surfaces": [],
-      "meta": "84 routes · 73 pages · 110 tables",
+      "meta": "86 routes · 73 pages · 110 tables",
       "summary": "How the Brain graph is regenerated, checked for staleness, and served on Vercel — multi-repo CI, local roots, and secrets.",
       "pos": {
         "x": 305.6,
@@ -1751,6 +1751,56 @@
       "kind": "surface",
       "parentId": "crm.capture",
       "label": "/api/capture/reactions",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-capture-recordings",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.meetings",
+      "label": "/api/capture/recordings",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-capture-recordings-id",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.meetings",
+      "label": "/api/capture/recordings/[id]",
       "system": "crm",
       "source": "openapi",
       "hosted_by": null,
@@ -8007,6 +8057,34 @@
       "to": {
         "system": "crm",
         "domain": "crm.surface.api-capture-reactions"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-capture-recordings",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.meetings"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-capture-recordings"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-capture-recordings-id",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.meetings"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-capture-recordings-id"
       },
       "contract_status": "live"
     },
