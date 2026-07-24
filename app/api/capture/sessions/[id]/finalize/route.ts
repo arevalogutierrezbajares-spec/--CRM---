@@ -21,7 +21,12 @@ import {
 } from "@/lib/capture/validate";
 import { FINALIZE_LEASE_MINUTES } from "@/lib/capture/constants";
 
-export const maxDuration = 800; // long calls: assembly + transcription + filing
+// Plan ceiling (hobby caps Serverless Functions at 300s; 800 blocked every
+// deployment). Deepgram transcribes far faster than realtime and the windowed
+// pipeline bounds memory, so even 2h calls fit comfortably; if a finalize ever
+// does exceed this, the helper retries and the server's idempotent lease
+// resumes the work rather than restarting it.
+export const maxDuration = 300;
 
 /**
  * Protocol §POST finalize — call ended; assemble, transcribe, file.
