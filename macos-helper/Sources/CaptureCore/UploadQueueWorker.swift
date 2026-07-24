@@ -51,6 +51,11 @@ public final class UploadQueueWorker {
     public var onStateChange: ((WorkerState) -> Void)?
     public var onChunkUploaded: ((_ localId: String, _ seq: Int) -> Void)?
     public var onSessionFinalized: ((Outcome) -> Void)?
+    /// Test hook (simulate --precomputed): a pre-diarized transcript to send
+    /// verbatim as the finalize precomputedTranscript, bypassing local STT.
+    /// Lets the E2E verify per-speaker synthesis on a KNOWN 10-voice transcript
+    /// without depending on the HF-token-gated diarizer. Nil in production.
+    public var precomputedOverride: CaptureAPIClient.FinalizeBody.PrecomputedTranscript?
     public var onError: ((String) -> Void)?
     /// Optional: persist a local copy of the assembled audio right before the
     /// spool is deleted (transcript-only mode keeps audio only on this Mac).
@@ -254,7 +259,9 @@ public final class UploadQueueWorker {
         // what MonoWavAssembler.assembleLeftChannel expects — and local Whisper
         // diarization is the only way to separate speakers on a mixed channel.
         var precomputed: CaptureAPIClient.FinalizeBody.PrecomputedTranscript? = nil
-        if !snap.kind.capturesSystemAudio {
+        if let override = precomputedOverride {
+            precomputed = override
+        } else if !snap.kind.capturesSystemAudio {
             precomputed = tryLocalTranscribe(spooler: spooler)
         }
 
@@ -270,6 +277,7 @@ public final class UploadQueueWorker {
             terms: snap.terms ?? [],
             agenda: snap.agenda ?? [],
             coverage: snap.coverage ?? [],
+            roster: snap.roster ?? [],
             themes: Self.themeDefs(for: snap)
         )
 
@@ -334,7 +342,9 @@ public final class UploadQueueWorker {
                 model: cfg.localTranscribeModel,
                 timeoutSecs: cfg.localTranscribeTimeoutSecs,
                 repoRootHint: URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("AGB-CRM"),
-                maxSpeakers: cfg.localTranscribeMaxSpeakers
+                // Per-session roster hint wins over the global config default —
+                // a 10-name roster tells pyannote to look for ~11 clusters.
+                maxSpeakers: spooler.speakerHint > 0 ? spooler.speakerHint : cfg.localTranscribeMaxSpeakers
             )
             let result = try LocalTranscribeRunner.transcribe(wav: monoURL, opts: opts)
             log.info(

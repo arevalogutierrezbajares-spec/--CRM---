@@ -40,9 +40,23 @@ import {
   type Utterance,
   type TranscriptionResult,
 } from "./deepgram";
-import { fileCallTranscript, type FileCallResult } from "./file-call";
-import { buildThemedDoc, facetsFromThemedDoc, type ThemedDoc } from "./themed-doc";
-import { replaceCallThemeFacets } from "@/db/queries/call-recordings";
+import {
+  fileCallTranscript,
+  runThemeLibrarian,
+  runCallAudit,
+  shouldRunAudit,
+  type FileCallResult,
+} from "./file-call";
+import {
+  buildThemedDoc,
+  facetsFromThemedDoc,
+  renderThemedBrief,
+  type ThemedDoc,
+} from "./themed-doc";
+import {
+  replaceCallThemeFacets,
+  updateCallRecording,
+} from "@/db/queries/call-recordings";
 import type {
   AgendaItem,
   CoverageMark,
@@ -695,6 +709,52 @@ export async function finalizeSession(opts: {
     } catch (e) {
       console.warn(
         `[capture] theme facets not stored for session ${session.id}: ${String(e)}`,
+      );
+    }
+  }
+
+  // 6c. El Cuaderno Slice 3: advisory enrichment on top of the durable, already-
+  // persisted themed doc (durable-first — the recording + brief already exist, so
+  // a slow or failed pass never loses the call). The librarian (Haiku) adds
+  // cite-verified supporting/contradicting quotes per theme; the auditor (Sonnet,
+  // threshold-gated) builds the call-wide commitments/blockers/decisions ledger +
+  // per-speaker synthesis. Both are cite-gated; the whole block is try/catch.
+  if (result.themedDoc) {
+    try {
+      let enriched: ThemedDoc = result.themedDoc;
+      if (enriched.themes.some((t) => t.evidence.length > 0)) {
+        enriched = await runThemeLibrarian({
+          workspaceId,
+          userId: session.createdBy,
+          recordingId,
+          spendRoute: "capture:finalize:file",
+          transcript: dialogueText,
+          doc: enriched,
+          utterances: txResult.utterances,
+        });
+      }
+      if (shouldRunAudit(enriched)) {
+        enriched = await runCallAudit({
+          workspaceId,
+          userId: session.createdBy,
+          recordingId,
+          spendRoute: "capture:finalize:file",
+          transcript: dialogueText,
+          doc: enriched,
+          utterances: txResult.utterances,
+        });
+      }
+      if (enriched !== result.themedDoc) {
+        await updateCallRecording({
+          id: recordingId,
+          workspaceId,
+          themedDoc: enriched,
+          brief: renderThemedBrief(enriched),
+        });
+      }
+    } catch (e) {
+      console.warn(
+        `[capture] slice-3 enrichment skipped for session ${session.id}: ${String(e)}`,
       );
     }
   }

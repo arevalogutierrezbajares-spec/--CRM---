@@ -3,6 +3,10 @@ import type {
   CallRecordingListItem,
   CallRecordingRow,
 } from "@/db/queries/call-recordings";
+import type {
+  ThemeTimeline,
+  WorkspaceThemeItem,
+} from "@/db/queries/capture-themes";
 
 /** PostView → the helper's wire shape. Shared by /api/capture/posts + /notes. */
 export function serializePost(p: PostView) {
@@ -65,6 +69,39 @@ export function serializeRecordingSummary(r: CallRecordingListItem) {
     participants: deriveParticipants(r.speakerMap, r.utteranceSpeakers),
     partial: r.partial,
     suspectFlags: r.suspectFlags,
+  };
+}
+
+/** WorkspaceThemeItem → the themes-index wire shape (dates as ISO). */
+export function serializeThemeSummary(t: WorkspaceThemeItem) {
+  return {
+    key: t.key,
+    label: t.label,
+    callCount: t.callCount,
+    lastSeen: t.lastSeen.toISOString(),
+  };
+}
+
+/** ThemeTimeline → the timeline wire shape (all dates as ISO, null-safe). */
+export function serializeThemeTimeline(t: ThemeTimeline) {
+  return {
+    key: t.key,
+    label: t.label,
+    rollup: {
+      callCount: t.rollup.callCount,
+      firstSeen: t.rollup.firstSeen ? t.rollup.firstSeen.toISOString() : null,
+      lastSeen: t.rollup.lastSeen ? t.rollup.lastSeen.toISOString() : null,
+      coverage: t.rollup.coverage,
+    },
+    calls: t.calls.map((c) => ({
+      callId: c.callId,
+      callTitle: c.callTitle,
+      callDate: c.callDate.toISOString(),
+      noteCount: c.noteCount,
+      quoteCount: c.quoteCount,
+      flagCount: c.flagCount,
+      coverage: c.coverage,
+    })),
   };
 }
 

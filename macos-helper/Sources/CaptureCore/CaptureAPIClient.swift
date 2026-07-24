@@ -98,6 +98,9 @@ public final class CaptureAPIClient {
         public let agenda: [SessionManifest.AgendaItem]
         /// Operator coverage marks on agenda items. Omitted when empty.
         public let coverage: [SessionManifest.CoverageMark]
+        /// Expected participant names (roster) — name pool for mapping
+        /// SPEAKER_xx clusters. Omitted when empty.
+        public let roster: [String]
         /// Theme definitions: agenda-seeded + live-created. Omitted when empty.
         public let themes: [ThemeDef]
 
@@ -161,6 +164,7 @@ public final class CaptureAPIClient {
                     terms: [SessionManifest.TermCorrection] = [],
                     agenda: [SessionManifest.AgendaItem] = [],
                     coverage: [SessionManifest.CoverageMark] = [],
+                    roster: [String] = [],
                     themes: [ThemeDef] = []) {
             self.endedAt = ISO8601.string(from: endedAt)
             self.durationSecs = durationSecs
@@ -173,6 +177,7 @@ public final class CaptureAPIClient {
             self.terms = terms
             self.agenda = agenda
             self.coverage = coverage
+            self.roster = roster
             self.themes = themes
         }
 
@@ -184,6 +189,7 @@ public final class CaptureAPIClient {
                     terms: [SessionManifest.TermCorrection] = [],
                     agenda: [SessionManifest.AgendaItem] = [],
                     coverage: [SessionManifest.CoverageMark] = [],
+                    roster: [String] = [],
                     themes: [ThemeDef] = []) {
             self.endedAt = endedAtISO
             self.durationSecs = durationSecs
@@ -196,6 +202,7 @@ public final class CaptureAPIClient {
             self.terms = terms
             self.agenda = agenda
             self.coverage = coverage
+            self.roster = roster
             self.themes = themes
         }
 
@@ -227,6 +234,9 @@ public final class CaptureAPIClient {
             }
             if !coverage.isEmpty {
                 try c.encode(coverage, forKey: .init("coverage"))
+            }
+            if !roster.isEmpty {
+                try c.encode(roster, forKey: .init("roster"))
             }
             if !themes.isEmpty {
                 try c.encode(themes, forKey: .init("themes"))

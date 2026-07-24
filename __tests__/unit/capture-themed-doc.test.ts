@@ -63,6 +63,7 @@ import {
 } from "@/lib/capture/validate";
 import {
   buildThemedDoc,
+  buildSpeakerScaffold,
   renderThemedBrief,
   nearestUtteranceAt,
   clockTs,
@@ -75,8 +76,13 @@ import {
   gateThemeExtractions,
   sanitizeCallSentence,
   fileCallTranscript,
+  gateAudit,
+  gateSupporting,
+  shouldRunAudit,
   MAX_AI_BULLETS_PER_CATEGORY,
   MAX_AI_BULLET_CHARS,
+  MAX_AUDIT_COMMITMENTS,
+  MAX_SUPPORTING_PER_THEME,
 } from "@/lib/capture/file-call";
 import { serializeRecordingDetail } from "@/lib/capture/serialize";
 import type { Utterance } from "@/lib/capture/deepgram";
@@ -1531,5 +1537,431 @@ describe("POST /api/capture/recordings/[id]/strike", () => {
     expect(res.status).toBe(200);
     const json = (await res.json()) as { recording: { themedDoc: ThemedDoc } };
     expect(json.recording.themedDoc.callSentence).toBeNull();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Slice 3 — buildSpeakerScaffold (dual-channel excludes founder; mixed keeps all)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("buildSpeakerScaffold", () => {
+  it("dual-channel: excludes the founder side, counts participant turns", () => {
+    const utterances = [
+      u(0, 5, "hi", "founder"),
+      u(6, 10, "hello", "participant"),
+      u(11, 15, "and one more", "participant"),
+      u(16, 20, "ok", "founder"),
+    ];
+    const scaffold = buildSpeakerScaffold(utterances, {
+      founder: "Tomas",
+      participant: "Carlos",
+    });
+    expect(scaffold).toEqual([
+      { speaker: "Carlos", headline: "", turnCount: 2, commitments: [], raised: [] },
+    ]);
+  });
+
+  it("mixed-acoustic: keeps every diarization cluster as a participant", () => {
+    const utterances = [
+      u(0, 5, "a", "SPEAKER_00", { diarizationId: "SPEAKER_00", channel: 0 }),
+      u(6, 10, "b", "SPEAKER_01", { diarizationId: "SPEAKER_01", channel: 0 }),
+      u(11, 15, "c", "SPEAKER_00", { diarizationId: "SPEAKER_00", channel: 0 }),
+      u(16, 20, "d", "SPEAKER_02", { diarizationId: "SPEAKER_02", channel: 0 }),
+    ];
+    // founder="Room" is a channel label no cluster resolves to → nothing dropped.
+    const scaffold = buildSpeakerScaffold(utterances, {
+      founder: "Room",
+      participant: "Remote",
+    });
+    expect(scaffold.map((s) => [s.speaker, s.turnCount])).toEqual([
+      ["SPEAKER_00", 2],
+      ["SPEAKER_01", 1],
+      ["SPEAKER_02", 1],
+    ]);
+  });
+
+  it("mixed-acoustic: resolves clusters through speakerMap to display names", () => {
+    const utterances = [
+      u(0, 5, "a", "SPEAKER_00", { diarizationId: "SPEAKER_00", channel: 0 }),
+      u(6, 10, "b", "SPEAKER_01", { diarizationId: "SPEAKER_01", channel: 0 }),
+    ];
+    const scaffold = buildSpeakerScaffold(utterances, {
+      founder: "Room",
+      participant: "Remote",
+      speakerMap: { SPEAKER_00: "Ana", SPEAKER_01: "Beto" },
+    });
+    expect(scaffold.map((s) => s.speaker)).toEqual(["Ana", "Beto"]);
+  });
+
+  it("buildThemedDoc emits the scaffold + null audit", () => {
+    const doc = buildThemedDoc({
+      themes: [{ key: "t", label: "T", agenda: false }],
+      agenda: [],
+      resolvedNotes: [
+        { atSec: 8, quote: "hello", note: "n", themeKey: "t" },
+      ],
+      resolvedFlags: [],
+      utterances: [u(0, 5, "hi", "founder"), u(6, 10, "hello", "participant")],
+      labels: { founder: "Tomas", participant: "Carlos" },
+    });
+    expect(doc.audit).toBeNull();
+    expect(doc.speakers).toEqual([
+      { speaker: "Carlos", headline: "", turnCount: 1, commitments: [], raised: [] },
+    ]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Slice 3 — shouldRunAudit threshold
+// ─────────────────────────────────────────────────────────────────────────────
+
+const emptyDoc = (over: Partial<ThemedDoc> = {}): ThemedDoc => ({
+  v: 1,
+  callSentence: null,
+  themes: [],
+  unfiled: [],
+  agenda: [],
+  speakers: [],
+  audit: null,
+  ...over,
+});
+
+const spk = (speaker: string, turnCount = 1) => ({
+  speaker,
+  headline: "",
+  turnCount,
+  commitments: [],
+  raised: [],
+});
+
+describe("shouldRunAudit (threshold)", () => {
+  it("runs when ≥2 distinct participants", () => {
+    expect(shouldRunAudit(emptyDoc({ speakers: [spk("Ana"), spk("Beto")] }))).toBe(true);
+  });
+  it("runs when ≥1 agenda item even with <2 speakers", () => {
+    expect(
+      shouldRunAudit(emptyDoc({ speakers: [spk("Ana")], agenda: [{ key: "x", label: "X", coverage: "gap" }] })),
+    ).toBe(true);
+  });
+  it("skips a 1-on-1 with no agenda", () => {
+    expect(shouldRunAudit(emptyDoc({ speakers: [spk("Ana")] }))).toBe(false);
+    expect(shouldRunAudit(emptyDoc())).toBe(false);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Slice 3 — gateAudit (cite-gate + owner scaffold + due_source + caps)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const auditDoc = (): ThemedDoc =>
+  emptyDoc({
+    agenda: [{ key: "x", label: "X", coverage: "gap" }],
+    speakers: [spk("Ana", 3), spk("Beto", 2)],
+  });
+
+const auditUtts = [u(100, 110, "..."), u(200, 210, "...")];
+
+describe("gateAudit (cite-gate)", () => {
+  it("keeps valid items, attaches to speaker + audit block", () => {
+    const { audit, speakers, dropped } = gateAudit(
+      {
+        commitments: [
+          { owner: "Ana", text: "send sheet", quote: "I'll send it", cite_t_secs: 100, due: "Friday", due_source: "spoken" },
+          { owner: "Ghost", text: "x", quote: "y", cite_t_secs: 100 }, // owner not in scaffold
+          { owner: "Ana", text: "we are aligned going forward", quote: "q", cite_t_secs: 100 }, // banlist
+          { owner: "Beto", text: "no cite match", quote: "q", cite_t_secs: 500 }, // cite off
+          { owner: "Ana", text: "no quote", quote: "", cite_t_secs: 100 }, // empty quote
+        ],
+        blockers: [
+          { kind: "risk", text: "budget risk", quote: "q", cite_t_secs: 200, raised_by: "Beto" },
+          { kind: "bogus", text: "x", quote: "q", cite_t_secs: 200, raised_by: "Beto" }, // bad kind
+        ],
+        decisions: [
+          { text: "go with plan A", cite_t_secs: 100 },
+          { text: "seems fine", cite_t_secs: 100 }, // banlist
+        ],
+        speakers: [{ speaker: "Ana", headline: "Drove pricing" }, { speaker: "Ghost", headline: "x" }],
+      },
+      auditDoc(),
+      auditUtts,
+    );
+
+    expect(audit.commitments).toEqual([
+      { owner: "Ana", text: "send sheet", quote: "I'll send it", tSecs: 100, due: "Friday", dueSource: "spoken" },
+    ]);
+    expect(audit.blockers).toEqual([
+      { kind: "risk", text: "budget risk", quote: "q", tSecs: 200, raisedBy: "Beto" },
+    ]);
+    expect(audit.decisions).toEqual([{ text: "go with plan A", tSecs: 100 }]);
+
+    const ana = speakers.find((s) => s.speaker === "Ana")!;
+    const beto = speakers.find((s) => s.speaker === "Beto")!;
+    expect(ana.headline).toBe("Drove pricing");
+    expect(ana.commitments).toHaveLength(1);
+    expect(beto.raised).toHaveLength(1);
+    // commitment(Ghost) + commitment(banlist) + commitment(cite) + commitment(no quote)
+    // + blocker(bad kind) + decision(banlist) = 6
+    expect(dropped).toBe(6);
+  });
+
+  it("accepts a cite at the ±2s boundary, rejects beyond, and never mutates the input doc", () => {
+    const doc = auditDoc();
+    const { audit } = gateAudit(
+      {
+        commitments: [
+          { owner: "Ana", text: "edge", quote: "q", cite_t_secs: 102, due_source: "absent" }, // +2s ok
+          { owner: "Ana", text: "past", quote: "q", cite_t_secs: 103 }, // +3s dropped
+        ],
+        blockers: [],
+        decisions: [],
+        speakers: [],
+      },
+      doc,
+      auditUtts,
+    );
+    expect(audit.commitments.map((c) => c.text)).toEqual(["edge"]);
+    // due absent ⇒ null + "absent"
+    expect(audit.commitments[0]).toMatchObject({ due: null, dueSource: "absent" });
+    // input doc's scaffold is untouched
+    expect(doc.speakers!.every((s) => s.commitments.length === 0)).toBe(true);
+  });
+
+  it("due_source='spoken' without a due string falls back to absent", () => {
+    const { audit } = gateAudit(
+      {
+        commitments: [{ owner: "Ana", text: "t", quote: "q", cite_t_secs: 100, due_source: "spoken" }],
+        blockers: [],
+        decisions: [],
+        speakers: [],
+      },
+      auditDoc(),
+      auditUtts,
+    );
+    expect(audit.commitments[0]).toMatchObject({ due: null, dueSource: "absent" });
+  });
+
+  it("caps commitments and drops the overflow", () => {
+    const many = Array.from({ length: MAX_AUDIT_COMMITMENTS + 5 }, (_, i) => ({
+      owner: "Ana",
+      text: `c${i}`,
+      quote: "q",
+      cite_t_secs: 100,
+    }));
+    const { audit, dropped } = gateAudit(
+      { commitments: many, blockers: [], decisions: [], speakers: [] },
+      auditDoc(),
+      auditUtts,
+    );
+    expect(audit.commitments).toHaveLength(MAX_AUDIT_COMMITMENTS);
+    expect(dropped).toBe(5);
+  });
+
+  it("is robust to garbage input", () => {
+    const { audit, speakers, dropped } = gateAudit(null, auditDoc(), auditUtts);
+    expect(audit).toEqual({ commitments: [], blockers: [], decisions: [] });
+    expect(speakers.map((s) => s.speaker)).toEqual(["Ana", "Beto"]);
+    expect(dropped).toBe(0);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Slice 3 — gateSupporting (librarian cite-gate + contradicts)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const supportingDoc = (): ThemedDoc =>
+  emptyDoc({
+    themes: [
+      {
+        key: "pricing",
+        label: "Pricing",
+        origin: "agenda",
+        agendaItemKey: "pricing",
+        evidence: [{ type: "note", tSecs: 100, text: "floor", quote: "q", speaker: "Ana" }],
+        ai: null,
+      },
+      {
+        key: "empty",
+        label: "Empty",
+        origin: "agenda",
+        agendaItemKey: "empty",
+        evidence: [],
+        ai: null,
+      },
+    ],
+  });
+
+const supUtts = [u(200, 210, "posadas won't pay that at all", "participant")];
+
+describe("gateSupporting (librarian cite-gate)", () => {
+  it("keeps verbatim-verified quotes incl. contradicts, drops the rest", () => {
+    const { byTheme, dropped } = gateSupporting(
+      {
+        themes: [
+          {
+            key: "pricing",
+            quotes: [
+              { quote: "posadas won't pay that", cite_t_secs: 200, relevance: "contradicts" }, // verbatim substring
+              { quote: "totally made up line", cite_t_secs: 200, relevance: "supports" }, // not in utterance
+              { quote: "posadas won't pay that", cite_t_secs: 200, relevance: "bogus" }, // bad relevance
+            ],
+          },
+          { key: "empty", quotes: [{ quote: "posadas won't pay that", cite_t_secs: 200, relevance: "supports" }] }, // gap theme
+          { key: "ghost", quotes: [{ quote: "x", cite_t_secs: 200, relevance: "supports" }] }, // unknown key
+        ],
+      },
+      supportingDoc(),
+      supUtts,
+    );
+    expect(byTheme.get("pricing")).toEqual([
+      { tSecs: 200, quote: "posadas won't pay that", relevance: "contradicts" },
+    ]);
+    expect(byTheme.has("empty")).toBe(false);
+    // made-up + bogus-relevance + gap-theme + unknown-key = 4
+    expect(dropped).toBe(4);
+  });
+
+  it("caps supporting quotes per theme at MAX_SUPPORTING_PER_THEME", () => {
+    const quotes = Array.from({ length: MAX_SUPPORTING_PER_THEME + 2 }, () => ({
+      quote: "posadas won't pay that",
+      cite_t_secs: 200,
+      relevance: "supports" as const,
+    }));
+    const { byTheme, dropped } = gateSupporting(
+      { themes: [{ key: "pricing", quotes }] },
+      supportingDoc(),
+      supUtts,
+    );
+    expect(byTheme.get("pricing")).toHaveLength(MAX_SUPPORTING_PER_THEME);
+    expect(dropped).toBe(2);
+  });
+
+  it("is robust to garbage input", () => {
+    expect(gateSupporting(null, supportingDoc(), supUtts).byTheme.size).toBe(0);
+    expect(gateSupporting({ themes: "x" }, supportingDoc(), supUtts).byTheme.size).toBe(0);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Slice 3 — renderThemedBrief with audit/by-speaker/supporting/next-steps
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("renderThemedBrief — Slice 3 sections", () => {
+  const slice3Doc: ThemedDoc = {
+    v: 1,
+    callSentence: null,
+    themes: [
+      {
+        key: "pricing",
+        label: "Pricing",
+        origin: "agenda",
+        agendaItemKey: "pricing",
+        evidence: [
+          { type: "note", tSecs: 100, text: "floor $50", quote: "we can't go below fifty", speaker: "Ana" },
+        ],
+        ai: {
+          committed: [],
+          decided: [],
+          open: [],
+          supporting: [
+            { tSecs: 200, quote: "posadas won't pay that", relevance: "contradicts" },
+            { tSecs: 150, quote: "fifty is our floor", relevance: "constraint" },
+          ],
+        },
+      },
+    ],
+    unfiled: [],
+    agenda: [{ key: "pricing", label: "Pricing", coverage: "covered" }],
+    speakers: [
+      {
+        speaker: "Ana",
+        headline: "Pushed the $50 floor",
+        turnCount: 5,
+        commitments: [
+          { owner: "Ana", text: "send revised sheet Friday", quote: "I'll send it Friday", tSecs: 300, due: "Friday", dueSource: "spoken" },
+        ],
+        raised: [],
+      },
+      {
+        speaker: "Beto",
+        headline: "Raised the posada affordability blocker",
+        turnCount: 3,
+        commitments: [],
+        raised: [
+          { kind: "blocker", text: "posadas can't afford $50", quote: "posadas won't pay that", tSecs: 200, raisedBy: "Beto" },
+        ],
+      },
+    ],
+    audit: {
+      commitments: [
+        { owner: "Ana", text: "send revised sheet Friday", quote: "I'll send it Friday", tSecs: 300, due: "Friday", dueSource: "spoken" },
+      ],
+      blockers: [
+        { kind: "blocker", text: "posadas can't afford $50", quote: "posadas won't pay that", tSecs: 200, raisedBy: "Beto" },
+      ],
+      decisions: [{ text: "Floor stays at $50", tSecs: 150 }],
+    },
+    nextSteps: [
+      { title: "Send revised pricing sheet", due: "2026-07-25" },
+      { title: "Follow up with Beto", due: null },
+    ],
+  };
+
+  it("renders commitments, blockers, by-speaker, next steps, and the contradicts quote", () => {
+    expect(renderThemedBrief(slice3Doc)).toBe(
+      [
+        "## Agenda coverage",
+        "✅ Pricing",
+        "",
+        "## ▸ Pricing",
+        "**Your notes**",
+        "- floor $50 [1:40]",
+        "**Said on the call**",
+        '- Ana [1:40]: "we can\'t go below fifty"',
+        "> **⟦AI · also said⟧**",
+        '> - **contradicts** — "posadas won\'t pay that" [3:20]',
+        '> - constraint — "fifty is our floor" [2:30]',
+        "",
+        "## ⚑ Commitments",
+        '- **Ana** — send revised sheet Friday — Friday [5:00] "I\'ll send it Friday"',
+        "",
+        "## ⚠ Blockers & issues raised",
+        '- **blocker** (Beto) — posadas can\'t afford $50 [3:20] "posadas won\'t pay that"',
+        "",
+        "## 🗣 By speaker",
+        "### Ana · 5 turns",
+        "Pushed the $50 floor",
+        "- committed: send revised sheet Friday [5:00]",
+        "",
+        "### Beto · 3 turns",
+        "Raised the posada affordability blocker",
+        "- raised: blocker — posadas can't afford $50 [3:20]",
+        "",
+        "## → Next steps",
+        "- Send revised pricing sheet — 2026-07-25",
+        "- Follow up with Beto",
+      ].join("\n"),
+    );
+  });
+
+  it("a slice-1/2 doc (no audit/speakers/supporting) renders byte-identically to before", () => {
+    const legacy: ThemedDoc = {
+      v: 1,
+      callSentence: null,
+      themes: [
+        {
+          key: "onboarding",
+          label: "Onboarding",
+          origin: "live",
+          agendaItemKey: null,
+          evidence: [{ type: "note", tSecs: 95, text: "needs Spanish demo", quote: "", speaker: "" }],
+          ai: null,
+        },
+      ],
+      unfiled: [],
+      agenda: [],
+    };
+    expect(renderThemedBrief(legacy)).toBe(
+      ["## ▸ Onboarding", "**Your notes**", "- needs Spanish demo [1:35]"].join("\n"),
+    );
   });
 });
