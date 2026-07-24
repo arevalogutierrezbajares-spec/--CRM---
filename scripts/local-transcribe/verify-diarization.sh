@@ -16,7 +16,7 @@ if [[ ! -x "$VENV_PY" ]]; then
   echo "✗ venv missing. Set it up first:"
   echo "    python3.12 -m venv .venv && .venv/bin/pip install -U pip"
   echo "    .venv/bin/pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu"
-  echo "    .venv/bin/pip install whisperx soundfile"
+  echo "    .venv/bin/pip install whisperx soundfile certifi"
   exit 1
 fi
 
