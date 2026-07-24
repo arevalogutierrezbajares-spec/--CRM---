@@ -41,10 +41,11 @@ import {
   type TranscriptionResult,
 } from "./deepgram";
 import { fileCallTranscript, type FileCallResult } from "./file-call";
-import { buildThemedDoc, type ThemedDoc } from "./themed-doc";
+import { buildThemedDoc, facetsFromThemedDoc, type ThemedDoc } from "./themed-doc";
 import { replaceCallThemeFacets } from "@/db/queries/call-recordings";
 import type {
   AgendaItem,
+  CoverageMark,
   Highlight,
   LiveTheme,
   OperatorNote,
@@ -125,18 +126,26 @@ export function resolveHighlights(
  * {@link resolveHighlights}: the same nearest-utterance quote (with the same
  * {@link MAX_HIGHLIGHT_MATCH_GAP_SECS} guard) shows what was being said as the
  * operator typed. The note text itself is always kept verbatim.
+ *
+ * Slice 2: when a note carries an `anchor`, the operator deliberately aimed at
+ * anchor.tSecs — resolve the quote there and display that as the atSec. The
+ * anchor's own `quote` is advisory context only and is never stored verbatim;
+ * we always re-quote from the final utterances.
  */
 export function resolveNotes(
   notes: OperatorNote[],
   utterances: Utterance[],
 ): ResolvedOperatorNote[] {
   if (notes.length === 0) return [];
-  return notes.map((n) => ({
-    atSec: n.tSecs,
-    quote: quoteAt(n.tSecs, utterances),
-    note: n.text,
-    themeKey: n.themeKey ?? null,
-  }));
+  return notes.map((n) => {
+    const atSec = n.anchor ? n.anchor.tSecs : n.tSecs;
+    return {
+      atSec,
+      quote: quoteAt(atSec, utterances),
+      note: n.text,
+      themeKey: n.themeKey ?? null,
+    };
+  });
 }
 
 /** Escape a literal string for embedding in a RegExp. */
@@ -333,6 +342,8 @@ export async function finalizeSession(opts: {
   agenda?: AgendaItem[];
   /** El Cuaderno: live theme list — union of agenda-seeded + live-created. */
   themes?: LiveTheme[];
+  /** El Cuaderno Slice 2: live agenda coverage marks (advisory). */
+  coverage?: CoverageMark[];
 }): Promise<FinalizeOutcome> {
   const { session } = opts;
   const workspaceId = session.workspaceId;
@@ -620,6 +631,7 @@ export async function finalizeSession(opts: {
           participant: participantLabel,
           speakerMap: Object.keys(speakerMap).length ? speakerMap : undefined,
         },
+        coverage: opts.coverage ?? [],
       });
     } catch (e) {
       console.warn(
@@ -678,14 +690,7 @@ export async function finalizeSession(opts: {
       await replaceCallThemeFacets({
         workspaceId,
         callId: recordingId,
-        facets: result.themedDoc.themes.map((t) => ({
-          label: t.label,
-          origin: t.origin,
-          noteCount: t.evidence.filter((e) => e.type === "note").length,
-          quoteCount: t.evidence.filter((e) => e.quote !== "").length,
-          flagCount: t.evidence.filter((e) => e.type === "flag").length,
-          coverage: t.evidence.length > 0 ? ("covered" as const) : ("gap" as const),
-        })),
+        facets: facetsFromThemedDoc(result.themedDoc),
       });
     } catch (e) {
       console.warn(

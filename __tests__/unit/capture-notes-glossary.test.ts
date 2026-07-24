@@ -94,6 +94,49 @@ describe("parseNotes", () => {
     const [n] = parseNotes([{ tSecs: 1, text: "a".repeat(5000) }]);
     expect(n.text.length).toBe(MAX_NOTE_CHARS);
   });
+
+  it("parses an optional anchor: quote trimmed/capped, tSecs clamped", () => {
+    expect(
+      parseNotes([
+        {
+          tSecs: 512,
+          text: "Floor is $50/mo",
+          anchor: { quote: "  ...verbatim live text...  ", tSecs: 498 },
+        },
+      ]),
+    ).toEqual([
+      {
+        tSecs: 512,
+        text: "Floor is $50/mo",
+        themeKey: null,
+        anchor: { quote: "...verbatim live text...", tSecs: 498 },
+      },
+    ]);
+
+    // Anchor quote capped at 200 chars; anchor tSecs clamped to 24h.
+    const [clamped] = parseNotes([
+      { tSecs: 5, text: "n", anchor: { quote: "q".repeat(500), tSecs: 1e9 } },
+    ]);
+    expect(clamped.anchor!.quote.length).toBe(200);
+    expect(clamped.anchor!.tSecs).toBe(24 * 3600);
+  });
+
+  it("drops an invalid/absent anchor to nothing (note itself survives)", () => {
+    // Absent anchor → no anchor key at all (minimal slice-1 shape).
+    expect(parseNotes([{ tSecs: 5, text: "a" }])[0]).toEqual({
+      tSecs: 5,
+      text: "a",
+      themeKey: null,
+    });
+    // Bad tSecs on the anchor → the anchor is dropped, the note stays.
+    for (const bad of [{ quote: "x", tSecs: -1 }, { quote: "x", tSecs: "no" }, { quote: "x" }, {}]) {
+      const [n] = parseNotes([{ tSecs: 5, text: "a", anchor: bad }]);
+      expect(n).toEqual({ tSecs: 5, text: "a", themeKey: null });
+    }
+    // Empty-quote anchor is still usable (tSecs is the deliberate aim-point).
+    const [ok] = parseNotes([{ tSecs: 5, text: "a", anchor: { quote: "   ", tSecs: 7 } }]);
+    expect(ok.anchor).toEqual({ quote: "", tSecs: 7 });
+  });
 });
 
 describe("parseTerms", () => {
@@ -196,6 +239,36 @@ describe("resolveNotes", () => {
       expect(n.quote).toBe(h.quote);
       expect(n.atSec).toBe(h.atSec);
     }
+  });
+
+  it("re-quotes at the anchor, displaying the anchor tSecs (not the note's)", () => {
+    // Note tSecs=18 lands in "See you next week", but the operator aimed the
+    // anchor at 8s — resolution re-quotes THERE and shows 8 as the atSec. The
+    // anchor's own wire quote is advisory and never stored verbatim.
+    const [n] = resolveNotes(
+      [
+        {
+          tSecs: 18,
+          text: "budget note",
+          anchor: { quote: "throwaway live text", tSecs: 8 },
+        },
+      ],
+      utterances,
+    );
+    expect(n).toEqual({
+      atSec: 8,
+      quote: "The budget is forty thousand",
+      note: "budget note",
+      themeKey: null,
+    });
+  });
+
+  it("an anchor beyond the gap yields no quote (audio gone at the aim-point)", () => {
+    const [n] = resolveNotes(
+      [{ tSecs: 8, text: "n", anchor: { quote: "x", tSecs: 500 } }],
+      utterances,
+    );
+    expect(n).toEqual({ atSec: 500, quote: "", note: "n", themeKey: null });
   });
 });
 

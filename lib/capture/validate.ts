@@ -151,9 +151,43 @@ export function parseHighlights(raw: unknown): Highlight[] {
 /** Cap operator-typed live notes so a helper can't DoS finalize. */
 export const MAX_NOTES = 500;
 export const MAX_NOTE_CHARS = 1000;
+/** An anchor quote is throwaway context — cap it like the resolved quote. */
+export const MAX_ANCHOR_QUOTE_CHARS = 200;
+
+/**
+ * Slice 2: an optional deliberate aim-point for a note. When present, quote
+ * resolution re-quotes at {@link NoteAnchor.tSecs} instead of the note's own
+ * tSecs. `quote` is the live text the operator was aiming at — advisory context
+ * only; the resolver always re-quotes from the final utterances, never stores
+ * this verbatim.
+ */
+export type NoteAnchor = { quote: string; tSecs: number };
 
 /** themeKey optional on the type (old helpers omit it); parse always sets it. */
-export type OperatorNote = { tSecs: number; text: string; themeKey?: string | null };
+export type OperatorNote = {
+  tSecs: number;
+  text: string;
+  themeKey?: string | null;
+  /** Slice 2: optional aim-point; absent/invalid ⇒ null (note itself survives). */
+  anchor?: NoteAnchor | null;
+};
+
+/**
+ * Validate an optional note anchor: `tSecs` clamped to [0, 24h]; `quote`
+ * trimmed + capped (may be empty). Anything without a usable tSecs → null, so a
+ * malformed anchor never fails a finalize — the note simply resolves at its own
+ * tSecs.
+ */
+function parseAnchor(value: unknown): NoteAnchor | null {
+  if (!value || typeof value !== "object") return null;
+  const o = value as Record<string, unknown>;
+  const t = typeof o.tSecs === "number" ? o.tSecs : Number(o.tSecs);
+  if (!Number.isFinite(t) || t < 0) return null;
+  const quote = (o.quote == null ? "" : String(o.quote))
+    .trim()
+    .slice(0, MAX_ANCHOR_QUOTE_CHARS);
+  return { tSecs: Math.min(t, 24 * 3600), quote };
+}
 
 /**
  * Validate helper-supplied operator-typed live notes. Returns [] for anything
@@ -170,14 +204,45 @@ export function parseNotes(raw: unknown): OperatorNote[] {
     if (!Number.isFinite(t) || t < 0) continue;
     const text = o.text == null ? "" : String(o.text).trim();
     if (!text) continue;
+    const anchor = parseAnchor(o.anchor);
     out.push({
       tSecs: Math.min(t, 24 * 3600),
       text: text.slice(0, MAX_NOTE_CHARS),
       themeKey: parseThemeKey(o.themeKey),
+      // Absent by default — only deliberate aim-points carry an anchor, so
+      // unanchored notes keep their minimal (slice-1) shape.
+      ...(anchor ? { anchor } : {}),
     });
   }
   out.sort((a, b) => a.tSecs - b.tSecs);
   return out;
+}
+
+// ── El Cuaderno Slice 2: coverage marks ──────────────────────────────────────
+
+/** Cap coverage marks so a helper can't DoS finalize. */
+export const MAX_COVERAGE = 64;
+
+export type CoverageState = "touched" | "done";
+export type CoverageMark = { key: string; state: CoverageState };
+
+/**
+ * Validate helper-supplied agenda coverage marks ("operator says this item is
+ * touched/done"). Advisory/never-throws; [] for anything unusable. Keyed by a
+ * valid theme slug, last-write-wins per key, capped at {@link MAX_COVERAGE}. A
+ * `tSecs` may ride along on the wire but is not consumed here.
+ */
+export function parseCoverage(raw: unknown): CoverageMark[] {
+  if (!Array.isArray(raw) || raw.length === 0) return [];
+  const byKey = new Map<string, CoverageState>();
+  for (const item of raw.slice(0, MAX_COVERAGE)) {
+    if (!item || typeof item !== "object") continue;
+    const o = item as Record<string, unknown>;
+    if (!isValidThemeKey(o.key)) continue;
+    if (o.state !== "touched" && o.state !== "done") continue;
+    byKey.set(o.key, o.state); // last-write-wins per key
+  }
+  return [...byKey].map(([key, state]) => ({ key, state }));
 }
 
 /** Cap live transcription-term corrections so a helper can't DoS finalize. */

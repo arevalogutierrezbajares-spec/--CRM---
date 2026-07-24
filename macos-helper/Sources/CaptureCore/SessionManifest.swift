@@ -72,10 +72,27 @@ public struct SessionManifest: Codable, Equatable {
         public var text: String
         /// Operator's #theme tag (slug). Nil = unfiled (the inbox).
         public var themeKey: String?
-        public init(tSecs: Double, text: String, themeKey: String? = nil) {
+        /// Line-Grab: the specific transcript moment the operator aimed the
+        /// note at (↑/↓ pick). The server re-quotes the FINAL transcript at
+        /// `anchor.tSecs`; `quote` is the throwaway live text, kept as
+        /// context only. Nil = note anchors at its own tSecs (today's flow).
+        public var anchor: NoteAnchor?
+        public init(tSecs: Double, text: String, themeKey: String? = nil,
+                    anchor: NoteAnchor? = nil) {
             self.tSecs = tSecs
             self.text = text
             self.themeKey = themeKey
+            self.anchor = anchor
+        }
+    }
+
+    /// A picked-line anchor: live-view quote + its audio-timeline moment.
+    public struct NoteAnchor: Codable, Equatable {
+        public var quote: String
+        public var tSecs: Double
+        public init(quote: String, tSecs: Double) {
+            self.quote = quote
+            self.tSecs = tSecs
         }
     }
 
@@ -90,6 +107,24 @@ public struct SessionManifest: Codable, Equatable {
         public init(key: String, label: String) {
             self.key = key
             self.label = label
+        }
+    }
+
+    /// Agenda coverage marks the operator made live (rail clicks). Only
+    /// explicit states ride the wire; "touched" is derived server-side from
+    /// tagged evidence. Last-write-wins per key at filing.
+    public var coverage: [CoverageMark]?
+
+    /// One operator coverage action on an agenda item.
+    public struct CoverageMark: Codable, Equatable {
+        public var key: String
+        /// "done" (operator ticked it) or "touched".
+        public var state: String
+        public var tSecs: Double
+        public init(key: String, state: String, tSecs: Double) {
+            self.key = key
+            self.state = state
+            self.tSecs = tSecs
         }
     }
 

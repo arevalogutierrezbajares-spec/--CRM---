@@ -30,6 +30,8 @@ final class CallsSectionView: TownHallSectionView, NSTableViewDataSource, NSTabl
     private let detailTitle = NSTextField(wrappingLabelWithString: "")
     private let detailMeta = thMetaLabel("")
     private let detailTags = NSStackView()
+    /// El Cuaderno curation: unfiled tray + AI strike chips (themed docs only).
+    private let curateStack = NSStackView()
     private let detailText = NSTextView()
     private var detailScroll: NSScrollView?
     private var currentDetailId: String?
@@ -116,6 +118,11 @@ final class CallsSectionView: TownHallSectionView, NSTableViewDataSource, NSTabl
         detailTags.spacing = 5
         detailTags.translatesAutoresizingMaskIntoConstraints = false
 
+        curateStack.orientation = .vertical
+        curateStack.alignment = .leading
+        curateStack.spacing = 6
+        curateStack.translatesAutoresizingMaskIntoConstraints = false
+
         let hairline = NSBox()
         hairline.boxType = .separator
         hairline.translatesAutoresizingMaskIntoConstraints = false
@@ -141,6 +148,7 @@ final class CallsSectionView: TownHallSectionView, NSTableViewDataSource, NSTabl
         detailContainer.addSubview(detailTitle)
         detailContainer.addSubview(detailMeta)
         detailContainer.addSubview(detailTags)
+        detailContainer.addSubview(curateStack)
         detailContainer.addSubview(hairline)
         detailContainer.addSubview(scroll)
         NSLayoutConstraint.activate([
@@ -160,7 +168,11 @@ final class CallsSectionView: TownHallSectionView, NSTableViewDataSource, NSTabl
             detailTags.leadingAnchor.constraint(equalTo: detailContainer.leadingAnchor, constant: 2),
             detailTags.trailingAnchor.constraint(lessThanOrEqualTo: detailContainer.trailingAnchor),
 
-            hairline.topAnchor.constraint(equalTo: detailTags.bottomAnchor, constant: 10),
+            curateStack.topAnchor.constraint(equalTo: detailTags.bottomAnchor, constant: 8),
+            curateStack.leadingAnchor.constraint(equalTo: detailContainer.leadingAnchor, constant: 2),
+            curateStack.trailingAnchor.constraint(lessThanOrEqualTo: detailContainer.trailingAnchor),
+
+            hairline.topAnchor.constraint(equalTo: curateStack.bottomAnchor, constant: 10),
             hairline.leadingAnchor.constraint(equalTo: detailContainer.leadingAnchor),
             hairline.trailingAnchor.constraint(equalTo: detailContainer.trailingAnchor),
             hairline.heightAnchor.constraint(equalToConstant: 1),
@@ -262,6 +274,116 @@ final class CallsSectionView: TownHallSectionView, NSTableViewDataSource, NSTabl
         detailText.textStorage?.setAttributedString(out)
         detailScroll?.contentView.scroll(to: .zero)
         detailScroll?.reflectScrolledClipView(detailScroll!.contentView)
+        rebuildCuration(for: d)
+    }
+
+    // MARK: - Curation (El Cuaderno)
+
+    /// Unfiled tray + per-theme AI strike chips. Only for themed recordings;
+    /// every action round-trips through the server and re-renders from the
+    /// authoritative updated document.
+    private func rebuildCuration(for d: CallRecordingDetail) {
+        curateStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        guard let doc = d.themedDoc else { return }
+
+        // Unfiled tray: each stray note gets a "File under…" chip.
+        for (idx, item) in doc.unfiled.prefix(8).enumerated() {
+            let row = NSStackView()
+            row.orientation = .horizontal
+            row.alignment = .centerY
+            row.spacing = 8
+
+            let text = item.text ?? item.quote ?? "(evidence)"
+            let label = NSTextField(labelWithString: "✎ \(text)  ·  \(Self.clock(item.tSecs))")
+            label.font = .systemFont(ofSize: 12)
+            label.textColor = .secondaryLabelColor
+            label.lineBreakMode = .byTruncatingTail
+
+            let chip = THMenuButton(symbol: "tray.and.arrow.down")
+            chip.maxWidth = 150
+            var titles = ["File under…"] + doc.themes.map(\.label)
+            titles.append("＋ New theme…")
+            chip.resetsAfterSelect = true
+            chip.setTitles(titles)
+            chip.onSelect = { [weak self] choice in
+                guard let self, choice > 0 else { return }
+                if choice == titles.count - 1 {
+                    self.promptNewTheme { label in
+                        self.assign(item: item, idx: idx, on: d, themeKey: nil, newLabel: label)
+                    }
+                } else {
+                    self.assign(item: item, idx: idx, on: d,
+                                themeKey: doc.themes[choice - 1].key, newLabel: nil)
+                }
+            }
+            row.addArrangedSubview(label)
+            row.addArrangedSubview(chip)
+            curateStack.addArrangedSubview(row)
+        }
+
+        // AI strike chips: one per theme carrying an AI block, + call sentence.
+        var strikeViews: [NSView] = []
+        if doc.callSentence != nil {
+            strikeViews.append(makeStrikeButton(title: "✕ AI sentence", themeKey: nil, on: d))
+        }
+        for theme in doc.themes where theme.hasAI {
+            strikeViews.append(makeStrikeButton(title: "✕ AI · \(theme.label)", themeKey: theme.key, on: d))
+        }
+        if !strikeViews.isEmpty {
+            let row = NSStackView(views: strikeViews)
+            row.orientation = .horizontal
+            row.spacing = 6
+            curateStack.addArrangedSubview(row)
+        }
+        curateStack.isHidden = curateStack.arrangedSubviews.isEmpty
+    }
+
+    private func makeStrikeButton(title: String, themeKey: String?, on d: CallRecordingDetail) -> NSButton {
+        let btn = THButton(title: title, style: .plain, symbol: nil,
+                           target: self, action: #selector(strikeTapped(_:)))
+        btn.toolTip = "Remove this AI block from the filed document (your notes are untouched)"
+        strikeTargets[ObjectIdentifier(btn)] = (d.id, themeKey)
+        return btn
+    }
+
+    private var strikeTargets: [ObjectIdentifier: (recordingId: String, themeKey: String?)] = [:]
+
+    @objc private func strikeTapped(_ sender: NSButton) {
+        guard let target = strikeTargets[ObjectIdentifier(sender)] else { return }
+        run { [weak self] client in
+            let updated = try await client.strikeAI(recordingId: target.recordingId,
+                                                    themeKey: target.themeKey)
+            guard let self else { return }
+            self.detailCache[updated.id] = updated
+            if self.currentDetailId == updated.id { self.renderDetail(updated) }
+        }
+    }
+
+    private func assign(item: ThemedDocLite.Evidence, idx: Int, on d: CallRecordingDetail,
+                        themeKey: String?, newLabel: String?) {
+        run { [weak self] client in
+            let updated = try await client.assignTheme(
+                recordingId: d.id, tSecs: item.tSecs, type: item.type,
+                themeKey: themeKey, newThemeLabel: newLabel)
+            guard let self else { return }
+            self.detailCache[updated.id] = updated
+            if self.currentDetailId == updated.id { self.renderDetail(updated) }
+        }
+    }
+
+    private func promptNewTheme(_ completion: @escaping (String) -> Void) {
+        let alert = NSAlert()
+        alert.messageText = "New theme"
+        alert.informativeText = "Name the theme this note belongs to."
+        alert.addButton(withTitle: "File")
+        alert.addButton(withTitle: "Cancel")
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 220, height: 24))
+        field.placeholderString = "e.g. Legal"
+        alert.accessoryView = field
+        DispatchQueue.main.async { field.window?.makeFirstResponder(field) }
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let label = field.stringValue.trimmingCharacters(in: .whitespaces)
+        if !label.isEmpty { completion(label) }
     }
 
     private func setTags(participants: [String], contact: String?, partial: Bool, suspectFlags: [String]) {

@@ -114,10 +114,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var highlightHotKey: GlobalHotKey?
     /// ⌘⇧N — focus the Call Desk note composer while recording.
     private var noteHotKey: GlobalHotKey?
+    /// ⌘⇧A — agenda rail toggle.
+    private var railHotKey: GlobalHotKey?
     private var fixTermMenuItem: NSMenuItem?
     /// Agenda typed before a call starts — applied to the next session's
     /// spooler (crash-safe from then on). Cleared once attached.
     private var pendingAgenda: [SessionManifest.AgendaItem] = []
+    /// Agenda keys active this session (rail dots) + which the operator ticked.
+    private var agendaKeysThisSession: Set<String> = []
+    private var doneAgendaKeys: Set<String> = []
     private var detectedSourceApp: String?
     /// Far-side person name for this recording (never source app). Feeds live
     /// captions + spool contactName → CRM finalize (FR-CALL-ATT-3).
@@ -164,6 +169,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self, self.state == .recording || self.state == .paused else { return }
             self.liveWindow.focusComposer()
         }
+        // ⌘⇧A toggles the agenda rail (any state — reviewing the list pre-call
+        // is legitimate; it no-ops without an agenda).
+        railHotKey = GlobalHotKey(id: 4, keyCode: GlobalHotKey.railKeyCode)
+        railHotKey?.onPressed = { [weak self] in self?.liveWindow.toggleRail() }
 
         // Always-on-screen Start/Stop control (notch-proof, hotkey-independent).
         controlWindow.onToggle = { [weak self] in self?.hotKeyToggled() }
@@ -175,8 +184,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // (composer text, when present, rides as the flag's note).
         liveWindow.onHighlight = { [weak self] note in self?.dropHighlight(note: note) }
         // ✎ Call Desk: typed notes + term corrections during the call.
-        liveWindow.onNote = { [weak self] text in self?.dropNote(text: text) }
+        liveWindow.onNote = { [weak self] text, anchor in self?.dropNote(text: text, anchor: anchor) }
         liveWindow.onFixTerm = { [weak self] in self?.fixTermTapped() }
+        liveWindow.onAgendaToggle = { [weak self] key, done in self?.agendaToggled(key: key, done: done) }
         configureTownHall()
         controlWindow.show()
 
@@ -576,6 +586,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // FEATURE 2: best-effort live transcript.
         if cfg.liveTranscript {
             liveWindow.reset()
+            // Line-Grab anchors + ✎ notes stamp against the audio timeline.
+            liveWindow.timelineNow = { [weak self] in self?.activeSpooler?.appendedSeconds ?? 0 }
+            let agenda = activeSpooler?.snapshot.agenda ?? []
+            agendaKeysThisSession = Set(agenda.map(\.key))
+            doneAgendaKeys = []
+            liveWindow.setAgenda(agenda.map { (key: $0.key, label: $0.label) })
             if cfg.liveTranscriptAutoShow { liveWindow.show() }
             liveEngineFellBack = false
             // Engine per the user's choice (menu-bar → Live Transcript Engine).
@@ -642,7 +658,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Live Notes: persist a typed note anchored to the audio timeline (same
     /// crash-safe manifest ride as highlights — see dropHighlight for why the
     /// anchor is `appendedSeconds`, not wall-clock).
-    private func dropNote(text: String) {
+    private func dropNote(text: String, anchor: LiveTranscriptWindow.Anchor? = nil) {
         guard state == .recording || state == .paused,
               let spooler = activeSpooler else {
             // Never eat typed text silently: put it back and say why.
@@ -654,12 +670,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let parsed = ThemeTags.parse(text)
         let body = parsed.text.isEmpty ? text : parsed.text
         let themeKey = parsed.tags.first
+        let noteAnchor = anchor.map {
+            SessionManifest.NoteAnchor(quote: String($0.quote.prefix(200)), tSecs: $0.tSecs)
+        }
         do {
-            let count = try spooler.addNote(tSecs: tSecs, text: body, themeKey: themeKey)
-            liveWindow.flashNote(atSecs: tSecs, text: body, themeKey: themeKey, count: count)
-            log.info("note #\(count) @\(Int(tSecs))s\(themeKey.map { " #\($0)" } ?? "")", category: "app")
+            let count = try spooler.addNote(tSecs: tSecs, text: body,
+                                            themeKey: themeKey, anchor: noteAnchor)
+            let shownAt = noteAnchor?.tSecs ?? tSecs
+            liveWindow.flashNote(atSecs: shownAt, text: body, themeKey: themeKey, count: count)
+            // A tagged note that hits an agenda item lights its rail dot.
+            if let themeKey, agendaKeysThisSession.contains(themeKey),
+               doneAgendaKeys.contains(themeKey) == false {
+                liveWindow.updateAgendaState(key: themeKey, state: .touched)
+            }
+            log.info("note #\(count) @\(Int(shownAt))s\(themeKey.map { " #\($0)" } ?? "")\(noteAnchor != nil ? " ↳anchored" : "")", category: "app")
         } catch {
             log.warn("note failed: \(error.localizedDescription)", category: "app")
+        }
+    }
+
+    /// Rail click: persist the operator's coverage judgment. "done" overrides
+    /// everything at filing; un-ticking reverts to derived coverage.
+    private func agendaToggled(key: String, done: Bool) {
+        if done { doneAgendaKeys.insert(key) } else { doneAgendaKeys.remove(key) }
+        guard let spooler = activeSpooler, state == .recording || state == .paused else { return }
+        do {
+            try spooler.addCoverageMark(key: key, state: done ? "done" : "touched",
+                                        tSecs: spooler.appendedSeconds)
+            log.info("agenda \(key) → \(done ? "done" : "reverted")", category: "app")
+        } catch {
+            log.warn("coverage mark failed: \(error.localizedDescription)", category: "app")
         }
     }
 
@@ -736,6 +776,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         if let spooler = activeSpooler, state == .recording || state == .paused {
             try? spooler.setAgenda(items)
+            agendaKeysThisSession = Set(items.map(\.key))
+            liveWindow.setAgenda(items.map { (key: $0.key, label: $0.label) })
             liveWindow.setStatus("☰ Agenda set — \(items.count) item\(items.count == 1 ? "" : "s") this call")
         } else {
             pendingAgenda = items
@@ -932,13 +974,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// FR-CALL-TRG-4: manual start, independent of detection.
     /// - Parameter kind: `.call` = mic+system; `.meeting` = in-person room (mic only).
+    private var manualStartInFlight = false
+
     private func manualStart(kind: CaptureKind) {
+        // Re-entrancy guard (07-13 review P1): the permissions await suspends
+        // before `self.engine` is set, so a double-press (⌘⇧R twice, or panel
+        // button + hotkey) could spin up two engines against one mic. The
+        // flag closes that window; it clears on every exit path.
+        guard !manualStartInFlight else { return }
         guard engine == nil, let store else {
             if store == nil { presentAlert(title: "Cannot record", text: lastError ?? "Spool unavailable") }
             return
         }
+        manualStartInFlight = true
         detector.disarm()
         Task { @MainActor in
+            defer { self.manualStartInFlight = false }
             if let problem = await PermissionsManager.ensureCapturePermissions(kind: kind) {
                 self.captureUnavailable(problem)
                 return

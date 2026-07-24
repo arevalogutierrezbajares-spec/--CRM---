@@ -6,9 +6,18 @@ import CaptureCore
 /// style. Newest line at the bottom, autoscrolls, speaker-labeled, interim text
 /// shown greyed until finalized.
 ///
+/// Call Desk surface (El Cuaderno): a notes composer (⌘⇧N), ↑/↓ Line-Grab to
+/// anchor a note to a specific recent line, #theme chips, and a collapsible
+/// agenda rail (⌘⇧A) showing the operator's original list with coverage dots.
+///
 /// It NEVER touches capture: closing/hiding it is purely cosmetic, and a
 /// `.unavailable` status just shows a quiet banner while recording + filing
 /// continue. Reduced-motion friendly (no animations; instant scroll).
+///
+/// Rendering is INCREMENTAL: finalized items are appended once into a
+/// committed region and never rebuilt; only the volatile tail (per-channel
+/// interim lines) is re-rendered on updates. The old full-rebuild was O(n²)
+/// over call length and visibly stuttered on hour-long calls.
 final class LiveTranscriptWindow: NSObject {
 
     private var panel: NSPanel?
@@ -19,27 +28,67 @@ final class LiveTranscriptWindow: NSObject {
     /// Call Desk composer: type → Enter files a ✎ note; text + ★ files a
     /// flag WITH that note. Focused globally via ⌘⇧N.
     private let composer = NSTextField(string: "")
+    /// "↳ re: …" preview of the Line-Grab anchor while a line is picked.
+    private let anchorLabel = NSTextField(labelWithString: "")
 
-    /// Transcript timeline, in the order it happened: finalized lines,
-    /// operator-flagged ★ markers, and typed ✎ notes interleaved. Markers
-    /// append "now", so append order is chronological. Interim text for each
-    /// channel is held separately and re-rendered live until a final replaces it.
-    private enum Item {
-        case line(LiveTranscriptStreamer.Line)
-        case highlight(t: TimeInterval, note: String?)
-        case note(t: TimeInterval, text: String, themeKey: String?)
-    }
-    private var items: [Item] = []
+    // MARK: - Incremental render state
+
+    /// Length of the committed (finalized, never-rebuilt) region of the text
+    /// storage. Everything past it is the volatile tail (interims / empty
+    /// state) and is replaced wholesale on updates.
+    private var committedLength = 0
     private var interimByChannel: [Int: LiveTranscriptStreamer.Line] = [:]
+
+    // MARK: - Line-Grab state
+
+    /// A recently finalized transcript line the operator can pick as a note
+    /// anchor. `range` is its span in the committed storage (for highlight).
+    private struct PickableLine {
+        let range: NSRange
+        let quote: String
+        let tSecs: Double
+    }
+    /// Last N pickable lines, oldest → newest. Bounded so ranges stay cheap.
+    private var pickables: [PickableLine] = []
+    private static let maxPickables = 30
+    /// Index into `pickables` of the currently picked line (nil = no pick).
+    private var pickIndex: Int?
+
+    /// A durable note anchor: the aimed-at moment + the live text as context.
+    /// The server re-quotes from the FINAL transcript at `tSecs` (the live
+    /// text is throwaway); the quote just shows the operator what he grabbed.
+    struct Anchor {
+        let quote: String
+        let tSecs: Double
+    }
+
+    /// Audio-timeline clock provider (spooler.appendedSeconds), set by the
+    /// AppDelegate per recording. Stamps finalized lines so Line-Grab anchors
+    /// land on the same timeline the server stamps utterances against.
+    var timelineNow: (() -> Double)?
+
+    // MARK: - Agenda rail state
+
+    enum AgendaState { case none, touched, done }
+    private var agendaRows: [(key: String, label: String)] = []
+    private var agendaStates: [String: AgendaState] = [:]
+    private var railExpanded = false
+    private let railStack = NSStackView()
+    private var meterButton: NSButton?
+
+    // MARK: - Callbacks
 
     /// Fired when the operator taps the ★ button to flag the current moment;
     /// carries the composer text (nil when empty) as the flag's note. The
     /// AppDelegate anchors it to the recording + persists it (crash-safe).
     var onHighlight: ((String?) -> Void)?
     /// Fired when the operator types a note and hits Enter in the composer.
-    var onNote: ((String) -> Void)?
+    /// Second argument is the Line-Grab anchor when a line was picked.
+    var onNote: ((String, Anchor?) -> Void)?
     /// Fired by the "✎ Term" button — AppDelegate prompts for heard/correct.
     var onFixTerm: (() -> Void)?
+    /// Fired when the operator clicks an agenda row (key, nowDone).
+    var onAgendaToggle: ((String, Bool) -> Void)?
 
     var isVisible: Bool { panel?.isVisible ?? false }
 
@@ -77,6 +126,17 @@ final class LiveTranscriptWindow: NSObject {
         statusLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
         statusLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
+        // ☰ coverage meter — shows "2/5" once an agenda exists; click expands
+        // the rail (⌘⇧A does the same globally).
+        let meter = NSButton(title: "", target: self, action: #selector(meterTapped))
+        meter.bezelStyle = .rounded
+        meter.controlSize = .small
+        meter.font = .monospacedSystemFont(ofSize: 10.5, weight: .semibold)
+        meter.toolTip = "Your agenda — click to expand (⌘⇧A)"
+        meter.isHidden = true
+        meter.setContentHuggingPriority(.required, for: .horizontal)
+        self.meterButton = meter
+
         // ★ "Flag moment" — mirrors the ⌘⇧K global hotkey. Marks the current
         // point in the call as important; the flag rides through to the CRM
         // brief. If the composer holds text, it becomes the flag's note.
@@ -99,10 +159,17 @@ final class LiveTranscriptWindow: NSObject {
         term.toolTip = "Correct a misheard name/term — fixes the filed transcript"
         term.setContentHuggingPriority(.required, for: .horizontal)
 
-        let header = NSStackView(views: [statusLabel, term, star])
+        let header = NSStackView(views: [statusLabel, meter, term, star])
         header.orientation = .horizontal
         header.alignment = .centerY
         header.spacing = 8
+
+        // Agenda rail (collapsed by default): the operator's original list
+        // with coverage dots; click a row to mark it done.
+        railStack.orientation = .vertical
+        railStack.alignment = .leading
+        railStack.spacing = 2
+        railStack.isHidden = true
 
         let scroll = NSScrollView()
         scroll.hasVerticalScroller = true
@@ -122,10 +189,17 @@ final class LiveTranscriptWindow: NSObject {
         scroll.documentView = textView
         self.scrollView = scroll
 
+        // Anchor preview (Line-Grab): visible only while a line is picked.
+        anchorLabel.font = .systemFont(ofSize: 10.5)
+        anchorLabel.textColor = NSColor(calibratedRed: 0.83, green: 0.66, blue: 0.33, alpha: 0.9)
+        anchorLabel.lineBreakMode = .byTruncatingTail
+        anchorLabel.isHidden = true
+
         // Notes composer, docked under the transcript. Enter = timestamped ✎
-        // note; the panel is non-activating so typing here never steals focus
-        // from the call app unless the operator deliberately clicks / ⌘⇧N.
-        composer.placeholderString = "Note — Enter saves at the current moment  (⌘⇧N)"
+        // note; ↑/↓ picks a recent line as the note's anchor; the panel is
+        // non-activating so typing here never steals focus from the call app
+        // unless the operator deliberately clicks / ⌘⇧N.
+        composer.placeholderString = "Note — ⏎ saves · ↑ grabs a line · #theme  (⌘⇧N)"
         composer.font = .systemFont(ofSize: 12)
         composer.isBezeled = false
         composer.isBordered = false
@@ -148,16 +222,18 @@ final class LiveTranscriptWindow: NSObject {
             composerWell.heightAnchor.constraint(equalToConstant: 30),
         ])
 
-        let stack = NSStackView(views: [header, scroll, composerWell])
+        let stack = NSStackView(views: [header, railStack, scroll, anchorLabel, composerWell])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 8
+        stack.setCustomSpacing(4, after: railStack)
+        stack.setCustomSpacing(3, after: anchorLabel)
         // Extra top inset clears the transparent titlebar's close button.
         stack.edgeInsets = NSEdgeInsets(top: 30, left: 14, bottom: 12, right: 14)
         stack.translatesAutoresizingMaskIntoConstraints = false
-        header.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -28).isActive = true
-        scroll.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -28).isActive = true
-        composerWell.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -28).isActive = true
+        for v in [header, railStack, scroll, anchorLabel, composerWell] {
+            v.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -28).isActive = true
+        }
 
         // Frosted glass behind everything — content floats on vibrancy, not a
         // flat opaque panel.
@@ -182,7 +258,7 @@ final class LiveTranscriptWindow: NSObject {
             panel.setFrameOrigin(frame.origin)
         }
         self.panel = panel
-        render()
+        renderTail()
     }
 
     // MARK: - Show / hide
@@ -202,10 +278,15 @@ final class LiveTranscriptWindow: NSObject {
 
     /// Reset transcript content for a new recording (keeps window position).
     func reset() {
-        items.removeAll()
         interimByChannel.removeAll()
+        pickables.removeAll()
+        pickIndex = nil
+        committedLength = 0
+        textView.textStorage?.setAttributedString(NSAttributedString(string: ""))
+        anchorLabel.isHidden = true
+        setAgenda([])
         setStatus("● Recording — connecting live transcript…")
-        render()
+        renderTail()
     }
 
     // MARK: - Content updates (call on main thread)
@@ -215,12 +296,22 @@ final class LiveTranscriptWindow: NSObject {
             interimByChannel[line.channel] = nil
             // Skip empties; Deepgram occasionally emits a blank final.
             if !line.text.trimmingCharacters(in: .whitespaces).isEmpty {
-                items.append(.line(line))
+                let t = timelineNow?() ?? 0
+                let run = Self.lineString(line, interim: false)
+                let range = appendCommitted(run)
+                pickables.append(PickableLine(range: range, quote: line.text, tSecs: t))
+                if pickables.count > Self.maxPickables {
+                    pickables.removeFirst(pickables.count - Self.maxPickables)
+                }
+                // An active pick tracks its LINE, not its index-from-end; the
+                // simplest correct behavior on new content is to keep the same
+                // pickables entry highlighted (ranges never move — committed
+                // text is append-only).
             }
         } else {
             interimByChannel[line.channel] = line
         }
-        render()
+        renderTail()
     }
 
     /// Show an operator-flagged ★ moment inline (append order = chronological)
@@ -228,35 +319,18 @@ final class LiveTranscriptWindow: NSObject {
     /// happens in the AppDelegate; this just gives the operator feedback that
     /// the flag landed and where.
     func flashHighlight(atSecs: TimeInterval, note: String?, count: Int) {
-        items.append(.highlight(t: atSecs, note: note))
+        _ = appendCommitted(Self.highlightString(t: atSecs, note: note))
         setStatus("★ Flagged \(Self.clock(atSecs)) — \(count) this call")
-        render()
-    }
-
-    @objc private func highlightTapped() {
-        let text = composer.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        composer.stringValue = ""
-        onHighlight?(text.isEmpty ? nil : text)
-    }
-
-    @objc private func composerSubmitted() {
-        let text = composer.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
-        composer.stringValue = ""
-        onNote?(text)
-    }
-
-    @objc private func fixTermTapped() {
-        onFixTerm?()
+        renderTail()
     }
 
     /// Show a typed ✎ note inline (append order = chronological) and confirm in
     /// the banner. Cosmetic only — persistence happens in the AppDelegate.
     func flashNote(atSecs: TimeInterval, text: String, themeKey: String? = nil, count: Int) {
-        items.append(.note(t: atSecs, text: text, themeKey: themeKey))
+        _ = appendCommitted(Self.noteString(t: atSecs, text: text, themeKey: themeKey))
         let chip = themeKey.map { "  #\($0)" } ?? ""
         setStatus("✎ Noted \(Self.clock(atSecs))\(chip) — \(count) this call")
-        render()
+        renderTail()
     }
 
     /// Confirm a term correction landed (corrections don't sit on the timeline;
@@ -267,6 +341,26 @@ final class LiveTranscriptWindow: NSObject {
         } else {
             setStatus("✎ Term \(count): “\(right)” hinted to the transcriber")
         }
+    }
+
+    @objc private func highlightTapped() {
+        let text = composer.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        composer.stringValue = ""
+        clearPick()
+        onHighlight?(text.isEmpty ? nil : text)
+    }
+
+    @objc private func composerSubmitted() {
+        let text = composer.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        composer.stringValue = ""
+        let anchor = currentAnchor()
+        clearPick()
+        onNote?(text, anchor)
+    }
+
+    @objc private func fixTermTapped() {
+        onFixTerm?()
     }
 
     /// Bring the window up and put the cursor in the note composer (⌘⇧N). The
@@ -292,6 +386,148 @@ final class LiveTranscriptWindow: NSObject {
         panel?.orderFrontRegardless()
     }
 
+    // MARK: - Line-Grab
+
+    private func currentAnchor() -> Anchor? {
+        guard let i = pickIndex, pickables.indices.contains(i) else { return nil }
+        return Anchor(quote: pickables[i].quote, tSecs: pickables[i].tSecs)
+    }
+
+    /// ↑ = pick the previous (older) line; ↓ = move toward newest, then clear.
+    private func movePick(older: Bool) {
+        guard !pickables.isEmpty else { return }
+        let previous = pickIndex
+        if older {
+            if let i = pickIndex {
+                pickIndex = max(0, i - 1)
+            } else {
+                pickIndex = pickables.count - 1 // start at the newest line
+            }
+        } else {
+            if let i = pickIndex {
+                pickIndex = i + 1 < pickables.count ? i + 1 : nil // past newest = clear
+            }
+        }
+        applyPickHighlight(previous: previous)
+        updateAnchorPreview()
+    }
+
+    private func clearPick() {
+        let previous = pickIndex
+        pickIndex = nil
+        applyPickHighlight(previous: previous)
+        updateAnchorPreview()
+    }
+
+    private func applyPickHighlight(previous: Int?) {
+        guard let storage = textView.textStorage else { return }
+        let gold = NSColor(calibratedRed: 0.83, green: 0.66, blue: 0.33, alpha: 1)
+        storage.beginEditing()
+        if let p = previous, pickables.indices.contains(p) {
+            storage.removeAttribute(.backgroundColor, range: pickables[p].range)
+        }
+        if let i = pickIndex, pickables.indices.contains(i) {
+            storage.addAttribute(.backgroundColor,
+                                 value: gold.withAlphaComponent(0.12),
+                                 range: pickables[i].range)
+        }
+        storage.endEditing()
+        if let i = pickIndex, pickables.indices.contains(i) {
+            textView.scrollRangeToVisible(pickables[i].range)
+        } else {
+            textView.scrollToEndOfDocument(nil)
+        }
+    }
+
+    private func updateAnchorPreview() {
+        if let anchor = currentAnchor() {
+            let quote = anchor.quote.count > 60
+                ? String(anchor.quote.prefix(60)) + "…" : anchor.quote
+            anchorLabel.stringValue = "↳ re: “\(quote)”  @\(Self.clock(anchor.tSecs))"
+            anchorLabel.isHidden = false
+        } else {
+            anchorLabel.isHidden = true
+        }
+    }
+
+    // MARK: - Agenda rail
+
+    /// Install the operator's original list. Empty hides meter + rail.
+    func setAgenda(_ items: [(key: String, label: String)]) {
+        agendaRows = items
+        agendaStates = agendaStates.filter { pair in items.contains { $0.key == pair.key } }
+        railExpanded = railExpanded && !items.isEmpty
+        rebuildRail()
+    }
+
+    /// Update one item's coverage dot (touched when a tagged note lands,
+    /// done when the operator ticks it).
+    func updateAgendaState(key: String, state: AgendaState) {
+        agendaStates[key] = state
+        rebuildRail()
+    }
+
+    /// ⌘⇧A / meter click: expand or collapse the rail.
+    func toggleRail() {
+        guard !agendaRows.isEmpty else { return }
+        railExpanded.toggle()
+        rebuildRail()
+        if railExpanded { show() }
+    }
+
+    @objc private func meterTapped() { toggleRail() }
+
+    @objc private func agendaRowTapped(_ sender: NSButton) {
+        guard sender.tag >= 0, sender.tag < agendaRows.count else { return }
+        let key = agendaRows[sender.tag].key
+        let nowDone = agendaStates[key] != AgendaState.done
+        agendaStates[key] = nowDone ? .done : .none
+        rebuildRail()
+        onAgendaToggle?(key, nowDone)
+    }
+
+    private func rebuildRail() {
+        railStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        let covered = agendaRows.filter { (agendaStates[$0.key] ?? .none) != .none }.count
+        if agendaRows.isEmpty {
+            meterButton?.isHidden = true
+            railStack.isHidden = true
+            return
+        }
+        meterButton?.isHidden = false
+        meterButton?.title = "☰ \(covered)/\(agendaRows.count)"
+        railStack.isHidden = !railExpanded
+        guard railExpanded else { return }
+        for (i, row) in agendaRows.enumerated() {
+            let state = agendaStates[row.key] ?? .none
+            let (dot, color): (String, NSColor) = {
+                switch state {
+                case .none: return ("○", .tertiaryLabelColor)
+                case .touched: return ("◐", .systemTeal)
+                case .done: return ("●", .systemGreen)
+                }
+            }()
+            let btn = NSButton(title: "", target: self, action: #selector(agendaRowTapped(_:)))
+            btn.isBordered = false
+            btn.tag = i
+            btn.alignment = .left
+            btn.toolTip = "Click to mark done"
+            let title = NSMutableAttributedString()
+            title.append(NSAttributedString(string: "\(dot) ", attributes: [
+                .font: NSFont.systemFont(ofSize: 11.5, weight: .semibold),
+                .foregroundColor: color,
+            ]))
+            title.append(NSAttributedString(string: row.label, attributes: [
+                .font: NSFont.systemFont(ofSize: 11.5),
+                .foregroundColor: state == .done ? NSColor.secondaryLabelColor : NSColor.labelColor,
+            ]))
+            btn.attributedTitle = title
+            railStack.addArrangedSubview(btn)
+        }
+    }
+
+    // MARK: - Status
+
     /// mm:ss (or h:mm:ss past an hour) for a moment offset.
     private static func clock(_ secs: TimeInterval) -> String {
         let s = max(0, Int(secs.rounded()))
@@ -309,7 +545,7 @@ final class LiveTranscriptWindow: NSObject {
         setStatus("⚠ \(message) — recording continues normally")
     }
 
-    // MARK: - Render
+    // MARK: - Render (incremental)
 
     /// SF Rounded for speaker names — warmer than mono, still crisp on the HUD.
     private static func roundedFont(ofSize size: CGFloat, weight: NSFont.Weight) -> NSFont {
@@ -319,95 +555,113 @@ final class LiveTranscriptWindow: NSObject {
         return font
     }
 
-    private func render() {
-        guard panel != nil else { return }
-        let storage = textView.textStorage
-        storage?.beginEditing()
-        storage?.setAttributedString(NSAttributedString(string: ""))
+    private static let gold = NSColor(calibratedRed: 0.83, green: 0.66, blue: 0.33, alpha: 1)
 
-        // Proportional body (Otter/Granola-style readability), rounded speaker
-        // labels, breathing room between turns.
+    private static var para: NSMutableParagraphStyle {
+        let p = NSMutableParagraphStyle()
+        p.paragraphSpacing = 5
+        p.lineSpacing = 1
+        return p
+    }
+
+    private static func lineString(_ line: LiveTranscriptStreamer.Line, interim: Bool) -> NSAttributedString {
         let baseFont = NSFont.systemFont(ofSize: 12.5)
-        let speakerFont = Self.roundedFont(ofSize: 12.5, weight: .semibold)
-        let para = NSMutableParagraphStyle()
-        para.paragraphSpacing = 5
-        para.lineSpacing = 1
+        let speakerFont = roundedFont(ofSize: 12.5, weight: .semibold)
+        let textColor: NSColor = interim ? .tertiaryLabelColor : .labelColor
+        let speakerColor: NSColor = line.channel == 0 ? .systemBlue : .systemGreen
+        let out = NSMutableAttributedString()
+        out.append(NSAttributedString(string: "\(line.speaker)  ", attributes: [
+            .font: speakerFont,
+            .foregroundColor: interim ? speakerColor.withAlphaComponent(0.5) : speakerColor,
+            .paragraphStyle: para,
+        ]))
+        out.append(NSAttributedString(string: "\(line.text)\n", attributes: [
+            .font: baseFont,
+            .foregroundColor: textColor,
+            .paragraphStyle: para,
+        ]))
+        return out
+    }
 
-        func appendLine(_ line: LiveTranscriptStreamer.Line, interim: Bool) {
-            let textColor: NSColor = interim ? .tertiaryLabelColor : .labelColor
-            let speakerColor: NSColor = line.channel == 0 ? .systemBlue : .systemGreen
-            let label = NSAttributedString(string: "\(line.speaker)  ", attributes: [
-                .font: speakerFont,
-                .foregroundColor: interim ? speakerColor.withAlphaComponent(0.5) : speakerColor,
-                .paragraphStyle: para,
-            ])
-            let body = NSAttributedString(string: "\(line.text)\n", attributes: [
-                .font: baseFont,
-                .foregroundColor: textColor,
-                .paragraphStyle: para,
-            ])
-            storage?.append(label)
-            storage?.append(body)
+    private static func highlightString(t: TimeInterval, note: String?) -> NSAttributedString {
+        let suffix = note.map { "  \($0)" } ?? ""
+        return NSAttributedString(
+            string: "★ \(clock(t)) flagged\(suffix)\n",
+            attributes: [.font: roundedFont(ofSize: 12.5, weight: .semibold),
+                         .foregroundColor: NSColor.systemOrange,
+                         .paragraphStyle: para]
+        )
+    }
+
+    private static func noteString(t: TimeInterval, text: String, themeKey: String?) -> NSAttributedString {
+        // Third Voice: the operator's typed note renders as his own gold
+        // speaker turn, a peer of the blue/green voice channels.
+        let baseFont = NSFont.systemFont(ofSize: 12.5)
+        let line = NSMutableAttributedString()
+        line.append(NSAttributedString(string: "You ✎  ", attributes: [
+            .font: roundedFont(ofSize: 12.5, weight: .semibold),
+            .foregroundColor: gold, .paragraphStyle: para,
+        ]))
+        line.append(NSAttributedString(string: "\(clock(t))  ", attributes: [
+            .font: NSFont.monospacedSystemFont(ofSize: 10.5, weight: .regular),
+            .foregroundColor: NSColor.tertiaryLabelColor, .paragraphStyle: para,
+        ]))
+        line.append(NSAttributedString(string: text, attributes: [
+            .font: baseFont, .foregroundColor: gold, .paragraphStyle: para,
+        ]))
+        if let themeKey {
+            line.append(NSAttributedString(string: "  #\(themeKey)", attributes: [
+                .font: NSFont.monospacedSystemFont(ofSize: 10.5, weight: .medium),
+                .foregroundColor: gold.withAlphaComponent(0.7), .paragraphStyle: para,
+            ]))
         }
+        line.append(NSAttributedString(string: "\n"))
+        return line
+    }
 
-        func appendHighlight(t: TimeInterval, note: String?) {
-            let suffix = note.map { "  \($0)" } ?? ""
-            let marker = NSAttributedString(
-                string: "★ \(Self.clock(t)) flagged\(suffix)\n",
-                attributes: [.font: speakerFont, .foregroundColor: NSColor.systemOrange,
-                             .paragraphStyle: para]
-            )
-            storage?.append(marker)
-        }
+    /// Append a finalized run to the committed region (replacing the volatile
+    /// tail first) and return its range in the storage. O(run), not O(call).
+    @discardableResult
+    private func appendCommitted(_ run: NSAttributedString) -> NSRange {
+        buildPanelIfNeeded()
+        guard let storage = textView.textStorage else { return NSRange(location: 0, length: 0) }
+        storage.beginEditing()
+        let tail = NSRange(location: committedLength, length: storage.length - committedLength)
+        storage.replaceCharacters(in: tail, with: "")
+        let range = NSRange(location: committedLength, length: run.length)
+        storage.append(run)
+        committedLength = storage.length
+        storage.endEditing()
+        return range
+    }
 
-        func appendNote(t: TimeInterval, text: String, themeKey: String?) {
-            // Third Voice: the operator's typed note renders as his own gold
-            // speaker turn, a peer of the blue/green voice channels.
-            let gold = NSColor(calibratedRed: 0.83, green: 0.66, blue: 0.33, alpha: 1)
-            let line = NSMutableAttributedString()
-            line.append(NSAttributedString(string: "You ✎  ", attributes: [
-                .font: speakerFont, .foregroundColor: gold, .paragraphStyle: para,
-            ]))
-            line.append(NSAttributedString(string: "\(Self.clock(t))  ", attributes: [
-                .font: NSFont.monospacedSystemFont(ofSize: 10.5, weight: .regular),
-                .foregroundColor: NSColor.tertiaryLabelColor, .paragraphStyle: para,
-            ]))
-            line.append(NSAttributedString(string: text, attributes: [
-                .font: baseFont, .foregroundColor: gold, .paragraphStyle: para,
-            ]))
-            if let themeKey {
-                line.append(NSAttributedString(string: "  #\(themeKey)", attributes: [
-                    .font: NSFont.monospacedSystemFont(ofSize: 10.5, weight: .medium),
-                    .foregroundColor: gold.withAlphaComponent(0.7), .paragraphStyle: para,
-                ]))
-            }
-            line.append(NSAttributedString(string: "\n"))
-            storage?.append(line)
-        }
-
-        if items.isEmpty && interimByChannel.isEmpty {
-            storage?.append(NSAttributedString(string: "Listening — words appear as they're spoken…\n", attributes: [
-                .font: baseFont,
-                .foregroundColor: NSColor.tertiaryLabelColor,
-                .paragraphStyle: para,
-            ]))
+    /// Re-render ONLY the volatile tail: per-channel interim lines, or the
+    /// empty state while nothing has arrived yet.
+    private func renderTail() {
+        guard let storage = textView.textStorage else { return }
+        let tail = NSMutableAttributedString()
+        if committedLength == 0 && interimByChannel.isEmpty {
+            tail.append(NSAttributedString(
+                string: "Listening — words appear as they're spoken…\n",
+                attributes: [.font: NSFont.systemFont(ofSize: 12.5),
+                             .foregroundColor: NSColor.tertiaryLabelColor,
+                             .paragraphStyle: Self.para]))
         } else {
-            for item in items {
-                switch item {
-                case .line(let line): appendLine(line, interim: false)
-                case .highlight(let t, let note): appendHighlight(t: t, note: note)
-                case .note(let t, let text, let themeKey): appendNote(t: t, text: text, themeKey: themeKey)
+            for channel in interimByChannel.keys.sorted() {
+                if let line = interimByChannel[channel] {
+                    tail.append(Self.lineString(line, interim: true))
                 }
             }
-            // Interim tails (one per active channel) shown greyed at the bottom.
-            for channel in interimByChannel.keys.sorted() {
-                if let line = interimByChannel[channel] { appendLine(line, interim: true) }
-            }
         }
-        storage?.endEditing()
-
-        // Autoscroll to the newest line (instant — reduced-motion friendly).
-        textView.scrollToEndOfDocument(nil)
+        storage.beginEditing()
+        let tailRange = NSRange(location: committedLength, length: storage.length - committedLength)
+        storage.replaceCharacters(in: tailRange, with: tail)
+        storage.endEditing()
+        // Autoscroll to the newest line (instant — reduced-motion friendly),
+        // unless the operator is aiming the pick bar at an older line.
+        if pickIndex == nil {
+            textView.scrollToEndOfDocument(nil)
+        }
     }
 }
 
@@ -420,14 +674,28 @@ extension LiveTranscriptWindow: NSWindowDelegate {
 }
 
 extension LiveTranscriptWindow: NSTextFieldDelegate {
-    /// Esc in the composer returns focus to the call app (⌘⇧N grabbed it).
+    /// Composer keyboard grammar: ↑/↓ = Line-Grab pick, Esc = clear pick or
+    /// hand focus back to the call app.
     func control(_ control: NSControl, textView: NSTextView,
                  doCommandBy commandSelector: Selector) -> Bool {
-        guard control === composer, commandSelector == #selector(NSResponder.cancelOperation(_:)) else {
+        guard control === composer else { return false }
+        switch commandSelector {
+        case #selector(NSResponder.moveUp(_:)):
+            movePick(older: true)
+            return true
+        case #selector(NSResponder.moveDown(_:)):
+            movePick(older: false)
+            return true
+        case #selector(NSResponder.cancelOperation(_:)):
+            if pickIndex != nil {
+                clearPick()
+            } else {
+                releaseComposerFocus()
+            }
+            return true
+        default:
             return false
         }
-        releaseComposerFocus()
-        return true
     }
 }
 

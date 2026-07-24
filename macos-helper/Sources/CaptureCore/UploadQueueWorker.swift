@@ -269,6 +269,7 @@ public final class UploadQueueWorker {
             notes: snap.notes ?? [],
             terms: snap.terms ?? [],
             agenda: snap.agenda ?? [],
+            coverage: snap.coverage ?? [],
             themes: Self.themeDefs(for: snap)
         )
 

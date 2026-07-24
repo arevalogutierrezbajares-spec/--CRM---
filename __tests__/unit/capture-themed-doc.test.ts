@@ -12,10 +12,12 @@ vi.mock("@/lib/anthropic", () => ({
 const updateCallRecordingMock = vi.fn(async (..._args: unknown[]) => undefined);
 const getCallRecordingMock = vi.fn();
 const getContactNameMock = vi.fn();
+const replaceCallThemeFacetsMock = vi.fn(async (..._args: unknown[]) => undefined);
 vi.mock("@/db/queries/call-recordings", () => ({
   updateCallRecording: (...args: unknown[]) => updateCallRecordingMock(...args),
   getCallRecording: (...args: unknown[]) => getCallRecordingMock(...args),
   getContactName: (...args: unknown[]) => getContactNameMock(...args),
+  replaceCallThemeFacets: (...args: unknown[]) => replaceCallThemeFacetsMock(...args),
 }));
 const createCallMeetingMock = vi.fn(async (..._args: unknown[]) => "meeting-1");
 vi.mock("@/db/queries/meetings", () => ({
@@ -51,20 +53,24 @@ import {
   parseThemes,
   parseNotes,
   parseHighlights,
+  parseCoverage,
   isValidThemeKey,
   slugifyThemeLabel,
   MAX_AGENDA,
   MAX_THEMES,
   MAX_THEME_LABEL_CHARS,
+  MAX_COVERAGE,
 } from "@/lib/capture/validate";
 import {
   buildThemedDoc,
   renderThemedBrief,
   nearestUtteranceAt,
   clockTs,
+  facetsFromThemedDoc,
   type ThemedDoc,
   type ThemeEvidence,
 } from "@/lib/capture/themed-doc";
+import { assignEvidence, strike } from "@/lib/capture/themed-doc-mutate";
 import {
   gateThemeExtractions,
   sanitizeCallSentence,
@@ -209,6 +215,49 @@ describe("marker themeKey validation (parseNotes / parseHighlights)", () => {
   });
 });
 
+describe("parseCoverage (Slice 2)", () => {
+  it("returns [] for non-arrays / garbage (advisory — never throws)", () => {
+    expect(parseCoverage(null)).toEqual([]);
+    expect(parseCoverage(undefined)).toEqual([]);
+    expect(parseCoverage({})).toEqual([]);
+    expect(parseCoverage([])).toEqual([]);
+    expect(parseCoverage("nope")).toEqual([]);
+    expect(parseCoverage([null, 42, "x", {}])).toEqual([]);
+  });
+
+  it("keeps valid {key,state} marks, drops bad keys/states", () => {
+    expect(
+      parseCoverage([
+        { key: "pricing", state: "done" },
+        { key: "onboarding", state: "touched" },
+        { key: "BAD KEY", state: "done" }, // invalid slug → dropped
+        { key: "integrations", state: "skipped" }, // invalid state → dropped
+        { key: "integrations" }, // missing state → dropped
+      ]),
+    ).toEqual([
+      { key: "pricing", state: "done" },
+      { key: "onboarding", state: "touched" },
+    ]);
+  });
+
+  it("last-write-wins per key", () => {
+    expect(
+      parseCoverage([
+        { key: "pricing", state: "touched" },
+        { key: "pricing", state: "done" },
+      ]),
+    ).toEqual([{ key: "pricing", state: "done" }]);
+  });
+
+  it("caps at MAX_COVERAGE", () => {
+    const many = Array.from({ length: MAX_COVERAGE + 10 }, (_, i) => ({
+      key: `k-${i}`,
+      state: "done" as const,
+    }));
+    expect(parseCoverage(many)).toHaveLength(MAX_COVERAGE);
+  });
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // themed-doc.ts — buildThemedDoc / nearestUtteranceAt / renderThemedBrief
 // ─────────────────────────────────────────────────────────────────────────────
@@ -342,6 +391,78 @@ describe("buildThemedDoc", () => {
   it("marks live origin for themes not on the agenda", () => {
     expect(doc.themes.find((t) => t.key === "onboarding")!.origin).toBe("live");
     expect(doc.themes.find((t) => t.key === "onboarding")!.agendaItemKey).toBeNull();
+  });
+});
+
+describe("buildThemedDoc — Slice 2 coverage (done precedence)", () => {
+  const themes = [
+    { key: "pricing-model", label: "Pricing model", agenda: true },
+    { key: "integrations", label: "Integrations", agenda: true },
+    { key: "hiring", label: "Hiring", agenda: true },
+  ];
+  const agenda = [
+    { key: "pricing-model", label: "Pricing model" },
+    { key: "integrations", label: "Integrations" },
+    { key: "hiring", label: "Hiring" },
+  ];
+  const utterances = [u(500, 520, "We cannot go below fifty dollars", "participant")];
+
+  const build = () =>
+    buildThemedDoc({
+      themes,
+      agenda,
+      // pricing-model has evidence; integrations + hiring are empty.
+      resolvedNotes: [
+        { atSec: 512, quote: "We cannot go below fifty dollars", note: "Floor is $50/mo", themeKey: "pricing-model" },
+      ],
+      resolvedFlags: [],
+      utterances,
+      labels: LABELS,
+      coverage: [
+        // done wins over evidence-derived 'covered' AND over 'gap'.
+        { key: "pricing-model", state: "done" },
+        { key: "integrations", state: "done" },
+        { key: "hiring", state: "touched" }, // touched does NOT force coverage
+      ],
+    });
+
+  it("done marks win over evidence (covered) and over gap; touched is inert", () => {
+    expect(build().agenda).toEqual([
+      { key: "pricing-model", label: "Pricing model", coverage: "done" }, // had evidence, marked done
+      { key: "integrations", label: "Integrations", coverage: "done" }, // no evidence, marked done
+      { key: "hiring", label: "Hiring", coverage: "gap" }, // touched-only, no evidence → gap
+    ]);
+  });
+
+  it("a done item with zero evidence is NOT listed under Gaps", () => {
+    const md = renderThemedBrief(build());
+    // integrations is done-no-evidence — appears in coverage line, not in Gaps.
+    const gapsSection = md.split("## ⛔ Gaps")[1] ?? "";
+    expect(gapsSection).not.toContain("Integrations");
+    expect(gapsSection).toContain("Hiring"); // the real gap is still listed
+  });
+
+  it("renders the ● done line, with '(no notes)' when a done item has no evidence", () => {
+    const line = renderThemedBrief(build())
+      .split("## Agenda coverage\n")[1]
+      .split("\n")[0];
+    expect(line).toBe(
+      "● Pricing model — done · ● Integrations — done (no notes) · ⛔ Hiring — not discussed",
+    );
+  });
+
+  it("no coverage marks ⇒ slice-1 behavior (evidence ⇒ covered, none ⇒ gap)", () => {
+    const doc = buildThemedDoc({
+      themes,
+      agenda,
+      resolvedNotes: [
+        { atSec: 512, quote: "We cannot go below fifty dollars", note: "n", themeKey: "pricing-model" },
+      ],
+      resolvedFlags: [],
+      utterances,
+      labels: LABELS,
+    });
+    expect(doc.agenda.map((a) => a.coverage)).toEqual(["covered", "gap", "gap"]);
   });
 });
 
@@ -1063,5 +1184,352 @@ describe("POST /api/capture/sessions/[id]/finalize — themed intake", () => {
     expect(finalizeSessionMock).toHaveBeenCalledWith(
       expect.objectContaining({ agenda: [], themes: [] }),
     );
+  });
+
+  it("parses coverage and passes it to finalizeSession", async () => {
+    const res = await post({
+      totalChunks: 1,
+      coverage: [
+        { key: "pricing-model", state: "done", tSecs: 700 },
+        { key: "BAD KEY", state: "done" },
+      ],
+    });
+    expect(res.status).toBe(200);
+    expect(finalizeSessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        coverage: [{ key: "pricing-model", state: "done" }],
+      }),
+    );
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// themed-doc-mutate.ts — assignEvidence / strike (pure)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const mutDoc = (): ThemedDoc => ({
+  v: 1,
+  callSentence: "A one-liner.",
+  themes: [
+    {
+      key: "pricing",
+      label: "Pricing",
+      origin: "agenda",
+      agendaItemKey: "pricing",
+      evidence: [
+        { type: "note", tSecs: 100, text: "floor", quote: "q", speaker: "Carlos" },
+      ],
+      ai: { committed: [{ text: "send sheet", tSecs: 100 }], decided: [], open: [] },
+    },
+    {
+      key: "onboarding",
+      label: "Onboarding",
+      origin: "live",
+      agendaItemKey: null,
+      evidence: [{ type: "flag", tSecs: 200, text: "note", quote: "", speaker: "" }],
+      ai: null,
+    },
+  ],
+  unfiled: [
+    { type: "note", tSecs: 300, text: "stray", quote: "invoice", speaker: "Tomas" },
+    { type: "flag", tSecs: 305, text: null, quote: "sign", speaker: "Ana" },
+  ],
+  agenda: [
+    { key: "pricing", label: "Pricing", coverage: "covered" },
+    { key: "integrations", label: "Integrations", coverage: "gap" },
+  ],
+});
+
+describe("assignEvidence", () => {
+  it("moves an unfiled marker into an existing theme (sorted, input untouched)", () => {
+    const doc = mutDoc();
+    const next = assignEvidence(
+      doc,
+      { tSecs: 300, type: "note" },
+      { kind: "existing", themeKey: "pricing" },
+    )!;
+    // Pulled from unfiled, appended to pricing, sorted by tSecs.
+    expect(next.themes.find((t) => t.key === "pricing")!.evidence.map((e) => e.tSecs)).toEqual([
+      100, 300,
+    ]);
+    expect(next.unfiled.map((e) => e.text)).toEqual([null]);
+    // Immutability: the source doc is unchanged.
+    expect(doc.unfiled).toHaveLength(2);
+    expect(doc.themes.find((t) => t.key === "pricing")!.evidence).toHaveLength(1);
+  });
+
+  it("matches within ±0.5s and preserves the theme's ai block", () => {
+    const next = assignEvidence(
+      mutDoc(),
+      { tSecs: 300.4, type: "note" },
+      { kind: "existing", themeKey: "pricing" },
+    )!;
+    expect(next.themes.find((t) => t.key === "pricing")!.ai).toEqual({
+      committed: [{ text: "send sheet", tSecs: 100 }],
+      decided: [],
+      open: [],
+    });
+  });
+
+  it("creates a new live theme, seeding agendaItemKey when the slug matches an agenda item", () => {
+    const next = assignEvidence(
+      mutDoc(),
+      { tSecs: 300, type: "note" },
+      { kind: "new", label: "Integrations" },
+    )!;
+    const created = next.themes.find((t) => t.key === "integrations")!;
+    expect(created).toMatchObject({
+      key: "integrations",
+      label: "Integrations",
+      origin: "live",
+      agendaItemKey: "integrations", // slug matches the agenda item
+    });
+    expect(created.evidence.map((e) => e.tSecs)).toEqual([300]);
+    // Agenda coverage recomputed: integrations now has evidence ⇒ covered.
+    expect(next.agenda.find((a) => a.key === "integrations")!.coverage).toBe("covered");
+  });
+
+  it("re-files an item between themes and prunes the emptied live source theme", () => {
+    const next = assignEvidence(
+      mutDoc(),
+      { tSecs: 200, type: "flag" },
+      { kind: "existing", themeKey: "pricing" },
+    )!;
+    // onboarding was live with a single flag → now empty → pruned.
+    expect(next.themes.map((t) => t.key)).toEqual(["pricing"]);
+    expect(next.themes[0].evidence.map((e) => e.tSecs)).toEqual([100, 200]);
+  });
+
+  it("returns null when the item can't be located (⇒ route 400)", () => {
+    expect(
+      assignEvidence(mutDoc(), { tSecs: 999, type: "note" }, { kind: "existing", themeKey: "pricing" }),
+    ).toBeNull();
+    // Right time, wrong type.
+    expect(
+      assignEvidence(mutDoc(), { tSecs: 300, type: "flag" }, { kind: "existing", themeKey: "pricing" }),
+    ).toBeNull();
+  });
+
+  it("returns null for an unknown existing themeKey or an unsluggable new label", () => {
+    expect(
+      assignEvidence(mutDoc(), { tSecs: 300, type: "note" }, { kind: "existing", themeKey: "ghost" }),
+    ).toBeNull();
+    expect(
+      assignEvidence(mutDoc(), { tSecs: 300, type: "note" }, { kind: "new", label: "¡¡¡" }),
+    ).toBeNull();
+  });
+
+  it("a 'done' agenda coverage stays sticky through a re-file", () => {
+    const doc = mutDoc();
+    doc.agenda[0].coverage = "done"; // pricing marked handled
+    const next = assignEvidence(
+      doc,
+      { tSecs: 100, type: "note" },
+      { kind: "existing", themeKey: "onboarding" },
+    )!;
+    // pricing lost its only evidence but stays 'done' (operator said handled).
+    expect(next.agenda.find((a) => a.key === "pricing")!.coverage).toBe("done");
+  });
+});
+
+describe("strike", () => {
+  it("nulls a theme's ai block, leaving everything else intact", () => {
+    const doc = mutDoc();
+    const next = strike(doc, { kind: "theme", themeKey: "pricing" })!;
+    expect(next.themes.find((t) => t.key === "pricing")!.ai).toBeNull();
+    expect(next.callSentence).toBe("A one-liner.");
+    // Immutability.
+    expect(doc.themes.find((t) => t.key === "pricing")!.ai).not.toBeNull();
+  });
+
+  it("nulls the call sentence, leaving themes intact", () => {
+    const next = strike(mutDoc(), { kind: "callSentence" })!;
+    expect(next.callSentence).toBeNull();
+    expect(next.themes.find((t) => t.key === "pricing")!.ai).not.toBeNull();
+  });
+
+  it("returns null for an unknown theme (⇒ route 400)", () => {
+    expect(strike(mutDoc(), { kind: "theme", themeKey: "ghost" })).toBeNull();
+  });
+});
+
+describe("facetsFromThemedDoc", () => {
+  it("derives per-theme note/quote/flag counts + evidence-based coverage", () => {
+    expect(facetsFromThemedDoc(mutDoc())).toEqual([
+      { label: "Pricing", origin: "agenda", noteCount: 1, quoteCount: 1, flagCount: 0, coverage: "covered" },
+      { label: "Onboarding", origin: "live", noteCount: 0, quoteCount: 0, flagCount: 1, coverage: "covered" },
+    ]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Routes — assign-theme (PATCH) + strike (POST)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const ROUTE_REC_ID = "00000000-0000-4000-8000-0000000000ab";
+
+const routeRecRow = () =>
+  ({
+    id: ROUTE_REC_ID,
+    workspaceId: "ws-1",
+    title: "Call",
+    transcript: "t",
+    brief: "old brief",
+    language: null,
+    durationSecs: null,
+    contactId: null,
+    meetingId: null,
+    actionItemCount: 0,
+    audioPath: null,
+    audioBytes: null,
+    audioPurgeAt: null,
+    audioPurgedAt: null,
+    channels: 2,
+    sourceApp: "WhatsApp",
+    utterances: null,
+    speakerMap: null,
+    transcriptEngine: null,
+    suspectFlags: null,
+    consentNote: null,
+    contactAmbiguous: false,
+    partial: false,
+    themedDoc: mutDoc(),
+    agenda: null,
+    createdBy: "u",
+    createdAt: new Date("2026-07-24T10:00:00.000Z"),
+  }) as unknown as import("@/db/queries/call-recordings").CallRecordingRow;
+
+describe("PATCH /api/capture/recordings/[id]/assign-theme", () => {
+  beforeEach(() => {
+    resolveCaptureTokenMock.mockReset().mockResolvedValue({
+      workspaceId: "ws-1",
+      userId: "user-1",
+      displayName: "Tomas G",
+    });
+    getCallRecordingMock.mockReset().mockResolvedValue(routeRecRow());
+    getContactNameMock.mockReset().mockResolvedValue(null);
+    updateCallRecordingMock.mockClear();
+    replaceCallThemeFacetsMock.mockClear();
+  });
+
+  async function patch(body: unknown, id = ROUTE_REC_ID) {
+    const { PATCH } = await import(
+      "@/app/api/capture/recordings/[id]/assign-theme/route"
+    );
+    const { NextRequest } = await import("next/server");
+    const req = new NextRequest(
+      `http://x/api/capture/recordings/${id}/assign-theme`,
+      {
+        method: "PATCH",
+        headers: { authorization: "Bearer t", "content-type": "application/json" },
+        body: JSON.stringify(body),
+      },
+    );
+    return PATCH(req, { params: Promise.resolve({ id }) });
+  }
+
+  it("401 when the capture token doesn't resolve", async () => {
+    resolveCaptureTokenMock.mockResolvedValue(null);
+    const res = await patch({ tSecs: 300, type: "note", themeKey: "pricing" });
+    expect(res.status).toBe(401);
+  });
+
+  it("404 for a non-uuid id and for an unknown recording", async () => {
+    expect((await patch({ tSecs: 300, type: "note", themeKey: "pricing" }, "not-a-uuid")).status).toBe(404);
+    getCallRecordingMock.mockResolvedValue(null);
+    expect((await patch({ tSecs: 300, type: "note", themeKey: "pricing" })).status).toBe(404);
+  });
+
+  it("400 for bad body (missing type, or both/neither target)", async () => {
+    expect((await patch({ tSecs: 300, themeKey: "pricing" })).status).toBe(400);
+    expect((await patch({ tSecs: 300, type: "note" })).status).toBe(400); // neither
+    expect(
+      (await patch({ tSecs: 300, type: "note", themeKey: "pricing", newTheme: { label: "X" } })).status,
+    ).toBe(400); // both
+  });
+
+  it("400 when the evidence item can't be found", async () => {
+    const res = await patch({ tSecs: 999, type: "note", themeKey: "pricing" });
+    expect(res.status).toBe(400);
+    expect(updateCallRecordingMock).not.toHaveBeenCalled();
+  });
+
+  it("happy path: moves the marker, persists themed_doc + brief, rebuilds facets, returns recording", async () => {
+    const res = await patch({ tSecs: 300, type: "note", themeKey: "pricing" });
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as { recording: { themedDoc: ThemedDoc; brief: string } };
+    // The stray note is now under pricing; unfiled shrank.
+    expect(json.recording.themedDoc.themes.find((t) => t.key === "pricing")!.evidence).toHaveLength(2);
+    expect(json.recording.themedDoc.unfiled).toHaveLength(1);
+    // Persistence: themed_doc + re-rendered brief.
+    expect(updateCallRecordingMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: ROUTE_REC_ID,
+        workspaceId: "ws-1",
+        themedDoc: expect.objectContaining({ v: 1 }),
+        brief: json.recording.brief,
+      }),
+    );
+    // Facets rebuilt for the workspace/call.
+    expect(replaceCallThemeFacetsMock).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: "ws-1", callId: ROUTE_REC_ID }),
+    );
+  });
+});
+
+describe("POST /api/capture/recordings/[id]/strike", () => {
+  beforeEach(() => {
+    resolveCaptureTokenMock.mockReset().mockResolvedValue({
+      workspaceId: "ws-1",
+      userId: "user-1",
+      displayName: "Tomas G",
+    });
+    getCallRecordingMock.mockReset().mockResolvedValue(routeRecRow());
+    getContactNameMock.mockReset().mockResolvedValue(null);
+    updateCallRecordingMock.mockClear();
+  });
+
+  async function post(body: unknown, id = ROUTE_REC_ID) {
+    const { POST } = await import("@/app/api/capture/recordings/[id]/strike/route");
+    const { NextRequest } = await import("next/server");
+    const req = new NextRequest(`http://x/api/capture/recordings/${id}/strike`, {
+      method: "POST",
+      headers: { authorization: "Bearer t", "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    return POST(req, { params: Promise.resolve({ id }) });
+  }
+
+  it("401 when the capture token doesn't resolve", async () => {
+    resolveCaptureTokenMock.mockResolvedValue(null);
+    expect((await post({ target: "callSentence" })).status).toBe(401);
+  });
+
+  it("404 for a non-uuid id", async () => {
+    expect((await post({ target: "callSentence" }, "nope")).status).toBe(404);
+  });
+
+  it("400 for a bad target and for an unknown theme", async () => {
+    expect((await post({ target: "bogus" })).status).toBe(400);
+    expect((await post({ target: "theme" })).status).toBe(400); // missing themeKey
+    expect((await post({ target: "theme", themeKey: "ghost" })).status).toBe(400);
+    expect(updateCallRecordingMock).not.toHaveBeenCalled();
+  });
+
+  it("strikes a theme's ai and persists the re-rendered brief", async () => {
+    const res = await post({ target: "theme", themeKey: "pricing" });
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as { recording: { themedDoc: ThemedDoc } };
+    expect(json.recording.themedDoc.themes.find((t) => t.key === "pricing")!.ai).toBeNull();
+    expect(updateCallRecordingMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: ROUTE_REC_ID, themedDoc: expect.objectContaining({ v: 1 }) }),
+    );
+  });
+
+  it("strikes the call sentence", async () => {
+    const res = await post({ target: "callSentence" });
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as { recording: { themedDoc: ThemedDoc } };
+    expect(json.recording.themedDoc.callSentence).toBeNull();
   });
 });

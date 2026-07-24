@@ -65,11 +65,41 @@ public final class ChunkSpooler {
         }
         self.chunkBytes = max(1, manifestStorage.chunkSeconds) * AudioConstants.bytesPerSecond
 
-        // Reconcile with files on disk: a chunk only counts if its file exists.
+        // Sweep any partial temp files a crash may have left behind (they never
+        // count as chunks, but don't let them accumulate).
+        Self.removeTempFiles(in: directory)
+
+        // Reconcile with files on disk. A chunk counts only if its file is both
+        // present AND complete: a crash before the atomic rename can't leave a
+        // truncated `chunk-*.wav`, but legacy spools (pre-atomic-write) or a
+        // damaged filesystem can — an under-sized non-final chunk, or a final
+        // chunk with no real PCM, would silently corrupt the upload. Drop those
+        // seqs (and delete the bad file) so `seqsWritten` — and therefore the
+        // finalize `totalChunks` (= `seqsWritten.count`) — reflects only audio
+        // that is actually intact on disk.
         let onDisk = Self.chunkSeqsOnDisk(in: directory)
-        let written = Set(manifestStorage.seqsWritten).union(onDisk)
-            .filter { onDisk.contains($0) }
-            .sorted()
+        let candidates = Set(manifestStorage.seqsWritten).union(onDisk).sorted()
+        let maxSeq = candidates.max()
+        var written: [Int] = []
+        for seq in candidates {
+            let url = directory.appendingPathComponent(Self.chunkFileName(seq: seq))
+            guard onDisk.contains(seq) else {
+                HelperLog.shared.warn(
+                    "reopen: chunk seq \(seq) has no file on disk — dropping from seqsWritten",
+                    category: "audio")
+                continue
+            }
+            let size = Self.fileSize(at: url)
+            let isFinal = (seq == maxSeq)
+            guard Self.chunkFileIsComplete(size: size, isFinal: isFinal, chunkBytes: chunkBytes) else {
+                HelperLog.shared.warn(
+                    "reopen: chunk seq \(seq) is truncated (\(size) bytes, final=\(isFinal)) — dropping + deleting",
+                    category: "audio")
+                try? FileManager.default.removeItem(at: url)
+                continue
+            }
+            written.append(seq)
+        }
         manifestStorage.seqsWritten = written
         manifestStorage.seqsUploaded = manifestStorage.seqsUploaded.filter { written.contains($0) }.sorted()
         self.appendedBytes = (try? Self.spooledPCMBytes(in: directory, seqs: written)) ?? 0
@@ -233,12 +263,14 @@ public final class ChunkSpooler {
     /// with the notes. Returns the running note count for live UI feedback;
     /// empty/whitespace text is a no-op (returns current count).
     @discardableResult
-    public func addNote(tSecs: Double, text: String, themeKey: String? = nil) throws -> Int {
+    public func addNote(tSecs: Double, text: String, themeKey: String? = nil,
+                        anchor: SessionManifest.NoteAnchor? = nil) throws -> Int {
         lock.lock(); defer { lock.unlock() }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         var current = manifestStorage.notes ?? []
         guard !trimmed.isEmpty else { return current.count }
-        current.append(SessionManifest.Note(tSecs: max(0, tSecs), text: trimmed, themeKey: themeKey))
+        current.append(SessionManifest.Note(tSecs: max(0, tSecs), text: trimmed,
+                                            themeKey: themeKey, anchor: anchor))
         manifestStorage.notes = current
         try persistManifest()
         return current.count
@@ -261,6 +293,19 @@ public final class ChunkSpooler {
         guard !duplicate else { return current.count }
         current.append(SessionManifest.TermCorrection(wrong: normalizedWrong, right: r))
         manifestStorage.terms = current
+        try persistManifest()
+        return current.count
+    }
+
+    /// Record an operator coverage action on an agenda item (rail click).
+    /// Appended; the server keeps the last mark per key. Crash-safe.
+    @discardableResult
+    public func addCoverageMark(key: String, state: String, tSecs: Double) throws -> Int {
+        lock.lock(); defer { lock.unlock() }
+        var current = manifestStorage.coverage ?? []
+        guard !key.isEmpty else { return current.count }
+        current.append(SessionManifest.CoverageMark(key: key, state: state, tSecs: max(0, tSecs)))
+        manifestStorage.coverage = current
         try persistManifest()
         return current.count
     }
@@ -294,20 +339,56 @@ public final class ChunkSpooler {
 
     // MARK: - Internals
 
-    /// Write one chunk file (canonical WAV) and record it in the manifest.
+    /// Write one chunk file (canonical WAV) atomically and record it in the
+    /// manifest.
+    ///
+    /// Atomicity (NFR-CALL-REL-1/3): the WAV is written to a temp name in the
+    /// *same* directory, then `rename(2)`d onto the final `chunk-NNNNNN.wav`
+    /// name. `rename` within one filesystem is atomic, so the canonical chunk
+    /// name only ever appears once its bytes are fully on disk — a crash / power
+    /// loss mid-write leaves at most a `.chunk-*.wav.tmp` dropping (which no
+    /// reader counts: it is neither `chunk-*` prefixed nor `.wav` suffixed and is
+    /// swept on reopen). This closes the "truncated chunk that later uploads
+    /// silently corrupt" defect at the source. The temp name is derived from the
+    /// same directory so it can never collide across dirs.
+    ///
+    /// Order is deliberate: file lands atomically FIRST, then the manifest is
+    /// persisted. A crash in the gap just leaves a complete, un-recorded chunk
+    /// file that `openingDirectory` re-reconciles into `seqsWritten`.
     private func writeChunk(_ pcm: Data) throws {
         let seq = (manifestStorage.seqsWritten.max() ?? -1) + 1
         let wav = WavCodec.wrap(pcm: pcm)
         let url = chunkURL(seq: seq)
+        let tmp = directory.appendingPathComponent(Self.chunkTempName(seq: seq))
+
+        // Clear any leftover temp from a prior interrupted attempt at this seq.
+        try? FileManager.default.removeItem(at: tmp)
+
         let ok = FileManager.default.createFile(
-            atPath: url.path,
+            atPath: tmp.path,
             contents: wav,
             attributes: [.posixPermissions: 0o600]
         )
-        guard ok else { throw SpoolerError.ioFailure("could not write \(url.lastPathComponent)") }
+        guard ok else { throw SpoolerError.ioFailure("could not write \(tmp.lastPathComponent)") }
+
+        // Atomic publish. rename() preserves the 0600 temp inode's permissions.
+        guard rename(tmp.path, url.path) == 0 else {
+            let err = errno
+            try? FileManager.default.removeItem(at: tmp)
+            throw SpoolerError.ioFailure(
+                "could not rename \(tmp.lastPathComponent) → \(url.lastPathComponent) (errno \(err))")
+        }
+
         manifestStorage.seqsWritten.append(seq)
         manifestStorage.seqsWritten.sort()
         try persistManifest()
+    }
+
+    /// Temp sibling name for an in-flight chunk write. The leading dot + `.tmp`
+    /// suffix keep it out of `chunkSeqsOnDisk` (which requires a `chunk-` prefix
+    /// AND a `.wav` suffix), so a partial temp is never mistaken for a chunk.
+    private static func chunkTempName(seq: Int) -> String {
+        String(format: ".chunk-%06d.wav.tmp", seq)
     }
 
     /// Atomic, 0600 manifest write: temp file in the same dir, then rename.
@@ -343,6 +424,33 @@ public final class ChunkSpooler {
             if let seq = Int(digits) { seqs.insert(seq) }
         }
         return seqs
+    }
+
+    /// Delete any in-flight `.chunk-*.wav.tmp` droppings in the spool directory.
+    private static func removeTempFiles(in directory: URL) {
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
+        for name in names where name.hasPrefix(".chunk-") && name.hasSuffix(".wav.tmp") {
+            try? FileManager.default.removeItem(at: directory.appendingPathComponent(name))
+        }
+    }
+
+    private static func fileSize(at url: URL) -> Int {
+        let attrs = try? FileManager.default.attributesOfItem(atPath: url.path)
+        return (attrs?[.size] as? Int) ?? 0
+    }
+
+    /// Whether a chunk file on disk is complete enough to keep on reopen.
+    ///
+    /// - A file must have a header plus at least one PCM byte (`> wavHeaderBytes`);
+    ///   a header-only / sub-header remnant is a dropping.
+    /// - A *non-final* chunk always carries a full `chunkBytes` PCM payload, so a
+    ///   shorter file is a truncated write → not complete.
+    /// - The *final* chunk (highest seq) is legitimately short (the flush
+    ///   remainder), so any file with real PCM passes.
+    static func chunkFileIsComplete(size: Int, isFinal: Bool, chunkBytes: Int) -> Bool {
+        guard size > AudioConstants.wavHeaderBytes else { return false }
+        if isFinal { return true }
+        return size >= AudioConstants.wavHeaderBytes + chunkBytes
     }
 
     private static func pcmBytes(ofChunkAt url: URL) -> Int {

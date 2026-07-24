@@ -255,29 +255,33 @@ export async function replaceCallThemeFacets(opts: {
     )
     .limit(1);
   if (!rec) return;
-  await db
-    .delete(callThemeFacets)
-    .where(
-      and(
-        eq(callThemeFacets.callId, opts.callId),
-        eq(callThemeFacets.workspaceId, opts.workspaceId),
-      ),
+  // Delete + insert must be atomic: a crash between them would otherwise leave
+  // the call with zero facets (review finding). One transaction, all-or-nothing.
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(callThemeFacets)
+      .where(
+        and(
+          eq(callThemeFacets.callId, opts.callId),
+          eq(callThemeFacets.workspaceId, opts.workspaceId),
+        ),
+      );
+    if (opts.facets.length === 0) return;
+    await tx.insert(callThemeFacets).values(
+      opts.facets.map((f) => ({
+        workspaceId: opts.workspaceId,
+        callId: opts.callId,
+        themeId: null,
+        label: f.label,
+        origin: f.origin,
+        noteCount: f.noteCount,
+        quoteCount: f.quoteCount,
+        flagCount: f.flagCount,
+        coverage: f.coverage,
+        callDate: rec.createdAt,
+      })),
     );
-  if (opts.facets.length === 0) return;
-  await db.insert(callThemeFacets).values(
-    opts.facets.map((f) => ({
-      workspaceId: opts.workspaceId,
-      callId: opts.callId,
-      themeId: null,
-      label: f.label,
-      origin: f.origin,
-      noteCount: f.noteCount,
-      quoteCount: f.quoteCount,
-      flagCount: f.flagCount,
-      coverage: f.coverage,
-      callDate: rec.createdAt,
-    })),
-  );
+  });
 }
 
 /** Full recording including transcript (for the detail/expand view). */
