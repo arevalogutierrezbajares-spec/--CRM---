@@ -14,6 +14,18 @@ Output JSON matches AGB Utterance[] for CRM dialogue building.
 """
 from __future__ import annotations
 
+import os as _os
+
+# macOS venv Pythons often lack a usable system CA bundle, so model downloads
+# (VAD / align / pyannote from the HF hub) fail with SSL cert-verify errors.
+# Point urllib + requests at certifi's bundle before anything network runs.
+try:
+    import certifi as _certifi
+    _os.environ.setdefault("SSL_CERT_FILE", _certifi.where())
+    _os.environ.setdefault("REQUESTS_CA_BUNDLE", _certifi.where())
+except Exception:
+    pass
+
 import argparse
 import json
 import sys
