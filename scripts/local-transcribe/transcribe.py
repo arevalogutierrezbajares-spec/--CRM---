@@ -32,6 +32,37 @@ def fmt_speaker(label: str | int | None) -> str:
     return s
 
 
+def _load_audio_16k_mono(wav: Path):
+    """Load a WAV/MP3 as float32 mono @ 16 kHz WITHOUT torchcodec.
+
+    torchcodec (whisperx's default decoder) is broken against ffmpeg 8, so we
+    decode with soundfile (libsndfile) and resample if needed. Returns a numpy
+    float32 array in [-1, 1], the shape whisperx.transcribe expects.
+    """
+    import numpy as np
+    try:
+        import soundfile as sf
+    except ImportError as e:
+        raise SystemExit(
+            "soundfile not installed (needed to decode audio without torchcodec).\n"
+            "  scripts/local-transcribe/.venv/bin/pip install soundfile\n"
+            f"Import error: {e}"
+        ) from e
+
+    data, sr = sf.read(str(wav), dtype="float32", always_2d=True)
+    mono = data.mean(axis=1)  # downmix to mono
+    if sr != 16000:
+        # Linear resample — adequate for STT; avoids a scipy/librosa dependency.
+        n_out = int(round(len(mono) * 16000 / sr))
+        if n_out > 0:
+            mono = np.interp(
+                np.linspace(0.0, len(mono), num=n_out, endpoint=False),
+                np.arange(len(mono)),
+                mono,
+            ).astype(np.float32)
+    return np.ascontiguousarray(mono, dtype=np.float32)
+
+
 def run_whisperx(wav: Path, model: str, device: str, language: str | None,
                  min_speakers: int | None = None, max_speakers: int | None = None) -> dict:
     try:
@@ -45,10 +76,14 @@ def run_whisperx(wav: Path, model: str, device: str, language: str | None,
             f"Import error: {e}"
         ) from e
 
+    import os
     import torch
 
     compute_type = "float16" if device == "cuda" else "int8"
-    audio = whisperx.load_audio(str(wav))
+    # Load audio ourselves via soundfile so we never touch torchcodec's decoder
+    # (broken against ffmpeg 8 on this Mac: "Could not load libtorchcodec").
+    # whisperx wants float32 mono @ 16 kHz.
+    audio = _load_audio_16k_mono(wav)
     model_a = whisperx.load_model(model, device, compute_type=compute_type)
     result = model_a.transcribe(audio, batch_size=8, language=language)
 
@@ -66,11 +101,31 @@ def run_whisperx(wav: Path, model: str, device: str, language: str | None,
         return_char_alignments=False,
     )
 
-    # Diarization (requires HF token for many pyannote checkpoints)
-    diarize_model = whisperx.DiarizationPipeline(
-        use_auth_token=True,  # reads HF_TOKEN / huggingface-cli login
-        device=device,
-    )
+    # Diarization (requires an HF token that has ACCEPTED the pyannote gated
+    # model terms). API moved across whisperx versions: 3.8+ exposes it under
+    # whisperx.diarize with a `token=` kwarg; older builds have it top-level
+    # with `use_auth_token=`.
+    hf_token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
+    if not hf_token:
+        raise SystemExit(
+            "Diarization needs a Hugging Face token.\n"
+            "  1) Create a token: https://huggingface.co/settings/tokens (read scope)\n"
+            "  2) Accept the model terms (click 'Agree'):\n"
+            "       https://huggingface.co/pyannote/speaker-diarization-3.1\n"
+            "       https://huggingface.co/pyannote/segmentation-3.0\n"
+            "  3) export HF_TOKEN=hf_xxxxxxxx   (then re-run)\n"
+        )
+    try:
+        from whisperx.diarize import DiarizationPipeline  # whisperx >= 3.8
+    except ImportError:
+        from whisperx import DiarizationPipeline  # older whisperx
+
+    try:
+        diarize_model = DiarizationPipeline(token=hf_token, device=device)
+    except TypeError:
+        # older signature
+        diarize_model = DiarizationPipeline(use_auth_token=hf_token, device=device)
+
     # Speaker-count hints dramatically improve clustering on crowded audio
     # (10+ people on a speakerphone): pyannote otherwise under-clusters.
     diarize_kwargs = {}
