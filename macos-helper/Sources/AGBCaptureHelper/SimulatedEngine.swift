@@ -15,6 +15,7 @@ import CaptureCore
 ///       [--term "wrong=right"]…      term correction; "right" alone = hint
 ///       [--agenda "Item;Item;…"]     pre-call agenda (semicolon-separated)
 ///       [--cover "key=done"]…        agenda coverage mark (repeatable)
+///       [--kind call|meeting|speaker] session kind (speaker/meeting → local diarize)
 ///       [--precomputed <path.json>]  inject a pre-diarized transcript as the
 ///                                    finalize precomputedTranscript
 ///                                    --note also accepts "SECS@ANCHOR:text"
@@ -31,6 +32,8 @@ enum SimulatedEngine {
         var crashAfter: Int?
         var abandon = false
         var precomputedPath: String?
+        var kind: CaptureKind = .call
+        var roster: [String] = []
         /// Call Desk notes to inject: (tSecs, text). E2E for the notes spine.
         var notes: [(Double, String)] = []
         /// Term corrections to inject: (wrong?, right).
@@ -94,6 +97,10 @@ enum SimulatedEngine {
         }
         options.abandon = arguments.contains("--abandon")
         options.precomputedPath = value(after: "--precomputed")
+        if let k = value(after: "--kind"), let ck = CaptureKind(rawValue: k) { options.kind = ck }
+        if let r = value(after: "--roster") {
+            options.roster = r.split(separator: ";").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        }
 
         // Repeatable flags: every occurrence's following value.
         func values(after flag: String) -> [String] {
@@ -195,6 +202,7 @@ enum SimulatedEngine {
             let startedAt = Date().addingTimeInterval(-duration)
             spooler = try store.createSession(startedAt: startedAt,
                                               sourceApp: options.sourceApp,
+                                              captureKind: options.kind,
                                               chunkSeconds: options.chunkSecs)
             let meter = SilenceMeter()
             var offset = 0
@@ -229,6 +237,10 @@ enum SimulatedEngine {
             for (key, state) in options.covers {
                 _ = try spooler.addCoverageMark(key: key, state: state, tSecs: 0)
                 info("cover: \(key) = \(state)")
+            }
+            if !options.roster.isEmpty {
+                try spooler.setRoster(options.roster)
+                info("roster: \(options.roster.count) → speakerHint \(spooler.speakerHint)")
             }
             for (wrong, right) in options.terms {
                 _ = try spooler.addTermCorrection(wrong: wrong, right: right)

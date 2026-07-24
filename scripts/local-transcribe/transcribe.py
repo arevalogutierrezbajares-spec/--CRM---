@@ -75,6 +75,81 @@ def _load_audio_16k_mono(wav: Path):
     return np.ascontiguousarray(mono, dtype=np.float32)
 
 
+def _open_diarize(result: dict, audio, min_speakers=None, max_speakers=None) -> None:
+    """Token-free speaker diarization: embed each aligned segment with an open
+    d-vector model (Resemblyzer, bundled weights — no Hugging Face gating) and
+    cluster the embeddings. Writes seg["speaker"] = "SPEAKER_NN" in place.
+
+    The roster speaker-count hint (max_speakers) sets the cluster count, which
+    is what makes 10+ voice separation tractable; without a hint we auto-pick
+    the count from embedding distances.
+    """
+    import numpy as np
+    try:
+        from resemblyzer import VoiceEncoder
+        from sklearn.cluster import AgglomerativeClustering
+    except ImportError as e:
+        raise SystemExit(
+            "Token-free diarization needs resemblyzer + scikit-learn:\n"
+            "  scripts/local-transcribe/.venv/bin/pip install resemblyzer scikit-learn\n"
+            f"Import error: {e}"
+        ) from e
+
+    segments = [s for s in (result.get("segments") or []) if (s.get("text") or "").strip()]
+    if not segments:
+        return
+    sr = 16000
+    encoder = VoiceEncoder("cpu", verbose=False)
+    embs, embedded = [], []
+    for seg in segments:
+        s = int(float(seg.get("start") or 0) * sr)
+        e = int(float(seg.get("end") or 0) * sr)
+        clip = audio[max(0, s):min(len(audio), e)]
+        if len(clip) < int(0.4 * sr):  # too short to embed reliably
+            continue
+        try:
+            embs.append(encoder.embed_utterance(np.asarray(clip, dtype=np.float32)))
+            embedded.append(seg)
+        except Exception:
+            continue
+    if not embs:
+        for seg in segments:
+            seg["speaker"] = "SPEAKER_00"
+        return
+
+    X = np.asarray(embs)
+    n = len(X)
+    if max_speakers and max_speakers > 0:
+        k = min(max_speakers, n)
+        labels = AgglomerativeClustering(
+            n_clusters=k, metric="cosine", linkage="average").fit_predict(X)
+    else:
+        # No hint: cut the dendrogram at a cosine-distance threshold tuned for
+        # distinct voices, bounded by an optional floor.
+        labels = AgglomerativeClustering(
+            n_clusters=None, distance_threshold=0.32,
+            metric="cosine", linkage="average").fit_predict(X)
+        if min_speakers and len(set(labels)) < min_speakers and n >= min_speakers:
+            labels = AgglomerativeClustering(
+                n_clusters=min_speakers, metric="cosine", linkage="average").fit_predict(X)
+
+    # Stable SPEAKER_NN ids in order of first appearance.
+    order, remap = {}, {}
+    for lbl in labels:
+        if lbl not in remap:
+            remap[lbl] = len(order)
+            order[lbl] = True
+    for seg, lbl in zip(embedded, labels):
+        seg["speaker"] = f"SPEAKER_{remap[lbl]:02d}"
+    # Segments too short to embed inherit the previous speaker.
+    last = "SPEAKER_00"
+    for seg in segments:
+        if "speaker" in seg:
+            last = seg["speaker"]
+        else:
+            seg["speaker"] = last
+
+
 def run_whisperx(wav: Path, model: str, device: str, language: str | None,
                  min_speakers: int | None = None, max_speakers: int | None = None) -> dict:
     try:
@@ -90,6 +165,12 @@ def run_whisperx(wav: Path, model: str, device: str, language: str | None,
 
     import os
     import torch
+
+    # faster-whisper (CTranslate2) has no Metal backend, so "mps" — which the
+    # helper passes on Apple Silicon — raises "unsupported device mps". Metal
+    # buys little for these short calls anyway; run the ASR on CPU (int8).
+    if device == "mps":
+        device = "cpu"
 
     compute_type = "float16" if device == "cuda" else "int8"
     # Load audio ourselves via soundfile so we never touch torchcodec's decoder
@@ -113,40 +194,40 @@ def run_whisperx(wav: Path, model: str, device: str, language: str | None,
         return_char_alignments=False,
     )
 
-    # Diarization (requires an HF token that has ACCEPTED the pyannote gated
-    # model terms). API moved across whisperx versions: 3.8+ exposes it under
-    # whisperx.diarize with a `token=` kwarg; older builds have it top-level
-    # with `use_auth_token=`.
+    # Diarization. Two engines:
+    #  • pyannote (whisperx) — higher quality, but its checkpoints are gated
+    #    behind a Hugging Face token the user must request + accept.
+    #  • token-free (Resemblyzer d-vectors + agglomerative clustering) — no
+    #    token, no gating, works out of the box; the DEFAULT so 10-speaker
+    #    capture works with zero setup. The roster speaker-count hint drives
+    #    the cluster count, which is exactly what crowded audio needs.
+    # Set HF_TOKEN (and accept the pyannote terms) to prefer pyannote instead.
     hf_token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
-    if not hf_token:
-        raise SystemExit(
-            "Diarization needs a Hugging Face token.\n"
-            "  1) Create a token: https://huggingface.co/settings/tokens (read scope)\n"
-            "  2) Accept the model terms (click 'Agree'):\n"
-            "       https://huggingface.co/pyannote/speaker-diarization-3.1\n"
-            "       https://huggingface.co/pyannote/segmentation-3.0\n"
-            "  3) export HF_TOKEN=hf_xxxxxxxx   (then re-run)\n"
-        )
-    try:
-        from whisperx.diarize import DiarizationPipeline  # whisperx >= 3.8
-    except ImportError:
-        from whisperx import DiarizationPipeline  # older whisperx
+    used_pyannote = False
+    if hf_token:
+        try:
+            try:
+                from whisperx.diarize import DiarizationPipeline  # whisperx >= 3.8
+            except ImportError:
+                from whisperx import DiarizationPipeline  # older whisperx
+            try:
+                diarize_model = DiarizationPipeline(token=hf_token, device=device)
+            except TypeError:
+                diarize_model = DiarizationPipeline(use_auth_token=hf_token, device=device)
+            diarize_kwargs = {}
+            if min_speakers:
+                diarize_kwargs["min_speakers"] = min_speakers
+            if max_speakers:
+                diarize_kwargs["max_speakers"] = max_speakers
+            diarize_segments = diarize_model(audio, **diarize_kwargs)
+            result = whisperx.assign_word_speakers(diarize_segments, result)
+            used_pyannote = True
+        except Exception as e:  # gated-model refusal, network, etc.
+            print(f"[transcribe] pyannote unavailable ({e}); using token-free diarizer",
+                  file=sys.stderr)
 
-    try:
-        diarize_model = DiarizationPipeline(token=hf_token, device=device)
-    except TypeError:
-        # older signature
-        diarize_model = DiarizationPipeline(use_auth_token=hf_token, device=device)
-
-    # Speaker-count hints dramatically improve clustering on crowded audio
-    # (10+ people on a speakerphone): pyannote otherwise under-clusters.
-    diarize_kwargs = {}
-    if min_speakers:
-        diarize_kwargs["min_speakers"] = min_speakers
-    if max_speakers:
-        diarize_kwargs["max_speakers"] = max_speakers
-    diarize_segments = diarize_model(audio, **diarize_kwargs)
-    result = whisperx.assign_word_speakers(diarize_segments, result)
+    if not used_pyannote:
+        _open_diarize(result, audio, min_speakers=min_speakers, max_speakers=max_speakers)
 
     utterances = []
     for seg in result.get("segments") or []:
@@ -168,7 +249,7 @@ def run_whisperx(wav: Path, model: str, device: str, language: str | None,
     utterances.sort(key=lambda u: u["start"])
     return {
         "language": result.get("language") or language or "multi",
-        "engine": "whisperx",
+        "engine": "whisperx" if used_pyannote else "whisperx+resemblyzer",
         "model": model,
         "utterances": utterances,
     }
