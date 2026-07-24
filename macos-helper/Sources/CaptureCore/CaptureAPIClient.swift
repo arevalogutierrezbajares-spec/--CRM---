@@ -390,9 +390,16 @@ public final class CaptureAPIClient {
         request.httpBody = try JSONEncoder().encode(body)
         let (data, status) = try await send(request)
         if status == 409 {
-            struct Missing: Decodable { let missing: [Int] }
-            let missing = (try? JSONDecoder().decode(Missing.self, from: data))?.missing ?? []
-            throw APIError.missingChunks(missing)
+            // The server 409s for four distinct reasons; ONLY the genuine
+            // missing-chunks case carries a `missing` array. Collapsing the
+            // others ("finalize in progress", "abandoned", "no chunks") into
+            // missingChunks([]) produced misleading logs and a latent
+            // can't-recover loop. Distinguish by the body's shape.
+            struct Missing: Decodable { let missing: [Int]? }
+            if let missing = (try? JSONDecoder().decode(Missing.self, from: data))?.missing {
+                throw APIError.missingChunks(missing)
+            }
+            throw APIError.http(status: 409, body: bodyString(data))
         }
         try throwForCommonStatus(status, data: data)
         guard status == 200 else { throw APIError.http(status: status, body: bodyString(data)) }

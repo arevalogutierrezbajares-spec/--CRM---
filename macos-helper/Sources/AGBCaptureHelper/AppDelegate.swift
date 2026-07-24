@@ -64,7 +64,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// FEATURE 2: live-transcript floating window + Deepgram stream.
     private let liveWindow = LiveTranscriptWindow()
-    private var liveStreamer: LiveTranscribing?
+    /// Backing store + lock for `liveStreamer`: the audio tap reads it every
+    /// ~100 ms on its own queue while the main thread reassigns it (start,
+    /// stop, and the mid-call auto-fallback engine swap). An unsynchronized
+    /// ARC read during reassignment is a use-after-free class race — the
+    /// fallback made it live, so every access goes through the lock.
+    private var liveStreamerStorage: LiveTranscribing?
+    private let liveStreamerLock = NSLock()
+    private var liveStreamer: LiveTranscribing? {
+        get {
+            liveStreamerLock.lock(); defer { liveStreamerLock.unlock() }
+            return liveStreamerStorage
+        }
+        set {
+            liveStreamerLock.lock(); defer { liveStreamerLock.unlock() }
+            liveStreamerStorage = newValue
+        }
+    }
     /// One engine swap max per recording: when the on-device engine dies the
     /// cloud engine takes over (unless the user chose local-only). Guards
     /// against ping-ponging between two broken engines.
@@ -760,6 +776,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
               config.isComplete,
               state == .recording || state == .paused else { return false }
         liveEngineFellBack = true
+        // Silence the dying engine completely: a late status/line from its
+        // in-flight callbacks would clobber the "switched" banner / append a
+        // stale caption after the swap.
+        liveStreamer?.onStatus = nil
+        liveStreamer?.onLine = nil
         liveStreamer?.stop()
         let cloud = LiveTranscriptStreamer(config: config,
                                            participantName: activeParticipantName,
