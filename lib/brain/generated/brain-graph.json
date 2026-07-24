@@ -1,10 +1,10 @@
 {
   "version": "1.1",
-  "generatedAt": "2026-07-23T09:21:33.743Z",
+  "generatedAt": "2026-07-24T04:13:02.855Z",
   "commit": {
     "vav": null,
     "caney": null,
-    "crm": "c68f1ff",
+    "crm": "c2df319",
     "restaurants": null,
     "academy": null
   },
@@ -670,7 +670,7 @@
       "last_commit": null,
       "docs_ref": "docs/brain-ops.md",
       "surfaces": [],
-      "meta": "86 routes · 73 pages · 112 tables",
+      "meta": "88 routes · 73 pages · 112 tables",
       "summary": "How the Brain graph is regenerated, checked for staleness, and served on Vercel — multi-repo CI, local roots, and secrets.",
       "pos": {
         "x": 305.6,
@@ -1801,6 +1801,56 @@
       "kind": "surface",
       "parentId": "crm.meetings",
       "label": "/api/capture/recordings/[id]",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-capture-recordings-id-assign-theme",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.meetings",
+      "label": "/api/capture/recordings/[id]/assign-theme",
+      "system": "crm",
+      "source": "openapi",
+      "hosted_by": null,
+      "fn": null,
+      "state": "done",
+      "liveness": null,
+      "size": "sm",
+      "owner": null,
+      "branch": null,
+      "last_commit": null,
+      "docs_ref": "app/api/**/route.ts",
+      "surfaces": [],
+      "meta": null,
+      "summary": null,
+      "pos": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": "crm.surface.api-capture-recordings-id-strike",
+      "level": 3,
+      "kind": "surface",
+      "parentId": "crm.meetings",
+      "label": "/api/capture/recordings/[id]/strike",
       "system": "crm",
       "source": "openapi",
       "hosted_by": null,
@@ -8085,6 +8135,34 @@
       "to": {
         "system": "crm",
         "domain": "crm.surface.api-capture-recordings-id"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-capture-recordings-id-assign-theme",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.meetings"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-capture-recordings-id-assign-theme"
+      },
+      "contract_status": "live"
+    },
+    {
+      "id": "contains.crm.surface.api-capture-recordings-id-strike",
+      "kind": "contains",
+      "subtype": null,
+      "from": {
+        "system": "crm",
+        "domain": "crm.meetings"
+      },
+      "to": {
+        "system": "crm",
+        "domain": "crm.surface.api-capture-recordings-id-strike"
       },
       "contract_status": "live"
     },
