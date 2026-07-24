@@ -21,7 +21,27 @@
  * build time OR on the client.
  */
 
-import Graph from "graphology";
+import GraphDefault from "graphology";
+
+// graphology's bundled d.ts resolves the default export to the abstract
+// zero-arg Graph from graphology-types under this tsconfig, which drops the
+// options constructor and every mutation method — the ONLY file that
+// constructs graphs directly, and the error that broke the Vercel build once
+// the type-check cache went cold. Runtime shape is correct; re-type locally.
+type AnyGraph = {
+  mergeNode: (n: string) => void;
+  mergeEdge: (a: string, b: string) => void;
+  nodes: () => string[];
+  forEachNode: (cb: (n: string) => void) => void;
+  inDegree: (n: string) => number;
+  outDegree: (n: string) => number;
+  degree: (n: string) => number;
+  order: number;
+  size: number;
+};
+const Graph = GraphDefault as unknown as new (opts?: {
+  type?: string; multi?: boolean; allowSelfLoops?: boolean;
+}) => AnyGraph & Record<string, any>;
 import { stronglyConnectedComponents } from "graphology-components";
 import louvain from "graphology-communities-louvain";
 import type { BrainGraph, BrainNode, EdgeKind, System } from "../types";
