@@ -20,6 +20,9 @@ final class GlobalHotKey {
     /// ⌘⇧N — jump into the Call Desk note composer while recording.
     public static let noteKeyCode = UInt32(kVK_ANSI_N)
 
+    /// ⌘⇧A — expand/collapse the agenda rail in the Call Desk.
+    public static let railKeyCode = UInt32(kVK_ANSI_A)
+
     /// `id` disambiguates multiple registered hotkeys: each instance installs its
     /// own app-target handler that fires for ANY matching-signature hotkey, so the
     /// handler must filter by id or every key would fire every callback.

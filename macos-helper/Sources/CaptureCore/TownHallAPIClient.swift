@@ -193,6 +193,39 @@ extension CaptureAPIClient {
                               path: "/api/capture/recordings/\(id)").recording
     }
 
+    /// File an unfiled (or re-file a themed) evidence item under a theme.
+    /// Exactly one of `themeKey` / `newThemeLabel`.
+    public func assignTheme(recordingId: String, tSecs: Double, type: String,
+                            themeKey: String? = nil,
+                            newThemeLabel: String? = nil) async throws -> CallRecordingDetail {
+        struct Body: Encodable {
+            let tSecs: Double
+            let type: String
+            let themeKey: String?
+            let newTheme: NewTheme?
+            struct NewTheme: Encodable { let label: String }
+        }
+        return try await sendDecoding(
+            RecordingResponse.self,
+            path: "/api/capture/recordings/\(recordingId)/assign-theme",
+            method: "PATCH",
+            body: Body(tSecs: tSecs, type: type, themeKey: themeKey,
+                       newTheme: newThemeLabel.map(Body.NewTheme.init))
+        ).recording
+    }
+
+    /// Strike an AI block from the filed doc (theme's extractions, or the
+    /// call sentence). The operator's own content is untouchable.
+    public func strikeAI(recordingId: String, themeKey: String?) async throws -> CallRecordingDetail {
+        struct Body: Encodable { let target: String; let themeKey: String? }
+        return try await sendDecoding(
+            RecordingResponse.self,
+            path: "/api/capture/recordings/\(recordingId)/strike",
+            method: "POST",
+            body: Body(target: themeKey == nil ? "callSentence" : "theme", themeKey: themeKey)
+        ).recording
+    }
+
     // MARK: - Notifications
 
     /// Returns the active inbox + the live unread count.

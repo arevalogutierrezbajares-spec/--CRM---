@@ -19,7 +19,7 @@ import {
 } from "./deepgram";
 import { MAX_HIGHLIGHT_MATCH_GAP_SECS } from "./constants";
 import type { FlaggedMoment, ResolvedOperatorNote } from "./finalize";
-import type { AgendaItem, LiveTheme } from "./validate";
+import type { AgendaItem, CoverageMark, LiveTheme } from "./validate";
 
 /** One time-anchored operator marker filed under a theme (or unfiled). */
 export type ThemeEvidence = {
@@ -56,7 +56,11 @@ export type ThemedDocTheme = {
 export type ThemedDocAgendaItem = {
   key: string;
   label: string;
-  coverage: "covered" | "gap";
+  /**
+   * 'done' = operator marked it handled (wire coverage), sticky across re-files;
+   * 'covered' = ≥1 evidence; 'gap' = on the agenda, nothing captured.
+   */
+  coverage: "done" | "covered" | "gap";
 };
 
 /** The structured call document persisted in call_recordings.themed_doc. */
@@ -116,8 +120,8 @@ export function clockTs(sec: number): string {
  * - Live-created themes with zero evidence are dropped; agenda-seeded themes
  *   are always kept — they are the gaps the operator wants to see.
  * - Evidence within each bucket is sorted by tSecs (call order).
- * - Agenda coverage (slice 1, no pulled quotes yet): the matching theme has
- *   ≥1 evidence → 'covered', else 'gap'.
+ * - Agenda coverage (slice 2): the operator marked it done (wire) → 'done';
+ *   else the matching theme has ≥1 evidence → 'covered'; else → 'gap'.
  */
 export function buildThemedDoc(opts: {
   themes: LiveTheme[];
@@ -127,6 +131,8 @@ export function buildThemedDoc(opts: {
   utterances: Utterance[];
   /** Speaker labels — the same ones the dialogue was built with. */
   labels: DialogueLabels;
+  /** Slice 2: operator's live agenda coverage marks (advisory). */
+  coverage?: CoverageMark[];
 }): ThemedDoc {
   const { themes, agenda, resolvedNotes, resolvedFlags, utterances, labels } = opts;
 
@@ -189,14 +195,18 @@ export function buildThemedDoc(opts: {
     // themes are kept: an empty one IS the signal (a gap on the agenda).
     .filter((t) => t.evidence.length > 0 || t.origin === "agenda");
 
+  const doneKeys = new Set(
+    (opts.coverage ?? []).filter((c) => c.state === "done").map((c) => c.key),
+  );
   const themeByKey = new Map(docThemes.map((t) => [t.key, t]));
   const agendaOut: ThemedDocAgendaItem[] = agenda.map((a) => {
     const theme = themeByKey.get(a.key);
-    return {
-      key: a.key,
-      label: a.label,
-      coverage: theme && theme.evidence.length > 0 ? "covered" : "gap",
-    };
+    const coverage: ThemedDocAgendaItem["coverage"] = doneKeys.has(a.key)
+      ? "done"
+      : theme && theme.evidence.length > 0
+        ? "covered"
+        : "gap";
+    return { key: a.key, label: a.label, coverage };
   });
 
   return { v: 1, callSentence: null, themes: docThemes, unfiled, agenda: agendaOut };
@@ -226,10 +236,19 @@ export function renderThemedBrief(doc: ThemedDoc): string {
   }
 
   if (doc.agenda.length > 0) {
+    const themeByKey = new Map(doc.themes.map((t) => [t.key, t]));
     const line = doc.agenda
-      .map((a) =>
-        a.coverage === "covered" ? `✅ ${a.label}` : `⛔ ${a.label} — not discussed`,
-      )
+      .map((a) => {
+        if (a.coverage === "done") {
+          // Operator marked it handled: '● … — done', noting when no notes back it.
+          const theme = themeByKey.get(a.key);
+          const suffix = theme && theme.evidence.length > 0 ? "" : " (no notes)";
+          return `● ${a.label} — done${suffix}`;
+        }
+        return a.coverage === "covered"
+          ? `✅ ${a.label}`
+          : `⛔ ${a.label} — not discussed`;
+      })
       .join(" · ");
     parts.push(`## Agenda coverage\n${line}`);
   }
@@ -296,4 +315,30 @@ export function renderThemedBrief(doc: ThemedDoc): string {
   }
 
   return parts.join("\n\n").trim();
+}
+
+/** One per-call per-theme facet rollup (mirrors CallThemeFacetInput). */
+export type ThemedDocFacet = {
+  label: string;
+  origin: "agenda" | "live";
+  noteCount: number;
+  quoteCount: number;
+  flagCount: number;
+  coverage: "covered" | "gap";
+};
+
+/**
+ * Derive the per-theme facet rollups powering cross-call theme queries. Pure —
+ * shared by the finalize pipeline and the Slice 2 re-file route so both persist
+ * facets identically. Coverage is evidence-based (≥1 evidence ⇒ 'covered').
+ */
+export function facetsFromThemedDoc(doc: ThemedDoc): ThemedDocFacet[] {
+  return doc.themes.map((t) => ({
+    label: t.label,
+    origin: t.origin,
+    noteCount: t.evidence.filter((e) => e.type === "note").length,
+    quoteCount: t.evidence.filter((e) => e.quote !== "").length,
+    flagCount: t.evidence.filter((e) => e.type === "flag").length,
+    coverage: t.evidence.length > 0 ? ("covered" as const) : ("gap" as const),
+  }));
 }

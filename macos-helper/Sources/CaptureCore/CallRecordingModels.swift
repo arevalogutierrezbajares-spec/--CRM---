@@ -82,11 +82,14 @@ public struct CallRecordingDetail: Decodable {
     public let language: String?
     public let actionItemCount: Int
     public let meetingId: String?
+    /// El Cuaderno themed document (nil for legacy/un-themed recordings).
+    public let themedDoc: ThemedDocLite?
 
     enum CodingKeys: String, CodingKey {
         case id, title, createdAt, durationSecs, sourceApp, contactName
         case brief, transcript, utterances, speakerMap, transcriptEngine
         case suspectFlags, partial, language, actionItemCount, meetingId
+        case themedDoc
     }
 
     public init(from decoder: Decoder) throws {
@@ -107,6 +110,7 @@ public struct CallRecordingDetail: Decodable {
         language = try? c.decodeIfPresent(String.self, forKey: .language)
         actionItemCount = (try? c.decodeIfPresent(Int.self, forKey: .actionItemCount)) ?? 0
         meetingId = try? c.decodeIfPresent(String.self, forKey: .meetingId)
+        themedDoc = try? c.decodeIfPresent(ThemedDocLite.self, forKey: .themedDoc)
     }
 
     /// Display name for an utterance's speaker: mapped cluster name when the
@@ -124,5 +128,74 @@ public struct CallRecordingDetail: Decodable {
             return "Speaker \(n + 1)"
         }
         return utterance.speaker
+    }
+}
+
+
+// MARK: - Themed document (El Cuaderno)
+
+/// Lenient view of `themedDoc` for in-app curation: enough to render the
+/// unfiled tray and per-theme AI presence; full fidelity stays server-side.
+public struct ThemedDocLite: Decodable {
+    public let callSentence: String?
+    public let themes: [Theme]
+    public let unfiled: [Evidence]
+    public let agenda: [AgendaCoverage]
+
+    public struct Theme: Decodable {
+        public let key: String
+        public let label: String
+        public let evidenceCount: Int
+        public let hasAI: Bool
+
+        enum CodingKeys: String, CodingKey { case key, label, evidence, ai }
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            key = (try? c.decode(String.self, forKey: .key)) ?? ""
+            label = (try? c.decodeIfPresent(String.self, forKey: .label)) ?? key
+            let ev = (try? c.decodeIfPresent([Evidence].self, forKey: .evidence)) ?? []
+            evidenceCount = ev.count
+            // ai == null → no block; any object → present.
+            hasAI = (try? c.decodeNil(forKey: .ai)) == false && c.contains(.ai)
+        }
+    }
+
+    public struct Evidence: Decodable {
+        public let type: String
+        public let tSecs: Double
+        public let text: String?
+        public let quote: String?
+
+        enum CodingKeys: String, CodingKey { case type, tSecs, text, quote }
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            type = (try? c.decodeIfPresent(String.self, forKey: .type)) ?? "note"
+            tSecs = (try? c.decodeIfPresent(Double.self, forKey: .tSecs)) ?? 0
+            text = try? c.decodeIfPresent(String.self, forKey: .text)
+            quote = try? c.decodeIfPresent(String.self, forKey: .quote)
+        }
+    }
+
+    public struct AgendaCoverage: Decodable {
+        public let key: String
+        public let label: String
+        public let coverage: String
+
+        enum CodingKeys: String, CodingKey { case key, label, coverage }
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            key = (try? c.decode(String.self, forKey: .key)) ?? ""
+            label = (try? c.decodeIfPresent(String.self, forKey: .label)) ?? key
+            coverage = (try? c.decodeIfPresent(String.self, forKey: .coverage)) ?? "gap"
+        }
+    }
+
+    enum CodingKeys: String, CodingKey { case callSentence, themes, unfiled, agenda }
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        callSentence = try? c.decodeIfPresent(String.self, forKey: .callSentence)
+        themes = (try? c.decodeIfPresent([Theme].self, forKey: .themes)) ?? []
+        unfiled = (try? c.decodeIfPresent([Evidence].self, forKey: .unfiled)) ?? []
+        agenda = (try? c.decodeIfPresent([AgendaCoverage].self, forKey: .agenda)) ?? []
     }
 }

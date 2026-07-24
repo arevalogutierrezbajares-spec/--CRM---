@@ -86,6 +86,12 @@ final class AudioEngine: NSObject {
     private var defaultOutputObserver: NSObjectProtocol?
     private var scRestartAttempts = 0
     private var spoolFailureReported = false
+    /// Defect-A watchdog: fires a mic-capture restart when the mic (L) channel
+    /// delivers only digital zeros for a sustained window while system (R) audio
+    /// is live. Touched only on `queue` (the pump + the restart it triggers).
+    private var micDeadDetector = MicDeadDetector()
+    /// One-time operator notice per session when the mic-dead watchdog restarts.
+    private var micRestartNoticeSent = false
     /// Periodic levels log so speakers-only tests can confirm system(R) is live.
     private var levelsTickCount = 0
     private let stateLock = NSLock()
@@ -136,6 +142,8 @@ final class AudioEngine: NSObject {
         interleaver.reset()
         ring.clear()
         spoolFailureReported = false
+        micDeadDetector.reset()
+        micRestartNoticeSent = false
         mode = .preroll
 
         try startMicEngine()
@@ -402,6 +410,57 @@ final class AudioEngine: NSObject {
         }
     }
 
+    /// DEFECT A recovery: the mic (L) channel has delivered only digital zeros
+    /// for a sustained window while system (R) audio is live — the mic tap died
+    /// silently (suspected mid-call route change). Tear the mic path down and
+    /// re-create it once via `startMicEngine()` (HAL-preferred → AVAudioEngine
+    /// fallback), then surface a one-time notice.
+    ///
+    /// Thread discipline: this runs on `queue` (invoked from `pumpOnce`, and the
+    /// pump timer is a serial source on `queue`). That's the *same* queue the
+    /// existing mic restarts already marshal onto — `restartMicAVAudioIfFormatChanged`
+    /// and the HAL `onFatalError` handler both `queue.async` before touching the
+    /// mic path — so tearing down / rebuilding here is on the sanctioned thread.
+    private func restartMicCapture() {
+        guard mode != .stopped else { return }
+
+        HelperLog.shared.error(
+            "mic-dead watchdog: mic (L) delivered only zeros for ~\(Int(micDeadDetector.deadWindow))s while system (R) live — restarting mic capture (attempt \(micDeadDetector.restartsUsed)/\(micDeadDetector.maxRestarts))",
+            category: "audio"
+        )
+
+        // Tear down whichever mic source is currently active.
+        micHAL?.stop()
+        micHAL = nil
+        micHALActive = false
+        if let engine = avEngine {
+            engine.inputNode.removeTap(onBus: 0)
+            engine.stop()
+            avEngine = nil
+        }
+        if let observer = configChangeObserver {
+            NotificationCenter.default.removeObserver(observer)
+            configChangeObserver = nil
+        }
+        micConverter = nil
+        micConverterInputFormat = nil
+
+        do {
+            try startMicEngine()
+            HelperLog.shared.info("mic-dead watchdog: mic capture path restarted", category: "audio")
+        } catch {
+            onError?("Microphone capture lost: \(error.localizedDescription)")
+            return
+        }
+
+        // One-time-per-session operator notice (subsequent capped restarts stay
+        // quiet in the UI but are still logged above).
+        if !micRestartNoticeSent {
+            micRestartNoticeSent = true
+            onError?("Microphone went silent — capture was automatically restarted.")
+        }
+    }
+
     private func handleMicBuffer(_ buffer: AVAudioPCMBuffer) {
         guard mode != .stopped else { return }
         if let mono = convert(buffer: buffer,
@@ -642,7 +701,8 @@ final class AudioEngine: NSObject {
     }
 
     private func pumpOnce() {
-        let bytes = interleaver.pump(now: CACurrentMediaTime())
+        let now = CACurrentMediaTime()
+        let bytes = interleaver.pump(now: now)
         guard !bytes.isEmpty else { return }
 
         switch mode {
@@ -668,6 +728,21 @@ final class AudioEngine: NSObject {
                     "levels (recording): \(r.summary) | output: \(OutputRoute.currentDefaultOutput().summary)",
                     category: "audio"
                 )
+            }
+
+            // DEFECT A: mic-dead watchdog. On call kinds (mic L + system R), a
+            // silently-dead mic tap shows up as all-zero L samples while R is
+            // live. Feed the pure detector; on `.restart` it has decided the mic
+            // has been digitally dead ~8 s and we rebuild the mic path (capped so
+            // a genuinely dead device can't loop). Mic-only kinds have no R
+            // channel to cross-check, so the watchdog is skipped there.
+            if captureKind.capturesSystemAudio {
+                let s = MicDeadDetector.scan(interleaved: bytes)
+                if micDeadDetector.feed(micAllZero: s.micAllZero,
+                                        systemActive: s.systemActive,
+                                        at: now) == .restart {
+                    restartMicCapture()
+                }
             }
 
             // FEATURE 2: hand a copy to the live-transcript stream. Best-effort,

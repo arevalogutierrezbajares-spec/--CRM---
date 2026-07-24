@@ -14,6 +14,9 @@ import CaptureCore
 ///                                    #tags parse into themeKey like the UI)
 ///       [--term "wrong=right"]…      term correction; "right" alone = hint
 ///       [--agenda "Item;Item;…"]     pre-call agenda (semicolon-separated)
+///       [--cover "key=done"]…        agenda coverage mark (repeatable)
+///                                    --note also accepts "SECS@ANCHOR:text"
+///                                    to pin a Line-Grab anchor at ANCHOR secs
 ///
 /// Config: config.json, overridden by env AGB_CRM_URL / AGB_CRM_TOKEN.
 /// Exit codes: 0 success, 1 failure, 2 simulated crash.
@@ -31,6 +34,10 @@ enum SimulatedEngine {
         var terms: [(String?, String)] = []
         /// Agenda labels to inject (semicolon-separated on the CLI).
         var agenda: [String] = []
+        /// Coverage marks: (key, state).
+        var covers: [(String, String)] = []
+        /// Note index → Line-Grab anchor tSecs.
+        var anchors: [Int: Double] = [:]
     }
 
     static func run(arguments: [String]) -> Int32 {
@@ -91,13 +98,28 @@ enum SimulatedEngine {
             }
         }
         for raw in values(after: "--note") {
-            // "SECS:text" — first colon splits.
-            guard let colon = raw.firstIndex(of: ":"),
-                  let secs = Double(raw[..<colon]) else {
-                fail("--note expects \"SECS:text\", got \(raw)")
+            // "SECS:text" or "SECS@ANCHORSECS:text" — first colon splits.
+            guard let colon = raw.firstIndex(of: ":") else {
+                fail("--note expects \"SECS[@ANCHOR]:text\", got \(raw)")
                 return nil
             }
-            options.notes.append((secs, String(raw[raw.index(after: colon)...])))
+            let head = String(raw[..<colon])
+            let text = String(raw[raw.index(after: colon)...])
+            if let at = head.firstIndex(of: "@"),
+               let secs = Double(head[..<at]), let anchor = Double(head[head.index(after: at)...]) {
+                options.notes.append((secs, text))
+                options.anchors[options.notes.count - 1] = anchor
+            } else if let secs = Double(head) {
+                options.notes.append((secs, text))
+            } else {
+                fail("--note expects \"SECS[@ANCHOR]:text\", got \(raw)")
+                return nil
+            }
+        }
+        for raw in values(after: "--cover") {
+            if let eq = raw.firstIndex(of: "=") {
+                options.covers.append((String(raw[..<eq]), String(raw[raw.index(after: eq)...])))
+            }
         }
         for raw in values(after: "--term") {
             // "wrong=right" or just "right" (keyterm hint only).
@@ -189,11 +211,20 @@ enum SimulatedEngine {
                 try spooler.setAgenda(items)
                 info("agenda: \(items.map(\.key).joined(separator: ", "))")
             }
-            for (secs, text) in options.notes {
+            for (i, noteEntry) in options.notes.enumerated() {
+                let (secs, text) = noteEntry
                 let parsed = ThemeTags.parse(text)
                 let body = parsed.text.isEmpty ? text : parsed.text
-                _ = try spooler.addNote(tSecs: secs, text: body, themeKey: parsed.tags.first)
-                info("note @\(secs)s: \(body)\(parsed.tags.first.map { " #\($0)" } ?? "")")
+                let anchor = options.anchors[i].map {
+                    SessionManifest.NoteAnchor(quote: "(sim anchor)", tSecs: $0)
+                }
+                _ = try spooler.addNote(tSecs: secs, text: body,
+                                        themeKey: parsed.tags.first, anchor: anchor)
+                info("note @\(secs)s: \(body)\(parsed.tags.first.map { " #\($0)" } ?? "")\(anchor.map { " ↳@\($0.tSecs)" } ?? "")")
+            }
+            for (key, state) in options.covers {
+                _ = try spooler.addCoverageMark(key: key, state: state, tSecs: 0)
+                info("cover: \(key) = \(state)")
             }
             for (wrong, right) in options.terms {
                 _ = try spooler.addTermCorrection(wrong: wrong, right: right)

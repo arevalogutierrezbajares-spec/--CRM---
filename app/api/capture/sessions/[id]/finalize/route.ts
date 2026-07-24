@@ -13,6 +13,7 @@ import {
   MAX_TOTAL_CHUNKS,
   parsePrecomputedTranscript,
   parseAgenda,
+  parseCoverage,
   parseHighlights,
   parseNotes,
   parseTerms,
@@ -52,6 +53,7 @@ export async function POST(
     terms?: unknown;
     agenda?: unknown;
     themes?: unknown;
+    coverage?: unknown;
   } | null;
   if (!body || !Number.isInteger(body.totalChunks) || body.totalChunks! < 1) {
     return NextResponse.json(
@@ -138,6 +140,7 @@ export async function POST(
   // El Cuaderno: agenda + live themes (advisory — absent ⇒ legacy filing).
   const agenda = parseAgenda(body.agenda);
   const themes = parseThemes(body.themes);
+  const coverage = parseCoverage(body.coverage);
   const outcome = await finalizeSession({
     session,
     founderLabel: identity.displayName?.split(/\s+/)[0] ?? "Founder",
@@ -153,6 +156,7 @@ export async function POST(
     terms,
     agenda,
     themes,
+    coverage,
   });
 
   if (!outcome.ok) {

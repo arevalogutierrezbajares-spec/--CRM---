@@ -96,6 +96,8 @@ public final class CaptureAPIClient {
         public let terms: [SessionManifest.TermCorrection]
         /// Pre-call agenda (El Cuaderno). Omitted when empty.
         public let agenda: [SessionManifest.AgendaItem]
+        /// Operator coverage marks on agenda items. Omitted when empty.
+        public let coverage: [SessionManifest.CoverageMark]
         /// Theme definitions: agenda-seeded + live-created. Omitted when empty.
         public let themes: [ThemeDef]
 
@@ -158,6 +160,7 @@ public final class CaptureAPIClient {
                     notes: [SessionManifest.Note] = [],
                     terms: [SessionManifest.TermCorrection] = [],
                     agenda: [SessionManifest.AgendaItem] = [],
+                    coverage: [SessionManifest.CoverageMark] = [],
                     themes: [ThemeDef] = []) {
             self.endedAt = ISO8601.string(from: endedAt)
             self.durationSecs = durationSecs
@@ -169,6 +172,7 @@ public final class CaptureAPIClient {
             self.notes = notes
             self.terms = terms
             self.agenda = agenda
+            self.coverage = coverage
             self.themes = themes
         }
 
@@ -179,6 +183,7 @@ public final class CaptureAPIClient {
                     notes: [SessionManifest.Note] = [],
                     terms: [SessionManifest.TermCorrection] = [],
                     agenda: [SessionManifest.AgendaItem] = [],
+                    coverage: [SessionManifest.CoverageMark] = [],
                     themes: [ThemeDef] = []) {
             self.endedAt = endedAtISO
             self.durationSecs = durationSecs
@@ -190,6 +195,7 @@ public final class CaptureAPIClient {
             self.notes = notes
             self.terms = terms
             self.agenda = agenda
+            self.coverage = coverage
             self.themes = themes
         }
 
@@ -218,6 +224,9 @@ public final class CaptureAPIClient {
             }
             if !agenda.isEmpty {
                 try c.encode(agenda, forKey: .init("agenda"))
+            }
+            if !coverage.isEmpty {
+                try c.encode(coverage, forKey: .init("coverage"))
             }
             if !themes.isEmpty {
                 try c.encode(themes, forKey: .init("themes"))
