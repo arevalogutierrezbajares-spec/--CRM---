@@ -15,6 +15,8 @@ import CaptureCore
 ///       [--term "wrong=right"]…      term correction; "right" alone = hint
 ///       [--agenda "Item;Item;…"]     pre-call agenda (semicolon-separated)
 ///       [--cover "key=done"]…        agenda coverage mark (repeatable)
+///       [--precomputed <path.json>]  inject a pre-diarized transcript as the
+///                                    finalize precomputedTranscript
 ///                                    --note also accepts "SECS@ANCHOR:text"
 ///                                    to pin a Line-Grab anchor at ANCHOR secs
 ///
@@ -28,6 +30,7 @@ enum SimulatedEngine {
         var sourceApp: String?
         var crashAfter: Int?
         var abandon = false
+        var precomputedPath: String?
         /// Call Desk notes to inject: (tSecs, text). E2E for the notes spine.
         var notes: [(Double, String)] = []
         /// Term corrections to inject: (wrong?, right).
@@ -90,6 +93,7 @@ enum SimulatedEngine {
             options.crashAfter = n
         }
         options.abandon = arguments.contains("--abandon")
+        options.precomputedPath = value(after: "--precomputed")
 
         // Repeatable flags: every occurrence's following value.
         func values(after flag: String) -> [String] {
@@ -255,6 +259,9 @@ enum SimulatedEngine {
                                   spooler: ChunkSpooler,
                                   options: Options) async -> Int32 {
         let worker = UploadQueueWorker(store: store, clientProvider: { client })
+        if let path = options.precomputedPath {
+            worker.precomputedOverride = loadPrecomputed(path)
+        }
         let myLocalId = spooler.localId
         let uploadCounter = Counter()
 
@@ -345,6 +352,28 @@ enum SimulatedEngine {
             value += 1
             return value
         }
+    }
+
+    private static func loadPrecomputed(_ path: String) -> CaptureAPIClient.FinalizeBody.PrecomputedTranscript? {
+        guard let data = FileManager.default.contents(atPath: path) else {
+            fail("--precomputed: cannot read \(path)"); return nil
+        }
+        struct U: Decodable {
+            let speaker: String; let diarizationId: String?; let channel: Int?
+            let start: Double; let end: Double; let text: String
+        }
+        struct T: Decodable { let language: String?; let engine: String?; let utterances: [U] }
+        guard let t = try? JSONDecoder().decode(T.self, from: data) else {
+            fail("--precomputed: invalid JSON in \(path)"); return nil
+        }
+        let us = t.utterances.map {
+            CaptureAPIClient.FinalizeBody.PrecomputedTranscript.Utterance(
+                speaker: $0.speaker, diarizationId: $0.diarizationId ?? $0.speaker,
+                channel: $0.channel ?? 0, start: $0.start, end: $0.end, text: $0.text)
+        }
+        info("precomputed: \(us.count) utterances, \(Set(us.map(\.speaker)).count) speakers")
+        return CaptureAPIClient.FinalizeBody.PrecomputedTranscript(
+            language: t.language, engine: t.engine ?? "sim", utterances: us)
     }
 
     private static func info(_ message: String) {
