@@ -16,26 +16,15 @@ if [[ ! -x "$VENV_PY" ]]; then
   echo "✗ venv missing. Set it up first:"
   echo "    python3.12 -m venv .venv && .venv/bin/pip install -U pip"
   echo "    .venv/bin/pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu"
-  echo "    .venv/bin/pip install whisperx soundfile certifi"
+  echo "    .venv/bin/pip install whisperx soundfile certifi resemblyzer scikit-learn"
   exit 1
 fi
 
-if [[ -z "${HF_TOKEN:-}" && -z "${HUGGING_FACE_HUB_TOKEN:-}" ]]; then
-  cat <<'MSG'
-✗ No HF_TOKEN. Diarization needs a Hugging Face token that has accepted the
-  pyannote gated-model terms. Two minutes, one time:
-
-    1) Create a token (read scope):  https://huggingface.co/settings/tokens
-    2) Click "Agree and access" on BOTH:
-         https://huggingface.co/pyannote/speaker-diarization-3.1
-         https://huggingface.co/pyannote/segmentation-3.0
-    3) Re-run with the token:
-         HF_TOKEN=hf_xxxxxxxx ./verify-diarization.sh
-
-  (In the AGB AI helper, this same token then powers every speakerphone/
-   meeting capture automatically — no per-call step.)
-MSG
-  exit 2
+if [[ -n "${HF_TOKEN:-}" || -n "${HUGGING_FACE_HUB_TOKEN:-}" ]]; then
+  echo "==> HF_TOKEN present — will prefer pyannote (higher quality)"
+else
+  echo "==> no HF_TOKEN — using the token-free diarizer (Resemblyzer + clustering)"
+  echo "    (set HF_TOKEN + accept pyannote terms for higher-quality diarization)"
 fi
 
 echo "==> generating 10-voice conference fixture"
