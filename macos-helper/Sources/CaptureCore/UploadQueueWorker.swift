@@ -51,6 +51,11 @@ public final class UploadQueueWorker {
     public var onStateChange: ((WorkerState) -> Void)?
     public var onChunkUploaded: ((_ localId: String, _ seq: Int) -> Void)?
     public var onSessionFinalized: ((Outcome) -> Void)?
+    /// Test hook (simulate --precomputed): a pre-diarized transcript to send
+    /// verbatim as the finalize precomputedTranscript, bypassing local STT.
+    /// Lets the E2E verify per-speaker synthesis on a KNOWN 10-voice transcript
+    /// without depending on the HF-token-gated diarizer. Nil in production.
+    public var precomputedOverride: CaptureAPIClient.FinalizeBody.PrecomputedTranscript?
     public var onError: ((String) -> Void)?
     /// Optional: persist a local copy of the assembled audio right before the
     /// spool is deleted (transcript-only mode keeps audio only on this Mac).
@@ -254,7 +259,9 @@ public final class UploadQueueWorker {
         // what MonoWavAssembler.assembleLeftChannel expects — and local Whisper
         // diarization is the only way to separate speakers on a mixed channel.
         var precomputed: CaptureAPIClient.FinalizeBody.PrecomputedTranscript? = nil
-        if !snap.kind.capturesSystemAudio {
+        if let override = precomputedOverride {
+            precomputed = override
+        } else if !snap.kind.capturesSystemAudio {
             precomputed = tryLocalTranscribe(spooler: spooler)
         }
 
