@@ -23,25 +23,16 @@
 
 import GraphDefault from "graphology";
 
-// graphology's bundled d.ts resolves the default export to the abstract
-// zero-arg Graph from graphology-types under this tsconfig, which drops the
-// options constructor and every mutation method — the ONLY file that
-// constructs graphs directly, and the error that broke the Vercel build once
-// the type-check cache went cold. Runtime shape is correct; re-type locally.
-type AnyGraph = {
-  mergeNode: (n: string) => void;
-  mergeEdge: (a: string, b: string) => void;
-  nodes: () => string[];
-  forEachNode: (cb: (n: string) => void) => void;
-  inDegree: (n: string) => number;
-  outDegree: (n: string) => number;
-  degree: (n: string) => number;
-  order: number;
-  size: number;
-};
+// graphology's default-export typing resolves differently between the npm
+// (local) and pnpm (Vercel) dependency layouts — one sees the full concrete
+// class, the other the abstract zero-arg Graph. Typing the constructor's
+// instances as `any` is the only shape that compiles in BOTH environments
+// (a structural shim here failed Vercel's stricter resolution the other way).
+// Runtime is correct either way; this file is the only direct constructor.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const Graph = GraphDefault as unknown as new (opts?: {
   type?: string; multi?: boolean; allowSelfLoops?: boolean;
-}) => AnyGraph & Record<string, any>;
+}) => any;
 import { stronglyConnectedComponents } from "graphology-components";
 import louvain from "graphology-communities-louvain";
 import type { BrainGraph, BrainNode, EdgeKind, System } from "../types";
@@ -151,14 +142,14 @@ export function computeInsights(graph: BrainGraph): BrainInsights {
   }
   const hubs: HubInsight[] = dg
     .nodes()
-    .map((id) => ({
+    .map((id: string) => ({
       ...refOf(id),
       degree: dg.degree(id),
       inDegree: dg.inDegree(id),
       outDegree: dg.outDegree(id),
     }))
-    .filter((h) => h.degree >= 2)
-    .sort((a, b) => b.degree - a.degree || a.id.localeCompare(b.id));
+    .filter((h: HubInsight) => h.degree >= 2)
+    .sort((a: HubInsight, b: HubInsight) => b.degree - a.degree || a.id.localeCompare(b.id));
 
   // ── Cross-system cycles: SCCs of the system-collapsed interchange graph ─
   const crossEdges = graph.edges.filter(
