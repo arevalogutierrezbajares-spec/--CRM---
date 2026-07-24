@@ -175,8 +175,13 @@ final class OnDeviceTranscriber: NSObject, LiveTranscribing {
             if let result {
                 let text = result.bestTranscription.formattedString
                 if !text.isEmpty {
-                    self.queue.async { ch.consecutiveFailures = 0 }
-                    self.emit(channel: ch.index, text: text, isFinal: result.isFinal)
+                    // Hop to the serial queue: the Speech framework invokes this
+                    // on its own thread, and emit reads participantName whose
+                    // writer runs on `queue`.
+                    self.queue.async {
+                        ch.consecutiveFailures = 0
+                        self.emit(channel: ch.index, text: text, isFinal: result.isFinal)
+                    }
                 }
                 if result.isFinal { self.rotate(ch, afterError: false) }
             } else if let error {
@@ -264,7 +269,8 @@ final class OnDeviceTranscriber: NSObject, LiveTranscribing {
     }
 
     private func emit(channel: Int, text: String, isFinal: Bool) {
-        // Always called on `queue` — read participantName here (same serial queue).
+        // Called on `queue` (task callback hops here) — participantName reads
+        // are consistent with setParticipantName's writes.
         // Mic-only kinds: only the mic channel carries speech (R is silence).
         if !captureKind.capturesSystemAudio, channel != 0 { return }
         let speaker = LiveTranscriptStreamer.label(forChannel: channel,
