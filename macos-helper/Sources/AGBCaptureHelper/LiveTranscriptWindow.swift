@@ -89,8 +89,19 @@ final class LiveTranscriptWindow: NSObject {
     var onFixTerm: (() -> Void)?
     /// Fired when the operator clicks an agenda row (key, nowDone).
     var onAgendaToggle: ((String, Bool) -> Void)?
+    /// Fired when the operator adopts a commitment-whisper chip as a note.
+    var onAdoptCommitment: ((String) -> Void)?
+    /// Fired for each FINALIZED transcript line so the AppDelegate can run
+    /// on-device detection (commitment whisper + agenda glow) with its
+    /// session context (agenda keys, spooler).
+    var onFinalLine: ((String) -> Void)?
 
     var isVisible: Bool { panel?.isVisible ?? false }
+
+    /// The pending commitment-whisper suggestion (nil = none showing).
+    private var whisperClause: String?
+    private let whisperBar = NSStackView()
+    private let whisperLabel = NSTextField(labelWithString: "")
 
     // MARK: - Window
 
@@ -195,6 +206,34 @@ final class LiveTranscriptWindow: NSObject {
         anchorLabel.lineBreakMode = .byTruncatingTail
         anchorLabel.isHidden = true
 
+        // Commitment whisper: a dismissible chip that surfaces a detected
+        // spoken commitment; the operator adopts it as a note (⌥⏎ or the
+        // button) or ignores it (it clears on the next detection / dismiss).
+        whisperLabel.font = .systemFont(ofSize: 11.5)
+        whisperLabel.textColor = .labelColor
+        whisperLabel.lineBreakMode = .byTruncatingTail
+        whisperLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        let adopt = NSButton(title: "Keep ⌥⏎", target: self, action: #selector(adoptWhisperTapped))
+        adopt.bezelStyle = .rounded
+        adopt.controlSize = .small
+        adopt.font = .systemFont(ofSize: 11, weight: .semibold)
+        adopt.contentTintColor = .systemGreen
+        adopt.setContentHuggingPriority(.required, for: .horizontal)
+        let dismiss = NSButton(title: "✕", target: self, action: #selector(dismissWhisperTapped))
+        dismiss.bezelStyle = .rounded
+        dismiss.controlSize = .small
+        dismiss.font = .systemFont(ofSize: 11)
+        dismiss.setContentHuggingPriority(.required, for: .horizontal)
+        let heard = NSTextField(labelWithString: "⟶")
+        heard.font = .systemFont(ofSize: 11, weight: .semibold)
+        heard.textColor = .systemGreen
+        heard.setContentHuggingPriority(.required, for: .horizontal)
+        whisperBar.setViews([heard, whisperLabel, adopt, dismiss], in: .leading)
+        whisperBar.orientation = .horizontal
+        whisperBar.alignment = .centerY
+        whisperBar.spacing = 7
+        whisperBar.isHidden = true
+
         // Notes composer, docked under the transcript. Enter = timestamped ✎
         // note; ↑/↓ picks a recent line as the note's anchor; the panel is
         // non-activating so typing here never steals focus from the call app
@@ -222,16 +261,17 @@ final class LiveTranscriptWindow: NSObject {
             composerWell.heightAnchor.constraint(equalToConstant: 30),
         ])
 
-        let stack = NSStackView(views: [header, railStack, scroll, anchorLabel, composerWell])
+        let stack = NSStackView(views: [header, railStack, scroll, whisperBar, anchorLabel, composerWell])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 8
         stack.setCustomSpacing(4, after: railStack)
+        stack.setCustomSpacing(3, after: whisperBar)
         stack.setCustomSpacing(3, after: anchorLabel)
         // Extra top inset clears the transparent titlebar's close button.
         stack.edgeInsets = NSEdgeInsets(top: 30, left: 14, bottom: 12, right: 14)
         stack.translatesAutoresizingMaskIntoConstraints = false
-        for v in [header, railStack, scroll, anchorLabel, composerWell] {
+        for v in [header, railStack, scroll, whisperBar, anchorLabel, composerWell] {
             v.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -28).isActive = true
         }
 
@@ -284,9 +324,35 @@ final class LiveTranscriptWindow: NSObject {
         committedLength = 0
         textView.textStorage?.setAttributedString(NSAttributedString(string: ""))
         anchorLabel.isHidden = true
+        dismissWhisper()
         setAgenda([])
         setStatus("● Recording — connecting live transcript…")
         renderTail()
+    }
+
+    // MARK: - Commitment whisper
+
+    /// Surface a detected commitment as a dismissible suggestion chip. Newest
+    /// wins (one at a time), so a stale suggestion never lingers.
+    func showWhisper(clause: String) {
+        buildPanelIfNeeded()
+        whisperClause = clause
+        whisperLabel.stringValue = clause
+        whisperBar.isHidden = false
+    }
+
+    func dismissWhisper() {
+        whisperClause = nil
+        whisperBar.isHidden = true
+    }
+
+    @objc private func adoptWhisperTapped() { adoptWhisper() }
+    @objc private func dismissWhisperTapped() { dismissWhisper() }
+
+    private func adoptWhisper() {
+        guard let clause = whisperClause else { return }
+        dismissWhisper()
+        onAdoptCommitment?(clause)
     }
 
     // MARK: - Content updates (call on main thread)
@@ -307,6 +373,7 @@ final class LiveTranscriptWindow: NSObject {
                 // simplest correct behavior on new content is to keep the same
                 // pickables entry highlighted (ranges never move — committed
                 // text is append-only).
+                onFinalLine?(line.text)
             }
         } else {
             interimByChannel[line.channel] = line
@@ -687,12 +754,22 @@ extension LiveTranscriptWindow: NSTextFieldDelegate {
             movePick(older: false)
             return true
         case #selector(NSResponder.cancelOperation(_:)):
-            if pickIndex != nil {
+            if whisperClause != nil {
+                dismissWhisper()
+            } else if pickIndex != nil {
                 clearPick()
             } else {
                 releaseComposerFocus()
             }
             return true
+        case #selector(NSResponder.insertNewlineIgnoringFieldEditor(_:)):
+            // ⌥⏎ adopts the pending commitment whisper as a note (only when
+            // the composer is empty — otherwise it's a stray option-return).
+            if whisperClause != nil && composer.stringValue.isEmpty {
+                adoptWhisper()
+                return true
+            }
+            return false
         default:
             return false
         }

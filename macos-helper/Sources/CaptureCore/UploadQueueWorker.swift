@@ -270,6 +270,7 @@ public final class UploadQueueWorker {
             terms: snap.terms ?? [],
             agenda: snap.agenda ?? [],
             coverage: snap.coverage ?? [],
+            roster: snap.roster ?? [],
             themes: Self.themeDefs(for: snap)
         )
 
@@ -334,7 +335,9 @@ public final class UploadQueueWorker {
                 model: cfg.localTranscribeModel,
                 timeoutSecs: cfg.localTranscribeTimeoutSecs,
                 repoRootHint: URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("AGB-CRM"),
-                maxSpeakers: cfg.localTranscribeMaxSpeakers
+                // Per-session roster hint wins over the global config default —
+                // a 10-name roster tells pyannote to look for ~11 clusters.
+                maxSpeakers: spooler.speakerHint > 0 ? spooler.speakerHint : cfg.localTranscribeMaxSpeakers
             )
             let result = try LocalTranscribeRunner.transcribe(wav: monoURL, opts: opts)
             log.info(

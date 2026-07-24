@@ -310,6 +310,27 @@ public final class ChunkSpooler {
         return current.count
     }
 
+    /// Set the expected participants (roster) + optional explicit count.
+    /// Feeds the diarizer speaker-count hint and the name-mapping pool.
+    public func setRoster(_ names: [String], expectedSpeakers: Int? = nil) throws {
+        lock.lock(); defer { lock.unlock() }
+        let clean = names.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        manifestStorage.roster = clean.isEmpty ? nil : clean
+        manifestStorage.expectedSpeakers = (expectedSpeakers ?? 0) > 0 ? expectedSpeakers : nil
+        try persistManifest()
+    }
+
+    /// The diarizer max-speakers hint for this session: explicit count →
+    /// roster size → 0 (let config/pyannote decide). +1 headroom over the
+    /// roster so an unexpected extra voice isn't force-merged.
+    public var speakerHint: Int {
+        lock.lock(); defer { lock.unlock() }
+        if let e = manifestStorage.expectedSpeakers, e > 0 { return e }
+        if let r = manifestStorage.roster, !r.isEmpty { return r.count + 1 }
+        return 0
+    }
+
     /// Set/replace the call agenda (El Cuaderno "original list"). Crash-safe.
     public func setAgenda(_ items: [SessionManifest.AgendaItem]) throws {
         lock.lock(); defer { lock.unlock() }

@@ -123,6 +123,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Agenda keys active this session (rail dots) + which the operator ticked.
     private var agendaKeysThisSession: Set<String> = []
     private var doneAgendaKeys: Set<String> = []
+    /// Agenda (key,label) for on-device glow matching this session.
+    private var agendaForGlow: [(key: String, label: String)] = []
+    /// Agenda keys already lit ◐ by glow, so we don't re-touch/log repeatedly.
+    private var glowedAgendaKeys: Set<String> = []
+    /// Commitment clauses already whispered this call (dedupe noise).
+    private var whisperedClauses: Set<String> = []
+    /// Participants typed before a call — attached to the next session.
+    private var pendingRoster: [String] = []
     private var detectedSourceApp: String?
     /// Far-side person name for this recording (never source app). Feeds live
     /// captions + spool contactName → CRM finalize (FR-CALL-ATT-3).
@@ -187,6 +195,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         liveWindow.onNote = { [weak self] text, anchor in self?.dropNote(text: text, anchor: anchor) }
         liveWindow.onFixTerm = { [weak self] in self?.fixTermTapped() }
         liveWindow.onAgendaToggle = { [weak self] key, done in self?.agendaToggled(key: key, done: done) }
+        // On-device live assists (Slice 3): commitment whisper + agenda glow,
+        // run per finalized transcript line. No model, no network.
+        liveWindow.onFinalLine = { [weak self] text in self?.scanLiveLine(text) }
+        liveWindow.onAdoptCommitment = { [weak self] clause in
+            self?.dropNote(text: clause)
+        }
         configureTownHall()
         controlWindow.show()
 
@@ -467,6 +481,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 try? spooler.setAgenda(pendingAgenda)
                 pendingAgenda = []
             }
+            if !pendingRoster.isEmpty {
+                try? spooler.setRoster(pendingRoster)
+                pendingRoster = []
+            }
             activeSpooler = spooler
             engine.promoteToRecording(spooler: spooler)
             state = .recording
@@ -591,6 +609,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let agenda = activeSpooler?.snapshot.agenda ?? []
             agendaKeysThisSession = Set(agenda.map(\.key))
             doneAgendaKeys = []
+            agendaForGlow = agenda.map { (key: $0.key, label: $0.label) }
+            glowedAgendaKeys = []
+            whisperedClauses = []
             liveWindow.setAgenda(agenda.map { (key: $0.key, label: $0.label) })
             if cfg.liveTranscriptAutoShow { liveWindow.show() }
             liveEngineFellBack = false
@@ -689,6 +710,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// On-device live assists per finalized transcript line (Slice 3):
+    /// (1) commitment whisper — a spoken "I'll send… Friday" surfaces a chip
+    ///     the operator adopts with ⌥⏎; (2) agenda glow — a line mentioning an
+    ///     agenda topic lights its rail dot ◐. Both are pure/local, no model.
+    private func scanLiveLine(_ text: String) {
+        // Agenda glow: light any mentioned, not-yet-covered item.
+        if !agendaForGlow.isEmpty {
+            for key in AgendaMatcher.matches(line: text, agenda: agendaForGlow)
+            where !glowedAgendaKeys.contains(key) && !doneAgendaKeys.contains(key) {
+                glowedAgendaKeys.insert(key)
+                liveWindow.updateAgendaState(key: key, state: .touched)
+                log.info("agenda glow: \(key)", category: "app")
+            }
+        }
+        // Commitment whisper: surface the newest unseen commitment.
+        if let candidate = CommitmentDetector.scan(line: text) {
+            let norm = candidate.clause.lowercased()
+            if whisperedClauses.insert(norm).inserted, whisperedClauses.count <= 12 {
+                liveWindow.showWhisper(clause: candidate.clause)
+                log.info("commitment whisper: \(candidate.clause.prefix(48))", category: "app")
+            }
+        }
+    }
+
     /// Rail click: persist the operator's coverage judgment. "done" overrides
     /// everything at filing; un-ticking reverts to derived coverage.
     private func agendaToggled(key: String, done: Bool) {
@@ -777,6 +822,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let spooler = activeSpooler, state == .recording || state == .paused {
             try? spooler.setAgenda(items)
             agendaKeysThisSession = Set(items.map(\.key))
+            agendaForGlow = items.map { (key: $0.key, label: $0.label) }
+            glowedAgendaKeys = []
             liveWindow.setAgenda(items.map { (key: $0.key, label: $0.label) })
             liveWindow.setStatus("☰ Agenda set — \(items.count) item\(items.count == 1 ? "" : "s") this call")
         } else {
@@ -784,6 +831,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             lastResult = "Agenda staged for the next call (\(items.count) items)"
         }
         log.info("agenda set: \(items.count) item(s)", category: "app")
+    }
+
+    /// El Cuaderno roster: name the expected participants (one per line). The
+    /// count hints the diarizer's speaker count — crucial so a 10-person
+    /// speakerphone call doesn't collapse to 2 clusters — and the names become
+    /// a pool for mapping SPEAKER_xx to people after filing. Staged pre-call or
+    /// attached to the active session (crash-safe).
+    @objc private func setRosterTapped() {
+        let alert = NSAlert()
+        alert.messageText = "Participants — who's on this call?"
+        alert.informativeText = "One name per line. The count tells the transcriber how many voices to separate (essential for 10+ person calls); names help label who said what."
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Cancel")
+        let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 300, height: 140))
+        let tv = NSTextView(frame: scroll.bounds)
+        tv.font = .systemFont(ofSize: 12.5)
+        tv.isRichText = false
+        let existing = activeSpooler?.snapshot.roster ?? (pendingRoster.isEmpty ? nil : pendingRoster)
+        tv.string = (existing ?? []).joined(separator: "\n")
+        scroll.documentView = tv
+        scroll.hasVerticalScroller = true
+        alert.accessoryView = scroll
+        DispatchQueue.main.async { tv.window?.makeFirstResponder(tv) }
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let names = Array(tv.string
+            .split(separator: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+            .prefix(40))
+        if let spooler = activeSpooler, state == .recording || state == .paused {
+            try? spooler.setRoster(names)
+            liveWindow.setStatus("☰ \(names.count) participant\(names.count == 1 ? "" : "s") — diarizer hint \(spooler.speakerHint)")
+        } else {
+            pendingRoster = names
+            lastResult = "Roster staged for the next call (\(names.count) participants)"
+        }
+        log.info("roster set: \(names.count) participant(s)", category: "app")
     }
 
     private func handleLiveStatus(_ status: LiveTranscriptStreamer.Status) {
@@ -1011,6 +1096,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 if !self.pendingAgenda.isEmpty {
                     try? spooler.setAgenda(self.pendingAgenda)
                     self.pendingAgenda = []
+                }
+                if !self.pendingRoster.isEmpty {
+                    try? spooler.setRoster(self.pendingRoster)
+                    self.pendingRoster = []
                 }
                 self.activeSpooler = spooler
                 engine.promoteToRecording(spooler: spooler)
@@ -1365,6 +1454,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(fixTerm)
 
         menu.addItem(makeItem("Set call agenda…", #selector(setAgendaTapped), ""))
+        menu.addItem(makeItem("Set participants…", #selector(setRosterTapped), ""))
 
         menu.addItem(.separator())
         let townHallItem = makeItem("Town Hall", #selector(openTownHall), "h")

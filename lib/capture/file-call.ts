@@ -15,9 +15,16 @@ import type { Utterance } from "./deepgram";
 import {
   renderThemedBrief,
   clockTs,
+  nearestUtteranceAt,
   type ThemedDoc,
   type ThemeAi,
   type ThemeAiBullet,
+  type SupportingQuote,
+  type Commitment,
+  type RaisedItem,
+  type SpeakerSynthesis,
+  type CallAudit,
+  type NextStep,
 } from "./themed-doc";
 
 const { actionItems, touches, contacts } = schema;
@@ -284,6 +291,557 @@ export function sanitizeCallSentence(raw: unknown): string | null {
   if (!s || s.length > MAX_CALL_SENTENCE_CHARS) return null;
   if (AI_BULLET_BANLIST_RE.test(s)) return null;
   return s;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EL CUADERNO — Slice 3: the librarian (Haiku) + the auditor (Sonnet)
+//
+// The librarian adds 0–4 cite-verified verbatim quotes per theme the operator
+// left unmarked (supports / contradicts / constraint / number / date) — the
+// `contradicts` tag is the anti-yes-man signal. The auditor produces the
+// centerpiece: a call-wide commitments ledger, blockers/issues raised, decisions,
+// and a per-speaker synthesis — every claim cite-gated to a real utterance (±2s)
+// with owner/raisedBy pinned to a scaffold speaker, or it's dropped. Both are
+// advisory and run AFTER the durable recording row exists (see finalize.ts).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The auditor earns a bigger model: commitment/blocker/gap judgment is the one
+ * place worth Sonnet. `coerceModel` in lib/anthropic accepts the Sonnet-4.x
+ * tier as `claude-sonnet-4-6` (there is no `-4-5` id — an unknown string would
+ * be silently downgraded to the Haiku default, defeating the point).
+ */
+export const AUDIT_MODEL = "claude-sonnet-4-6";
+export const LIBRARIAN_MODEL = "claude-haiku-4-5";
+
+export const MAX_AUDIT_COMMITMENTS = 40;
+export const MAX_AUDIT_BLOCKERS = 30;
+export const MAX_AUDIT_DECISIONS = 40;
+export const MAX_AUDIT_QUOTE_CHARS = 200;
+export const MAX_AUDIT_TEXT_CHARS = 160;
+export const MAX_AUDIT_HEADLINE_CHARS = 120;
+export const MAX_AUDIT_DUE_CHARS = 60;
+export const MAX_SUPPORTING_PER_THEME = 4;
+
+const RAISED_KINDS = ["blocker", "issue", "question", "risk"] as const;
+const SUPPORTING_RELEVANCE = [
+  "supports",
+  "contradicts",
+  "constraint",
+  "number",
+  "date",
+] as const;
+
+const AUDIT_ITEM = {
+  type: "object",
+  properties: {
+    text: {
+      type: "string",
+      description:
+        "The fact in ≤160 chars, preferring the speaker's own words. No hedging, no consultant-speak.",
+    },
+    quote: {
+      type: "string",
+      description:
+        "The verbatim words spoken (≤200 chars). Quote or stay silent — never paraphrase.",
+    },
+    cite_t_secs: {
+      type: "number",
+      description: "Seconds into the call where this was said. No cite ⇒ discarded.",
+    },
+  },
+  required: ["text", "quote", "cite_t_secs"],
+} as const;
+
+export const FILE_CALL_AUDIT_TOOL: ClaudeToolDef = {
+  name: "file_call_audit",
+  description:
+    "Audit a filed call: the commitments made, the blockers/issues raised, the decisions taken, and a one-line throughline per speaker. Every item cites the second it was said.",
+  input_schema: {
+    type: "object",
+    properties: {
+      commitments: {
+        type: "array",
+        description:
+          "Things a specific person committed to do. `owner` MUST be an exact speaker label from the scaffold. `due` only if a date was literally spoken. Empty array is correct when nobody committed to anything.",
+        items: {
+          type: "object",
+          properties: {
+            owner: { type: "string", description: "Exact speaker label from the scaffold." },
+            text: AUDIT_ITEM.properties.text,
+            quote: AUDIT_ITEM.properties.quote,
+            cite_t_secs: AUDIT_ITEM.properties.cite_t_secs,
+            due: {
+              type: "string",
+              description: "The due date/timeframe ONLY if literally spoken; omit otherwise.",
+            },
+            due_source: {
+              type: "string",
+              enum: ["spoken", "absent"],
+              description: "'spoken' only if a date was actually said; else 'absent'. Never infer.",
+            },
+          },
+          required: ["owner", "text", "quote", "cite_t_secs"],
+        },
+      },
+      blockers: {
+        type: "array",
+        description:
+          "Blockers, issues, questions, or risks raised on the call. `raised_by` MUST be an exact speaker label. Empty array is correct.",
+        items: {
+          type: "object",
+          properties: {
+            kind: { type: "string", enum: [...RAISED_KINDS] },
+            text: AUDIT_ITEM.properties.text,
+            quote: AUDIT_ITEM.properties.quote,
+            cite_t_secs: AUDIT_ITEM.properties.cite_t_secs,
+            raised_by: { type: "string", description: "Exact speaker label from the scaffold." },
+          },
+          required: ["kind", "text", "quote", "cite_t_secs", "raised_by"],
+        },
+      },
+      decisions: {
+        type: "array",
+        description: "Decisions actually made on the call. Empty array is correct.",
+        items: {
+          type: "object",
+          properties: {
+            text: AUDIT_ITEM.properties.text,
+            cite_t_secs: AUDIT_ITEM.properties.cite_t_secs,
+          },
+          required: ["text", "cite_t_secs"],
+        },
+      },
+      speakers: {
+        type: "array",
+        description:
+          "One entry per scaffold speaker you can characterize. `headline` is a plain, factual one-line throughline of what that person was about on the call (≤120 chars, their words preferred).",
+        items: {
+          type: "object",
+          properties: {
+            speaker: { type: "string", description: "Exact speaker label from the scaffold." },
+            headline: { type: "string", description: "One factual line, ≤120 chars." },
+          },
+          required: ["speaker", "headline"],
+        },
+      },
+    },
+    required: ["commitments", "blockers", "decisions", "speakers"],
+  },
+};
+
+const SYSTEM_AUDIT =
+  "You are the auditor for a busy operator's call notebook, reading a full speaker-attributed transcript of a multi-party call. Doctrine: QUOTE OR STAY SILENT. Produce (1) a commitments ledger — who committed to do what, (2) blockers/issues/questions/risks raised, (3) decisions actually made, and (4) one plain factual headline per speaker. RULES: never paraphrase — every item carries the verbatim `quote` and the second it was said (`cite_t_secs`); `owner` and `raised_by` MUST be an EXACT speaker label from the scaffold you are given — never invent a name; a commitment's `due` is set ONLY if a date/timeframe was literally spoken (`due_source`='spoken'), otherwise `due_source`='absent' — never infer a deadline; a headline is a factual one-liner of that speaker's throughline, in their words where possible. Do NOT use hedging or consultant-speak (aligned, leverage, synergy, circle back, going forward, key takeaway, seems, appears, likely). 'No commitments' / 'no blockers' is a correct and common answer — return empty arrays rather than manufacturing items. You MUST call the file_call_audit tool exactly once.";
+
+const SUPPORTING_ITEM = {
+  type: "object",
+  properties: {
+    quote: {
+      type: "string",
+      description: "Verbatim words spoken at the cite (≤200 chars). Must appear in the transcript.",
+    },
+    cite_t_secs: {
+      type: "number",
+      description: "Seconds into the call where this was said.",
+    },
+    relevance: {
+      type: "string",
+      enum: [...SUPPORTING_RELEVANCE],
+      description:
+        "How the quote bears on the theme: supports, contradicts, constraint, number, or date.",
+    },
+  },
+  required: ["quote", "cite_t_secs", "relevance"],
+} as const;
+
+export const FILE_THEME_SUPPORTING_TOOL: ClaudeToolDef = {
+  name: "file_theme_supporting",
+  description:
+    "For each theme, surface 0–4 additional verbatim quotes the operator did not mark that bear on it — especially anything that CONTRADICTS the theme.",
+  input_schema: {
+    type: "object",
+    properties: {
+      themes: {
+        type: "array",
+        description: "Per-theme supporting quotes. Use ONLY the theme keys given.",
+        items: {
+          type: "object",
+          properties: {
+            key: { type: "string", description: "Theme key exactly as given." },
+            quotes: {
+              type: "array",
+              description: "0–4 verbatim quotes, each with a cite and a relevance tag.",
+              items: SUPPORTING_ITEM,
+            },
+          },
+          required: ["key", "quotes"],
+        },
+      },
+    },
+    required: ["themes"],
+  },
+};
+
+const SYSTEM_LIBRARIAN =
+  "You are a librarian for a busy operator's call notebook. For each theme the operator marked, scan the transcript for UP TO 4 additional verbatim quotes they did not mark that genuinely bear on that theme, tagging each as supports / contradicts / constraint / number / date. Doctrine: quote exactly — every quote must be words that literally appear in the transcript at the cited second; never paraphrase or invent. Prioritize CONTRADICTIONS — a quote that cuts against the operator's read is the most valuable thing you can surface. If a theme has no genuine extra quotes, return an empty array for it — silence is correct. You MUST call the file_theme_supporting tool exactly once.";
+
+/** Collapse whitespace + trim; "" when not a usable string. */
+function cleanText(raw: unknown): string {
+  return typeof raw === "string" ? raw.replace(/\s+/g, " ").trim() : "";
+}
+
+/** True when a cite lands within ±CITE_TOLERANCE_SECS of any utterance start. */
+function citeOnUtterance(t: number, utterances: Utterance[]): boolean {
+  return utterances.some((u) => Math.abs(u.start - t) <= CITE_TOLERANCE_SECS);
+}
+
+/**
+ * CITE-GATE for the auditor (code, not prompt). Keeps a commitment/blocker/
+ * decision only when: its cite lands within ±2 s of a real utterance start; its
+ * `owner`/`raisedBy` is an EXACT scaffold speaker label; it carries a non-empty
+ * verbatim quote; and it passes the banlist and length caps. Valid items attach
+ * to BOTH their speaker (matched on the owner/raisedBy field) AND the call-wide
+ * audit block. Everything else is silently dropped (count returned). Pure.
+ */
+export function gateAudit(
+  raw: unknown,
+  doc: ThemedDoc,
+  utterances: Utterance[],
+): { audit: CallAudit; speakers: SpeakerSynthesis[]; dropped: number } {
+  const scaffold = doc.speakers ?? [];
+  // Fresh working copy so the input doc is never mutated.
+  const speakers: SpeakerSynthesis[] = scaffold.map((s) => ({
+    speaker: s.speaker,
+    headline: "",
+    turnCount: s.turnCount,
+    commitments: [],
+    raised: [],
+  }));
+  const byName = new Map(speakers.map((s) => [s.speaker, s]));
+  const audit: CallAudit = { commitments: [], blockers: [], decisions: [] };
+  let dropped = 0;
+
+  const validCite = (t: unknown): number | null => {
+    const c = typeof t === "number" ? t : Number(t);
+    return Number.isFinite(c) && c >= 0 && citeOnUtterance(c, utterances) ? c : null;
+  };
+  const validQuote = (q: unknown): string | null => {
+    const s = cleanText(q);
+    return s ? s.slice(0, MAX_AUDIT_QUOTE_CHARS) : null;
+  };
+  const validText = (t: unknown): string | null => {
+    const s = cleanText(t);
+    if (!s || s.length > MAX_AUDIT_TEXT_CHARS || AI_BULLET_BANLIST_RE.test(s)) return null;
+    return s;
+  };
+
+  const input = (raw ?? {}) as Record<string, unknown>;
+
+  // Commitments.
+  const rawCommitments = Array.isArray(input.commitments) ? input.commitments : [];
+  for (const item of rawCommitments) {
+    if (audit.commitments.length >= MAX_AUDIT_COMMITMENTS) {
+      dropped += 1;
+      continue;
+    }
+    if (!item || typeof item !== "object") {
+      dropped += 1;
+      continue;
+    }
+    const o = item as Record<string, unknown>;
+    const owner = cleanText(o.owner);
+    const speaker = byName.get(owner);
+    const text = validText(o.text);
+    const cite = validCite(o.cite_t_secs);
+    const quote = validQuote(o.quote);
+    if (!speaker || !text || cite === null || !quote) {
+      dropped += 1;
+      continue;
+    }
+    const spoken =
+      o.due_source === "spoken" && typeof o.due === "string" && o.due.trim().length > 0;
+    const commitment: Commitment = {
+      owner,
+      text,
+      quote,
+      tSecs: cite,
+      due: spoken ? (o.due as string).trim().slice(0, MAX_AUDIT_DUE_CHARS) : null,
+      dueSource: spoken ? "spoken" : "absent",
+    };
+    audit.commitments.push(commitment);
+    speaker.commitments.push(commitment);
+  }
+
+  // Blockers / issues / questions / risks.
+  const rawBlockers = Array.isArray(input.blockers) ? input.blockers : [];
+  for (const item of rawBlockers) {
+    if (audit.blockers.length >= MAX_AUDIT_BLOCKERS) {
+      dropped += 1;
+      continue;
+    }
+    if (!item || typeof item !== "object") {
+      dropped += 1;
+      continue;
+    }
+    const o = item as Record<string, unknown>;
+    const kind = RAISED_KINDS.find((k) => k === o.kind);
+    const raisedBy = cleanText(o.raised_by);
+    const speaker = byName.get(raisedBy);
+    const text = validText(o.text);
+    const cite = validCite(o.cite_t_secs);
+    const quote = validQuote(o.quote);
+    if (!kind || !speaker || !text || cite === null || !quote) {
+      dropped += 1;
+      continue;
+    }
+    const blocker: RaisedItem = { kind, text, quote, tSecs: cite, raisedBy };
+    audit.blockers.push(blocker);
+    speaker.raised.push(blocker);
+  }
+
+  // Decisions (no speaker attribution).
+  const rawDecisions = Array.isArray(input.decisions) ? input.decisions : [];
+  for (const item of rawDecisions) {
+    if (audit.decisions.length >= MAX_AUDIT_DECISIONS) {
+      dropped += 1;
+      continue;
+    }
+    if (!item || typeof item !== "object") {
+      dropped += 1;
+      continue;
+    }
+    const o = item as Record<string, unknown>;
+    const text = validText(o.text);
+    const cite = validCite(o.cite_t_secs);
+    if (!text || cite === null) {
+      dropped += 1;
+      continue;
+    }
+    audit.decisions.push({ text, tSecs: cite });
+  }
+
+  // Speaker headlines — mapped onto the scaffold, banlist + length gated.
+  const rawSpeakers = Array.isArray(input.speakers) ? input.speakers : [];
+  for (const item of rawSpeakers) {
+    if (!item || typeof item !== "object") continue;
+    const o = item as Record<string, unknown>;
+    const speaker = byName.get(cleanText(o.speaker));
+    if (!speaker) continue;
+    const headline = cleanText(o.headline);
+    if (headline && headline.length <= MAX_AUDIT_HEADLINE_CHARS && !AI_BULLET_BANLIST_RE.test(headline)) {
+      speaker.headline = headline;
+    }
+  }
+
+  return { audit, speakers, dropped };
+}
+
+/**
+ * The audit is worth a Sonnet call only when there's real cross-party structure
+ * to find: ≥2 distinct participant speakers OR ≥1 agenda item. A 1-on-1 with no
+ * agenda is skipped to save the cost (it stays audit=null).
+ */
+export function shouldRunAudit(doc: ThemedDoc): boolean {
+  const participants = doc.speakers?.length ?? 0;
+  const agendaItems = doc.agenda?.length ?? 0;
+  return participants >= 2 || agendaItems >= 1;
+}
+
+/**
+ * CITE-GATE for the librarian (code, not prompt). Keeps a supporting quote only
+ * when: its theme has ≥1 operator evidence (never a gap); the quote VERBATIM
+ * appears in the utterance nearest its cite (case-insensitive substring); and
+ * the relevance is one of the allowed tags. ≤4 per theme. Pure.
+ */
+export function gateSupporting(
+  raw: unknown,
+  doc: ThemedDoc,
+  utterances: Utterance[],
+): { byTheme: Map<string, SupportingQuote[]>; dropped: number } {
+  const byTheme = new Map<string, SupportingQuote[]>();
+  let dropped = 0;
+  if (!raw || typeof raw !== "object") return { byTheme, dropped };
+  const list = (raw as Record<string, unknown>).themes;
+  if (!Array.isArray(list)) return { byTheme, dropped };
+
+  // Only themes WITH operator evidence are eligible — gaps stay honest.
+  const eligible = new Map(
+    doc.themes.filter((t) => t.evidence.length > 0).map((t) => [t.key, t]),
+  );
+
+  for (const entry of list) {
+    if (!entry || typeof entry !== "object") continue;
+    const e = entry as Record<string, unknown>;
+    const key = typeof e.key === "string" ? e.key : null;
+    if (!key || !eligible.has(key)) {
+      if (Array.isArray(e.quotes)) dropped += e.quotes.length;
+      continue;
+    }
+    const quotes = Array.isArray(e.quotes) ? e.quotes : [];
+    const out: SupportingQuote[] = [];
+    for (const q of quotes) {
+      if (out.length >= MAX_SUPPORTING_PER_THEME) {
+        dropped += 1;
+        continue;
+      }
+      if (!q || typeof q !== "object") {
+        dropped += 1;
+        continue;
+      }
+      const o = q as Record<string, unknown>;
+      const quote = cleanText(o.quote);
+      const citeRaw = o.cite_t_secs ?? o.citeTSecs;
+      const cite = typeof citeRaw === "number" ? citeRaw : Number(citeRaw);
+      const relevance = SUPPORTING_RELEVANCE.find((r) => r === o.relevance);
+      const u = Number.isFinite(cite) && cite >= 0 ? nearestUtteranceAt(cite, utterances) : null;
+      const verbatim =
+        !!quote &&
+        !!u &&
+        u.text.toLowerCase().includes(quote.toLowerCase());
+      if (!verbatim || !relevance) {
+        dropped += 1;
+        continue;
+      }
+      out.push({ tSecs: cite, quote: quote.slice(0, MAX_AUDIT_QUOTE_CHARS), relevance });
+    }
+    if (out.length > 0) byTheme.set(key, out);
+  }
+  return { byTheme, dropped };
+}
+
+/**
+ * Librarian pass (Haiku, advisory): one batched call over the themes that carry
+ * operator evidence, cite-gated, merging supporting quotes onto each theme's ai
+ * block. Returns the enriched doc (or the doc unchanged when nothing survives).
+ */
+export async function runThemeLibrarian(opts: {
+  workspaceId: string;
+  userId: string;
+  recordingId: string;
+  spendRoute: string;
+  transcript: string;
+  doc: ThemedDoc;
+  utterances: Utterance[];
+}): Promise<ThemedDoc> {
+  const eligible = opts.doc.themes.filter((t) => t.evidence.length > 0);
+  if (eligible.length === 0) return opts.doc;
+
+  const skeleton = eligible
+    .map((t) => {
+      const marks = t.evidence
+        .filter((e) => e.quote)
+        .map((e) => `    - [${Math.round(e.tSecs)}s] "${e.quote}"`)
+        .join("\n");
+      return `- ${t.key} — "${t.label}"${marks ? `\n${marks}` : ""}`;
+    })
+    .join("\n");
+
+  const res = await claudeWithTools({
+    model: LIBRARIAN_MODEL,
+    system: SYSTEM_LIBRARIAN,
+    tools: [FILE_THEME_SUPPORTING_TOOL],
+    maxTokens: 1500,
+    spend: {
+      workspaceId: opts.workspaceId,
+      userId: opts.userId,
+      direction: "out",
+      payload: {
+        route: `${opts.spendRoute}:librarian`,
+        transcriptChars: opts.transcript.length,
+      },
+      trackUsage: true,
+    },
+    messages: [
+      {
+        role: "user",
+        content: `THEMES (already marked by the operator — quotes shown are what they flagged; find OTHER quotes that bear on each, especially contradictions):\n${skeleton}\n\nTRANSCRIPT (timestamps are [mm:ss] from call start):\n${opts.transcript.slice(0, 24000)}`,
+      },
+    ],
+  });
+
+  const toolUse =
+    res.ok &&
+    res.content.find((b) => b.type === "tool_use" && b.name === "file_theme_supporting");
+  if (!toolUse || toolUse.type !== "tool_use") return opts.doc;
+
+  const { byTheme, dropped } = gateSupporting(toolUse.input, opts.doc, opts.utterances);
+  if (dropped > 0) {
+    console.warn(
+      `[capture] librarian cite-gate dropped ${dropped} quote(s) for recording ${opts.recordingId}`,
+    );
+  }
+  if (byTheme.size === 0) return opts.doc;
+
+  return {
+    ...opts.doc,
+    themes: opts.doc.themes.map((t) => {
+      const supporting = byTheme.get(t.key);
+      if (!supporting) return t;
+      const ai: ThemeAi = t.ai
+        ? { ...t.ai, supporting }
+        : { committed: [], decided: [], open: [], supporting };
+      return { ...t, ai };
+    }),
+  };
+}
+
+/**
+ * Auditor pass (Sonnet, advisory): one call over the whole transcript + the
+ * speaker scaffold + agenda, cite-gated, attaching commitments/blockers to both
+ * the speakers and the call-wide audit block. Returns the enriched doc (or the
+ * doc unchanged when nothing survives). Gate BEFORE calling with shouldRunAudit.
+ */
+export async function runCallAudit(opts: {
+  workspaceId: string;
+  userId: string;
+  recordingId: string;
+  spendRoute: string;
+  transcript: string;
+  doc: ThemedDoc;
+  utterances: Utterance[];
+}): Promise<ThemedDoc> {
+  const scaffold = opts.doc.speakers ?? [];
+  const scaffoldLines = scaffold.length
+    ? scaffold.map((s) => `- ${s.speaker} (${s.turnCount} turns)`).join("\n")
+    : "- (no distinct participants detected)";
+  const agendaLines = opts.doc.agenda.length
+    ? opts.doc.agenda.map((a) => `- ${a.label}`).join("\n")
+    : "- (none)";
+
+  const res = await claudeWithTools({
+    model: AUDIT_MODEL,
+    system: SYSTEM_AUDIT,
+    tools: [FILE_CALL_AUDIT_TOOL],
+    maxTokens: 3000,
+    spend: {
+      workspaceId: opts.workspaceId,
+      userId: opts.userId,
+      direction: "out",
+      payload: {
+        route: `${opts.spendRoute}:audit`,
+        transcriptChars: opts.transcript.length,
+      },
+      trackUsage: true,
+    },
+    messages: [
+      {
+        role: "user",
+        content: `SPEAKER SCAFFOLD (owner / raised_by MUST be one of these EXACT labels):\n${scaffoldLines}\n\nAGENDA:\n${agendaLines}\n\nTRANSCRIPT (lines are '[mm:ss] Name: words'):\n${opts.transcript.slice(0, 24000)}`,
+      },
+    ],
+  });
+
+  const toolUse =
+    res.ok && res.content.find((b) => b.type === "tool_use" && b.name === "file_call_audit");
+  if (!toolUse || toolUse.type !== "tool_use") return opts.doc;
+
+  const { audit, speakers, dropped } = gateAudit(toolUse.input, opts.doc, opts.utterances);
+  if (dropped > 0) {
+    console.warn(
+      `[capture] audit cite-gate dropped ${dropped} item(s) for recording ${opts.recordingId}`,
+    );
+  }
+  return { ...opts.doc, audit, speakers };
 }
 
 type CallItem = {
@@ -718,10 +1276,23 @@ async function runThemedFiling(opts: {
     }
   }
 
+  // Surface the operator's action items under "→ Next steps" in the brief, and
+  // persist them on the doc so re-files/strikes (which re-render from the doc)
+  // keep the section. Same validation as the DB action-item rows below.
+  const nextSteps: NextStep[] = items
+    .map((it): NextStep | null => {
+      const title = String(it.title ?? "").slice(0, 200).trim();
+      if (!title) return null;
+      const rawDue = String(it.due_date ?? "");
+      return { title, due: /^\d{4}-\d{2}-\d{2}$/.test(rawDue) ? rawDue : null };
+    })
+    .filter((n): n is NextStep => n !== null);
+
   const completed: ThemedDoc = {
     ...doc,
     callSentence,
     themes: doc.themes.map((t) => ({ ...t, ai: aiByTheme.get(t.key) ?? null })),
+    nextSteps: nextSteps.length > 0 ? nextSteps : null,
   };
   return {
     title,

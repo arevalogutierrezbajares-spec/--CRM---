@@ -110,6 +110,16 @@ public struct SessionManifest: Codable, Equatable {
         }
     }
 
+    /// Expected participant names (El Cuaderno roster). Hints the diarizer's
+    /// speaker count (crucial for 10+ person speakerphone calls, which
+    /// under-cluster without it) and gives the operator a name pool to map
+    /// SPEAKER_xx clusters to. Crash-safe.
+    public var roster: [String]?
+    /// Explicit expected-speaker count when it differs from roster size
+    /// (e.g. roster of 3 names on an 8-person call). Overrides roster.count
+    /// as the diarizer max-speakers hint. 0/nil = derive from roster/config.
+    public var expectedSpeakers: Int?
+
     /// Agenda coverage marks the operator made live (rail clicks). Only
     /// explicit states ride the wire; "touched" is derived server-side from
     /// tagged evidence. Last-write-wins per key at filing.

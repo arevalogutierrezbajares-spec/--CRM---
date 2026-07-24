@@ -36,12 +36,71 @@ export type ThemeEvidence = {
 /** One AI-extracted bullet; tSecs is the cite-gated evidence timestamp. */
 export type ThemeAiBullet = { text: string; tSecs: number };
 
+/**
+ * Slice 3 (librarian): a verbatim quote the operator did NOT mark, surfaced
+ * under a theme with a relevance tag. `contradicts` is the anti-yes-man signal.
+ */
+export type SupportingQuote = {
+  tSecs: number;
+  quote: string;
+  relevance: "supports" | "contradicts" | "constraint" | "number" | "date";
+};
+
 /** Per-theme AI extraction (cite-gated). Null until/unless the AI pass ran. */
 export type ThemeAi = {
   committed: ThemeAiBullet[];
   decided: ThemeAiBullet[];
   open: ThemeAiBullet[];
+  /**
+   * Slice 3: additional verbatim quotes surfaced by the librarian pass, each
+   * cite-verified to appear at its utterance. Absent on slice-1/2 docs.
+   */
+  supporting?: SupportingQuote[];
 };
+
+// ── Slice 3: call-wide audit (Sonnet, cite-gated) ────────────────────────────
+
+/**
+ * One committed action attributed to a real speaker. `owner`/`raisedBy` are
+ * always an exact scaffold speaker label. `due` is only set when literally
+ * spoken (dueSource="spoken"); otherwise null / "absent" — never inferred.
+ */
+export type Commitment = {
+  owner: string;
+  text: string;
+  quote: string;
+  tSecs: number;
+  due: string | null;
+  dueSource: "spoken" | "absent";
+};
+
+/** One blocker/issue/question/risk raised on the call, attributed to a speaker. */
+export type RaisedItem = {
+  kind: "blocker" | "issue" | "question" | "risk";
+  text: string;
+  quote: string;
+  tSecs: number;
+  raisedBy: string;
+};
+
+/** Per-speaker synthesis: their throughline + what they committed / raised. */
+export type SpeakerSynthesis = {
+  speaker: string;
+  headline: string;
+  turnCount: number;
+  commitments: Commitment[];
+  raised: RaisedItem[];
+};
+
+/** Call-wide audit ledger (Sonnet pass). Null until the auditor ran. */
+export type CallAudit = {
+  commitments: Commitment[];
+  blockers: RaisedItem[];
+  decisions: ThemeAiBullet[];
+};
+
+/** Operator action item surfaced under Next steps in the brief. */
+export type NextStep = { title: string; due: string | null };
 
 export type ThemedDocTheme = {
   key: string;
@@ -72,6 +131,22 @@ export type ThemedDoc = {
   /** Markers whose themeKey was absent/unknown — never silently dropped. */
   unfiled: ThemeEvidence[];
   agenda: ThemedDocAgendaItem[];
+  /**
+   * Slice 3: deterministic per-speaker scaffold (headline/commitments/raised
+   * filled by the auditor). Optional — absent on slice-1/2 docs. buildThemedDoc
+   * always populates it (empty headline, empty lists) for the auditor to fill.
+   */
+  speakers?: SpeakerSynthesis[] | null;
+  /**
+   * Slice 3: call-wide commitments/blockers/decisions ledger. Null until the
+   * Sonnet auditor runs (advisory — a slow/failed audit leaves it null).
+   */
+  audit?: CallAudit | null;
+  /**
+   * Slice 3: the operator's action items, surfaced under Next steps in the
+   * brief. Set by the filing pass; carried through re-files/strikes via spread.
+   */
+  nextSteps?: NextStep[] | null;
 };
 
 /**
@@ -209,7 +284,59 @@ export function buildThemedDoc(opts: {
     return { key: a.key, label: a.label, coverage };
   });
 
-  return { v: 1, callSentence: null, themes: docThemes, unfiled, agenda: agendaOut };
+  const speakers = buildSpeakerScaffold(utterances, labels);
+
+  return {
+    v: 1,
+    callSentence: null,
+    themes: docThemes,
+    unfiled,
+    agenda: agendaOut,
+    speakers,
+    audit: null,
+  };
+}
+
+/**
+ * Slice 3: the deterministic per-speaker scaffold the auditor fills. Distinct
+ * participant labels (resolved exactly like buildDialogue, via resolveSpeakerLabel)
+ * with their turn counts, in first-appearance order.
+ *
+ * Founder exclusion follows the acoustic shape, mirroring how the transcript was
+ * built: on a DUAL-CHANNEL call the channel-0 side resolves to labels.founder
+ * and is dropped (it's the operator/"You"); on a MIXED-ACOUSTIC call (in-person
+ * room / speakerphone) every voice is a diarization cluster and no cluster can
+ * be singled out as the founder, so all clusters are participants. Mixed is
+ * detected from the utterance shape (any diarization cluster present) — the same
+ * signal parseDeepgram/mapDeepgramSpeaker produce.
+ */
+export function buildSpeakerScaffold(
+  utterances: Utterance[],
+  labels: DialogueLabels,
+): SpeakerSynthesis[] {
+  const mixed = utterances.some(
+    (u) => !!u.diarizationId || u.speaker.startsWith("SPEAKER_"),
+  );
+  const founderLabel = labels.founder;
+  const counts = new Map<string, number>();
+  const order: string[] = [];
+  for (const u of utterances) {
+    const label = resolveSpeakerLabel(u, labels);
+    if (!label) continue;
+    // Dual-channel only: drop the founder side. On mixed calls founderLabel is
+    // a channel label ("Room"/operator name) that no cluster resolves to, so
+    // this guard never fires and every cluster is kept.
+    if (!mixed && label === founderLabel) continue;
+    if (!counts.has(label)) order.push(label);
+    counts.set(label, (counts.get(label) ?? 0) + 1);
+  }
+  return order.map((speaker) => ({
+    speaker,
+    headline: "",
+    turnCount: counts.get(speaker) ?? 0,
+    commitments: [],
+    raised: [],
+  }));
 }
 
 /**
@@ -254,11 +381,13 @@ export function renderThemedBrief(doc: ThemedDoc): string {
   }
 
   for (const theme of doc.themes) {
-    const hasAi =
-      theme.ai !== null &&
-      theme.ai.committed.length + theme.ai.decided.length + theme.ai.open.length > 0;
+    const bulletCount = theme.ai
+      ? theme.ai.committed.length + theme.ai.decided.length + theme.ai.open.length
+      : 0;
+    const supporting = theme.ai?.supporting ?? [];
+    const hasAi = theme.ai !== null && bulletCount > 0;
     // Empty agenda-seeded themes render under Gaps, not as hollow sections.
-    if (theme.evidence.length === 0 && !hasAi) continue;
+    if (theme.evidence.length === 0 && !hasAi && supporting.length === 0) continue;
 
     const lines: string[] = [`## ▸ ${theme.label}`];
 
@@ -293,6 +422,18 @@ export function renderThemedBrief(doc: ThemedDoc): string {
       lines.push(aiLines.join("\n"));
     }
 
+    // Librarian: verbatim quotes the operator did not mark. `contradicts` is the
+    // anti-yes-man signal — bold it so it can't be skimmed past.
+    if (supporting.length > 0) {
+      const supLines: string[] = ["> **⟦AI · also said⟧**"];
+      for (const s of supporting) {
+        const label =
+          s.relevance === "contradicts" ? "**contradicts**" : s.relevance;
+        supLines.push(`> - ${label} — "${s.quote}" [${clockTs(s.tSecs)}]`);
+      }
+      lines.push(supLines.join("\n"));
+    }
+
     parts.push(lines.join("\n"));
   }
 
@@ -303,6 +444,52 @@ export function renderThemedBrief(doc: ThemedDoc): string {
       return `- ${text}[${clockTs(e.tSecs)}]${quote}`;
     });
     parts.push(`## ✎ Unfiled notes\n${lines.join("\n")}`);
+  }
+
+  // ── Slice 3: call-wide audit — commitments, blockers, by-speaker, next steps.
+  // AI-authored, so it lands BELOW every operator-owned section (notes, quotes,
+  // unfiled) and just ABOVE Gaps. Each block is omitted when empty.
+  const audit = doc.audit ?? null;
+  if (audit && audit.commitments.length > 0) {
+    const lines = audit.commitments.map((c) => {
+      const due = c.due ?? "no date given";
+      return `- **${c.owner}** — ${c.text} — ${due} [${clockTs(c.tSecs)}] "${c.quote}"`;
+    });
+    parts.push(`## ⚑ Commitments\n${lines.join("\n")}`);
+  }
+
+  if (audit && audit.blockers.length > 0) {
+    const lines = audit.blockers.map(
+      (b) => `- **${b.kind}** (${b.raisedBy}) — ${b.text} [${clockTs(b.tSecs)}] "${b.quote}"`,
+    );
+    parts.push(`## ⚠ Blockers & issues raised\n${lines.join("\n")}`);
+  }
+
+  const speakers = (doc.speakers ?? []).filter(
+    (s) => s.headline || s.commitments.length > 0 || s.raised.length > 0,
+  );
+  if (speakers.length > 0) {
+    const blocks = speakers.map((s) => {
+      const lines = [`### ${s.speaker} · ${s.turnCount} turns`];
+      if (s.headline) lines.push(s.headline);
+      for (const c of s.commitments) {
+        lines.push(`- committed: ${c.text} [${clockTs(c.tSecs)}]`);
+      }
+      for (const r of s.raised) {
+        lines.push(`- raised: ${r.kind} — ${r.text} [${clockTs(r.tSecs)}]`);
+      }
+      return lines.join("\n");
+    });
+    parts.push(`## 🗣 By speaker\n${blocks.join("\n\n")}`);
+  }
+
+  const nextSteps = doc.nextSteps ?? [];
+  if (nextSteps.length > 0) {
+    const lines = nextSteps.map((n) => {
+      const due = n.due ? ` — ${n.due}` : "";
+      return `- ${n.title}${due}`;
+    });
+    parts.push(`## → Next steps\n${lines.join("\n")}`);
   }
 
   const gaps = doc.agenda.filter((a) => a.coverage === "gap");
